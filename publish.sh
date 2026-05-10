@@ -54,6 +54,9 @@ NODE
 rm -rf "$DIST"
 mkdir -p "$DIST/assets"
 
+# Bundle the auth library for the browser
+npx esbuild src/auth-bundle.js --bundle --format=iife --minify --outfile="$DIST/auth.js"
+
 cp tiny-world-builder.html "$DIST/index.html"
 cp tiny-world-builder.html "$DIST/tiny-world-builder.html"
 cp world.schema.json "$DIST/world.schema.json"

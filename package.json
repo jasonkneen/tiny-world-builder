@@ -1,0 +1,26 @@
+{
+  "name": "repo",
+  "version": "1.0.0",
+  "description": "A self-contained 3D voxel world editor in a single HTML file. No build, no dependencies installed locally — just open `tiny-world-builder.html` in a browser. Three.js r128 is pulled from cdnjs at runtime.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://x-access-token:ghs_SQuiLW07an716GQwDrG4BYjKOahF5I3Cuu7Z@github.com/jasonkneen/tiny-world-builder.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jasonkneen/tiny-world-builder/issues"
+  },
+  "homepage": "https://github.com/jasonkneen/tiny-world-builder#readme",
+  "dependencies": {
+    "@netlify/identity": "^1.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}
