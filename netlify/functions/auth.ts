@@ -9,8 +9,8 @@ export async function getAuthUserId(): Promise<string | null> {
   }
 }
 
-export function unauthorized() {
-  return Response.json({ error: 'Unauthorized' }, { status: 401 });
+export function unauthorized(origin?: string | null) {
+  return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders(origin) });
 }
 
 export function corsHeaders(origin?: string | null) {

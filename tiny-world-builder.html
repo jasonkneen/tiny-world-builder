@@ -854,6 +854,7 @@
 
       <!-- Password reset form (shown after recovery callback) -->
       <form id="auth-reset" class="auth-form" hidden onsubmit="return false">
+        <input type="text" autocomplete="username" aria-hidden="true" tabindex="-1" style="display:none" />
         <label>New password
           <input id="auth-reset-password" type="password" autocomplete="new-password" placeholder="Choose a new password" />
         </label>
