@@ -82,7 +82,7 @@
     z-index: 2;
     overflow: hidden;
   }
-  canvas { display: block; cursor: grab; }
+  canvas { display: block; cursor: grab; touch-action: none; }
   canvas.placing { cursor: crosshair; }
   canvas.dragging { cursor: grabbing; }
 
@@ -143,6 +143,59 @@
     margin-right: 4px;
     font-size: 9px;
     vertical-align: 1px;
+  }
+  .btn.icon {
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink);
+  }
+  .btn.icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .btn.icon.on::before { content: none; }
+  .btn.icon.on {
+    box-shadow: inset 0 0 0 1px #d8c79e, 0 0 0 3px rgba(217, 168, 43, 0.12);
+  }
+
+  /* Custom tooltip with 500ms hover delay, no delay on hide. */
+  [data-tooltip] { position: relative; }
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease 0s;
+    z-index: 100;
+    box-shadow: 0 4px 14px -6px rgba(20, 18, 16, 0.35);
+  }
+  @media (hover: hover) {
+    [data-tooltip]:hover::after {
+      opacity: 1;
+      transition: opacity 0.12s ease 500ms;
+    }
   }
 
   .toolbar {
@@ -227,6 +280,40 @@
     font-size: 9px;
     color: #b9b1a3;
     margin-top: -2px;
+  }
+
+  .unsaved-banner {
+    position: fixed;
+    bottom: 116px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 248, 226, 0.95);
+    border: 1px solid #e3cb86;
+    color: #7a5d18;
+    padding: 8px 14px 8px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1;
+    z-index: 11;
+    pointer-events: none;
+    box-shadow: 0 8px 28px -18px rgba(70, 50, 10, 0.35);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    white-space: nowrap;
+    max-width: calc(100vw - 32px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .unsaved-banner.visible { opacity: 1; }
+  .unsaved-banner[hidden] { display: none; }
+  .unsaved-banner .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #d9a82b;
+    box-shadow: 0 0 0 4px rgba(217, 168, 43, 0.18);
+    flex-shrink: 0;
   }
 
   .help {
@@ -402,6 +489,27 @@
     color: var(--muted);
     line-height: 1.4;
   }
+  .confirm-card { width: min(380px, 100%); }
+  .confirm-card .modal-head strong {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+  }
+  .confirm-copy {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .confirm-actions { justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .btn.confirm-destructive {
+    background: #b84838;
+    border-color: #a23a2b;
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn.confirm-destructive:hover { background: #a23a2b; }
   .range-row {
     display: grid;
     grid-template-columns: 116px 1fr 44px;
@@ -702,6 +810,15 @@
     .toolbar { bottom: 16px; padding: 6px; gap: 2px; }
     .tool { width: 52px; height: 56px; font-size: 10px; }
     .tool .swatch { width: 22px; height: 22px; }
+    .unsaved-banner { bottom: 90px; font-size: 11.5px; padding: 7px 12px 7px 10px; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .help { display: none; }
+    .btn { padding: 11px 14px; min-height: 44px; }
+    .btn.icon { padding: 0; width: 44px; height: 44px; }
+    .tool { min-width: 56px; min-height: 60px; }
+    .flyout-item { min-height: 40px; padding: 10px 14px; }
+    .tool kbd { display: none; }
   }
 </style>
 </head>
@@ -711,23 +828,49 @@
 
   <div class="brand">
     <div class="title">Tiny World <em>Builder</em></div>
-    <div class="sub">Click to place · drag to orbit · scroll to zoom</div>
+    <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
+  </div>
+
+  <div class="unsaved-banner" id="unsaved-banner" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span>Areas outside your 8×8 grid aren't saved</span>
   </div>
 
   <div class="controls">
-    <a class="btn" id="github-link" href="https://github.com/jasonkneen/tiny-world-builder" target="_blank" rel="noopener noreferrer" title="View on GitHub" aria-label="View Tiny World Builder on GitHub">
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style="vertical-align:-3px;margin-right:6px;fill:currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.6 7.6 0 0 1 8 3.86c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub
+    <a class="btn icon" id="github-link" href="https://github.com/jasonkneen/tiny-world-builder" target="_blank" rel="noopener noreferrer" data-tooltip="View on GitHub" aria-label="View Tiny World Builder on GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5a13.4 13.4 0 0 0-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5a4.8 4.8 0 0 0-1 3.5v4"/><path d="M9 18c-4.5 2-5-2-7-2"/></svg>
     </a>
-    <button class="btn" id="persp">Perspective</button>
-    <button class="btn" id="reset">↺ Reset</button>
-    <button class="btn" id="export" title="Download as JSON">⇩ Export</button>
-    <button class="btn" id="import" title="Load a JSON file">⇧ Import</button>
+    <button class="btn icon" id="persp" data-tooltip="Perspective" aria-label="Toggle camera mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
+    </button>
+    <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your 8 by 8 grid">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
+    </button>
+    <button class="btn icon" id="reset" data-tooltip="Reset world" aria-label="Reset world">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <button class="btn icon" id="export" data-tooltip="Export JSON" aria-label="Export world as JSON">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+    </button>
+    <button class="btn icon" id="import" data-tooltip="Import JSON" aria-label="Import world from JSON">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+    </button>
     <input type="file" id="import-file" accept=".json,application/json" hidden />
-    <button class="btn" id="generate" title="Generate world from a prompt" hidden>✨ Generate</button>
-    <button class="btn" id="render-settings" title="Render settings">Settings</button>
-    <button class="btn" id="clear">Clear</button>
-    <button class="btn" id="account-btn" hidden>My Account</button>
-    <button class="btn" id="auth-logout-btn" hidden>Sign out</button>
+    <button class="btn icon" id="generate" data-tooltip="Generate from prompt" aria-label="Generate world from prompt" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+    </button>
+    <button class="btn icon" id="render-settings" data-tooltip="Render settings" aria-label="Render settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="btn icon" id="clear" data-tooltip="Clear to grass" aria-label="Clear world to grass">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </button>
+    <button class="btn icon" id="account-btn" data-tooltip="My account" aria-label="My account" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+    <button class="btn icon" id="auth-logout-btn" data-tooltip="Sign out" aria-label="Sign out" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+    </button>
   </div>
 
   <div id="account-modal" class="modal" hidden>
@@ -866,6 +1009,20 @@
     </div>
   </div>
 
+  <div id="confirm-reset-modal" class="modal" hidden>
+    <form class="modal-card confirm-card" role="dialog" aria-labelledby="confirm-reset-title" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="confirm-reset-title">Reset to the starter world?</strong>
+        <button class="modal-close" id="confirm-reset-close" title="Close" aria-label="Close">×</button>
+      </div>
+      <p class="confirm-copy">This replaces your current build with the preset village. You'll lose anything you've placed on the 8×8 grid.</p>
+      <div class="modal-foot confirm-actions">
+        <button class="btn confirm-cancel" id="confirm-reset-cancel" type="button">Cancel</button>
+        <button class="btn confirm-destructive" id="confirm-reset-ok" type="button">Reset world</button>
+      </div>
+    </form>
+  </div>
+
   <div id="welcome-modal" class="modal">
     <form class="modal-card welcome-card" role="dialog" aria-labelledby="welcome-title" onsubmit="return false">
       <div class="modal-head">
@@ -874,8 +1031,8 @@
       </div>
       <p class="welcome-copy">Build a little voxel world by painting terrain, dropping houses, drawing fences, planting crops, and shaping paths.</p>
       <div class="welcome-tips" aria-label="Quick tips">
-        <div class="welcome-tip"><strong>Click to build</strong>Select a tool, then click any tile to place it.</div>
-        <div class="welcome-tip"><strong>Move the camera</strong>Drag to orbit, hold Space or right-drag to pan, scroll to zoom.</div>
+        <div class="welcome-tip"><strong>Tap or click to build</strong>Select a tool, then tap any tile to place it.</div>
+        <div class="welcome-tip"><strong>Move the camera</strong>One finger or left-drag to orbit · two fingers / right-drag / Space to pan · pinch or scroll to zoom.</div>
         <div class="welcome-tip"><strong>Keep going</strong>Use Reset, Clear, Export, Import, and Render from the top bar.</div>
       </div>
       <div class="welcome-actions">
@@ -3298,8 +3455,38 @@
     return x < GRID - 1 || x > 0 ? 'x' : 'z';
   }
 
+  // Cells outside the saved 8x8 home grid are rendered in grayscale so the
+  // user can tell at a glance that those areas won't be saved.
+  function isOutsideHomeGrid(x, z) {
+    return x < 0 || x >= GRID || z < 0 || z >= GRID;
+  }
+
+  function desaturateMaterial(mat) {
+    if (!mat || !mat.color) return;
+    if (mat.userData && mat.userData.grayscaled) return;
+    const c = mat.color;
+    const lum = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
+    const mix = 0.85;
+    c.setRGB(
+      c.r * (1 - mix) + lum * mix,
+      c.g * (1 - mix) + lum * mix,
+      c.b * (1 - mix) + lum * mix
+    );
+    if (mat.emissive) {
+      const e = mat.emissive;
+      const elum = e.r * 0.299 + e.g * 0.587 + e.b * 0.114;
+      e.setRGB(
+        e.r * (1 - mix) + elum * mix,
+        e.g * (1 - mix) + elum * mix,
+        e.b * (1 - mix) + elum * mix
+      );
+    }
+    if (!mat.userData) mat.userData = {};
+    mat.userData.grayscaled = true;
+  }
+
   function prepareFadeable(group, opts) {
-    const { ghost = false, opacity = 1 } = opts || {};
+    const { ghost = false, opacity = 1, grayscale = false } = opts || {};
     const displayOpacity = displayOpacityForRole(group, opacity);
     group.userData.currentOpacity = opacity;
     group.userData.targetOpacity = opacity;
@@ -3311,6 +3498,7 @@
         o.receiveShadow = false;
       }
       o.material = o.material.clone();
+      if (grayscale) desaturateMaterial(o.material);
       o.userData.baseOpacity = o.material.opacity === undefined ? 1 : o.material.opacity;
       o.material.transparent = true;
       o.material.opacity = o.userData.baseOpacity * displayOpacity;
@@ -3439,7 +3627,7 @@
         tile.userData.boardX = boardX;
         tile.userData.boardZ = boardZ;
         tile.userData.fadeRole = 'tile';
-        prepareFadeable(tile, { ghost: true, opacity: opacityAtWorldPosition(tile.position.x, tile.position.z) });
+        prepareFadeable(tile, { ghost: true, grayscale: true, opacity: opacityAtWorldPosition(tile.position.x, tile.position.z) });
         board.add(tile);
 
         const obj = makeGhostObject(cells, x, z);
@@ -3451,7 +3639,7 @@
         obj.userData.boardX = boardX;
         obj.userData.boardZ = boardZ;
         obj.userData.fadeRole = 'object';
-        prepareFadeable(obj, { ghost: true, opacity: opacityAtWorldPosition(obj.position.x, obj.position.z) });
+        prepareFadeable(obj, { ghost: true, grayscale: true, opacity: opacityAtWorldPosition(obj.position.x, obj.position.z) });
         board.add(obj);
       }
     }
@@ -3481,6 +3669,7 @@
   function updateGhostRenderBubble() {
     const cx = boardFromTargetCoord(target.x);
     const cz = boardFromTargetCoord(target.z);
+    let anyUnsavedVisible = false;
     for (const board of ghostBoards.values()) {
       const boardDist = Math.max(
         Math.abs(board.userData.boardX - cx),
@@ -3489,11 +3678,52 @@
       board.visible = boardDist <= ghostPreloadRadius;
       if (!board.visible) continue;
       for (const child of board.children) {
-        setElementOpacity(child, opacityAtWorldPosition(child.position.x, child.position.z));
+        const op = opacityAtWorldPosition(child.position.x, child.position.z);
+        setElementOpacity(child, op);
+        if (op > 0.05) anyUnsavedVisible = true;
       }
     }
+    if (!anyUnsavedVisible) {
+      for (const key in cellMeshes) {
+        const [kx, kz] = key.split(',').map(Number);
+        if (!isOutsideHomeGrid(kx, kz)) continue;
+        const entry = cellMeshes[key];
+        const root = entry.object || entry.tile;
+        if (!root) continue;
+        if (opacityAtWorldPosition(root.position.x, root.position.z) > 0.05) {
+          anyUnsavedVisible = true;
+          break;
+        }
+      }
+    }
+    setUnsavedBannerVisible(anyUnsavedVisible);
     updateHomeBoardFade();
     syncHoverVisibility();
+  }
+
+  let unsavedBannerHideTimer = null;
+  function setUnsavedBannerVisible(visible) {
+    const banner = document.getElementById('unsaved-banner');
+    if (!banner) return;
+    if (visible) {
+      if (unsavedBannerHideTimer) {
+        clearTimeout(unsavedBannerHideTimer);
+        unsavedBannerHideTimer = null;
+      }
+      if (banner.hidden) {
+        banner.hidden = false;
+        requestAnimationFrame(() => banner.classList.add('visible'));
+      } else {
+        banner.classList.add('visible');
+      }
+    } else if (!banner.hidden) {
+      banner.classList.remove('visible');
+      if (unsavedBannerHideTimer) clearTimeout(unsavedBannerHideTimer);
+      unsavedBannerHideTimer = setTimeout(() => {
+        banner.hidden = true;
+        unsavedBannerHideTimer = null;
+      }, 220);
+    }
   }
 
   function updateHomeBoardFade() {
@@ -3905,7 +4135,7 @@
     tile.userData.gx = x;
     tile.userData.gz = z;
     tile.userData.fadeRole = 'tile';
-    prepareFadeable(tile, { opacity: opacityAtWorldPosition(p.x, p.z) });
+    prepareFadeable(tile, { opacity: opacityAtWorldPosition(p.x, p.z), grayscale: isOutsideHomeGrid(x, z) });
     worldGroup.add(tile);
     entry.tile = tile;
     if (animate) animateDrop(tile, 2.4, 0.42, delay, easeOutCubic);
@@ -4010,7 +4240,7 @@
     }
     mesh.userData.baseY = objectY;
     mesh.userData.fadeRole = 'object';
-    prepareFadeable(mesh, { opacity: opacityAtWorldPosition(posX, posZ) });
+    prepareFadeable(mesh, { opacity: opacityAtWorldPosition(posX, posZ), grayscale: isOutsideHomeGrid(x, z) });
     worldGroup.add(mesh);
     entry.object = mesh;
     if (animate) animateDrop(mesh, 2.0, 0.5, delay, easeOutBack);
@@ -4604,29 +4834,19 @@
     }
   }
 
-  // -------- input: drag-to-orbit + click-to-place --------
+  // -------- input: drag-to-orbit + click-to-place + multi-touch --------
   let pointerDown = null;     // {x, y}
   let lastPointer = null;
   let didDrag = false;
-  let dragMode = null;        // 'orbit' | 'pan'
+  let dragMode = null;        // 'orbit' | 'pan' | 'pinch'
   let spaceDown = false;
   const DRAG_THRESHOLD = 5;
+  const activePointers = new Map(); // pointerId -> {x, y, type}
+  let pinchPrevDist = 0;
+  let pinchPrevMid = null;
 
-  renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
-
-  renderer.domElement.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
-    dragMode = (e.button === 2 || spaceDown) ? 'pan' : 'orbit';
-    pointerDown = { x: e.clientX, y: e.clientY };
-    lastPointer = { x: e.clientX, y: e.clientY };
-    didDrag = false;
-    renderer.domElement.classList.add('dragging');
-    renderer.domElement.setPointerCapture(e.pointerId);
-  });
-
-  renderer.domElement.addEventListener('pointermove', e => {
-    // hover update always
-    const cell = pickTile(e.clientX, e.clientY);
+  function updateHoverAt(x, y) {
+    const cell = pickTile(x, y);
     if (cell) {
       hoverMesh.position.set(cell.worldX, hoverHeightForCell(cell), cell.worldZ);
       hoverMesh.visible = true;
@@ -4634,6 +4854,65 @@
     } else {
       hoverMesh.visible = false;
       currentHover = null;
+    }
+  }
+
+  renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
+
+    if (activePointers.size >= 2) {
+      const pts = [...activePointers.values()];
+      pinchPrevDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchPrevMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      dragMode = 'pinch';
+      didDrag = true;
+      pointerDown = null;
+      hoverMesh.visible = false;
+      currentHover = null;
+      renderer.domElement.classList.add('dragging');
+      return;
+    }
+
+    dragMode = (e.button === 2 || spaceDown) ? 'pan' : 'orbit';
+    pointerDown = { x: e.clientX, y: e.clientY };
+    lastPointer = { x: e.clientX, y: e.clientY };
+    didDrag = false;
+    // Touch devices don't have hover before contact, so prime currentHover
+    // at the press location so a quick tap can place a tile.
+    if (e.pointerType !== 'mouse') updateHoverAt(e.clientX, e.clientY);
+    renderer.domElement.classList.add('dragging');
+  });
+
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (activePointers.has(e.pointerId)) {
+      const p = activePointers.get(e.pointerId);
+      p.x = e.clientX; p.y = e.clientY;
+    }
+
+    if (dragMode === 'pinch' && activePointers.size >= 2) {
+      const pts = [...activePointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (pinchPrevDist > 0 && dist > 0) {
+        const ratio = pinchPrevDist / dist;
+        viewSize = Math.max(4, Math.min(14, viewSize * ratio));
+        onResize();
+      }
+      if (pinchPrevMid) {
+        panCameraByPixels(mid.x - pinchPrevMid.x, mid.y - pinchPrevMid.y);
+      }
+      pinchPrevDist = dist;
+      pinchPrevMid = mid;
+      return;
+    }
+
+    // hover update for mouse devices (touch hover handled on press)
+    if (e.pointerType === 'mouse' || !pointerDown) {
+      updateHoverAt(e.clientX, e.clientY);
     }
 
     if (pointerDown) {
@@ -4650,25 +4929,64 @@
           polar = Math.max(0.18, Math.min(1.25, polar - ddy * 0.006));
           updateCamera();
         }
+        // While dragging on touch, hide the hover marker so it doesn't lag.
+        if (e.pointerType !== 'mouse') {
+          hoverMesh.visible = false;
+          currentHover = null;
+        }
       }
       lastPointer = { x: e.clientX, y: e.clientY };
     }
   });
 
   renderer.domElement.addEventListener('pointerup', e => {
+    activePointers.delete(e.pointerId);
     renderer.domElement.classList.remove('dragging');
+
+    if (dragMode === 'pinch') {
+      if (activePointers.size === 1) {
+        // Drop from pinch back to one-finger: continue as pan, no click.
+        const [remaining] = [...activePointers.values()];
+        pointerDown = { x: remaining.x, y: remaining.y };
+        lastPointer = { x: remaining.x, y: remaining.y };
+        didDrag = true;
+        dragMode = 'pan';
+        renderer.domElement.classList.add('dragging');
+      } else {
+        dragMode = null;
+        pointerDown = null;
+        lastPointer = null;
+      }
+      pinchPrevDist = 0;
+      pinchPrevMid = null;
+      return;
+    }
+
     if (pointerDown && !didDrag && currentHover && dragMode !== 'pan') {
       applyToolToCell(currentHover);
     }
-    pointerDown = null;
-    lastPointer = null;
-    dragMode = null;
+    if (activePointers.size === 0) {
+      pointerDown = null;
+      lastPointer = null;
+      dragMode = null;
+      // Touch devices: clear the hover marker after a tap so it doesn't linger.
+      if (e.pointerType !== 'mouse') {
+        hoverMesh.visible = false;
+        currentHover = null;
+      }
+    }
   });
 
-  renderer.domElement.addEventListener('pointercancel', () => {
+  renderer.domElement.addEventListener('pointercancel', e => {
+    activePointers.delete(e.pointerId);
     renderer.domElement.classList.remove('dragging');
-    pointerDown = null;
-    dragMode = null;
+    if (activePointers.size === 0) {
+      pointerDown = null;
+      lastPointer = null;
+      dragMode = null;
+      pinchPrevDist = 0;
+      pinchPrevMid = null;
+    }
   });
 
   renderer.domElement.addEventListener('wheel', e => {
@@ -4697,7 +5015,7 @@
       selectTool(shortcutTool);
       return;
     }
-    if (k === 'r') doReset();
+    if (k === 'r') confirmReset();
     else if (k === 'c') doClear();
     else if (k === 'p' || k === 'i') togglePerspective();
     else if (e.key === 'ArrowLeft') { e.preventDefault(); panCameraByCells(-1, 0); }
@@ -4713,8 +5031,9 @@
     }
   });
 
-  document.getElementById('reset').addEventListener('click', doReset);
+  document.getElementById('reset').addEventListener('click', () => confirmReset());
   document.getElementById('clear').addEventListener('click', doClear);
+  document.getElementById('home').addEventListener('click', flyHomeCamera);
   const perspBtn = document.getElementById('persp');
   perspBtn.addEventListener('click', togglePerspective);
 
@@ -4784,7 +5103,9 @@
     cameraMode = ['ortho', 'soft', 'perspective'].includes(mode) ? mode : 'ortho';
     camera = cameraMode === 'ortho' ? orthoCam : (cameraMode === 'soft' ? softCam : persCam);
     perspBtn.classList.toggle('on', cameraMode !== 'ortho');
-    perspBtn.textContent = cameraMode === 'ortho' ? 'Isometric' : (cameraMode === 'soft' ? 'Soft perspective' : 'Perspective');
+    perspBtn.setAttribute('data-tooltip',
+      cameraMode === 'ortho' ? 'Isometric' :
+      cameraMode === 'soft'  ? 'Soft perspective' : 'Perspective');
     onResize();
   }
 
@@ -4796,10 +5117,64 @@
     setCameraMode(DEFAULT_CAMERA_MODE);
   }
 
+  // Smoothly tween the camera target/zoom back to the home 8x8 grid
+  // without touching world data — used by the Home button.
+  let homeTween = null;
+  function flyHomeCamera() {
+    const start = {
+      tx: target.x, tz: target.z, view: viewSize,
+      az: azimuth, po: polar,
+    };
+    const end = {
+      tx: DEFAULT_TARGET.x, tz: DEFAULT_TARGET.z, view: DEFAULT_VIEW_SIZE,
+      az: DEFAULT_AZIMUTH, po: DEFAULT_POLAR,
+    };
+    homeTween = { start, end, t: 0, dur: 0.55 };
+  }
+  function tickHomeTween(dt) {
+    if (!homeTween) return;
+    homeTween.t = Math.min(1, homeTween.t + dt / homeTween.dur);
+    const u = easeOutCubic(homeTween.t);
+    const { start, end } = homeTween;
+    target.x = start.tx + (end.tx - start.tx) * u;
+    target.z = start.tz + (end.tz - start.tz) * u;
+    viewSize = start.view + (end.view - start.view) * u;
+    azimuth  = start.az + (end.az - start.az) * u;
+    polar    = start.po + (end.po - start.po) * u;
+    onResize();
+    if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+    if (homeTween.t >= 1) homeTween = null;
+  }
+
   function doReset() {
     loadInitialScene();
     resetCameraDefaults();
   }
+
+  function confirmReset() {
+    const modal = document.getElementById('confirm-reset-modal');
+    if (!modal) { doReset(); return; }
+    modal.hidden = false;
+    const okBtn = document.getElementById('confirm-reset-ok');
+    if (okBtn) okBtn.focus();
+  }
+  (function setupResetConfirm() {
+    const modal = document.getElementById('confirm-reset-modal');
+    if (!modal) return;
+    const close = () => { modal.hidden = true; };
+    const ok = document.getElementById('confirm-reset-ok');
+    const cancel = document.getElementById('confirm-reset-cancel');
+    const closeBtn = document.getElementById('confirm-reset-close');
+    ok.addEventListener('click', () => { close(); doReset(); });
+    cancel.addEventListener('click', close);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    window.addEventListener('keydown', e => {
+      if (modal.hidden) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'Enter') { e.preventDefault(); close(); doReset(); }
+    });
+  })();
   function doClear() {
     const TILE_STAGGER = 0.022;
     for (let x = 0; x < GRID; x++)
@@ -5047,6 +5422,7 @@
 
     // tile/object drop-in animations (load + placement)
     if (dropAnims.length) tickDropAnims(dt);
+    if (homeTween) tickHomeTween(dt);
     tickOpacityTransitions(dt);
 
     // sway trees / bob crops / wiggle tufts
