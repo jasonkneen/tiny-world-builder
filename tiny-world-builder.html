@@ -1400,10 +1400,12 @@
   }
 
   function applyCloudSettings() {
-    if (!cloudLayer) return;
-    cloudLayer.style.opacity = String(Math.max(0, Math.min(1, renderCloudAmount)) * 0.42);
-    cloudLayer.style.animationDuration = (140 - renderCloudSpeed * 115).toFixed(0) + 's';
-    cloudLayer.style.animationPlayState = renderCloudSpeed <= 0.01 || renderCloudAmount <= 0.01 ? 'paused' : 'running';
+    if (cloudLayer) {
+      // Hide the old CSS cloud overlay — real voxel clouds replace it.
+      cloudLayer.style.opacity = '0';
+      cloudLayer.style.animationPlayState = 'paused';
+    }
+    if (typeof syncCloudPopulation === 'function') syncCloudPopulation();
   }
 
   function applyTiltShiftSettings() {
@@ -1670,6 +1672,9 @@
     sunflowerStalk:  new THREE.MeshLambertMaterial({ color: 0x4d8a2a }),
     sunflowerPetal:  new THREE.MeshLambertMaterial({ color: 0xf2c849 }),
     sunflowerCenter: new THREE.MeshLambertMaterial({ color: 0x5a3a18 }),
+
+    cloud:     new THREE.MeshLambertMaterial({ color: 0xfdfcf8 }),
+    cloudShade:new THREE.MeshLambertMaterial({ color: 0xdcd9d0 }),
 
     hover:     new THREE.MeshBasicMaterial({ color: 0x2a2722, transparent: true, opacity: 0.18, depthWrite: false }),
     hoverErase:new THREE.MeshBasicMaterial({ color: 0xb84838, transparent: true, opacity: 0.28, depthWrite: false }),
@@ -2060,14 +2065,41 @@
         }
       }
     } else if (kind === 'tuft' || kind === 'crop' || kind === 'corn' || kind === 'wheat' || kind === 'pumpkin' || kind === 'carrot' || kind === 'sunflower') {
-      const s = 1 + extra * 0.035;
-      g.scale.set(s, 1 + extra * 0.04, s);
-      for (let i = 0; i < Math.min(extra, 5); i++) {
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.10 + i * 0.012, 0.035), M.cropStem);
-        const a = i * 2.1 + 0.2;
-        blade.position.set(Math.cos(a) * 0.31, 0.05 + i * 0.006, Math.sin(a) * 0.29);
-        blade.rotation.z = (i % 2 ? -1 : 1) * 0.18;
+      // Repeated clicks on the same crop tile grow the plant and pack
+      // more stems around the perimeter — level 1 is a single sprout,
+      // level 8 is a dense, taller patch.
+      const sX = 1 + extra * 0.10;
+      const sY = 1 + extra * 0.18;
+      g.scale.set(sX, sY, sX);
+      // Match the leaf colour for the crop type so density still reads
+      // as the right plant. cropStem stays the default fallback.
+      const stemMat = (kind === 'corn')      ? M.cornStalk
+                    : (kind === 'wheat')     ? M.wheatStalk
+                    : (kind === 'pumpkin')   ? M.pumpkinStem
+                    : (kind === 'carrot')    ? M.cornStalk
+                    : (kind === 'sunflower') ? M.sunflowerStalk
+                    : (kind === 'tuft')      ? M.leaves
+                    : M.cropStem;
+      // Two concentric rings of fillers — inner ring fills first, outer
+      // ring kicks in around level 4+, so density ramps smoothly.
+      const innerCount = Math.min(extra * 2, 8);
+      for (let i = 0; i < innerCount; i++) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12 + i * 0.012, 0.04), stemMat);
+        const a = i * 0.78 + extra * 0.15;
+        const r = 0.18 + (i % 2 ? 0.05 : 0);
+        blade.position.set(Math.cos(a) * r, 0.06 + i * 0.004, Math.sin(a) * r);
+        blade.rotation.z = (i % 2 ? -1 : 1) * 0.16;
         g.add(blade);
+      }
+      if (extra >= 3) {
+        const outerCount = Math.min((extra - 2) * 2, 8);
+        for (let i = 0; i < outerCount; i++) {
+          const blade = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.16 + i * 0.018, 0.035), stemMat);
+          const a = i * 0.78 + 0.4 + extra * 0.1;
+          blade.position.set(Math.cos(a) * 0.34, 0.08 + i * 0.005, Math.sin(a) * 0.34);
+          blade.rotation.z = (i % 2 ? 1 : -1) * 0.20;
+          g.add(blade);
+        }
       }
     } else if (kind === 'fence') {
       g.scale.y = 1 + Math.min(extra, 4) * 0.06;
@@ -5629,6 +5661,90 @@
     }
   }
 
+  // -------- voxel clouds --------
+  // Chunky clouds that drift slowly across the sky in world space, so they
+  // sit naturally over both the home grid and ghost boards. Count and speed
+  // come from the existing Clouds / Cloud-speed sliders in render settings.
+  const cloudGroup = new THREE.Group();
+  cloudGroup.name = 'clouds';
+  scene.add(cloudGroup);
+  const clouds = [];
+  const CLOUD_MAX = 18;
+  const CLOUD_RANGE_X = 24; // wrap-around x extent (centred on 0)
+  const CLOUD_Y_MIN = 5.5;
+  const CLOUD_Y_MAX = 8.5;
+  const CLOUD_Z_RANGE = 18;
+
+  function makeCloud() {
+    const g = new THREE.Group();
+    const puffs = 4 + Math.floor(Math.random() * 3);
+    const big = roundedBox(1.3, 0.55, 0.95, 0.18);
+    const main = new THREE.Mesh(big, M.cloud);
+    main.position.set(0, 0, 0);
+    g.add(main);
+    for (let i = 0; i < puffs; i++) {
+      const w = 0.55 + Math.random() * 0.55;
+      const h = 0.40 + Math.random() * 0.30;
+      const d = 0.55 + Math.random() * 0.45;
+      const puff = new THREE.Mesh(roundedBox(w, h, d, 0.16), Math.random() < 0.55 ? M.cloud : M.cloudShade);
+      puff.position.set(
+        (Math.random() - 0.5) * 1.4,
+        (Math.random() - 0.3) * 0.18,
+        (Math.random() - 0.5) * 0.9
+      );
+      g.add(puff);
+    }
+    // Underside shade — a thin slab of the darker material at the base.
+    const base = new THREE.Mesh(roundedBox(1.5, 0.18, 1.05, 0.16), M.cloudShade);
+    base.position.set(0, -0.22, 0);
+    g.add(base);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    return g;
+  }
+
+  function spawnCloud(initial) {
+    const c = makeCloud();
+    const scale = 0.7 + Math.random() * 0.8;
+    c.scale.set(scale, scale, scale);
+    c.position.set(
+      initial ? (Math.random() - 0.5) * CLOUD_RANGE_X * 2 : -CLOUD_RANGE_X - Math.random() * 4,
+      CLOUD_Y_MIN + Math.random() * (CLOUD_Y_MAX - CLOUD_Y_MIN),
+      (Math.random() - 0.5) * CLOUD_Z_RANGE
+    );
+    c.userData.driftSpeed = 0.35 + Math.random() * 0.45; // base m/s, then multiplied by renderCloudSpeed
+    cloudGroup.add(c);
+    clouds.push(c);
+    return c;
+  }
+
+  function syncCloudPopulation() {
+    const target = Math.round(Math.max(0, Math.min(1, renderCloudAmount)) * CLOUD_MAX);
+    while (clouds.length > target) {
+      const c = clouds.pop();
+      cloudGroup.remove(c);
+      c.traverse(o => o.geometry && o.geometry.dispose());
+    }
+    while (clouds.length < target) {
+      spawnCloud(true);
+    }
+  }
+
+  function updateClouds(dt) {
+    if (!clouds.length) return;
+    const baseSpeed = renderCloudSpeed * 2.4; // 0 → 2.4 m/s scalar
+    if (baseSpeed <= 0.0001) return;
+    for (const c of clouds) {
+      c.position.x += c.userData.driftSpeed * baseSpeed * dt;
+      if (c.position.x > CLOUD_RANGE_X) {
+        c.position.x = -CLOUD_RANGE_X - Math.random() * 2;
+        c.position.z = (Math.random() - 0.5) * CLOUD_Z_RANGE;
+        c.position.y = CLOUD_Y_MIN + Math.random() * (CLOUD_Y_MAX - CLOUD_Y_MIN);
+      }
+    }
+  }
+
+  syncCloudPopulation();
+
   // -------- animation loop --------
   let prevT = 0;
   let smokeTimer = 0;
@@ -5642,6 +5758,7 @@
     if (dropAnims.length) tickDropAnims(dt);
     if (homeTween) tickHomeTween(dt);
     tickOpacityTransitions(dt);
+    updateClouds(dt);
 
     // sway trees / bob crops / wiggle tufts
     for (const key in cellMeshes) {
