@@ -2,14 +2,14 @@ import type { Config } from '@netlify/functions';
 import { db } from '../../db/index.js';
 import { profiles } from '../../db/schema.js';
 import { and, eq, ne } from 'drizzle-orm';
-import { verifyIdentityToken, unauthorized, corsHeaders, corsResponse } from './auth.js';
+import { getAuthUserId, unauthorized, corsHeaders, corsResponse } from './auth.js';
 
 export default async (req: Request) => {
   const origin = req.headers.get('origin');
 
   if (req.method === 'OPTIONS') return corsResponse(origin);
 
-  const auth0Id = await verifyIdentityToken(req);
+  const auth0Id = await getAuthUserId();
   if (!auth0Id) return unauthorized();
 
   const headers = corsHeaders(origin);

@@ -784,7 +784,7 @@
     </form>
   </div>
 
-  <div id="auth-modal" class="auth-modal">
+  <div id="auth-modal" class="auth-modal" hidden>
     <div class="auth-card">
       <div class="auth-title">Tiny World <em>Builder</em></div>
       <div class="auth-subtitle">Sign in to start building</div>
@@ -5930,24 +5930,11 @@
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-    async function getAccessToken() {
-      const user = await Auth.getUser();
-      if (!user) return null;
-      const m = document.cookie.match(/(?:^|; )nf_jwt=([^;]*)/);
-      if (m) return decodeURIComponent(m[1]);
-      try {
-        const stored = JSON.parse(localStorage.getItem('gotrue.user'));
-        return stored && stored.token ? stored.token.access_token : null;
-      } catch (_) { return null; }
-    }
-
     async function apiCall(path, method, body) {
       try {
-        const token = await getAccessToken();
-        if (!token) return null;
         const opts = {
           method,
-          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json' },
         };
         if (body) opts.body = JSON.stringify(body);
         const r = await fetch(path, opts);
@@ -6299,13 +6286,16 @@
             enterApp();
             return true;
           case 'recovery':
+            modal.hidden = false;
             showForm('reset');
             return true;
           case 'invite':
+            modal.hidden = false;
             showSuccess('Set a password to accept your invite.');
             showForm('reset');
             return true;
           case 'email_change':
+            modal.hidden = false;
             showSuccess('Email address updated.');
             return true;
         }

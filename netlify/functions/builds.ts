@@ -2,7 +2,7 @@ import type { Config } from '@netlify/functions';
 import { db } from '../../db/index.js';
 import { builds, profiles } from '../../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
-import { verifyIdentityToken, unauthorized, corsHeaders, corsResponse } from './auth.js';
+import { getAuthUserId, unauthorized, corsHeaders, corsResponse } from './auth.js';
 
 async function getProfileId(auth0Id: string): Promise<number | null> {
   const [profile] = await db.select({ id: profiles.id }).from(profiles).where(eq(profiles.auth0Id, auth0Id));
@@ -14,7 +14,7 @@ export default async (req: Request) => {
 
   if (req.method === 'OPTIONS') return corsResponse(origin);
 
-  const auth0Id = await verifyIdentityToken(req);
+  const auth0Id = await getAuthUserId();
   if (!auth0Id) return unauthorized();
 
   const headers = corsHeaders(origin);
