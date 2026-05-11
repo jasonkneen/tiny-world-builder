@@ -5948,10 +5948,13 @@
         };
         if (body) opts.body = JSON.stringify(body);
         const r = await fetch(path, opts);
-        if (!r.ok) {
-          try { return await r.json(); } catch (_) { return { error: r.statusText || 'Request failed' }; }
+        const text = await r.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (_) {
+          data = { error: text || r.statusText || ('HTTP ' + r.status) };
         }
-        return await r.json();
+        if (!r.ok) return data || { error: r.statusText || ('HTTP ' + r.status) };
+        return data;
       } catch (err) {
         return { error: err.message || 'Network error' };
       }
