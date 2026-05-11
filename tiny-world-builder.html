@@ -1755,9 +1755,16 @@
     const bt = c.buildingType || null;
     const fs = c.fenceSide || null;
     const extras = (c.extras && c.extras.length) ? c.extras.map(e => ({ k: e.kind, s: e.fenceSide || null, f: e.floors || 1 })) : null;
-    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras) {
+    const ry = c.rotationY || 0;
+    const ox = c.offsetX || 0;
+    const oz = c.offsetZ || 0;
+    const hasTransform = ry || ox || oz;
+    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform) {
       const out = [x, z, c.terrain, c.kind, f, bt, tf, fs];
-      if (extras) out.push(extras);
+      // Always push extras (or null) before the transform so positions
+      // stay stable in the tuple. Transform packed as [ry, ox, oz].
+      out.push(extras || null);
+      if (hasTransform) out.push([ry, ox, oz]);
       return out;
     }
     return null;
@@ -3169,19 +3176,10 @@
     // spans across it. Default to span on the perpendicular axis.
     const spanAlongX = pathOrientation === 'x';
 
-    // Zebra stripes — 5 thin white slabs across the road.
-    const stripeMat = M.wallCream || M.pathTrim || M.path;
-    for (let i = -2; i <= 2; i++) {
-      const stripe = new THREE.Mesh(
-        new THREE.BoxGeometry(spanAlongX ? 0.85 : 0.14, 0.012, spanAlongX ? 0.14 : 0.85),
-        stripeMat
-      );
-      stripe.position.set(spanAlongX ? 0 : i * 0.17, 0.008, spanAlongX ? i * 0.17 : 0);
-      g.add(stripe);
-    }
-
     if (level === 1) {
-      // Level 1 keeps just the zebra stripes — no speed bump.
+      // Level 1 is now an empty placeholder — no zebra stripes, no
+      // bump. The fence just doesn't render anything on a path at
+      // level 1.
     } else if (level === 2) {
       // Two short pillars flanking the crossing.
       const pillarMat = M.castleStone || M.fenceSteel;
@@ -4612,8 +4610,14 @@
       const r = Math.floor(cellRand(x, z, 71) * 4); // 0..3
       mesh.rotation.y += r * (Math.PI / 2);
     }
+    // Apply any user-supplied rotation / within-tile offset (set by
+    // the ghost-preview arrow keys at placement time).
+    const userRot     = (world[x][z].rotationY || 0);
+    const userOffsetX = (world[x][z].offsetX   || 0);
+    const userOffsetZ = (world[x][z].offsetZ   || 0);
+    if (userRot) mesh.rotation.y += userRot;
     const objectY = TOP_H + terrainRiseAt(x, z);
-    mesh.position.set(posX, objectY, posZ);
+    mesh.position.set(posX + userOffsetX, objectY, posZ + userOffsetZ);
     if (setGridUserData) {
       mesh.userData.gx = x;
       mesh.userData.gz = z;
@@ -4717,7 +4721,7 @@
   const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
 
   function setCell(x, z, opts) {
-    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, forceTile = false } = opts;
+    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, forceTile = false, rotationY, offsetX, offsetZ } = opts;
     const prev = world[x][z] || { terrain: null, terrainFloors: 1, kind: null, floors: 1, buildingType: null, fenceSide: null };
     let nextTerrain = terrain || 'grass';
     let nextKind = kind || null;
@@ -4753,7 +4757,14 @@
     const carriedExtras = opts && Object.prototype.hasOwnProperty.call(opts, 'extras')
       ? (opts.extras || [])
       : (prev.extras || []);
-    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras };
+    // Rotation and within-tile offset for the main mesh. Cleared
+    // whenever the kind changes so a fresh placement starts at the
+    // default orientation.
+    const kindIsNew = (prev.kind || null) !== nextKind;
+    const newRotationY = (rotationY !== undefined) ? rotationY : (kindIsNew ? 0 : (prev.rotationY || 0));
+    const newOffsetX   = (offsetX   !== undefined) ? offsetX   : (kindIsNew ? 0 : (prev.offsetX   || 0));
+    const newOffsetZ   = (offsetZ   !== undefined) ? offsetZ   : (kindIsNew ? 0 : (prev.offsetZ   || 0));
+    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetZ: newOffsetZ };
 
     // For house clusters, every cell shares the floors count. Propagate to all.
     if (nextKind === 'house' && floorsChanged) {
@@ -5019,6 +5030,118 @@
   scene.add(hoverMesh);
 
   let currentHover = null;
+
+  // -------- ghost placement preview --------
+  // A translucent live preview of the object that would be placed on
+  // the hovered tile. Updates when the selected tool changes; follows
+  // the cursor; can be rotated and nudged within the tile via the
+  // arrow keys before the user commits with a click.
+  let ghostPreview = null;       // current preview Group (or null)
+  let ghostPreviewKey = null;    // tool signature this preview was built for
+  let ghostRotation = 0;         // radians (added on top of any deterministic rotation)
+  let ghostOffsetX = 0;          // within-tile x nudge
+  let ghostOffsetZ = 0;          // within-tile z nudge
+  const GHOST_ROT_STEP = Math.PI / 12;    // 15° per arrow press
+  const GHOST_OFFSET_STEP = 0.06;          // ~6% of a tile per arrow press
+  const GHOST_OFFSET_LIMIT = 0.32;         // clamp so the ghost stays on the tile
+
+  function ghostToolSignature(tool) {
+    if (!tool || tool.erase || tool.auto) return null;
+    const v = tool.activeVariant;
+    return tool.id + '|' + (v ? v.id : '') + '|' + (tool.kind || tool.terrain || '');
+  }
+
+  function buildGhostMesh(tool) {
+    if (!tool || tool.erase || tool.auto) return null;
+    const kind = tool.kind;
+    let mesh = null;
+    if      (kind === 'tree')      mesh = makeTree();
+    else if (kind === 'rock')      mesh = makeRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
+    else if (kind === 'tuft')      mesh = makeTuft();
+    else if (kind === 'crop')      mesh = makeCrop();
+    else if (kind === 'corn')      mesh = makeCorn();
+    else if (kind === 'wheat')     mesh = makeWheat();
+    else if (kind === 'pumpkin')   mesh = makePumpkin();
+    else if (kind === 'carrot')    mesh = makeCarrot();
+    else if (kind === 'sunflower') mesh = makeSunflower();
+    else if (kind === 'bridge')    mesh = makeBridge('x');
+    else if (kind === 'fence') {
+      const v = tool.activeVariant;
+      const side = (v && v.fenceSide && v.fenceSide !== 'auto') ? v.fenceSide : 'n';
+      mesh = makeFence(normalizeFenceSide(side), 1);
+    } else if (kind === 'house') {
+      const v = tool.activeVariant;
+      const bt = v && v.buildingType;
+      if      (bt === 'manor')      mesh = makeManor(1);
+      else if (bt === 'tower')      mesh = makeStoneTower(2);
+      else if (bt === 'turret')     mesh = makeTurret(1);
+      else if (bt === 'skyscraper') mesh = makeSkyscraper(4);
+      else                          mesh = makeHouse(1);
+    } else if (tool.terrain) {
+      // For pure terrain tools, show a thin coloured swatch hovering
+      // just above the tile so the user can still see what they'd paint.
+      const matMap = { grass: M.grass, dirt: M.dirtRich, path: M.path, water: M.water };
+      const mat = matMap[tool.terrain] || M.grass;
+      const swatch = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.04, 0.88), mat);
+      swatch.position.y = 0.02;
+      mesh = new THREE.Group();
+      mesh.add(swatch);
+    }
+    if (!mesh) return null;
+    // Translucent ghost look — clone materials so we don't tint the
+    // shared M.* instances. Disable shadows to keep the preview cheap.
+    mesh.traverse(o => {
+      if (!o.isMesh || !o.material) return;
+      o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone();
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => {
+        m.transparent = true;
+        m.opacity = 0.45;
+        m.depthWrite = false;
+      });
+      o.castShadow = false;
+      o.receiveShadow = false;
+    });
+    mesh.userData.ghostPreview = true;
+    return mesh;
+  }
+
+  function ensureGhostPreview() {
+    const sig = ghostToolSignature(selectedTool);
+    if (sig === ghostPreviewKey && ghostPreview) return;
+    if (ghostPreview) {
+      scene.remove(ghostPreview);
+      disposeGroup(ghostPreview);
+      ghostPreview = null;
+    }
+    ghostPreviewKey = sig;
+    if (!sig) return;
+    ghostPreview = buildGhostMesh(selectedTool);
+    if (ghostPreview) {
+      ghostPreview.visible = false;
+      scene.add(ghostPreview);
+    }
+  }
+
+  function updateGhostPlacement() {
+    if (!ghostPreview) return;
+    if (!currentHover) { ghostPreview.visible = false; return; }
+    ghostPreview.visible = true;
+    const baseY = TOP_H + (terrainRiseAt(currentHover.x, currentHover.z) || 0);
+    ghostPreview.position.set(
+      currentHover.worldX + ghostOffsetX,
+      baseY + 0.01,
+      currentHover.worldZ + ghostOffsetZ
+    );
+    ghostPreview.rotation.y = ghostRotation;
+  }
+
+  function resetGhostTransform() {
+    ghostRotation = 0;
+    ghostOffsetX = 0;
+    ghostOffsetZ = 0;
+    updateGhostPlacement();
+  }
 
   // -------- raycaster --------
   const raycaster = new THREE.Raycaster();
@@ -5381,6 +5504,10 @@
     } else {
       flyoutEl.hidden = true;
     }
+    // Rebuild the ghost preview for the new tool — reset any
+    // user-applied rotation/offset so they don't bleed across tools.
+    ensureGhostPreview();
+    resetGhostTransform();
   }
 
   function renderFlyout(el, tool) {
@@ -5395,6 +5522,9 @@
         tool.activeVariant = v;
         renderFlyout(el, tool);
         if (typeof refreshToolThumb === 'function') refreshToolThumb(tool.id);
+        // Active variant changed → rebuild the ghost preview to match.
+        ensureGhostPreview();
+        resetGhostTransform();
       });
       el.appendChild(item);
     });
@@ -5446,6 +5576,14 @@
     }
   }
 
+  // Read the current ghost rotation/offset to attach to a fresh setCell.
+  // Resets the live ghost transform so the next placement starts clean.
+  function consumeGhostTransform() {
+    const t = { rotationY: ghostRotation, offsetX: ghostOffsetX, offsetZ: ghostOffsetZ };
+    resetGhostTransform();
+    return t;
+  }
+
   function applyTool(x, z) {
     if (selectedTool.auto) {
       const genKey = document.getElementById('gen-key').value;
@@ -5480,7 +5618,8 @@
       const variant = selectedTool.activeVariant;
       const bType = (variant && variant.buildingType) || null;
       const terrainForHouse = cell.terrain === 'water' ? 'grass' : cell.terrain;
-      setCell(x, z, { terrain: terrainForHouse, terrainFloors: terrainLevelForCell(cell), kind: 'house', buildingType: bType });
+      const gt = consumeGhostTransform();
+      setCell(x, z, { terrain: terrainForHouse, terrainFloors: terrainLevelForCell(cell), kind: 'house', buildingType: bType, rotationY: gt.rotationY, offsetX: gt.offsetX, offsetZ: gt.offsetZ });
       return;
     }
     if (selectedTool.kind === 'fence') {
@@ -5504,7 +5643,8 @@
         return;
       }
       // Empty cell → fence becomes the main kind.
-      setCell(x, z, { terrain: cell.terrain, terrainFloors: terrainLevelForCell(cell), kind: 'fence', floors: 1, fenceSide: side });
+      const gt2 = consumeGhostTransform();
+      setCell(x, z, { terrain: cell.terrain, terrainFloors: terrainLevelForCell(cell), kind: 'fence', floors: 1, fenceSide: side, rotationY: gt2.rotationY, offsetX: gt2.offsetX, offsetZ: gt2.offsetZ });
       return;
     }
     if (selectedTool.kind) {
@@ -5534,13 +5674,15 @@
         carriedExtras.push(cell.kind === 'fence'
           ? { kind: 'fence', fenceSide: cell.fenceSide || 'n', floors: cell.floors || 1 }
           : { kind: 'tuft', floors: cell.floors || 1 });
-        setCell(x, z, { terrain: newTerrain, terrainFloors: terrainLevelForCell(cell), kind: incomingPrimary, floors: 1, extras: carriedExtras });
+        const gtd = consumeGhostTransform();
+        setCell(x, z, { terrain: newTerrain, terrainFloors: terrainLevelForCell(cell), kind: incomingPrimary, floors: 1, extras: carriedExtras, rotationY: gtd.rotationY, offsetX: gtd.offsetX, offsetZ: gtd.offsetZ });
         return;
       }
       if (cell.kind && cell.kind !== incomingPrimary && incomingPrimary === 'rock') {
         squashExistingObject(x, z);
       }
-      setCell(x, z, { terrain: newTerrain, terrainFloors: terrainLevelForCell(cell), kind: incomingPrimary, floors: 1 });
+      const gtf = consumeGhostTransform();
+      setCell(x, z, { terrain: newTerrain, terrainFloors: terrainLevelForCell(cell), kind: incomingPrimary, floors: 1, rotationY: gtf.rotationY, offsetX: gtf.offsetX, offsetZ: gtf.offsetZ });
       return;
     }
     if (selectedTool.terrain) {
@@ -5609,6 +5751,7 @@
       hoverMesh.visible = false;
       currentHover = null;
     }
+    updateGhostPlacement();
   }
 
   renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
@@ -5773,10 +5916,24 @@
     }
     if (k === 'c') doClear();
     else if (k === 'p' || k === 'i') togglePerspective();
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); panCameraByCells(-1, 0); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); panCameraByCells(1, 0); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); panCameraByCells(0, -1); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); panCameraByCells(0, 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      // Hold Shift to keep the original pan behaviour. Otherwise
+      // arrows steer the live ghost: left/right rotate, up/down
+      // nudge along Z, shift+left/right nudges along X.
+      if (e.shiftKey || !ghostPreview) {
+        if (e.key === 'ArrowLeft')       panCameraByCells(-1, 0);
+        else if (e.key === 'ArrowRight') panCameraByCells(1, 0);
+        else if (e.key === 'ArrowUp')    panCameraByCells(0, -1);
+        else                              panCameraByCells(0, 1);
+        return;
+      }
+      if (e.key === 'ArrowLeft')  ghostRotation -= GHOST_ROT_STEP;
+      if (e.key === 'ArrowRight') ghostRotation += GHOST_ROT_STEP;
+      if (e.key === 'ArrowUp')    ghostOffsetZ = Math.max(-GHOST_OFFSET_LIMIT, ghostOffsetZ - GHOST_OFFSET_STEP);
+      if (e.key === 'ArrowDown')  ghostOffsetZ = Math.min( GHOST_OFFSET_LIMIT, ghostOffsetZ + GHOST_OFFSET_STEP);
+      updateGhostPlacement();
+    }
   });
 
   window.addEventListener('keyup', e => {
@@ -7175,12 +7332,12 @@
       // Accept either tuple form [x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide]
       // (storage / export) or object form {x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide}
       // (canonical schema, AI generation output).
-      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras;
+      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform;
       if (Array.isArray(entry)) {
         if (entry.length < 4) continue;
-        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras] = entry;
+        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform] = entry;
       } else if (entry && typeof entry === 'object') {
-        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras } = entry);
+        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform } = entry);
       } else {
         continue;
       }
@@ -7196,6 +7353,16 @@
             floors: e.floors || e.f || 1,
           })).filter(e => e.kind === 'fence' || e.kind === 'tuft')
         : [];
+      let rotationY = 0, offsetX = 0, offsetZ = 0;
+      if (Array.isArray(transform) && transform.length >= 3) {
+        rotationY = +transform[0] || 0;
+        offsetX   = +transform[1] || 0;
+        offsetZ   = +transform[2] || 0;
+      } else if (transform && typeof transform === 'object') {
+        rotationY = +transform.rotationY || 0;
+        offsetX   = +transform.offsetX   || 0;
+        offsetZ   = +transform.offsetZ   || 0;
+      }
       overrides.set(x + ',' + z, {
         terrain: terrain || 'grass',
         terrainFloors: normalizedTerrainFloors,
@@ -7204,6 +7371,7 @@
         buildingType: buildingType || null,
         fenceSide: normalizedKind === 'fence' ? normalizeFenceSide(fenceSide) : null,
         extras: normalizedExtras,
+        rotationY, offsetX, offsetZ,
       });
     }
 
@@ -7220,6 +7388,9 @@
           buildingType: o ? o.buildingType : null,
           fenceSide: o ? o.fenceSide : null,
           extras:  o ? o.extras  : [],
+          rotationY: o ? o.rotationY : 0,
+          offsetX:   o ? o.offsetX   : 0,
+          offsetZ:   o ? o.offsetZ   : 0,
           tileDelay:   i * TILE_STAGGER,
           objectDelay: i * TILE_STAGGER + 0.04,
           forceTile: true,
