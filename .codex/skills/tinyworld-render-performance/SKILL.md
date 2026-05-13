@@ -37,7 +37,10 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Lighting stack: `AmbientLight` (flat fill so shadowed sides never go
   black) + `HemisphereLight` (warm sky/ground gradient) + the
   directional sun. All three are scaled by the lighting slider in
-  `applyLightingSettings()`.
+  `applyLightingSettings()`. Keep neutral/default lighting conservative
+  now that there is no post pass; time-of-day hemisphere scaling should
+  normalize against the day anchor (`0.90`), not the raw constructor value,
+  or midday blows out.
 - Ghost boards DO participate in the shadow pass — same sun, same shadows everywhere. `prepareFadeable` no longer forces castShadow/receiveShadow off on ghost meshes; the factory-level `castReceive` / `groundReceiveOnly` choices apply uniformly.
 - Voxel cloud visual opacity is independent from Cloud shadow. Do not drive visible cloud materials with `alphaTest`; cloud shadow breakup belongs on each puff's `customDepthMaterial` so lowering the shadow slider never hides the clouds themselves.
 - Smoke particles must be capped and must not cast/receive shadows.

@@ -3598,7 +3598,7 @@
     objectOpacity: 'tinyworld:render:objectOpacity',
     version: 'tinyworld:render:version',
   };
-  const RENDER_SETTINGS_VERSION = '14';
+  const RENDER_SETTINGS_VERSION = '15';
   const RENDER_DEFAULTS = {
     // Defaults tuned to keep image quality crisp while still trimming
     // a few cheap things off the per-frame budget.
@@ -3615,7 +3615,7 @@
     contrast: '1',
     brightness: '1',
     shadow: 'balanced',
-    lighting: '1.34',
+    lighting: '1.0',
     visibleDistance: '2',
     visibleSize: '8',
     clouds: '0.4',
@@ -3686,7 +3686,7 @@
   let renderSaturation = storedNumber(RENDER_LS.saturation, 1.0, 0.8, 1.3);
   let renderContrast = storedNumber(RENDER_LS.contrast, 1.0, 0.85, 1.25);
   let renderShadowQuality = localStorage.getItem(RENDER_LS.shadow) || 'balanced';
-  let renderLighting = storedNumber(RENDER_LS.lighting, 1.34, 0.5, 1.45);
+  let renderLighting = storedNumber(RENDER_LS.lighting, 1.0, 0.5, 1.45);
   let renderVisibleDistance = Math.round(storedNumber(RENDER_LS.visibleDistance, 2, 1, 4));
   // Visible-square size starts equal to the home grid so the world
   // only grows as the camera pans. On the FIRST pan we expand it to
@@ -3995,11 +3995,14 @@
   };
 
   function applyLightingSettings() {
-    hemi.intensity = 0.08 + renderLighting * 0.14;
-    sun.intensity = 0.85 + renderLighting * 0.55;
+    // Keep the default flatter and less blown-out now that the post pass is
+    // gone. The lighting slider still reaches bright values, but neutral 100%
+    // should preserve colour and shadow detail.
+    hemi.intensity = 0.05 + renderLighting * 0.10;
+    sun.intensity = 0.70 + renderLighting * 0.42;
     // Keep ambient minimal so cast shadows stay visible at every lighting
     // setting. Shadowed sides still get fill from hemi.
-    ambient.intensity = 0.04 + renderLighting * 0.05;
+    ambient.intensity = 0.025 + renderLighting * 0.035;
   }
 
   function setShadowQuality(value) {
@@ -10549,7 +10552,7 @@
       setRenderVisibleDistance(2);
       setRenderVisibleSize(16);
       renderBrightness = 1;
-      renderLighting = 1.34;
+      renderLighting = 1.0;
       applyLightingSettings();
       renderSaturation = 1;
       renderContrast = 1;
@@ -15615,8 +15618,8 @@
         sun.intensity = Math.max(0, lightBase.sunI * (tod.sunI / 1.35) * wx.mul);
         const sc = wx.tint != null ? lerpColor(tod.sunC, wx.tint, 0.35) : tod.sunC;
         sun.color.setHex(sc);
-        hemi.intensity = Math.max(0, lightBase.hemiI * (tod.hemiI / 0.30) * wx.hemiMul);
-        if (hemi.intensity > 1.6) hemi.intensity = 1.6;
+        hemi.intensity = Math.max(0, lightBase.hemiI * (tod.hemiI / 0.90) * wx.hemiMul);
+        if (hemi.intensity > 0.75) hemi.intensity = 0.75;
         hemi.color.setHex(tod.hemiSky);
         hemi.groundColor.setHex(lerpColor(tod.hemiGround, seasonGround, 0.45));
         const ambBoost = (tod.sunI < 0.5) ? 1.6 : 1.0;
