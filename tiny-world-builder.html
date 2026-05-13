@@ -1791,7 +1791,13 @@
       <span class="view-thumb" aria-hidden="true">
         <svg viewBox="0 0 32 28" width="36" height="32"><path d="M16 10 26 12l-10 4L6 12z" fill="#cdb98a"/><path d="M16 16l10-4v6l-10 4z" fill="#a08454"/><path d="M16 16l-10-4v6l10 4z" fill="#8a6f44"/></svg>
       </span>
-      <span class="view-body"><strong>First-person</strong><em>close orbit</em></span>
+      <span class="view-body"><strong>Perspective</strong><em>close orbit</em></span>
+    </button>
+    <button class="view-option" data-view="fp" role="menuitem">
+      <span class="view-thumb" aria-hidden="true">
+        <svg viewBox="0 0 32 28" width="36" height="32"><circle cx="16" cy="13" r="3" fill="#cdb98a"/><path d="M14 17h4l-2 8z" fill="#a08454"/><path d="M10 22l6-4 6 4" stroke="#8a6f44" stroke-width="1.5" fill="none"/></svg>
+      </span>
+      <span class="view-body"><strong>Walk (first-person)</strong><em>WASD · mouse · space jumps · esc exits</em></span>
     </button>
   </div>
 
@@ -8485,16 +8491,166 @@
   window.__adjustHoverTerrainHeight = adjustHoverTerrainHeight;
 
   function setCameraMode(mode) {
-    const requested = ['ortho', 'soft', 'perspective'].includes(mode) ? mode : 'ortho';
-    cameraMode = postProcessingEnabled ? 'ortho' : requested;
-    camera = cameraMode === 'ortho' ? orthoCam : (cameraMode === 'soft' ? softCam : persCam);
+    const requested = ['ortho', 'soft', 'perspective', 'fp'].includes(mode) ? mode : 'ortho';
+    // 'fp' (first-person walk) gates on post-processing the same way the
+    // other perspective modes do — post forces ortho.
+    const effective = postProcessingEnabled ? 'ortho' : requested;
+    if (effective !== 'fp' && fp.active) exitFP();
+    cameraMode = effective;
+    camera = cameraMode === 'ortho' ? orthoCam
+           : cameraMode === 'soft'  ? softCam
+           : persCam;
     perspBtn.classList.toggle('on', cameraMode !== 'ortho');
     perspBtn.classList.toggle('disabled', postProcessingEnabled);
     perspBtn.setAttribute('data-tooltip',
       postProcessingEnabled ? 'Isometric (locked — disable post-processing to change)' :
       cameraMode === 'ortho' ? 'Isometric' :
-      cameraMode === 'soft'  ? 'Soft perspective' : 'Perspective');
+      cameraMode === 'soft'  ? 'Soft perspective' :
+      cameraMode === 'fp'    ? 'Walk (esc to exit)' : 'Perspective');
+    if (effective === 'fp') enterFP();
     onResize();
+  }
+
+  // ---------- first-person walk ----------
+  // Ports OWB's src/main.js:194-343 ideas (eye-level camera, pointer-lock
+  // mouse-look, WASD + space jump + shift sprint) but simplified for
+  // tinyworld's 8×8 grid:
+  //   - ground height is sampled directly from world[x][z].terrainFloors
+  //     rather than via raycast (every cell is 1×1 with a known top Y).
+  //   - collision is bound-clamping to the home grid; no obstacle box
+  //     collisions (you can walk through props — keeps the diorama
+  //     readable rather than turning into a maze).
+  const FP_EYE_H = 0.5;          // eye sits 0.5 units above the cell top
+  const FP_SPEED = 1.4;          // units / sec
+  const FP_SPRINT_MULT = 2.2;
+  const FP_FOV = 55;
+  const FP_NEAR = 0.02;
+  const PERS_NEAR_DEFAULT = persCam.near;
+  const PERS_FOV_DEFAULT  = persCam.fov;
+  const FP_JUMP_V0 = 3.2;
+  const FP_GRAVITY = 10;
+  const FP_FALL_THRESHOLD = 0.5;
+  const FP_STEP_LERP = 14;
+  const fp = {
+    active: false,
+    pos: new THREE.Vector3(0, TOP_H + FP_EYE_H, 0),
+    yaw: 0,
+    pitch: 0,
+    vy: 0,
+    grounded: true,
+  };
+  const fpKeys = new Set();
+
+  function fpGroundYAt(worldX, worldZ) {
+    // Convert world-space (x, z) back to grid indices.
+    const gx = Math.round(worldX + GRID / 2 - 0.5);
+    const gz = Math.round(worldZ + GRID / 2 - 0.5);
+    const cell = (world[gx] && world[gx][gz]) ? world[gx][gz] : null;
+    const tf = cell ? (cell.terrainFloors || 1) : 1;
+    // Match the renderer's terrainRiseForLevel: each floor adds ~TOP_H.
+    const rise = (tf - 1) * TOP_H;
+    return rise + TOP_H + FP_EYE_H;
+  }
+
+  function enterFP() {
+    if (fp.active) return;
+    fp.active = true;
+    // Spawn at home-board centre at ground height, facing toward the
+    // negative Z axis so the user immediately sees the diorama.
+    fp.pos.set(0, fpGroundYAt(0, GRID * 0.4), GRID * 0.4);
+    fp.yaw = 0;
+    fp.pitch = 0;
+    fp.vy = 0;
+    fp.grounded = true;
+    persCam.fov = FP_FOV;
+    persCam.near = FP_NEAR;
+    persCam.updateProjectionMatrix();
+    document.body.classList.add('fp-active');
+    if (renderer.domElement.requestPointerLock) {
+      try { renderer.domElement.requestPointerLock(); } catch (_) {}
+    }
+  }
+  function exitFP() {
+    if (!fp.active) return;
+    fp.active = false;
+    fpKeys.clear();
+    persCam.fov = PERS_FOV_DEFAULT;
+    persCam.near = PERS_NEAR_DEFAULT;
+    persCam.updateProjectionMatrix();
+    document.body.classList.remove('fp-active');
+    if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+      try { document.exitPointerLock(); } catch (_) {}
+    }
+  }
+  document.addEventListener('pointerlockchange', () => {
+    if (!document.pointerLockElement && fp.active) {
+      // User hit esc / clicked away — drop back to ortho.
+      exitFP();
+      setCameraMode('ortho');
+    }
+  });
+  document.addEventListener('mousemove', e => {
+    if (!fp.active || document.pointerLockElement !== renderer.domElement) return;
+    fp.yaw -= e.movementX * 0.0022;
+    fp.pitch = Math.max(-1.4, Math.min(1.4, fp.pitch - e.movementY * 0.0022));
+  });
+  window.addEventListener('keydown', e => {
+    if (!fp.active) return;
+    if (e.key === 'Escape') { setCameraMode('ortho'); return; }
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (fp.grounded) { fp.vy = FP_JUMP_V0; fp.grounded = false; }
+      return;
+    }
+    fpKeys.add(e.key.toLowerCase());
+  });
+  window.addEventListener('keyup', e => {
+    if (!fp.active) return;
+    fpKeys.delete(e.key.toLowerCase());
+  });
+
+  function tickFP(dt) {
+    if (!fp.active) return;
+    const sinY = Math.sin(fp.yaw), cosY = Math.cos(fp.yaw);
+    let fx = 0, fz = 0;
+    if (fpKeys.has('w') || fpKeys.has('arrowup'))    { fx -= sinY; fz -= cosY; }
+    if (fpKeys.has('s') || fpKeys.has('arrowdown'))  { fx += sinY; fz += cosY; }
+    if (fpKeys.has('a') || fpKeys.has('arrowleft'))  { fx -= cosY; fz += sinY; }
+    if (fpKeys.has('d') || fpKeys.has('arrowright')) { fx += cosY; fz -= sinY; }
+    const sprint = fpKeys.has('shift') ? FP_SPRINT_MULT : 1;
+    const speed = FP_SPEED * sprint * dt;
+    const len = Math.hypot(fx, fz);
+    if (len > 0) {
+      const ux = fx / len, uz = fz / len;
+      fp.pos.x += ux * speed;
+      fp.pos.z += uz * speed;
+    }
+    // Clamp to the home-grid bounds (small margin so eye doesn't peek
+    // past the world edge).
+    const bound = GRID / 2 - 0.3;
+    fp.pos.x = Math.max(-bound, Math.min(bound, fp.pos.x));
+    fp.pos.z = Math.max(-bound, Math.min(bound, fp.pos.z));
+    // Ground-following + gravity.
+    const groundY = fpGroundYAt(fp.pos.x, fp.pos.z);
+    if (!fp.grounded) {
+      fp.vy -= FP_GRAVITY * dt;
+      fp.pos.y += fp.vy * dt;
+      if (fp.pos.y <= groundY) {
+        fp.pos.y = groundY;
+        fp.vy = 0;
+        fp.grounded = true;
+      }
+    } else if (fp.pos.y - groundY > FP_FALL_THRESHOLD) {
+      fp.grounded = false;
+    } else {
+      const k = 1 - Math.exp(-FP_STEP_LERP * dt);
+      fp.pos.y += (groundY - fp.pos.y) * k;
+    }
+    persCam.position.copy(fp.pos);
+    const lookX = fp.pos.x - Math.sin(fp.yaw) * Math.cos(fp.pitch);
+    const lookY = fp.pos.y + Math.sin(fp.pitch);
+    const lookZ = fp.pos.z - Math.cos(fp.yaw) * Math.cos(fp.pitch);
+    persCam.lookAt(lookX, lookY, lookZ);
   }
 
   function resetCameraDefaults() {
@@ -10108,6 +10264,7 @@
     tickOpacityTransitions(dt);
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
+    if (fp.active) tickFP(dt);
     updateClouds(dt);
     updateCropDuster(dt);
     // Drain the ghost-board build queue in small slices so visible-distance
