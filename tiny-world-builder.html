@@ -912,6 +912,22 @@
     margin-left: 4px;
   }
 
+  /* --- Showcase mode (hide chrome, let the scene speak) --- */
+  body.showcase .brand,
+  body.showcase .controls,
+  body.showcase .toolbar,
+  body.showcase .audio-panel,
+  body.showcase .help,
+  body.showcase .unsaved-banner,
+  body.showcase .minimap-wrap,
+  body.showcase #agent-input,
+  body.showcase #agent-panel {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  body.showcase .controls #showcase-mode { opacity: 1; pointer-events: auto; }
+
   /* --- Minimap --- */
   .minimap-wrap {
     position: fixed;
@@ -1116,7 +1132,9 @@
 
   .world-menu {
     position: fixed;
-    top: 78px; left: 28px;
+    /* Drop cleanly below the brand sub-line: brand sits at top:26px,
+       title 28px + 6px gap + sub-line 12px = ~72px; allow 8px gutter. */
+    top: 86px; left: 28px;
     z-index: 60;
     width: 320px;
     background: var(--panel);
@@ -1968,6 +1986,15 @@
     </button>
     <button class="btn icon" id="time-weather" data-tooltip="Time &amp; weather" aria-label="Time and weather">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </button>
+    <button class="btn icon" id="raise-terrain" data-tooltip="Raise terrain at cursor (R)" aria-label="Raise terrain">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="12 5 12 19"/><polyline points="5 12 12 5 19 12"/></svg>
+    </button>
+    <button class="btn icon" id="lower-terrain" data-tooltip="Lower terrain at cursor (F)" aria-label="Lower terrain">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="12 19 12 5"/><polyline points="5 12 12 19 19 12"/></svg>
+    </button>
+    <button class="btn icon" id="showcase-mode" data-tooltip="Showcase mode (hide chrome + orbit)" aria-label="Showcase mode">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
     </button>
     <button class="btn icon" id="dev-mode" data-tooltip="Developer overlay (`)" aria-label="Developer overlay">
       <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -10323,6 +10350,7 @@
     tickSquashAnims(dt);
     if (rippleAnims.length) tickRippleAnims(dt);
     if (fp.active) tickFP(dt);
+    if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
     updateClouds(dt);
     updateCropDuster(dt);
     // Drain the ghost-board build queue in small slices so visible-distance
@@ -13282,6 +13310,42 @@
         syncDevState();
       });
       syncDevState();
+    }
+
+    // -- raise / lower terrain (visible buttons matching R/F keys) --
+    const raiseBtn = document.getElementById('raise-terrain');
+    const lowerBtn = document.getElementById('lower-terrain');
+    if (raiseBtn) raiseBtn.addEventListener('click', () => {
+      if (typeof window.__adjustHoverTerrainHeight === 'function') window.__adjustHoverTerrainHeight(+1);
+    });
+    if (lowerBtn) lowerBtn.addEventListener('click', () => {
+      if (typeof window.__adjustHoverTerrainHeight === 'function') window.__adjustHoverTerrainHeight(-1);
+    });
+
+    // -- showcase mode (hide chrome + auto-orbit) --
+    // Toggles a body.showcase class that hides toolbars / chrome and
+    // starts a slow camera orbit driven by per-frame azimuth advance.
+    const showcaseBtn = document.getElementById('showcase-mode');
+    let showcaseActive = false;
+    if (showcaseBtn) {
+      showcaseBtn.addEventListener('click', () => {
+        showcaseActive = !showcaseActive;
+        document.body.classList.toggle('showcase', showcaseActive);
+        showcaseBtn.classList.toggle('on', showcaseActive);
+        if (showcaseActive) {
+          // Pop to soft perspective for a more cinematic angle.
+          if (typeof setCameraMode === 'function' && cameraMode === 'ortho') {
+            try { setCameraMode('soft'); } catch (_) {}
+          }
+        }
+      });
+      window.__showcaseTick = (dt) => {
+        if (!showcaseActive) return;
+        if (typeof azimuth === 'number') {
+          azimuth += dt * 0.12;
+          if (typeof updateCamera === 'function') updateCamera();
+        }
+      };
     }
 
     // Outside-click + escape close.
