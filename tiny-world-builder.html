@@ -808,6 +808,110 @@
     color: var(--muted);
     line-height: 1.4;
   }
+  /* --- Enhanced Generate panel (seed / biomes / elevation / plan) --- */
+  .modal-card.gen-card { width: min(560px, 100%); gap: 12px; max-height: calc(100vh - 100px); overflow: hidden; }
+  .modal-card.gen-card { overflow-y: auto; }
+  .gen-section {
+    background: rgba(0,0,0,0.015);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px 12px;
+  }
+  .gen-section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .gen-section-title {
+    font-size: 12px; font-weight: 600;
+    color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .gen-section-sum {
+    font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums;
+    padding: 1px 7px; border-radius: 999px;
+    background: #f0e9d6; border: 1px solid var(--line);
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .gen-section-sum.bad {
+    background: #fbe7e0; border-color: #e3a896; color: #8c3c25;
+  }
+  .gen-section-sum.good {
+    background: #e8f1dc; border-color: #b6cf90; color: #4a6a2a;
+  }
+  .gen-row-seed {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .gen-row-seed input {
+    flex: 1; font: inherit; font-size: 12.5px;
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .gen-mini {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; cursor: pointer;
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    transition: background 0.12s, color 0.12s;
+  }
+  .gen-mini:hover { background: #faf5ea; color: var(--ink); }
+  .gen-mini:active { transform: translateY(1px); }
+  .gen-sliders {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .gen-slider-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 44px;
+    align-items: center;
+    gap: 10px;
+    font-weight: 400;
+    color: var(--ink);
+    font-size: 12.5px;
+  }
+  .gen-slider-label {
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .gen-swatch {
+    width: 10px; height: 10px; border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    display: inline-block;
+  }
+  .gen-slider-row input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px;
+    background: var(--line);
+    border-radius: 999px;
+    border: none; padding: 0; margin: 0;
+    outline: none;
+  }
+  .gen-slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--panel); border: 1.5px solid #a88b4a;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  .gen-slider-row input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--panel); border: 1.5px solid #a88b4a;
+    cursor: pointer;
+  }
+  .gen-slider-val {
+    text-align: right; font-variant-numeric: tabular-nums;
+    color: var(--muted); font-size: 12px;
+  }
+  .gen-check {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 400; color: var(--ink); font-size: 12.5px;
+    flex-direction: row;
+  }
+  .gen-check input[type=checkbox] { margin: 0; }
+  .gen-check .gen-hint {
+    font-style: normal; color: var(--muted); font-size: 11.5px;
+    margin-left: 4px;
+  }
+
   .confirm-card { width: min(380px, 100%); }
   .confirm-card .modal-head strong {
     font-family: 'Fraunces', Georgia, serif;
@@ -1530,14 +1634,99 @@
   </div>
 
   <div id="gen-modal" class="modal" hidden>
-    <form class="modal-card" role="dialog" aria-labelledby="gen-title" onsubmit="return false">
+    <form class="modal-card gen-card" role="dialog" aria-labelledby="gen-title" onsubmit="return false">
       <div class="modal-head">
         <strong id="gen-title">Generate Tiny World</strong>
         <button class="modal-close" id="gen-close" title="Close">×</button>
       </div>
+
       <label>Prompt
         <textarea id="gen-prompt" rows="3" placeholder="a small fishing village by a river, a crop field next to two cottages, rocky outcrops on edges"></textarea>
       </label>
+
+      <div class="gen-section" data-section="seed">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Seed</span>
+        </div>
+        <div class="gen-row gen-row-seed">
+          <input id="gen-seed" type="text" placeholder="leave blank for random" autocomplete="off" />
+          <button class="gen-mini" id="gen-seed-random" type="button" data-tooltip="New random seed" aria-label="Random seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+          </button>
+          <button class="gen-mini" id="gen-seed-copy" type="button" data-tooltip="Copy seed" aria-label="Copy seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="gen-mini" id="gen-seed-paste" type="button" data-tooltip="Paste seed" aria-label="Paste seed">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="biomes">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Composition</span>
+          <span class="gen-section-sum" id="gen-biome-sum">100%</span>
+        </div>
+        <div class="gen-sliders" id="gen-biome-sliders">
+          <label class="gen-slider-row" data-biome="grass">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#9bc16a"></span>Grass</span>
+            <input type="range" min="0" max="100" step="1" value="55" data-biome="grass" />
+            <span class="gen-slider-val">55%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="forest">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#4f8a3a"></span>Forest</span>
+            <input type="range" min="0" max="100" step="1" value="20" data-biome="forest" />
+            <span class="gen-slider-val">20%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="water">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#5da3c8"></span>Water</span>
+            <input type="range" min="0" max="100" step="1" value="10" data-biome="water" />
+            <span class="gen-slider-val">10%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="dirt">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#b8945a"></span>Farmland</span>
+            <input type="range" min="0" max="100" step="1" value="10" data-biome="dirt" />
+            <span class="gen-slider-val">10%</span>
+          </label>
+          <label class="gen-slider-row" data-biome="settlement">
+            <span class="gen-slider-label"><span class="gen-swatch" style="background:#c98a5b"></span>Settlement</span>
+            <input type="range" min="0" max="100" step="1" value="5" data-biome="settlement" />
+            <span class="gen-slider-val">5%</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="elevation">
+        <div class="gen-section-head">
+          <span class="gen-section-title">Elevation</span>
+          <span class="gen-section-sum" id="gen-elev-sum">100%</span>
+        </div>
+        <div class="gen-sliders" id="gen-elev-sliders">
+          <label class="gen-slider-row" data-elev="plains">
+            <span class="gen-slider-label">Plains</span>
+            <input type="range" min="0" max="100" step="1" value="55" data-elev="plains" />
+            <span class="gen-slider-val">55%</span>
+          </label>
+          <label class="gen-slider-row" data-elev="hills">
+            <span class="gen-slider-label">Hills</span>
+            <input type="range" min="0" max="100" step="1" value="30" data-elev="hills" />
+            <span class="gen-slider-val">30%</span>
+          </label>
+          <label class="gen-slider-row" data-elev="mountains">
+            <span class="gen-slider-label">Mountains</span>
+            <input type="range" min="0" max="100" step="1" value="15" data-elev="mountains" />
+            <span class="gen-slider-val">15%</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="gen-section" data-section="advanced">
+        <label class="gen-check">
+          <input type="checkbox" id="gen-plan-first" />
+          <span>Sketch a topology plan first <em class="gen-hint">(uses gpt-image-1, OpenAI key)</em></span>
+        </label>
+      </div>
+
       <div class="help-line">Replaces the current world. Model and API key live in Settings → AI.</div>
       <div class="modal-foot">
         <span id="gen-status"></span>
@@ -9730,6 +9919,42 @@
     return JSON.stringify(block.input);
   }
 
+  // Item 12 — ask gpt-image-1 to draft a topology sketch first so the
+  // text model has a visual reference for valleys / hills / water.
+  // Returns a data: URL or hosted URL (whatever the API returns).  Best
+  // effort: callers are expected to fall back if this throws.
+  async function sketchTopologyPlan({ key, prompt, biomes, elevation, seed }) {
+    const bDesc = Object.entries(biomes).map(([k,v]) => k + ' ' + v + '%').join(', ');
+    const eDesc = 'plains ' + elevation.plains + '%, hills ' + elevation.hills + '%, mountains ' + elevation.mountains + '%';
+    const imgPrompt = (
+      'Top-down low-poly topology sketch of a tiny 8x8 isometric voxel diorama. ' +
+      'Show land/water boundaries, paths, and elevation as a colour-coded plan map ' +
+      '(blue=water, beige=path, light green=grass, dark green=forest, ' +
+      'brown=farmland, terracotta=settlement, darker shading = higher terrain). ' +
+      'Scene concept: ' + prompt + '. ' +
+      'Target composition: ' + bDesc + '. Elevation profile: ' + eDesc + '. ' +
+      'Aesthetic seed: ' + seed + '. ' +
+      'Output a clean 1:1 plan view, no labels, no UI, no characters.'
+    );
+    const r = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: 'gpt-image-1',
+        prompt: imgPrompt,
+        size: '1024x1024',
+        n: 1,
+      }),
+    });
+    if (!r.ok) throw new Error('image plan HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
+    const j = await r.json();
+    const item = (j && j.data && j.data[0]) || null;
+    if (!item) throw new Error('image plan: no data');
+    if (item.url) return item.url;
+    if (item.b64_json) return 'data:image/png;base64,' + item.b64_json;
+    throw new Error('image plan: unrecognised response shape');
+  }
+
   async function generateWorld(provider, model, key, userPrompt) {
     const system = buildSystemPrompt();
     const def = AI_DEFAULTS[provider];
@@ -9844,6 +10069,113 @@
   }
 
   // -------- generate modal wiring --------
+  // -------- generate panel state --------
+  // Persisted under tinyworld:gen:* — seed + composition + elevation +
+  // "plan first" toggle.  Sums on biomes/elevation sliders are enforced
+  // by proportionally rebalancing the other rows when one row moves.
+  const GEN_LS = {
+    seed: 'tinyworld:gen:seed',
+    biomes: 'tinyworld:gen:biomes.v1',
+    elevation: 'tinyworld:gen:elevation.v1',
+    planFirst: 'tinyworld:gen:planFirst',
+  };
+  const GEN_BIOME_DEFAULTS = { grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 };
+  const GEN_ELEV_DEFAULTS  = { plains: 55, hills: 30, mountains: 15 };
+
+  function genReadBiomes() {
+    try {
+      const raw = localStorage.getItem(GEN_LS.biomes);
+      if (!raw) return { ...GEN_BIOME_DEFAULTS };
+      const v = JSON.parse(raw);
+      const out = { ...GEN_BIOME_DEFAULTS };
+      for (const k of Object.keys(out)) if (Number.isFinite(v[k])) out[k] = clampInt(v[k], 0, 100);
+      return out;
+    } catch (_) { return { ...GEN_BIOME_DEFAULTS }; }
+  }
+  function genReadElevation() {
+    try {
+      const raw = localStorage.getItem(GEN_LS.elevation);
+      if (!raw) return { ...GEN_ELEV_DEFAULTS };
+      const v = JSON.parse(raw);
+      const out = { ...GEN_ELEV_DEFAULTS };
+      for (const k of Object.keys(out)) if (Number.isFinite(v[k])) out[k] = clampInt(v[k], 0, 100);
+      return out;
+    } catch (_) { return { ...GEN_ELEV_DEFAULTS }; }
+  }
+  function clampInt(n, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(Number(n) || 0))); }
+  function randomSeed() {
+    // Readable seeds: two short words + 3 digits.
+    const a = ['amber','clover','coral','dune','fern','glow','hazel','iris','juno','kestrel','larch','moss','nova','onyx','poppy','quartz','rust','sage','tide','umbra','vale','willow','yarrow','zephyr'];
+    const b = ['barrow','bay','brook','cliff','copse','crag','dale','fen','fjord','glen','grove','heath','holt','isle','lea','mire','peak','reef','ridge','vale','wood'];
+    const i = Math.floor(Math.random() * a.length);
+    const j = Math.floor(Math.random() * b.length);
+    const n = Math.floor(Math.random() * 900) + 100;
+    return a[i] + '-' + b[j] + '-' + n;
+  }
+  // Mulberry32 — deterministic PRNG seeded from a string.
+  function seedHash(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function makeMulberry32(seedStr) {
+    let a = seedHash(String(seedStr || ''));
+    return function() {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // Re-normalise a percent dict so it sums to 100, with the just-moved key
+  // pinned. Empty rows stay empty when possible.
+  function rebalanceSliderDict(dict, movedKey) {
+    const keys = Object.keys(dict);
+    const moved = clampInt(dict[movedKey], 0, 100);
+    let rest = 0;
+    for (const k of keys) if (k !== movedKey) rest += clampInt(dict[k], 0, 100);
+    const target = 100 - moved;
+    if (rest === 0) {
+      // Spread evenly across the other rows.
+      const others = keys.filter(k => k !== movedKey);
+      if (others.length === 0) return { ...dict, [movedKey]: 100 };
+      const each = Math.floor(target / others.length);
+      const out = { ...dict, [movedKey]: moved };
+      let used = 0;
+      others.forEach((k, i) => {
+        const v = (i === others.length - 1) ? (target - used) : each;
+        out[k] = clampInt(v, 0, 100);
+        used += v;
+      });
+      return out;
+    }
+    const out = { [movedKey]: moved };
+    let used = 0;
+    const others = keys.filter(k => k !== movedKey);
+    others.forEach((k, i) => {
+      let v;
+      if (i === others.length - 1) {
+        v = clampInt(target - used, 0, 100);
+      } else {
+        v = clampInt(dict[k] / rest * target, 0, 100);
+        used += v;
+      }
+      out[k] = v;
+    });
+    // Tiny rounding fix — make sure total == 100.
+    let total = 0;
+    for (const k of keys) total += out[k];
+    if (total !== 100 && others.length) {
+      const last = others[others.length - 1];
+      out[last] = clampInt(out[last] + (100 - total), 0, 100);
+    }
+    return out;
+  }
+
   (function wireGenerateModal() {
     const modal = document.getElementById('gen-modal');
     const openBtn = document.getElementById('generate');
@@ -9854,6 +10186,108 @@
     const modelEl = document.getElementById('gen-model');
     const keyEl = document.getElementById('gen-key');
     const statusEl = document.getElementById('gen-status');
+    const seedEl = document.getElementById('gen-seed');
+    const seedRandomBtn = document.getElementById('gen-seed-random');
+    const seedCopyBtn = document.getElementById('gen-seed-copy');
+    const seedPasteBtn = document.getElementById('gen-seed-paste');
+    const planFirstEl = document.getElementById('gen-plan-first');
+    const biomeSlidersEl = document.getElementById('gen-biome-sliders');
+    const biomeSumEl = document.getElementById('gen-biome-sum');
+    const elevSlidersEl = document.getElementById('gen-elev-sliders');
+    const elevSumEl = document.getElementById('gen-elev-sum');
+
+    let biomeState = genReadBiomes();
+    let elevState = genReadElevation();
+    if (planFirstEl) planFirstEl.checked = localStorage.getItem(GEN_LS.planFirst) === '1';
+    if (seedEl) seedEl.value = localStorage.getItem(GEN_LS.seed) || '';
+
+    function paintSliders(group, state, slidersEl, sumEl) {
+      let total = 0;
+      const rows = slidersEl ? slidersEl.querySelectorAll('.gen-slider-row') : [];
+      rows.forEach(row => {
+        const key = row.getAttribute('data-' + group);
+        if (!(key in state)) return;
+        const v = clampInt(state[key], 0, 100);
+        const range = row.querySelector('input[type=range]');
+        const val = row.querySelector('.gen-slider-val');
+        if (range && Number(range.value) !== v) range.value = String(v);
+        if (val) val.textContent = v + '%';
+        total += v;
+      });
+      if (sumEl) {
+        sumEl.textContent = total + '%';
+        sumEl.classList.remove('bad', 'good');
+        if (total === 100) sumEl.classList.add('good');
+        else sumEl.classList.add('bad');
+      }
+    }
+    function refreshSliders() {
+      paintSliders('biome', biomeState, biomeSlidersEl, biomeSumEl);
+      paintSliders('elev', elevState, elevSlidersEl, elevSumEl);
+    }
+    function bindGroup(group, state, slidersEl, storageKey, sumEl) {
+      if (!slidersEl) return;
+      slidersEl.addEventListener('input', e => {
+        const t = e.target;
+        if (!t || t.tagName !== 'INPUT' || t.type !== 'range') return;
+        const key = t.getAttribute('data-' + group);
+        if (!key || !(key in state)) return;
+        state[key] = clampInt(t.value, 0, 100);
+        const next = rebalanceSliderDict(state, key);
+        for (const k of Object.keys(state)) state[k] = next[k];
+        try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (_) {}
+        paintSliders(group, state, slidersEl, sumEl);
+      });
+    }
+    bindGroup('biome', biomeState, biomeSlidersEl, GEN_LS.biomes, biomeSumEl);
+    bindGroup('elev', elevState, elevSlidersEl, GEN_LS.elevation, elevSumEl);
+    refreshSliders();
+
+    if (seedEl) {
+      seedEl.addEventListener('input', () => {
+        try { localStorage.setItem(GEN_LS.seed, seedEl.value); } catch (_) {}
+      });
+    }
+    if (seedRandomBtn && seedEl) {
+      seedRandomBtn.addEventListener('click', () => {
+        seedEl.value = randomSeed();
+        try { localStorage.setItem(GEN_LS.seed, seedEl.value); } catch (_) {}
+      });
+    }
+    if (seedCopyBtn && seedEl) {
+      seedCopyBtn.addEventListener('click', async () => {
+        if (!seedEl.value) return;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(seedEl.value);
+          } else {
+            seedEl.select(); document.execCommand && document.execCommand('copy');
+          }
+        } catch (_) { /* clipboard blocked */ }
+      });
+    }
+    if (seedPasteBtn && seedEl) {
+      seedPasteBtn.addEventListener('click', async () => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) {
+            const v = await navigator.clipboard.readText();
+            if (v) { seedEl.value = v.trim(); try { localStorage.setItem(GEN_LS.seed, seedEl.value); } catch (_) {} }
+          }
+        } catch (_) {}
+      });
+    }
+    if (planFirstEl) {
+      planFirstEl.addEventListener('change', () => {
+        try { localStorage.setItem(GEN_LS.planFirst, planFirstEl.checked ? '1' : '0'); } catch (_) {}
+      });
+    }
+
+    window.__genState = () => ({
+      seed: seedEl ? seedEl.value : '',
+      biomes: { ...biomeState },
+      elevation: { ...elevState },
+      planFirst: !!(planFirstEl && planFirstEl.checked),
+    });
 
     function setStatus(msg, kind) {
       statusEl.textContent = msg || '';
@@ -9930,21 +10364,73 @@
     keyEl.addEventListener('input', saveProviderState);
 
     goBtn.addEventListener('click', async () => {
-      const prompt = promptEl.value.trim();
+      const promptRaw = promptEl.value.trim();
       const provider = providerEl.value;
       const model = modelEl.value.trim();
       const key = keyEl.value.trim();
-      if (!prompt) { setStatus('enter a prompt', 'error'); return; }
-      if (!key)    { setStatus('enter an API key', 'error'); return; }
+      const seed = (seedEl && seedEl.value.trim()) || '';
+      const biomes = { ...biomeState };
+      const elevation = { ...elevState };
+      const planFirst = !!(planFirstEl && planFirstEl.checked);
+      if (!promptRaw) { setStatus('enter a prompt', 'error'); return; }
+      if (!key)       { setStatus('enter an API key', 'error'); return; }
+      // Auto-sum guard: re-normalise on the fly if a row is off (defensive).
+      const bSum = Object.values(biomes).reduce((s,n)=>s+n,0);
+      if (bSum !== 100)      { setStatus('composition must sum to 100% — adjusted automatically', 'error'); }
+      const eSum = Object.values(elevation).reduce((s,n)=>s+n,0);
+      if (eSum !== 100)      { setStatus('elevation must sum to 100% — adjusted automatically', 'error'); }
+
+      // Effective seed: user-supplied or freshly generated. Stamped on the
+      // status line so the user can copy it after generation.
+      const effectiveSeed = seed || randomSeed();
+      if (!seed && seedEl) seedEl.value = effectiveSeed;
+
+      // Decorate the user prompt with composition + topology constraints
+      // and seed. Model is asked to honour those proportions when picking
+      // terrain / kinds, and to use the seed to disambiguate aesthetic
+      // choices so re-runs of the same seed produce consistent worlds.
+      const decoratedPrompt = (
+        'User intent: ' + promptRaw + '\n\n' +
+        'Composition (target percentages across the 8x8 grid, sum=100):\n' +
+        Object.entries(biomes).map(([k,v]) => '  ' + k + ': ' + v + '%').join('\n') + '\n\n' +
+        'Elevation profile (terrainFloors stack distribution, sum=100):\n' +
+        '  plains (terrainFloors=1): ' + elevation.plains + '%\n' +
+        '  hills (terrainFloors=2-3): ' + elevation.hills + '%\n' +
+        '  mountains (terrainFloors=4-8): ' + elevation.mountains + '%\n\n' +
+        'Seed: "' + effectiveSeed + '" — interpret as an aesthetic anchor; use it ' +
+        'to break ties consistently so the same seed + prompt yields a similar layout.\n\n' +
+        'Notes:\n' +
+        '- "forest" composition share should be expressed via tree placements on grass.\n' +
+        '- "settlement" share should be expressed via house clusters connected by path.\n' +
+        '- Use water cells for water share, dirt cells for farmland, grass for the rest.\n' +
+        '- Raise hills/mountains using terrainFloors (1=plains, 2-3=hills, 4-8=mountains).'
+      );
+
       saveProviderState();
       goBtn.disabled = true;
-      setStatus('generating', 'busy');
+      setStatus(planFirst ? 'sketching plan…' : 'generating', 'busy');
       try {
-        const data = await generateWorld(provider, model, key, prompt);
+        // Optional pre-pass: ask gpt-image-1 for a top-down topology sketch,
+        // then attach the image URL as additional context. Best-effort — if
+        // image generation fails, we fall back to plain text generation.
+        let planImageUrl = null;
+        if (planFirst && provider === 'openai') {
+          try {
+            planImageUrl = await sketchTopologyPlan({
+              key, prompt: promptRaw, biomes, elevation, seed: effectiveSeed,
+            });
+          } catch (planErr) {
+            console.warn('[generate] plan sketch failed (continuing without):', planErr);
+          }
+        }
+        const finalUserPrompt = planImageUrl
+          ? (decoratedPrompt + '\n\nA topology sketch was generated for you at: ' + planImageUrl +
+             '\nTreat it as authoritative for valleys/hills and water/land boundaries.')
+          : decoratedPrompt;
+        const data = await generateWorld(provider, model, key, finalUserPrompt);
         const ok = applyState(data);
         if (!ok) throw new Error('renderer rejected the scene');
-        setStatus('done', '');
-        close();
+        setStatus('done · seed: ' + effectiveSeed, '');
       } catch (err) {
         console.error('generate failed:', err);
         setStatus(String(err.message || err).slice(0, 140), 'error');
