@@ -2848,6 +2848,7 @@
         <button class="pill" data-weather="clear">Clear</button>
         <button class="pill" data-weather="cloudy">Cloudy</button>
         <button class="pill" data-weather="rain">Rain</button>
+        <button class="pill" data-weather="storm">Storm</button>
         <button class="pill" data-weather="snow">Snow</button>
       </div>
     </div>
@@ -4303,7 +4304,7 @@
       if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
       return;
     }
-    const heavy = (typeof weatherHeavyFactor === 'function') ? weatherHeavyFactor() : 0;
+    const heavy = (typeof weatherEffectFactor === 'function') ? weatherEffectFactor() : 0;
     const tint = new THREE.Color(mode === 'snow' ? 0xeaf3ff : 0x5f6f7f);
     const amount = mode === 'snow' ? 0.06 + heavy * 0.18 : 0.08 + heavy * 0.20;
     for (const [name] of weatherMaterialBase.entries()) {
@@ -8069,8 +8070,9 @@
 
   // -------- weather tile effects --------
   // Rain/snow particles are local to the camera, but the weather state itself
-  // should read across every rendered tile. These overlays are cheap shared
-  // slabs added to home + preview tile groups and refreshed when weather flips.
+  // should read across every rendered element through shared material tinting.
+  // The old always-on tile overlay slabs are deliberately disabled below; only
+  // real rain/snow impacts create visible surface marks.
   var tileWeatherMode = 'clear';
   let weatherTileAssets = null;
   function ensureWeatherTileAssets() {
@@ -11345,8 +11347,12 @@
   function weatherHeavyFactor() {
     return Math.max(0, Math.min(1, (weatherIntensity - 0.25) / 0.75));
   }
+  function weatherEffectFactor() {
+    const heavy = weatherHeavyFactor();
+    return weatherMode === 'storm' ? Math.max(0.82, heavy) : heavy;
+  }
   function weatherScaledCount(light, heavy) {
-    const k = weatherHeavyFactor();
+    const k = weatherEffectFactor();
     return Math.round(light + (heavy - light) * k);
   }
 
@@ -11441,13 +11447,13 @@
     return mesh;
   }
 
-  const rainSplash = makeSplashPool(120, { color: 0xb8c6d8, size: 0.22, life: 0.28, opacity: 0.55 });
+  const rainSplash = makeSplashPool(220, { color: 0xd4e5f4, size: 0.30, life: 0.38, opacity: 0.70 });
   scene.add(rainSplash);
 
   function applyWeatherSplashOpacity() {
-    const heavy = weatherHeavyFactor();
-    if (rainSplash && rainSplash.material) rainSplash.material.opacity = (0.28 + 0.36 * heavy) * weatherSplashIntensity;
-    if (rainSurface && rainSurface.material) rainSurface.material.opacity = (0.08 + 0.16 * heavy) * weatherSplashIntensity;
+    const heavy = weatherEffectFactor();
+    if (rainSplash && rainSplash.material) rainSplash.material.opacity = (0.34 + 0.42 * heavy) * weatherSplashIntensity;
+    if (rainSurface && rainSurface.material) rainSurface.material.opacity = (0.10 + 0.20 * heavy) * weatherSplashIntensity;
     if (snowSurface && snowSurface.material) snowSurface.material.opacity = (0.14 + 0.22 * heavy) * weatherSplashIntensity;
   }
 
@@ -11518,9 +11524,9 @@
   }
 
   function emitRainSurface(x, y, z) {
-    const heavy = weatherHeavyFactor();
-    const chance = weatherSplashIntensity * Math.max(0, (heavy - 0.18) / 0.82);
-    emitWeatherBuildSurface(rainSurface, x, y, z, chance, 0.45, 0.85 + heavy * 0.35);
+    const heavy = weatherEffectFactor();
+    const chance = weatherSplashIntensity * (0.10 + heavy * 0.74);
+    emitWeatherBuildSurface(rainSurface, x, y, z, chance, 0.42 + heavy * 0.10, 0.85 + heavy * 0.45);
   }
 
   function emitSnowSurface(x, y, z) {
@@ -11627,13 +11633,13 @@
 
   function setWeatherMode(mode) {
     weatherMode = mode;
-    tileWeatherMode = mode;
+    tileWeatherMode = mode === 'storm' ? 'rain' : mode;
     applyWeatherMaterialTint();
     updateWeatherTileEffects();
-    const heavy = weatherHeavyFactor();
-    if (rainMat) rainMat.opacity = 0.32 + 0.32 * heavy;
+    const heavy = weatherEffectFactor();
+    if (rainMat) rainMat.opacity = 0.32 + 0.36 * heavy;
     if (snowMat) snowMat.opacity = 0.75 + 0.20 * heavy;
-    setPrecipActive(rainMesh, mode === 'rain' ? weatherScaledCount(120, 700) : 0);
+    setPrecipActive(rainMesh, (mode === 'rain' || mode === 'storm') ? weatherScaledCount(120, 700) : 0);
     setPrecipActive(snowMesh, mode === 'snow' ? weatherScaledCount(70, 520) : 0);
   }
   function setWeatherIntensity(value) {
@@ -11650,7 +11656,8 @@
   // Watch body class for weather changes — this is the integration with
   // the existing time-weather popup which writes body.weather-* classes.
   function syncWeatherFromBodyClass() {
-    if (document.body.classList.contains('weather-rain')) setWeatherMode('rain');
+    if (document.body.classList.contains('weather-storm')) setWeatherMode('storm');
+    else if (document.body.classList.contains('weather-rain')) setWeatherMode('rain');
     else if (document.body.classList.contains('weather-snow')) setWeatherMode('snow');
     else setWeatherMode('clear');
   }
@@ -11659,8 +11666,8 @@
   syncWeatherFromBodyClass();
 
   function tickWeather(dt) {
-    const heavy = weatherHeavyFactor();
-    const rainBiasX = weatherMode === 'rain' ? 0.25 + heavy * 3.1 : 0;
+    const heavy = weatherEffectFactor();
+    const rainBiasX = (weatherMode === 'rain' || weatherMode === 'storm') ? 0.25 + heavy * 3.1 : 0;
     const rainTilt = rainBiasX ? Math.atan2(rainBiasX, 14) : 0;
     tickPrecip(rainMesh, dt, rainBiasX, rainTilt, (x, y, z) => {
       emitSplash(rainSplash, x, y, z);
@@ -15971,7 +15978,7 @@
       applyLights();
     }
     function applyWeather(weatherV) {
-      document.body.classList.remove('weather-clear','weather-cloudy','weather-rain','weather-snow');
+      document.body.classList.remove('weather-clear','weather-cloudy','weather-rain','weather-storm','weather-snow');
       document.body.classList.add('weather-' + weatherV);
       applyLights();
     }
@@ -16036,6 +16043,7 @@
       // snow use intensity as severity: low = light shower/flurries, high =
       // storm / snowstorm with darker, heavier ambience.
       const heavy = (typeof weatherHeavyFactor === 'function') ? weatherHeavyFactor() : 0;
+      if (w === 'storm') return { mul: 0.28, tint: 0x3f4858, hemiMul: 0.54 };
       if (w === 'rain')   return { mul: 0.72 - 0.42 * heavy, tint: heavy > 0.65 ? 0x4f5968 : 0x6a7a90, hemiMul: 0.82 - 0.22 * heavy };
       if (w === 'snow')   return { mul: 0.86 - 0.26 * heavy, tint: 0xc8d4e0, hemiMul: 0.96 - 0.20 * heavy };
       if (w === 'cloudy') return { mul: 0.68, tint: 0xa8a8a8, hemiMul: 0.85 };
@@ -16120,7 +16128,7 @@
       const s = localStorage.getItem(SEASON_LS);
       if (s && ['spring','summer','autumn','winter'].includes(s)) season = s;
       const w = localStorage.getItem(WEATHER_LS);
-      if (w && ['clear','cloudy','rain','snow'].includes(w)) weather = w;
+      if (w && ['clear','cloudy','rain','storm','snow'].includes(w)) weather = w;
     } catch (_) {}
     applyTod(todMinutes);
     applySeason(season);
@@ -16183,6 +16191,9 @@
           const p = e.target.closest('.pill');
           if (!p) return;
           weather = p.getAttribute('data-weather');
+          if (weather === 'storm' && typeof setWeatherIntensity === 'function') {
+            setWeatherIntensity(1);
+          }
           if (weather === 'snow' && season !== 'winter') {
             season = 'winter';
             applySeason(season);
@@ -16190,6 +16201,7 @@
           }
           applyWeather(weather);
           paintPills();
+          paintReadout();
           try { localStorage.setItem(WEATHER_LS, weather); } catch (_) {}
         });
       }
