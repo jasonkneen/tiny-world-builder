@@ -4277,16 +4277,51 @@
       pumpkinStem: 0x65743e, sunflowerStalk: 0x6f864e, rockMoss: 0x687c4e,
     },
   };
+  const weatherMaterialBase = new Map();
+  const WEATHER_MATERIAL_SKIP = new Set(['hover', 'hoverErase', 'waterFoam', 'cloud', 'cloudShade']);
+  function rememberWeatherMaterialBase() {
+    for (const [name, mat] of Object.entries(M)) {
+      if (!mat || !mat.color || WEATHER_MATERIAL_SKIP.has(name)) continue;
+      if (!weatherMaterialBase.has(name)) weatherMaterialBase.set(name, mat.color.getHex());
+    }
+  }
+  function resetWeatherMaterialTint() {
+    rememberWeatherMaterialBase();
+    for (const [name, hex] of weatherMaterialBase.entries()) {
+      const mat = M[name];
+      if (mat && mat.color) mat.color.setHex(hex);
+    }
+  }
+  function recaptureWeatherMaterialBase() {
+    weatherMaterialBase.clear();
+    rememberWeatherMaterialBase();
+  }
+  function applyWeatherMaterialTint() {
+    resetWeatherMaterialTint();
+    const mode = typeof tileWeatherMode === 'string' ? tileWeatherMode : 'clear';
+    if (mode !== 'rain' && mode !== 'snow') {
+      if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+      return;
+    }
+    const heavy = (typeof weatherHeavyFactor === 'function') ? weatherHeavyFactor() : 0;
+    const tint = new THREE.Color(mode === 'snow' ? 0xeaf3ff : 0x5f6f7f);
+    const amount = mode === 'snow' ? 0.06 + heavy * 0.18 : 0.08 + heavy * 0.20;
+    for (const [name] of weatherMaterialBase.entries()) {
+      const mat = M[name];
+      if (mat && mat.color) mat.color.lerp(tint, amount);
+    }
+    if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+  }
+
   function applySeasonFoliage(seasonName) {
+    resetWeatherMaterialTint();
     const palette = SEASON_FOLIAGE[seasonName === 'fall' ? 'autumn' : seasonName] || SEASON_FOLIAGE.summer;
     for (const [name, hex] of Object.entries(palette)) {
       const mat = M[name];
       if (mat && mat.color) mat.color.setHex(hex);
     }
-    // Fade-material clones may have captured old foliage colours; clear the
-    // cache so preview boards rebuilt/faded after a season change pick up the
-    // new palette instead of stale summer greens.
-    if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+    recaptureWeatherMaterialBase();
+    applyWeatherMaterialTint();
   }
 
   function castReceive(obj) {
@@ -4376,7 +4411,10 @@
     const terrainN = (neighbors && neighbors.terrain) || { n: null, s: null, e: null, w: null };
     const rise = terrainRiseForLevel(level);
     const topY = rise + TOP_H;
-    g.userData.weatherSurfaceY = topY + 0.03;
+    // Weather impact decals sit above the rounded/beveled slab, not at the
+    // mathematical tile height, otherwise rain ripples and snow buildup hide
+    // inside the top face at grazing camera angles.
+    g.userData.weatherSurfaceY = topY + 0.075;
 
     // Dirt block (sides + bottom of tile). Slightly overlap neighbours so
     // shallow camera angles can't see background through per-tile bevel gaps
@@ -7484,6 +7522,10 @@
     const baseY = obj.position.y;
     obj.position.y = baseY + distance;
     obj.userData.landing = true;
+    // Weather tile overlays are intentionally flat decals. Hide them while a
+    // tile is dropping in, otherwise they read as detached square panels until
+    // the tile settles onto the board.
+    if (obj.userData && obj.userData.weatherFx) obj.userData.weatherFx.visible = false;
     dropAnims.push({ obj, baseY, distance, t: -delay, dur, easing });
   }
   function dustCountForMesh(obj) {
@@ -7631,6 +7673,7 @@
       if (u >= 1) {
         a.obj.position.y = a.baseY;
         a.obj.userData.landing = false;
+        if (a.obj.userData && a.obj.userData.weatherFx) a.obj.userData.weatherFx.visible = true;
         emitImpactDust(a.obj);
         // For tiles or anything we didn't pre-fire (very short drops),
         // run the impact effects now as a fallback.
@@ -8058,23 +8101,10 @@
   }
   function applyWeatherTileEffect(tile) {
     if (!tile || !tile.userData || tile.userData.fadeRole !== 'tile') return;
-    const mode = tileWeatherMode;
-    if (mode !== 'rain' && mode !== 'snow') {
-      clearWeatherTileEffect(tile);
-      return;
-    }
-    if (tile.userData.weatherFx && tile.userData.weatherFxMode === mode) return;
+    // Do not attach per-tile weather panels. Weather should affect tiles via
+    // shared material tinting, while only actual rain/snow impacts create
+    // visible ripples/puddles/snow buildup on top of surfaces.
     clearWeatherTileEffect(tile);
-    const assets = ensureWeatherTileAssets();
-    const fx = new THREE.Mesh(assets.geo, mode === 'snow' ? assets.snow : assets.rain);
-    fx.name = 'weatherTileFx';
-    fx.position.y = tile.userData.weatherSurfaceY || (TOP_H + 0.03);
-    fx.renderOrder = mode === 'snow' ? 5 : 4;
-    fx.castShadow = false;
-    fx.receiveShadow = false;
-    tile.add(fx);
-    tile.userData.weatherFx = fx;
-    tile.userData.weatherFxMode = mode;
   }
   function updateWeatherTileEffects() {
     for (const key in cellMeshes) {
@@ -11477,7 +11507,7 @@
     const jitterX = (Math.random() - 0.5) * 0.18;
     const jitterZ = (Math.random() - 0.5) * 0.18;
     const size = minSize + Math.random() * (maxSize - minSize);
-    u._p.set(x + jitterX, y + 0.018, z + jitterZ);
+    u._p.set(x + jitterX, y + 0.045, z + jitterZ);
     u._q.setFromAxisAngle(u._axis, Math.random() * Math.PI * 2);
     u._s.set(size, 1, size * (0.75 + Math.random() * 0.35));
     u._m.compose(u._p, u._q, u._s);
@@ -11518,7 +11548,7 @@
         const k = Math.sin((nt / lifeMax) * Math.PI);
         sc.set(k, k, k);
       }
-      p.set(u.xs[i], u.ys[i] + 0.01, u.zs[i]);
+      p.set(u.xs[i], u.ys[i] + 0.035, u.zs[i]);
       m.compose(p, q, sc);
       pool.setMatrixAt(i, m);
     }
@@ -11531,8 +11561,7 @@
     const gz = Math.floor(z + GRID / 2);
     const homeEntry = cellMeshes[gx + ',' + gz];
     if (homeEntry && homeEntry.tile && homeEntry.tile.visible) {
-      const cell = getWorldCell(gx, gz);
-      return TOP_H + terrainRiseForLevel(tileLevelForCell(cell));
+      return homeEntry.tile.position.y + (homeEntry.tile.userData.weatherSurfaceY || (TOP_H + 0.075));
     }
     const bx = Math.floor(gx / GRID);
     const bz = Math.floor(gz / GRID);
@@ -11542,10 +11571,14 @@
     const lx = gx - bx * GRID;
     const lz = gz - bz * GRID;
     if (lx < 0 || lx >= GRID || lz < 0 || lz >= GRID) return null;
-    // Preview boards are valid landing surfaces, but avoid regenerating their
-    // deterministic cell data for every drop impact. Most preview tiles are
-    // level 1, so the standard tile top is the right cheap splash height.
-    return TOP_H;
+    // Preview boards are valid landing surfaces. Use the rendered tile's own
+    // weather surface height when available so impacts sit above the bevel.
+    for (const child of board.children) {
+      if (child && child.userData && child.userData.fadeRole === 'tile' && child.userData.gx === lx && child.userData.gz === lz) {
+        return child.position.y + (child.userData.weatherSurfaceY || (TOP_H + 0.075));
+      }
+    }
+    return TOP_H + 0.075;
   }
 
   const WEATHER_TILT_AXIS = new THREE.Vector3(0, 0, 1);
@@ -11595,6 +11628,7 @@
   function setWeatherMode(mode) {
     weatherMode = mode;
     tileWeatherMode = mode;
+    applyWeatherMaterialTint();
     updateWeatherTileEffects();
     const heavy = weatherHeavyFactor();
     if (rainMat) rainMat.opacity = 0.32 + 0.32 * heavy;
@@ -11606,6 +11640,7 @@
     weatherIntensity = Math.max(0.25, Math.min(1, Number.isFinite(value) ? value : 0.25));
     applyWeatherTileOpacity();
     applyWeatherSplashOpacity();
+    applyWeatherMaterialTint();
     setWeatherMode(weatherMode);
   }
   function setWeatherSplashIntensity(value) {
@@ -11711,6 +11746,8 @@
     'YEEHAW',
     'HAPPY HARVEST',
   ];
+  let activeSeason = 'summer';
+
   const cropDusterState = {
     phase: 'idle',          // 'idle' | 'flying' | 'banner' | 'refuel-wait'
     curve: null,
@@ -12088,6 +12125,15 @@
   function updateCropDuster(dt) {
     updateCropDustParticles(dt);
     if (!cropDusterModel) return;
+    if (activeSeason !== 'summer') {
+      cropDusterRoot.visible = false;
+      if (bannerMesh) bannerMesh.visible = false;
+      if (bannerWire) bannerWire.visible = false;
+      cropDusterState.phase = 'idle';
+      cropDusterState.curve = null;
+      cropDusterState.travel = 0;
+      return;
+    }
     spinCropDusterPropeller(dt);
     cropDusterTime += dt;
 
@@ -15919,6 +15965,7 @@
     function applySeason(seasonV) {
       document.body.classList.remove('season-spring','season-summer','season-autumn','season-winter');
       const normalized = seasonV === 'fall' ? 'autumn' : seasonV;
+      activeSeason = normalized;
       document.body.classList.add('season-' + normalized);
       if (typeof applySeasonFoliage === 'function') applySeasonFoliage(normalized);
       applyLights();
