@@ -87,63 +87,92 @@
   canvas.placing { cursor: crosshair; }
   canvas.dragging { cursor: grabbing; }
 
+  /* Original top-left brand (restored from main): Fraunces serif title
+     with italic accent on "Builder", subtitle below. */
   .brand {
-    display: none;
+    position: fixed;
+    top: 26px;
+    left: 28px;
+    pointer-events: none;
+    z-index: 10;
   }
   .brand .title {
-    font-family: inherit;
-    font-weight: 700;
-    font-size: 17px;
-    letter-spacing: 0;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 28px;
+    letter-spacing: -0.02em;
     line-height: 1;
-  }
-  .brand .title::before {
-    content: '';
-    display: inline-block;
-    width: 28px;
-    height: 28px;
-    margin-right: 10px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #a6ca53, #75a83a);
-    box-shadow: inset 0 -3px 0 rgba(63, 98, 29, 0.2), 0 1px 2px rgba(60, 40, 10, 0.14);
-    vertical-align: -8px;
-  }
-  .brand .title::after {
-    content: '';
-    position: absolute;
-    left: 27px;
-    top: 24px;
-    width: 12px;
-    height: 10px;
-    border: 2px solid #fff;
-    border-top: 0;
-    border-radius: 0 0 2px 2px;
-    box-sizing: border-box;
+    color: var(--ink);
   }
   .brand .title em {
-    display: none;
+    font-style: italic;
+    font-weight: 400;
+    color: #a08454;
   }
   .brand .sub {
-    display: none;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: 0.02em;
   }
+  /* world-menu-btn lives inside .brand only so JS can find it and
+     relocate it into the toolbar's world-slot; not visible here. */
+  .brand #world-menu-btn { display: none; }
+
+  /* Icon pill — sits top-right; the minimap stacks beneath it. */
+  .appbar {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 14;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .appbar .btn.icon {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+  }
+  .appbar .btn.icon svg { width: 15px; height: 15px; }
 
   .controls {
     position: fixed;
-    top: 30px; right: max(18px, calc(50% - 900px));
+    top: 50%;
+    left: 18px;
+    right: auto;
+    transform: translateY(-50%);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 4px;
-    min-height: 62px;
-    max-width: min(520px, calc(50vw - 110px));
-    padding: 0 16px 0 14px;
-    overflow-x: auto;
+    gap: 2px;
+    width: 44px;
+    max-height: min(720px, calc(100vh - 188px));
+    padding: 6px 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
     scrollbar-width: none;
-    background: rgba(255, 255, 255, 0.93);
-    border: 1px solid rgba(218, 208, 190, 0.82);
-    border-left: 0;
-    border-radius: 0 31px 31px 0;
-    box-shadow: 0 18px 48px -28px rgba(64, 48, 24, 0.45);
-    backdrop-filter: blur(14px);
+    background: rgba(255, 255, 255, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     z-index: 12;
   }
   .controls::-webkit-scrollbar { display: none; }
@@ -160,11 +189,14 @@
     box-shadow: 0 1px 0 rgba(60, 40, 10, 0.04);
     transition: background 0.12s, transform 0.08s;
   }
-  .btn:hover { background: #f7f1e5; }
+  .btn:hover { background: rgba(255, 255, 255, 0.55); }
   .btn:active { transform: translateY(1px); }
   .btn.on {
-    background: #f4ecd8;
-    border-color: #d8c79e;
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
   }
   .btn.on::before {
     content: '●';
@@ -175,20 +207,22 @@
   }
   .btn.icon {
     padding: 0;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #8d887d;
+    color: var(--ink);
   }
   .btn.icon.disabled {
     opacity: 0.4;
     pointer-events: none;
   }
   .btn.icon svg {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     display: block;
     stroke: currentColor;
     fill: none;
@@ -199,8 +233,11 @@
   .btn.icon.on::before { content: none; }
   .btn.icon.on {
     color: var(--ink);
-    background: #f4ecd8;
-    box-shadow: inset 0 0 0 1px #d8c79e, 0 0 0 3px rgba(217, 168, 43, 0.10);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
   }
   .btn.icon.locked {
     position: relative;
@@ -228,16 +265,21 @@
     bottom: 140px;
     right: 14px;
     z-index: 40;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 14px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
     padding: 8px 10px;
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 200px;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
   @media (max-width: 800px) {
     .audio-panel {
@@ -249,7 +291,7 @@
   }
   .audio-row {
     display: grid;
-    grid-template-columns: 26px 1fr auto;
+    grid-template-columns: 26px 1fr;
     align-items: center;
     gap: 8px;
   }
@@ -260,15 +302,59 @@
     text-transform: uppercase;
   }
   .audio-row input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
     width: 100%;
-    accent-color: var(--ink);
+    height: 14px;
+    background: transparent;
+    cursor: pointer;
+    outline: none;
+  }
+  .audio-row input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(120, 130, 150, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .audio-row input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(120, 130, 150, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .audio-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.18);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    cursor: pointer;
+  }
+  .audio-row input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.18);
+    cursor: pointer;
   }
   .audio-mute {
     width: 26px;
     height: 26px;
     padding: 0;
-    border: 1px solid var(--line);
-    background: var(--panel);
+    border: none;
+    background: transparent;
     color: var(--ink);
     border-radius: 6px;
     display: inline-flex;
@@ -293,31 +379,29 @@
   /* Custom tooltip with 500ms hover delay, no delay on hide. */
   [data-tooltip] { position: relative; }
   [data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+    content: none;
+  }
+  .ui-tooltip {
+    position: fixed;
+    z-index: 1000;
+    max-width: min(260px, calc(100vw - 24px));
     background: var(--ink);
     color: #fff;
-    padding: 5px 9px;
-    border-radius: 6px;
+    padding: 6px 9px;
+    border-radius: 7px;
     font-family: inherit;
     font-size: 11.5px;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 1.25;
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.12s ease 0s;
-    z-index: 100;
+    transform: translate(-50%, 0);
+    transition: opacity 0.12s ease;
     box-shadow: 0 4px 14px -6px rgba(20, 18, 16, 0.35);
   }
-  @media (hover: hover) {
-    [data-tooltip]:hover::after {
-      opacity: 1;
-      transition: opacity 0.12s ease 500ms;
-    }
+  .ui-tooltip.visible {
+    opacity: 1;
   }
 
   .toolbar {
@@ -325,16 +409,21 @@
     bottom: 28px;
     left: 50%;
     transform: translateX(-50%);
-    min-height: 62px;
-    background: rgba(255, 255, 255, 0.93);
-    padding: 0 18px;
-    border: 1px solid rgba(218, 208, 190, 0.82);
+    min-height: 54px;
+    background: rgba(255, 255, 255, 0.58);
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
     border-radius: 31px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    box-shadow: 0 18px 48px -28px rgba(64, 48, 24, 0.45);
-    backdrop-filter: blur(14px);
+    gap: 3px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     z-index: 12;
     max-width: calc(100vw - 32px);
     overflow-x: auto;
@@ -343,23 +432,23 @@
   }
   .toolbar::-webkit-scrollbar { display: none; }
   .toolbar-world-slot {
-    height: 48px;
+    height: 44px;
     display: flex;
     align-items: center;
     padding: 0 12px 0 0;
     margin-right: 8px;
-    border-right: 1px solid rgba(218, 208, 190, 0.92);
+    border-right: 1px solid rgba(120, 130, 150, 0.18);
     flex: 0 0 auto;
   }
   .toolbar .brand-title-btn {
     position: relative;
-    height: 42px;
+    height: 38px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
     padding: 0 2px 0 0;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 750;
     letter-spacing: 0;
     line-height: 1;
@@ -368,8 +457,8 @@
   }
   .toolbar .brand-title-btn::before {
     content: '';
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     border-radius: 8px;
     background: linear-gradient(135deg, #a6ca53, #75a83a);
     box-shadow: inset 0 -3px 0 rgba(63, 98, 29, 0.2), 0 1px 2px rgba(60, 40, 10, 0.14);
@@ -379,9 +468,9 @@
     content: '';
     position: absolute;
     left: 7px;
-    top: 17px;
-    width: 11px;
-    height: 9px;
+    top: 15px;
+    width: 10px;
+    height: 8px;
     border: 2px solid #fff;
     border-top: 0;
     border-radius: 0 0 2px 2px;
@@ -396,34 +485,55 @@
     color: #8d887d;
   }
   .tool-group-btn {
-    width: 78px;
-    height: 60px;
+    width: 58px;
+    height: 50px;
     border: 1px solid transparent;
-    border-radius: 18px;
+    border-radius: 16px;
     background: transparent;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 10.5px;
     color: #8d887d;
     font-weight: 700;
     transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
     flex-shrink: 0;
-    padding: 5px 4px 4px;
+    padding: 3px 3px 2px;
   }
-  .tool-group-btn:hover { background: #f7f1e5; color: var(--ink); }
-  .tool-group-btn.active {
-    background: #f3ead7;
-    border-color: transparent;
+  .tool-group-btn > span:not(.chev),
+  .tool > span {
+    max-width: 100%;
+    line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tool-group-btn .chev {
+    font-size: 9px;
+    line-height: 1;
+    margin-top: -1px;
+    color: #b09863;
+  }
+  .tool-group-btn:hover {
+    background: rgba(255, 255, 255, 0.55);
     color: var(--ink);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .tool-group-btn.active {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
   }
   .tool-group-btn .tool-thumb {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     display: block;
     pointer-events: none;
     image-rendering: -webkit-optimize-contrast;
@@ -431,14 +541,19 @@
   }
   .toolbar-divider {
     width: 1px;
-    height: 42px;
-    background: rgba(218, 208, 190, 0.92);
-    margin: 0 10px;
+    height: 36px;
+    background: linear-gradient(
+      to bottom,
+      rgba(120, 130, 150, 0) 0%,
+      rgba(120, 130, 150, 0.28) 50%,
+      rgba(120, 130, 150, 0) 100%
+    );
+    margin: 0 7px;
     flex: 0 0 auto;
   }
   .toolbar .audio-panel {
     position: static;
-    min-width: 150px;
+    min-width: 132px;
     box-shadow: none;
     border: none;
     background: transparent;
@@ -448,42 +563,49 @@
     z-index: auto;
   }
   .toolbar .audio-row {
-    grid-template-columns: 22px 80px 30px;
-    gap: 6px;
+    grid-template-columns: 20px 1fr;
+    gap: 5px;
   }
   .toolbar .audio-mute {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 6px;
   }
   .toolbar .audio-row input[type="range"] {
     height: 14px;
   }
   .tool {
-    width: 70px;
-    height: 60px;
+    width: 52px;
+    height: 50px;
     border: 1px solid transparent;
-    border-radius: 18px;
+    border-radius: 16px;
     background: transparent;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: 1px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 10.5px;
     color: #8d887d;
     font-weight: 700;
     transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
     flex-shrink: 0;
-    padding: 5px 4px 4px;
+    padding: 3px 3px 2px;
   }
-  .tool:hover { background: #f7f1e5; color: var(--ink); }
-  .tool.active {
-    background: #f3ead7;
-    border-color: transparent;
+  .tool:hover {
+    background: rgba(255, 255, 255, 0.55);
     color: var(--ink);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .tool.active {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
+    color: var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
   }
   .tool:active { transform: translateY(1px); }
   .tool.group-start { margin-left: 10px; position: relative; }
@@ -497,9 +619,9 @@
     background: var(--line);
   }
   .tool .swatch {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
     box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.10);
     position: relative;
     overflow: hidden;
@@ -507,8 +629,8 @@
     filter: contrast(1.45) brightness(0.78) saturate(1.28);
   }
   .tool .tool-thumb {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     display: block;
     pointer-events: none;
     /* Crisp pixel-accurate downsample for the WebGL bitmap. */
@@ -521,7 +643,7 @@
   }
   .tool .swatch.select {
     background: #f6efd9;
-    border: 1px solid #c8b06f;
+    border: 1px solid rgba(255, 255, 255, 0.6);
     box-shadow: inset 0 -3px 0 rgba(120, 90, 30, 0.16), 0 1px 2px rgba(0, 0, 0, 0.10);
   }
   .tool .swatch.select::before {
@@ -554,6 +676,123 @@
     font-size: 9px;
     color: #b9b1a3;
     margin-top: -2px;
+  }
+
+  /* Toolbar tools (non-flyout): icons stay. On hover, the text label swaps
+     for the keyboard shortcut. Flyouts are unaffected. */
+  .toolbar .tool:not(.flyout-tool) kbd {
+    display: none;
+    margin-top: -2px;
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 10.5px;
+  }
+  .toolbar .tool:not(.flyout-tool):hover > span:not(.chev) {
+    display: none;
+  }
+  .toolbar .tool:not(.flyout-tool):hover kbd {
+    display: inline-block;
+  }
+
+  /* Tool groups (Terrain, Plants, Build, ...) — render as monochrome icons
+     in the main bar, matching Select/Erase. The 3D thumbnails still appear
+     in the flyout. */
+  .toolbar .tool-group-btn .tool-thumb,
+  .toolbar .tool-group-btn > span:not(.chev),
+  .toolbar .tool-group-btn .chev {
+    display: none;
+  }
+  .toolbar .tool-group-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 12px;
+    position: relative;
+  }
+  .toolbar .tool-group-btn::before {
+    content: '';
+    width: 22px;
+    height: 22px;
+    background: var(--ink);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 22px 22px;
+    mask-size: 22px 22px;
+    display: block;
+  }
+  .toolbar .tool-group-btn[data-group="terrain"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m8 3 4 8 5-5 5 15H2L8 3z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m8 3 4 8 5-5 5 15H2L8 3z'/></svg>");
+  }
+  .toolbar .tool-group-btn[data-group="plants"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M7 20h10'/><path d='M10 20c5.5-2.5.8-6.4 3-10'/><path d='M9.5 9.4c1.5 4.5 4.7 8.5 9 9.5'/><path d='M14.1 6a7 7 0 0 0-1.1 4c0 1.2.3 2.4.8 3.5'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M7 20h10'/><path d='M10 20c5.5-2.5.8-6.4 3-10'/><path d='M9.5 9.4c1.5 4.5 4.7 8.5 9 9.5'/><path d='M14.1 6a7 7 0 0 0-1.1 4c0 1.2.3 2.4.8 3.5'/></svg>");
+  }
+  .toolbar .tool-group-btn[data-group="build"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9.5 12 3l9 6.5'/><path d='M5 10v10h14V10'/><path d='M10 20v-6h4v6'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9.5 12 3l9 6.5'/><path d='M5 10v10h14V10'/><path d='M10 20v-6h4v6'/></svg>");
+  }
+  .toolbar .tool-group-btn[data-group="infra"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='19' r='3'/><path d='M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15'/><circle cx='18' cy='5' r='3'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='19' r='3'/><path d='M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15'/><circle cx='18' cy='5' r='3'/></svg>");
+  }
+  .toolbar .tool-group-btn[data-group="farm"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 22 16 8'/><path d='M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/><path d='M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/><path d='M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 22 16 8'/><path d='M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/><path d='M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/><path d='M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z'/></svg>");
+  }
+  .toolbar .tool-group-btn[data-group="life"]::before {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3.5c-.83.42-1.92.34-3 0a2.32 2.32 0 0 0-3 0c-1.08.34-2.17.42-3 0L5 5l1 1.5a3 3 0 0 0 1 4L5 17h2l1-3a3 3 0 0 0 2 3h4a3 3 0 0 0 2-3l1 3h2l-2-6.5a3 3 0 0 0 1-4L19 5Z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M16 3.5c-.83.42-1.92.34-3 0a2.32 2.32 0 0 0-3 0c-1.08.34-2.17.42-3 0L5 5l1 1.5a3 3 0 0 0 1 4L5 17h2l1-3a3 3 0 0 0 2 3h4a3 3 0 0 0 2-3l1 3h2l-2-6.5a3 3 0 0 0 1-4L19 5Z'/></svg>");
+  }
+
+  /* Select + Erase render as clean monochrome icons rather than coloured
+     swatches. Mask-image draws the glyph in currentColor (ink), so they
+     match the group-name typography. */
+  .tool .swatch.select,
+  .tool .swatch.eraser {
+    background: currentColor !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    color: var(--ink);
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 20px 20px;
+    mask-size: 20px 20px;
+  }
+  .tool .swatch.select::before { content: none !important; }
+  .tool .swatch.select {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M5.5 2.6 L19.3 12 L12.7 12.9 L9.4 20.2 Z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M5.5 2.6 L19.3 12 L12.7 12.9 L9.4 20.2 Z'/></svg>");
+  }
+  .tool .swatch.eraser {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/><path d='M10 11v6'/><path d='M14 11v6'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/><path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/><path d='M10 11v6'/><path d='M14 11v6'/></svg>");
+  }
+
+  /* Select + Erase: icon only — drop the text label and kbd badge so the
+     glyph stands alone, matching the rest of the icon-only chrome. */
+  .toolbar .tool:has(.swatch.select) > span,
+  .toolbar .tool:has(.swatch.select) > kbd,
+  .toolbar .tool:has(.swatch.eraser) > span,
+  .toolbar .tool:has(.swatch.eraser) > kbd {
+    display: none !important;
+  }
+  .toolbar .tool:has(.swatch.select),
+  .toolbar .tool:has(.swatch.eraser) {
+    width: 44px;
+    padding: 0;
+  }
+  .toolbar .tool:has(.swatch.select) .swatch,
+  .toolbar .tool:has(.swatch.eraser) .swatch {
+    width: 22px;
+    height: 22px;
+    -webkit-mask-size: 20px 20px;
+    mask-size: 20px 20px;
   }
 
   .unsaved-banner {
@@ -641,12 +880,19 @@
      driven by the `.open` class; `hidden` still hides for a11y. */
   .flyout {
     position: fixed;
-    background: var(--panel);
+    background: rgba(255, 255, 255, 0.6);
     padding: 6px;
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 18px;
     display: flex;
     gap: 4px;
-    box-shadow: var(--shadow);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     z-index: 11;
     transform-origin: bottom center;
     transform: translate(-50%, 14px) scale(0.94);
@@ -697,18 +943,33 @@
   }
   .tool-group-btn { position: relative; }
   .flyout.tool-menu {
-    padding: 8px;
-    gap: 6px;
+    padding: 6px;
+    gap: 4px;
   }
   .flyout .tool.flyout-tool {
     width: 62px;
-    height: 72px;
+    height: 66px;
     font-size: 10.5px;
+    padding: 4px 3px 6px;
+    justify-content: flex-start;
+    gap: 3px;
   }
   .flyout .tool.flyout-tool .tool-thumb {
     width: 42px;
     height: 42px;
   }
+  /* Lock label/kbd line-height so the button stays single-line regardless
+     of the page font's default leading. */
+  .flyout .tool.flyout-tool > span:not(.chev),
+  .flyout .tool.flyout-tool > kbd {
+    line-height: 1;
+    margin: 0;
+  }
+  /* Flyout: hide the kbd by default and swap label ↔ kbd on hover so the
+     button stays one line tall. */
+  .flyout .tool.flyout-tool kbd { display: none; }
+  .flyout .tool.flyout-tool:hover > span:not(.chev) { display: none; }
+  .flyout .tool.flyout-tool:hover kbd { display: inline-block; }
   .flyout[hidden] { display: none; }
   .flyout-item {
     min-width: 56px;
@@ -726,8 +987,8 @@
   }
   .flyout-item:hover { background: var(--line-soft); color: var(--ink); }
   .flyout-item.active {
-    background: #f4ecd8;
-    border-color: #d8c79e;
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
     color: var(--ink);
   }
 
@@ -739,10 +1000,16 @@
     transform: translateX(-50%);
     z-index: 12;
     width: min(380px, calc(100vw - 48px));
-    background: rgba(255, 255, 255, 0.94);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    box-shadow: var(--shadow);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 20px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     display: grid;
     grid-template-columns: 34px 1fr 40px;
     align-items: center;
@@ -750,16 +1017,76 @@
     padding: 8px;
   }
   .agent-input.dragging { opacity: 0.92; }
-  .agent-grip,
+
+  /* Suggestion chips — float under the input bar and follow it when
+     dragged (positioned absolute against .agent-input). Wrap onto
+     multiple rows so longer suggestions don't clip. */
+  .agent-suggestions {
+    position: absolute;
+    left: -40px;
+    right: -40px;
+    top: calc(100% + 8px);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 2px;
+    grid-column: 1 / -1;
+  }
+  .agent-suggestions[hidden] { display: none; }
+  .agent-suggestion-chip {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05);
+    transition: background 0.12s, transform 0.08s;
+  }
+  .agent-suggestion-chip:hover { background: rgba(255, 255, 255, 0.85); }
+  .agent-suggestion-chip:active { transform: translateY(1px); }
   .agent-send,
   .agent-panel-toggle {
-    border: 1px solid var(--line);
-    background: #fffaf0;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.45);
     color: var(--ink);
     border-radius: 10px;
     cursor: pointer;
     font: inherit;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.04);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    transition: background 0.12s, border-color 0.12s;
   }
+  .agent-send:hover,
+  .agent-panel-toggle:hover {
+    background: rgba(255, 255, 255, 0.68);
+    border-color: rgba(255, 255, 255, 0.75);
+  }
+  /* Drag grip — icon only, no border, no fill. */
+  .agent-grip {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: grab;
+    font: inherit;
+    padding: 0;
+    box-shadow: none;
+    transition: color 0.12s;
+  }
+  .agent-grip:hover { color: var(--ink); }
   .agent-grip,
   .agent-send {
     width: 34px;
@@ -783,22 +1110,49 @@
   .agent-send:disabled { opacity: 0.45; cursor: wait; }
   .agent-panel {
     position: fixed;
-    left: 50%;
-    bottom: 198px;
-    transform: translateX(-50%);
+    bottom: 20px;
+    right: 20px;
     z-index: 12;
-    width: min(380px, calc(100vw - 48px));
-    max-height: min(520px, calc(100vh - 220px));
-    background: rgba(255, 255, 255, 0.94);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    box-shadow: var(--shadow);
+    width: min(360px, calc(100vw - 40px));
+    /* Expanded height grows upward from the bottom anchor. Stops below
+       the minimap (top-right, ~240px reserved) so they never overlap. */
+    max-height: min(60vh, calc(100vh - 260px));
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 20px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transform-origin: bottom right;
+    transition:
+      width 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.28s ease;
   }
+  /* Toast / collapsed state: same bottom-right anchor, shrinks to a
+     low-rounded rectangle. */
   .agent-panel.collapsed {
-    max-height: none;
+    width: min(320px, calc(100vw - 40px));
+    max-height: 38px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  /* Hidden state — slides off-screen to the right. Used as the "no
+     activity" resting state so the panel only shows up when there's
+     something to say (toast behavior). */
+  .agent-panel.hidden {
+    transform: translateX(calc(100% + 40px));
+    opacity: 0;
+    pointer-events: none;
   }
   .agent-panel-head {
     display: flex;
@@ -806,17 +1160,26 @@
     justify-content: space-between;
     gap: 10px;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid rgba(120, 130, 150, 0.12);
     font-size: 13px;
     font-weight: 700;
     color: var(--ink);
   }
-  .agent-panel.collapsed .agent-panel-head { border-bottom: none; }
+  .agent-panel.collapsed .agent-panel-head { display: none; }
   .agent-panel-toggle {
-    padding: 5px 9px;
-    font-size: 12px;
-    font-weight: 700;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 500;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
   }
+  .agent-panel-toggle:hover { color: var(--ink); }
   .agent-messages {
     padding: 10px;
     overflow-y: auto;
@@ -824,7 +1187,42 @@
     flex-direction: column;
     gap: 8px;
   }
-  .agent-panel.collapsed .agent-messages { display: none; }
+  /* In collapsed mode, the messages container becomes a single horizontal
+     line and only the most recent message renders (as an inline ticker). */
+  .agent-panel.collapsed .agent-messages {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 16px;
+    gap: 0;
+    overflow: hidden;
+    height: 38px;
+  }
+  .agent-panel.collapsed .agent-msg {
+    display: none;
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    width: 100%;
+    text-align: center;
+  }
+  .agent-panel.collapsed .agent-msg:last-child {
+    display: block;
+  }
+  .agent-panel.collapsed:empty::before,
+  .agent-panel.collapsed .agent-messages:empty::before {
+    content: 'Ask the agent…';
+    font-size: 12px;
+    color: var(--muted);
+    width: 100%;
+    text-align: center;
+  }
   .agent-msg {
     padding: 8px 10px;
     border-radius: 11px;
@@ -855,9 +1253,7 @@
     inset: 0;
     z-index: 6;
     pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     opacity: 0;
     transition: opacity 0.22s ease;
   }
@@ -868,34 +1264,47 @@
     display: none;
   }
   .generation-plan-overlay img {
+    position: absolute;
     width: min(68vmin, 720px);
+    height: min(68vmin, 720px);
     aspect-ratio: 1;
     object-fit: cover;
-    border-radius: 18px;
+    border-radius: 4px;
     opacity: 0.48;
     mix-blend-mode: multiply;
     filter: saturate(1.12) contrast(1.08);
-    box-shadow: 0 16px 60px -28px rgba(38, 30, 16, 0.45);
+    box-shadow: none;
+    transform-origin: 50% 50%;
+  }
+  body.generation-locked canvas {
+    cursor: wait;
   }
 
   /* -------- generate modal -------- */
   .modal {
     position: fixed; inset: 0;
-    background: rgba(20, 18, 16, 0.45);
-    backdrop-filter: blur(2px);
+    background: rgba(20, 24, 40, 0.18);
+    backdrop-filter: blur(8px) saturate(140%);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
     z-index: 50;
     display: flex; align-items: flex-start; justify-content: center;
     padding: 80px 20px 20px;
   }
   .modal[hidden] { display: none; }
   .modal-card {
-    background: var(--ink-bg, #fafaf6);
+    background: rgba(255, 255, 255, 0.6);
     color: var(--ink);
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 20px;
     padding: 18px 18px 14px;
     width: min(520px, 100%);
-    box-shadow: 0 18px 48px rgba(20, 18, 16, 0.22);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 24px 56px -16px rgba(40, 50, 80, 0.30);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     display: flex; flex-direction: column; gap: 10px;
     font-size: 13px;
   }
@@ -908,17 +1317,98 @@
   .modal-card select {
     font: inherit;
     color: var(--ink);
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 10px;
     padding: 8px 10px;
     outline: none;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.04);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
   }
   .modal-card textarea { resize: vertical; min-height: 64px; }
   .modal-card input:focus,
   .modal-card textarea:focus,
   .modal-card select:focus {
-    border-color: #b89c5e;
+    border-color: rgba(60, 130, 247, 0.5);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 0 0 3px rgba(60, 130, 247, 0.15);
+  }
+  /* Glassify every range slider that lives inside a modal / settings panel /
+     time popup / range-row. Tracks become translucent rails, thumbs become
+     frosted pill glass. */
+  .modal-card input[type="range"],
+  .settings-panel input[type="range"],
+  .range-row input[type="range"],
+  .time-row input[type="range"],
+  .gen-slider-row input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 14px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    outline: none;
+    cursor: pointer;
+  }
+  .modal-card input[type="range"]::-webkit-slider-runnable-track,
+  .settings-panel input[type="range"]::-webkit-slider-runnable-track,
+  .range-row input[type="range"]::-webkit-slider-runnable-track,
+  .time-row input[type="range"]::-webkit-slider-runnable-track,
+  .gen-slider-row input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(120, 130, 150, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .modal-card input[type="range"]::-moz-range-track,
+  .settings-panel input[type="range"]::-moz-range-track,
+  .range-row input[type="range"]::-moz-range-track,
+  .time-row input[type="range"]::-moz-range-track,
+  .gen-slider-row input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(120, 130, 150, 0.18);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  }
+  .modal-card input[type="range"]::-webkit-slider-thumb,
+  .settings-panel input[type="range"]::-webkit-slider-thumb,
+  .range-row input[type="range"]::-webkit-slider-thumb,
+  .time-row input[type="range"]::-webkit-slider-thumb,
+  .gen-slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 1px 3px rgba(20, 30, 50, 0.22);
+    backdrop-filter: blur(10px) saturate(180%);
+    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    cursor: pointer;
+  }
+  .modal-card input[type="range"]::-moz-range-thumb,
+  .settings-panel input[type="range"]::-moz-range-thumb,
+  .range-row input[type="range"]::-moz-range-thumb,
+  .time-row input[type="range"]::-moz-range-thumb,
+  .gen-slider-row input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.95) inset,
+      0 1px 3px rgba(20, 30, 50, 0.22);
+    cursor: pointer;
   }
   .modal-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -1019,7 +1509,7 @@
     color: var(--muted);
     transition: background 0.12s, color 0.12s;
   }
-  .gen-mini:hover { background: #faf5ea; color: var(--ink); }
+  .gen-mini:hover { background: rgba(255, 255, 255, 0.55); color: var(--ink); }
   .gen-mini:active { transform: translateY(1px); }
   .gen-sliders {
     display: flex; flex-direction: column; gap: 6px;
@@ -1053,13 +1543,13 @@
   .gen-slider-row input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 14px; height: 14px; border-radius: 50%;
-    background: var(--panel); border: 1.5px solid #a88b4a;
+    background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.6);
     cursor: pointer;
     box-shadow: 0 1px 2px rgba(0,0,0,0.18);
   }
   .gen-slider-row input[type=range]::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%;
-    background: var(--panel); border: 1.5px solid #a88b4a;
+    background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.6);
     cursor: pointer;
   }
   .gen-slider-val {
@@ -1096,19 +1586,30 @@
   /* --- Minimap --- */
   .minimap-wrap {
     position: fixed;
-    bottom: 24px; left: 24px;
+    /* Default anchor: top-right, under the appbar icon pill.
+       Overridden by JS-set top/left when the user drags it. */
+    top: 72px; right: 24px;
+    bottom: auto; left: auto;
     z-index: 30;
-    display: flex; align-items: flex-end; gap: 6px;
+    display: flex; align-items: flex-start; gap: 6px;
+    flex-direction: row-reverse;
     transition: transform 0.18s ease;
+    cursor: grab;
   }
-  .minimap-wrap.collapsed { transform: translateX(-180px); }
+  .minimap-wrap.dragging { cursor: grabbing; transition: none; }
+  .minimap-wrap.collapsed { transform: translateX(180px); }
   .minimap-card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 18px;
     padding: 8px;
-    box-shadow: 0 12px 30px -12px rgba(40, 28, 8, 0.24);
-    backdrop-filter: blur(6px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
   .minimap-card canvas {
     display: block;
@@ -1124,29 +1625,22 @@
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
-  .minimap-fold-btn {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    width: 22px; height: 42px;
-    display: inline-flex; align-items: center; justify-content: center;
-    color: var(--muted); cursor: pointer;
-    padding: 0;
-  }
-  .minimap-fold-btn:hover { color: var(--ink); background: #faf5ea; }
-  .minimap-wrap.collapsed .minimap-fold-btn svg { transform: rotate(180deg); }
-  .minimap-fold-btn svg { transition: transform 0.18s ease; }
-
   /* --- Topbar popups (view / time / weather) --- */
   .topbar-popup {
     position: fixed;
-    top: 78px; right: 28px;
+    top: 28px; left: 84px; right: auto;
     z-index: 60;
     width: 240px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 18px 50px -16px rgba(40, 28, 8, 0.28), 0 4px 12px -4px rgba(40, 28, 8, 0.12);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 16px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     padding: 8px;
     font-size: 13px;
     color: var(--ink);
@@ -1171,8 +1665,14 @@
     color: var(--ink);
     font: inherit;
   }
-  .view-option:hover { background: #faf2dc; }
-  .view-option.active { background: #f4ecd8; border-color: #d8c79e; }
+  .view-option:hover { background: rgba(255, 255, 255, 0.55); }
+  .view-option.active {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
+  }
   .view-thumb {
     width: 40px; height: 36px;
     border-radius: 6px;
@@ -1202,7 +1702,7 @@
   .time-row input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 14px; height: 14px; border-radius: 50%;
-    background: var(--panel); border: 1.5px solid #a88b4a;
+    background: var(--panel); border: 1px solid rgba(255, 255, 255, 0.6);
     cursor: pointer;
   }
   .time-row-val {
@@ -1222,9 +1722,9 @@
     font-size: 11.5px;
     cursor: pointer;
   }
-  .pill:hover { background: #faf5ea; }
+  .pill:hover { background: rgba(255, 255, 255, 0.55); }
   .pill.active {
-    background: #f4ecd8; border-color: #d8c79e;
+    background: rgba(255, 255, 255, 0.78); border-color: rgba(255, 255, 255, 0.6);
     color: var(--ink); font-weight: 500;
   }
   .time-foot {
@@ -1302,10 +1802,16 @@
     top: 86px; left: 28px;
     z-index: 60;
     width: 320px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 18px 50px -16px rgba(40, 28, 8, 0.28), 0 4px 12px -4px rgba(40, 28, 8, 0.12);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 18px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
     overflow: hidden;
     font-size: 13px;
     color: var(--ink);
@@ -1332,7 +1838,7 @@
     color: var(--ink);
     outline: none;
   }
-  .world-menu-input:focus { border-color: #b89c5e; }
+  .world-menu-input:focus { border-color: rgba(60, 130, 247, 0.5); }
   .world-menu-rename {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -1343,7 +1849,7 @@
     cursor: pointer;
     flex-shrink: 0;
   }
-  .world-menu-rename:hover { color: var(--ink); background: #faf5ea; }
+  .world-menu-rename:hover { color: var(--ink); background: rgba(255, 255, 255, 0.55); }
   .world-menu-section { padding: 6px; }
   .world-menu-section + .world-menu-section { border-top: 1px solid var(--line-soft); }
   .world-menu-section-title {
@@ -1363,7 +1869,7 @@
     color: var(--ink);
     font: inherit; font-size: 12.5px;
   }
-  .world-menu-item:hover { background: #faf2dc; }
+  .world-menu-item:hover { background: rgba(255, 255, 255, 0.55); }
   .world-menu-icon {
     width: 22px; height: 22px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -1389,8 +1895,8 @@
     color: var(--ink);
     font-size: 12.5px;
   }
-  .world-menu-slot:hover { background: #faf2dc; }
-  .world-menu-slot.active { background: #f4ecd8; }
+  .world-menu-slot:hover { background: rgba(255, 255, 255, 0.55); }
+  .world-menu-slot.active { background: rgba(255, 255, 255, 0.78); }
   .world-menu-slot .slot-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .world-menu-slot .slot-date { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .world-menu-slot .slot-delete {
@@ -1423,7 +1929,7 @@
     color: var(--ink);
     cursor: pointer;
   }
-  .world-menu-foot-btn:hover { background: #faf5ea; }
+  .world-menu-foot-btn:hover { background: rgba(255, 255, 255, 0.55); }
 
   /* --- Command palette (⌘K) --- */
   .palette-overlay {
@@ -1488,7 +1994,7 @@
   }
   .palette-item:hover,
   .palette-item.active {
-    background: #faf2dc;
+    background: rgba(255, 255, 255, 0.55);
   }
   .palette-item-icon {
     width: 22px; height: 22px;
@@ -1614,11 +2120,14 @@
     text-align: left;
     padding: 10px 11px;
   }
-  .settings-tab:hover { background: var(--line-soft); color: var(--ink); }
+  .settings-tab:hover { background: rgba(255, 255, 255, 0.45); color: var(--ink); }
   .settings-tab.active {
-    background: #f4ecd8;
-    border-color: #d8c79e;
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.6);
     color: var(--ink);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 1px 2px rgba(20, 30, 50, 0.06);
   }
   .settings-panels {
     min-width: 0;
@@ -1679,7 +2188,7 @@
   .welcome-tip {
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: #fffaf0;
+    background: rgba(255, 255, 255, 0.45);
     padding: 10px;
     font-size: 12px;
     line-height: 1.35;
@@ -1767,7 +2276,7 @@
     transition: border-color 0.15s;
   }
   .auth-card input:focus {
-    border-color: #b89c5e;
+    border-color: rgba(60, 130, 247, 0.5);
   }
   .auth-btn {
     background: var(--ink);
@@ -1880,7 +2389,7 @@
     cursor: pointer;
     transition: background 0.12s;
   }
-  .saves-list li:hover { background: #faf5ea; }
+  .saves-list li:hover { background: rgba(255, 255, 255, 0.55); }
   .saves-list .save-name { font-weight: 500; font-size: 13px; }
   .saves-list .save-date { font-size: 11px; color: var(--muted); }
   .saves-list .save-actions { display: flex; gap: 6px; }
@@ -1947,7 +2456,7 @@
   .profile-avatar-preview {
     width: 72px; height: 72px; border-radius: 50%;
     object-fit: cover; border: 2px solid var(--line);
-    margin: 0; background: #f4ecd8;
+    margin: 0; background: rgba(255, 255, 255, 0.78);
   }
   .tab-bar { display: flex; gap: 4px; margin-bottom: 14px; }
   .tab-bar button {
@@ -1963,11 +2472,36 @@
   @media (max-width: 600px) {
     .help { display: none; }
     .controls {
+      top: 50%;
+      left: 10px;
+      right: auto;
+      transform: translateY(-50%);
+      width: 40px;
+      max-height: calc(100vh - 176px);
+      min-height: 0;
+      max-width: none;
+      padding: 5px 4px;
+    }
+    .btn.icon {
+      width: 32px;
+      height: 32px;
+      flex-basis: 32px;
+    }
+    .btn.icon svg {
+      width: 16px;
+      height: 16px;
+    }
+    .minimap-wrap {
       top: 12px;
       right: 12px;
-      min-height: 54px;
-      max-width: 34vw;
-      padding: 0 10px;
+    }
+    .minimap-card canvas {
+      width: 118px;
+      height: 118px;
+    }
+    .topbar-popup {
+      top: 12px;
+      left: 66px;
     }
     .toolbar {
       top: auto;
@@ -1991,11 +2525,11 @@
     }
     .toolbar .brand-title-btn::before { width: 24px; height: 24px; }
     .toolbar .brand-title-btn::after { left: 7px; top: 15px; width: 10px; height: 8px; }
-    .tool-group-btn { width: 58px; height: 52px; font-size: 10px; padding: 3px 2px; border-radius: 15px; }
+    .tool-group-btn { width: 54px; height: 50px; font-size: 10px; padding: 3px 2px; border-radius: 15px; }
     .tool-group-btn .tool-thumb { width: 28px; height: 28px; }
     .toolbar .audio-panel { min-width: 130px; }
     .toolbar .audio-row { grid-template-columns: 22px 70px 28px; }
-    .tool { width: 56px; height: 52px; font-size: 10px; padding: 3px 2px; border-radius: 15px; }
+    .tool { width: 50px; height: 50px; font-size: 10px; padding: 3px 2px; border-radius: 15px; }
     .tool .swatch { width: 22px; height: 22px; }
     .tool .tool-thumb { width: 28px; height: 28px; }
     .unsaved-banner { bottom: 90px; font-size: 11.5px; padding: 7px 12px 7px 10px; }
@@ -2003,16 +2537,30 @@
   @media (hover: none), (pointer: coarse) {
     .help { display: none; }
     .btn { padding: 11px 14px; min-height: 44px; }
-    .btn.icon { padding: 0; width: 44px; height: 44px; }
-    .tool { min-width: 56px; min-height: 60px; }
-    .tool-group-btn { min-width: 56px; min-height: 60px; }
+    .btn.icon { padding: 0; width: 40px; height: 40px; min-height: 40px; }
+    .tool { min-width: 50px; min-height: 50px; }
+    .tool-group-btn { min-width: 54px; min-height: 50px; }
     .flyout-item { min-height: 40px; padding: 10px 14px; }
     .tool kbd { display: none; }
   }
 </style>
+<link rel="stylesheet" href="cluso/cluso-embed.css">
+<script type="text/javascript">
+  window.__CLUSO_EMBEDDED_CONFIG__ = {
+    defaultActive: false,
+    showToolbar: true,
+    hideCollapsedToolbar: false,
+    visibleControls: {
+      pause: true, markers: true, copy: true, send: true,
+      clear: true, settings: true, inspector: true, exit: true
+    }
+  };
+</script>
+<script type="module" src="cluso/cluso-embed.js"></script>
 </head>
 <body>
   <div id="app"></div>
+  <div id="root" style="position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;"></div>
   <div id="cloud-layer"></div>
   <div id="tod-tint" aria-hidden="true"></div>
 
@@ -2025,17 +2573,16 @@
         <span id="minimap-fps" data-tooltip="Frames per second">60 fps</span>
       </div>
     </div>
-    <button class="minimap-fold-btn" id="minimap-fold-btn" data-tooltip="Toggle minimap|N" aria-label="Toggle minimap">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-    </button>
   </div>
 
   <div class="brand">
-    <button type="button" class="title brand-title-btn" id="world-menu-btn" aria-haspopup="menu" aria-expanded="false">
+    <div class="title">Tiny World <em>Builder</em></div>
+    <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
+    <!-- Kept for JS to relocate into the toolbar's world-slot. -->
+    <button type="button" class="brand-title-btn" id="world-menu-btn" aria-haspopup="menu" aria-expanded="false">
       <span id="world-menu-label">My world</span>
       <svg class="brand-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
     </button>
-    <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
   </div>
 
   <!-- View modes popup -->
@@ -2158,7 +2705,6 @@
         <svg class="ic-off" viewBox="0 0 24 24"><path d="M9 18V6l11-3v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="15" r="3"/><path d="M3 3l18 18"/></svg>
       </button>
       <input type="range" id="audio-music-vol" min="0" max="100" step="1" aria-label="Music volume" />
-      <span class="audio-label">Music</span>
     </div>
     <div class="audio-row">
       <button type="button" class="audio-mute" id="audio-sfx-mute" data-tooltip="Mute SFX" aria-label="Mute SFX">
@@ -2166,14 +2712,22 @@
         <svg class="ic-off" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/></svg>
       </button>
       <input type="range" id="audio-sfx-vol" min="0" max="100" step="1" aria-label="SFX volume" />
-      <span class="audio-label">SFX</span>
     </div>
   </div>
 
-  <div class="controls">
+  <div class="appbar">
     <a class="btn icon" id="github-link" href="https://github.com/jasonkneen/tiny-world-builder" target="_blank" rel="noopener noreferrer" data-tooltip="View on GitHub" aria-label="View Tiny World Builder on GitHub">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5a13.4 13.4 0 0 0-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5a4.8 4.8 0 0 0-1 3.5v4"/><path d="M9 18c-4.5 2-5-2-7-2"/></svg>
     </a>
+    <button class="btn icon" id="account-btn" data-tooltip="My account" aria-label="My account" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+  </div>
+
+  <div class="controls">
+    <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your 8 by 8 grid">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
+    </button>
     <button class="btn icon" id="persp" data-tooltip="Perspective" aria-label="Toggle camera mode">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05"/><path d="M12 22.08V12"/></svg>
     </button>
@@ -2183,20 +2737,11 @@
     <button class="btn icon" id="time-weather" data-tooltip="Time &amp; weather" aria-label="Time and weather">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
     </button>
-    <button class="btn icon" id="raise-terrain" data-tooltip="Raise terrain at cursor (R)" aria-label="Raise terrain">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="12 5 12 19"/><polyline points="5 12 12 5 19 12"/></svg>
-    </button>
-    <button class="btn icon" id="lower-terrain" data-tooltip="Lower terrain at cursor (F)" aria-label="Lower terrain">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="12 19 12 5"/><polyline points="5 12 12 19 19 12"/></svg>
-    </button>
     <button class="btn icon" id="showcase-mode" data-tooltip="Showcase mode (hide chrome + orbit)" aria-label="Showcase mode">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
     </button>
     <button class="btn icon" id="dev-mode" data-tooltip="Developer overlay (`)" aria-label="Developer overlay">
       <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-    </button>
-    <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your 8 by 8 grid">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
     </button>
     <button class="btn icon" id="reset" data-tooltip="Reset world" aria-label="Reset world">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
@@ -2211,20 +2756,11 @@
     <button class="btn icon" id="generate" data-tooltip="Generate from prompt" aria-label="Generate world from prompt" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
     </button>
-    <button class="btn icon" id="render-settings" data-tooltip="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-    </button>
     <button class="btn icon" id="clear" data-tooltip="Clear to grass" aria-label="Clear world to grass">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     </button>
-    <button class="btn icon" id="account-btn" data-tooltip="My account" aria-label="My account" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    </button>
-    <button class="btn icon" id="auth-login-btn-top" data-tooltip="Sign in to unlock AI, settings & cloud saves" aria-label="Sign in">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
-    </button>
-    <button class="btn icon" id="auth-logout-btn" data-tooltip="Sign out" aria-label="Sign out" hidden>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+    <button class="btn icon" id="render-settings" data-tooltip="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   </div>
 
@@ -2525,8 +3061,8 @@
           <span>Procedural (offline) <em class="gen-hint">— skip the LLM, generate directly from seed</em></span>
         </label>
         <label class="gen-check">
-          <input type="checkbox" id="gen-plan-first" />
-          <span>Sketch a topology plan first <em class="gen-hint">(uses gpt-image-2, OpenAI key)</em></span>
+          <input type="checkbox" id="gen-disable-autofill" />
+          <span>Disable outside auto-fill <em class="gen-hint">blank grass beyond the generated board</em></span>
         </label>
       </div>
 
@@ -2719,7 +3255,7 @@
   <div id="agent-panel" class="agent-panel collapsed" aria-live="polite">
     <div class="agent-panel-head">
       <span>Agent conversation</span>
-      <button type="button" class="agent-panel-toggle" id="agent-panel-toggle">Expand</button>
+      <button type="button" class="agent-panel-toggle" id="agent-panel-toggle" aria-label="Close conversation">×</button>
     </div>
     <div class="agent-messages" id="agent-messages"></div>
   </div>
@@ -2732,14 +3268,12 @@
     <button type="button" class="agent-grip" id="agent-grip" title="Drag agent input" aria-label="Drag agent input">⋮⋮</button>
     <input id="agent-prompt" type="text" placeholder="Ask the agent to change this world…" aria-label="Ask the agent" />
     <button type="submit" class="agent-send" id="agent-send" aria-label="Send to agent">↑</button>
+    <div id="agent-suggestions" class="agent-suggestions" role="listbox" aria-label="Suggested prompts" hidden></div>
   </form>
 
   <div class="toolbar" id="toolbar"></div>
   <div class="flyout" id="flyout" hidden></div>
 
-  <div class="help">
-    Tools: <kbd>1-9</kbd> + letters · <kbd>E</kbd> erase · <kbd>R</kbd>/<kbd>F</kbd> raise/lower · Right-drag / <kbd>Space</kbd> drag pan · <kbd>P</kbd> perspective · <kbd>⌘K</kbd> search
-  </div>
 
   <!-- Command palette ⌘K -->
   <div class="palette-overlay" id="palette-overlay" hidden>
@@ -2781,6 +3315,98 @@
   const HOME_GRID_MAX = 48;
   const HOME_GRID_OPTIONS = [8, 12, 16, 20, 32, 48];
   let GRID = HOME_GRID_DEFAULT;
+  // Tooltips render in one fixed body-level element so they are never
+  // clipped by scrolling toolbars, minimaps, or flyouts.
+  (function wireFixedTooltips() {
+    const tip = document.createElement('div');
+    tip.className = 'ui-tooltip';
+    tip.setAttribute('role', 'tooltip');
+    tip.hidden = true;
+    document.body.appendChild(tip);
+    let active = null;
+    let timer = 0;
+    let hideTimer = 0;
+    let lastPointer = { x: 0, y: 0 };
+
+    function labelFor(el) {
+      return String((el && el.getAttribute('data-tooltip')) || '').split('|')[0].trim();
+    }
+    function place(el) {
+      if (!el || tip.hidden) return;
+      const r = el.getBoundingClientRect();
+      tip.style.left = '0px';
+      tip.style.top = '0px';
+      const tw = tip.offsetWidth || 80;
+      const th = tip.offsetHeight || 24;
+      let left = r.left + r.width / 2;
+      let top = r.bottom + 8;
+      if (el.closest('.controls')) {
+        left = r.right + 10 + tw / 2;
+        top = r.top + r.height / 2 - th / 2;
+      } else if (top + th > window.innerHeight - 8) {
+        top = r.top - th - 8;
+      }
+      left = Math.max(8 + tw / 2, Math.min(window.innerWidth - 8 - tw / 2, left));
+      top = Math.max(8, Math.min(window.innerHeight - 8 - th, top));
+      tip.style.left = Math.round(left) + 'px';
+      tip.style.top = Math.round(top) + 'px';
+    }
+    function show(el) {
+      const text = labelFor(el);
+      if (!text) return;
+      active = el;
+      clearTimeout(timer);
+      clearTimeout(hideTimer);
+      timer = setTimeout(() => {
+        tip.textContent = text;
+        tip.hidden = false;
+        tip.classList.add('visible');
+        place(active);
+      }, 500);
+    }
+    function hide() {
+      clearTimeout(timer);
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        const hovered = document.elementFromPoint(lastPointer.x, lastPointer.y);
+        const hoveredTooltip = hovered && hovered.closest && hovered.closest('[data-tooltip]');
+        if (active && (hoveredTooltip === active || document.activeElement === active || active.contains(document.activeElement))) {
+          place(active);
+          return;
+        }
+        active = null;
+        tip.classList.remove('visible');
+        tip.hidden = true;
+      }, 50);
+    }
+    document.addEventListener('pointermove', e => {
+      lastPointer = { x: e.clientX, y: e.clientY };
+    }, { passive: true });
+    document.addEventListener('mousemove', e => {
+      lastPointer = { x: e.clientX, y: e.clientY };
+    }, { passive: true });
+    document.addEventListener('pointerover', e => {
+      const el = e.target && e.target.closest && e.target.closest('[data-tooltip]');
+      if (el) show(el);
+    });
+    document.addEventListener('mouseover', e => {
+      const el = e.target && e.target.closest && e.target.closest('[data-tooltip]');
+      if (el) show(el);
+    });
+    document.addEventListener('pointerout', e => {
+      if (active && (!e.relatedTarget || !active.contains(e.relatedTarget))) hide();
+    });
+    document.addEventListener('mouseout', e => {
+      if (active && (!e.relatedTarget || !active.contains(e.relatedTarget))) hide();
+    });
+    document.addEventListener('focusin', e => {
+      const el = e.target && e.target.closest && e.target.closest('[data-tooltip]');
+      if (el) show(el);
+    });
+    document.addEventListener('focusout', hide);
+    window.addEventListener('scroll', () => place(active), true);
+    window.addEventListener('resize', () => place(active));
+  })();
   try {
     const stored = parseInt(localStorage.getItem('tinyworld:home-grid') || '', 10);
     if (HOME_GRID_OPTIONS.includes(stored)) GRID = stored;
@@ -3214,9 +3840,16 @@
 
   function updateCamera() {
     const r = cameraMode === 'ortho' ? 14 : (cameraMode === 'soft' ? viewSize * 9.6 : viewSize * 4.2);
-    camera.position.x = target.x + r * Math.sin(polar) * Math.cos(azimuth);
-    camera.position.y = target.y + r * Math.cos(polar);
-    camera.position.z = target.z + r * Math.sin(polar) * Math.sin(azimuth);
+    const isTopdown = cameraMode === 'ortho' && polar < 0.05;
+    if (isTopdown) {
+      camera.up.set(0, 0, -1);
+      camera.position.set(target.x, target.y + r, target.z);
+    } else {
+      camera.up.set(0, 1, 0);
+      camera.position.x = target.x + r * Math.sin(polar) * Math.cos(azimuth);
+      camera.position.y = target.y + r * Math.cos(polar);
+      camera.position.z = target.z + r * Math.sin(polar) * Math.sin(azimuth);
+    }
     camera.lookAt(target);
     if (typeof updateSunFollow === 'function') updateSunFollow();
   }
@@ -7914,11 +8547,17 @@
     // Strip shadows — the thumb renderer has no shadow maps.
     scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
-    const cam = new THREE.OrthographicCamera(-1.3, 1.3, 1.3, -1.3, 0.1, 30);
+    // Tall objects (buildings) need a taller frustum + a higher look-at so
+    // their roofs aren't clipped. Everyone else uses the compact default.
+    const isTall = tool.kind === 'house';
+    const cam = isTall
+      ? new THREE.OrthographicCamera(-1.7, 1.7, 2.6, -1.0, 0.1, 30)
+      : new THREE.OrthographicCamera(-1.3, 1.3, 1.3, -1.3, 0.1, 30);
     const ctx = canvas.getContext('2d');
     const entry = {
       scene, camera: cam, canvas, ctx,
       angle: THUMB_BASE_ANGLE, baseAngle: THUMB_BASE_ANGLE, returning: false,
+      lookAtY: isTall ? 1.0 : 0.4,
     };
     thumbScenes.set(tool.id, entry);
     renderToolThumb(tool.id);
@@ -7929,8 +8568,9 @@
     const t = thumbScenes.get(id);
     if (!t || !thumbRenderer) return;
     const r = 3.4;
-    t.camera.position.set(Math.cos(t.angle) * r, 2.4, Math.sin(t.angle) * r);
-    t.camera.lookAt(0, 0.4, 0);
+    const lookY = t.lookAtY ?? 0.4;
+    t.camera.position.set(Math.cos(t.angle) * r, 2.4 + lookY, Math.sin(t.angle) * r);
+    t.camera.lookAt(0, lookY, 0);
     thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
     thumbRenderer.render(t.scene, t.camera);
     const dpr = thumbRenderer.getPixelRatio();
@@ -8028,8 +8668,8 @@
       canvas.className = 'tool-thumb';
       canvas.width = THUMB_SIZE;
       canvas.height = THUMB_SIZE;
-      canvas.style.width = ((opts && opts.flyout) ? 42 : 48) + 'px';
-      canvas.style.height = ((opts && opts.flyout) ? 42 : 48) + 'px';
+      canvas.style.width = ((opts && opts.flyout) ? 42 : 30) + 'px';
+      canvas.style.height = ((opts && opts.flyout) ? 42 : 30) + 'px';
       btn.appendChild(canvas);
       setTimeout(() => buildToolThumb(t, canvas), 0);
     }
@@ -8111,8 +8751,8 @@
         canvas.className = 'tool-thumb';
         canvas.width = THUMB_SIZE;
         canvas.height = THUMB_SIZE;
-        canvas.style.width = '48px';
-        canvas.style.height = '48px';
+        canvas.style.width = '30px';
+        canvas.style.height = '30px';
         btn.appendChild(canvas);
         const thumbTool = Object.assign({}, rep, { id: 'group-' + group.id });
         setTimeout(() => buildToolThumb(thumbTool, canvas), 0);
@@ -8520,6 +9160,25 @@
   const activePointers = new Map(); // pointerId -> {x, y, type}
   let pinchPrevDist = 0;
   let pinchPrevMid = null;
+  let generationViewLocked = false;
+
+  function setGenerationViewLocked(locked) {
+    generationViewLocked = !!locked;
+    document.body.classList.toggle('generation-locked', generationViewLocked);
+    if (!generationViewLocked) return;
+    activePointers.clear();
+    pointerDown = null;
+    lastPointer = null;
+    didDrag = false;
+    dragMode = null;
+    spaceDown = false;
+    pinchPrevDist = 0;
+    pinchPrevMid = null;
+    hoverMesh.visible = false;
+    currentHover = null;
+    renderer.domElement.classList.remove('dragging');
+    updateGhostPlacement();
+  }
 
   function updateHoverAt(x, y) {
     const cell = pickTile(x, y);
@@ -8537,6 +9196,10 @@
   renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
   renderer.domElement.addEventListener('pointerdown', e => {
+    if (generationViewLocked) {
+      e.preventDefault();
+      return;
+    }
     if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
     try { renderer.domElement.setPointerCapture(e.pointerId); } catch (_) {}
@@ -8565,6 +9228,10 @@
   });
 
   renderer.domElement.addEventListener('pointermove', e => {
+    if (generationViewLocked) {
+      e.preventDefault();
+      return;
+    }
     if (activePointers.has(e.pointerId)) {
       const p = activePointers.get(e.pointerId);
       p.x = e.clientX; p.y = e.clientY;
@@ -8617,6 +9284,12 @@
   });
 
   renderer.domElement.addEventListener('pointerup', e => {
+    if (generationViewLocked) {
+      e.preventDefault();
+      activePointers.delete(e.pointerId);
+      renderer.domElement.classList.remove('dragging');
+      return;
+    }
     activePointers.delete(e.pointerId);
     renderer.domElement.classList.remove('dragging');
 
@@ -8655,6 +9328,12 @@
   });
 
   renderer.domElement.addEventListener('pointercancel', e => {
+    if (generationViewLocked) {
+      e.preventDefault();
+      activePointers.delete(e.pointerId);
+      renderer.domElement.classList.remove('dragging');
+      return;
+    }
     activePointers.delete(e.pointerId);
     renderer.domElement.classList.remove('dragging');
     if (activePointers.size === 0) {
@@ -8668,6 +9347,7 @@
 
   renderer.domElement.addEventListener('wheel', e => {
     e.preventDefault();
+    if (generationViewLocked) return;
     viewSize = Math.max(4, Math.min(22, viewSize + e.deltaY * 0.005));
     onResize();
   }, { passive: false });
@@ -8684,6 +9364,12 @@
     // Never swallow OS-level keystrokes like Cmd+R (reload), Ctrl+R, Cmd+F, etc.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.toLowerCase();
+    if (generationViewLocked) {
+      if (e.code === 'Space' || k === 'c' || k === 'p' || k === 'i' || k === 'r' || k === 'f' || e.key.indexOf('Arrow') === 0) {
+        e.preventDefault();
+      }
+      return;
+    }
     if (e.code === 'Space') {
       spaceDown = true;
       e.preventDefault();
@@ -8830,7 +9516,7 @@
     const requested = ['ortho', 'topdown', 'soft', 'perspective', 'fp'].includes(mode) ? mode : 'ortho';
     // 'fp' (first-person walk) gates on post-processing the same way the
     // other perspective modes do — post forces ortho.
-    const effective = postProcessingEnabled ? 'ortho' : requested;
+    const effective = postProcessingEnabled && requested !== 'topdown' ? 'ortho' : requested;
     if (effective !== 'fp' && fp.active) exitFP();
     // 'topdown' is orthoCam with polar snapped to ~0 (straight down).
     // Internally we still store cameraMode='ortho' for everything that
@@ -8838,7 +9524,7 @@
     // angle is the only thing that differs.
     if (effective === 'topdown') {
       if (cameraMode !== 'ortho' || polar > 0.05) polarBeforeTopdown = polar;
-      polar = 0.001;
+      polar = 0;
       cameraMode = 'ortho';
     } else if (effective === 'ortho') {
       // Returning to isometric from a true top-down — restore the
@@ -11276,10 +11962,10 @@
     // controls. Keep the OpenAI payload minimal and use the newer completion
     // cap; xAI keeps the older chat-completions controls.
     if (isOpenAI) {
-      body.max_completion_tokens = 16000;
+      body.max_completion_tokens = 8000;
     } else {
       body.temperature = 0.6;
-      body.max_tokens = 16000;
+      body.max_tokens = 8000;
     }
     const r = await fetch(endpoint, {
       method: 'POST',
@@ -11638,42 +12324,6 @@
   // Expose for tests / command palette.
   window.__generateProceduralWorld = generateProceduralWorld;
 
-  // Item 12 — ask gpt-image-2 to draft a topology sketch first so the
-  // text model has a visual reference for valleys / hills / water.
-  // Returns a data: URL or hosted URL (whatever the API returns).  Best
-  // effort: callers are expected to fall back if this throws.
-  async function sketchTopologyPlan({ key, prompt, biomes, elevation, seed }) {
-    const bDesc = Object.entries(biomes).map(([k,v]) => k + ' ' + v + '%').join(', ');
-    const eDesc = 'plains ' + elevation.plains + '%, hills ' + elevation.hills + '%, mountains ' + elevation.mountains + '%';
-    const imgPrompt = (
-      'Top-down low-poly topology sketch of a tiny 8x8 isometric voxel diorama. ' +
-      'Show land/water boundaries, paths, and elevation as a colour-coded plan map ' +
-      '(blue=water, beige=path, light green=grass, dark green=forest, ' +
-      'brown=farmland, terracotta=settlement, darker shading = higher terrain). ' +
-      'Scene concept: ' + prompt + '. ' +
-      'Target composition: ' + bDesc + '. Elevation profile: ' + eDesc + '. ' +
-      'Aesthetic seed: ' + seed + '. ' +
-      'Output a clean 1:1 plan view, no labels, no UI, no characters.'
-    );
-    const r = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model: 'gpt-image-2',
-        prompt: imgPrompt,
-        size: '1024x1024',
-        n: 1,
-      }),
-    });
-    if (!r.ok) throw new Error('image plan HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
-    const j = await r.json();
-    const item = (j && j.data && j.data[0]) || null;
-    if (!item) throw new Error('image plan: no data');
-    if (item.url) return item.url;
-    if (item.b64_json) return 'data:image/png;base64,' + item.b64_json;
-    throw new Error('image plan: unrecognised response shape');
-  }
-
   async function generateWorld(provider, model, key, userPrompt) {
     const system = buildSystemPrompt();
     const def = AI_DEFAULTS[provider];
@@ -11796,7 +12446,7 @@
     seed: 'tinyworld:gen:seed',
     biomes: 'tinyworld:gen:biomes.v1',
     elevation: 'tinyworld:gen:elevation.v1',
-    planFirst: 'tinyworld:gen:planFirst',
+    disableAutofill: 'tinyworld:gen:disableAutofill',
   };
   const GEN_BIOME_DEFAULTS = { grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 };
   const GEN_ELEV_DEFAULTS  = { plains: 55, hills: 30, mountains: 15 };
@@ -11909,7 +12559,7 @@
     const seedRandomBtn = document.getElementById('gen-seed-random');
     const seedCopyBtn = document.getElementById('gen-seed-copy');
     const seedPasteBtn = document.getElementById('gen-seed-paste');
-    const planFirstEl = document.getElementById('gen-plan-first');
+    const disableAutofillEl = document.getElementById('gen-disable-autofill');
     const proceduralEl = document.getElementById('gen-procedural');
     if (proceduralEl) proceduralEl.checked = localStorage.getItem('tinyworld:gen:procedural') === '1';
     if (proceduralEl) proceduralEl.addEventListener('change', () => {
@@ -11922,7 +12572,7 @@
 
     let biomeState = genReadBiomes();
     let elevState = genReadElevation();
-    if (planFirstEl) planFirstEl.checked = localStorage.getItem(GEN_LS.planFirst) === '1';
+    if (disableAutofillEl) disableAutofillEl.checked = localStorage.getItem(GEN_LS.disableAutofill) === '1';
     if (seedEl) seedEl.value = localStorage.getItem(GEN_LS.seed) || '';
 
     function paintSliders(group, state, slidersEl, sumEl) {
@@ -12000,9 +12650,9 @@
         } catch (_) {}
       });
     }
-    if (planFirstEl) {
-      planFirstEl.addEventListener('change', () => {
-        try { localStorage.setItem(GEN_LS.planFirst, planFirstEl.checked ? '1' : '0'); } catch (_) {}
+    if (disableAutofillEl) {
+      disableAutofillEl.addEventListener('change', () => {
+        try { localStorage.setItem(GEN_LS.disableAutofill, disableAutofillEl.checked ? '1' : '0'); } catch (_) {}
       });
     }
 
@@ -12010,7 +12660,9 @@
       seed: seedEl ? seedEl.value : '',
       biomes: { ...biomeState },
       elevation: { ...elevState },
-      planFirst: !!(planFirstEl && planFirstEl.checked),
+      planFirst: false,
+      fastLayout: false,
+      disableAutofill: !!(disableAutofillEl && disableAutofillEl.checked),
     });
 
     function setStatus(msg, kind) {
@@ -12018,13 +12670,61 @@
       statusEl.className = kind || '';
     }
 
+    function applyGenerationAutofillSetting(disabled) {
+      ghostBoardsBlank = !!disabled;
+      if (typeof clearGhostWorld === 'function') clearGhostWorld();
+      if (!ghostBoardsBlank && typeof ensureGhostBoardsAroundTarget === 'function') {
+        ensureGhostBoardsAroundTarget();
+      }
+    }
+
+    function positionPlanOverlayToGrid() {
+      const overlay = document.getElementById('generation-plan-overlay');
+      const img = document.getElementById('generation-plan-image');
+      if (!overlay || overlay.hidden || !img || !camera) return;
+      camera.updateMatrixWorld();
+      camera.updateProjectionMatrix();
+      const half = GRID / 2;
+      const y = TOP_H + 0.06;
+      const corners = [
+        new THREE.Vector3(-half, y, -half),
+        new THREE.Vector3( half, y, -half),
+        new THREE.Vector3(-half, y,  half),
+        new THREE.Vector3( half, y,  half),
+      ].map(corner => {
+        const p = corner.project(camera);
+        return {
+          x: (p.x * 0.5 + 0.5) * window.innerWidth,
+          y: (-p.y * 0.5 + 0.5) * window.innerHeight,
+        };
+      });
+      if (!corners.every(p => Number.isFinite(p.x + p.y))) return;
+      const topW = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+      const bottomW = Math.hypot(corners[3].x - corners[2].x, corners[3].y - corners[2].y);
+      const leftH = Math.hypot(corners[2].x - corners[0].x, corners[2].y - corners[0].y);
+      const rightH = Math.hypot(corners[3].x - corners[1].x, corners[3].y - corners[1].y);
+      const centerX = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+      const centerY = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
+      const angle = Math.atan2(corners[1].y - corners[0].y, corners[1].x - corners[0].x);
+      img.style.left = Math.round(centerX) + 'px';
+      img.style.top = Math.round(centerY) + 'px';
+      img.style.width = Math.round((topW + bottomW) / 2) + 'px';
+      img.style.height = Math.round((leftH + rightH) / 2) + 'px';
+      img.style.transform = 'translate(-50%, -50%) rotate(' + angle + 'rad)';
+    }
+
     function showPlanOverlay(url) {
       const overlay = document.getElementById('generation-plan-overlay');
       const img = document.getElementById('generation-plan-image');
       if (!overlay || !img || !url) return;
       img.src = url;
+      img.onload = positionPlanOverlayToGrid;
       overlay.hidden = false;
-      requestAnimationFrame(() => overlay.classList.add('visible'));
+      requestAnimationFrame(() => {
+        if (typeof updateCamera === 'function') updateCamera();
+        positionPlanOverlayToGrid();
+        overlay.classList.add('visible');
+      });
     }
 
     function hidePlanOverlay() {
@@ -12034,9 +12734,12 @@
       overlay.classList.remove('visible');
       setTimeout(() => {
         overlay.hidden = true;
+        img.onload = null;
         img.removeAttribute('src');
+        img.removeAttribute('style');
       }, 220);
     }
+    window.addEventListener('resize', positionPlanOverlayToGrid);
 
     function generationProgress(prompt) {
       const agent = window.__tinyworldAgent;
@@ -12045,9 +12748,9 @@
           say() {},
           update() {},
           error() {},
+          done() {},
         };
       }
-      agent.open();
       agent.add('user', 'Generate: ' + prompt);
       let current = agent.add('assistant', 'Starting generation…');
       return {
@@ -12059,7 +12762,11 @@
           agent.update(current, text);
         },
         error(text) {
-          agent.update(current, text, 'error');
+          // Final / failure — record + toast.
+          if (agent.done) agent.done(text, 'error');
+        },
+        done(text) {
+          if (agent.done) agent.done(text);
         },
       };
     }
@@ -12156,14 +12863,19 @@
 
     goBtn.addEventListener('click', async () => {
       const promptRaw = promptEl.value.trim();
-      const provider = providerEl.value;
-      const model = textModelForGeneration(provider, modelEl.value.trim());
-      const key = keyEl.value.trim();
+      const provider = 'openai';
+      const model = 'gpt-5.5';
+      if (providerEl.value !== provider) {
+        providerEl.value = provider;
+        loadProviderState();
+      }
+      modelEl.value = model;
+      const key = keyEl.value.trim() || localStorage.getItem(AI_LS.key(provider)) || '';
       const seed = (seedEl && seedEl.value.trim()) || '';
       const biomes = { ...biomeState };
       const elevation = { ...elevState };
-      const planFirst = !!(planFirstEl && planFirstEl.checked);
       const procedural = !!(proceduralEl && proceduralEl.checked);
+      const disableAutofill = !!(disableAutofillEl && disableAutofillEl.checked);
 
       // Procedural path — bypass the LLM entirely.
       if (procedural) {
@@ -12172,10 +12884,11 @@
         goBtn.disabled = true;
         setStatus('generating offline…', 'busy');
         try {
+          applyGenerationAutofillSetting(disableAutofill);
           const data = generateProceduralWorld({ seed: effectiveSeed, biomes, elevation });
           const err = (typeof validateWorld === 'function') ? validateWorld(data) : null;
           if (err) throw new Error('procedural schema: ' + err);
-          if (typeof applyState === 'function' && !applyState(data)) {
+          if (typeof applyState === 'function' && !applyState(data, { sliced: true })) {
             throw new Error('renderer rejected the procedural scene');
           }
           setStatus('done · seed: ' + effectiveSeed, '');
@@ -12190,9 +12903,16 @@
 
       if (!promptRaw) { setStatus('enter a prompt', 'error'); return; }
       if (!key)       { setStatus('enter an API key', 'error'); return; }
+      applyGenerationAutofillSetting(disableAutofill);
       const progress = generationProgress(promptRaw);
       close();
       progress.update('Preparing generation settings…');
+      progress.say(
+        'Settings: ' + GRID + 'x' + GRID + ' grid, seed ' + (seed || 'random') +
+        ', JSON layout model ' + model +
+        ', image generation off' +
+        ', outside auto-fill ' + (disableAutofill ? 'off' : 'on') + '.'
+      );
       // Auto-sum guard: re-normalise on the fly if a row is off (defensive).
       const bSum = Object.values(biomes).reduce((s,n)=>s+n,0);
       if (bSum !== 100)      { setStatus('composition must sum to 100% — adjusted automatically', 'error'); }
@@ -12227,55 +12947,31 @@
 
       if (modelEl.value.trim() !== model) {
         modelEl.value = model;
-        setStatus('using ' + model + ' for JSON; gpt-image-2 stays on the sketch step', 'busy');
+        setStatus('using ' + model + ' for JSON generation', 'busy');
       }
       saveProviderState();
       goBtn.disabled = true;
       if (statusEl.textContent.indexOf('using ') !== 0) {
-        setStatus(planFirst ? 'sketching plan…' : 'generating', 'busy');
+        setStatus('generating', 'busy');
       }
       try {
-        // Optional pre-pass: ask gpt-image-2 for a top-down topology sketch,
-        // then attach the image URL as additional context. Best-effort — if
-        // image generation fails, we fall back to plain text generation.
-        let planImageUrl = null;
-        if (planFirst && provider === 'openai') {
-          progress.say('Clearing the board and switching to top-down plan view…');
-          hidePlanOverlay();
-          if (typeof doClear === 'function') doClear();
-          if (typeof setCameraMode === 'function') setCameraMode('topdown');
-          progress.say('Generating topology sketch with gpt-image-2…');
-          try {
-            planImageUrl = await sketchTopologyPlan({
-              key, prompt: promptRaw, biomes, elevation, seed: effectiveSeed,
-            });
-            showPlanOverlay(planImageUrl);
-            progress.say('Topology sketch overlaid on the board.');
-          } catch (planErr) {
-            console.warn('[generate] plan sketch failed (continuing without):', planErr);
-            progress.say('Topology sketch failed; continuing with JSON generation.');
-          }
-        }
-        const finalTextPrompt = planImageUrl
-          ? (decoratedPrompt + '\n\nUse the attached topology sketch as authoritative for valleys/hills and water/land boundaries.')
-          : decoratedPrompt;
-        const finalUserPrompt = planImageUrl
-          ? [
-              { type: 'text', text: finalTextPrompt },
-              { type: 'image_url', image_url: { url: planImageUrl } },
-            ]
-          : finalTextPrompt;
+        hidePlanOverlay();
         progress.say('Generating validated world JSON with ' + model + '…');
-        const data = await generateWorld(provider, model, key, finalUserPrompt);
-        progress.say('Switching back to perspective and building the board…');
+        const data = await generateWorld(provider, model, key, decoratedPrompt);
+        const receivedCells = data && Array.isArray(data.cells) ? data.cells.length : 0;
+        progress.say('Received JSON with ' + receivedCells + ' cells. Switching back to perspective and slicing the build into terrain, then objects.');
         hidePlanOverlay();
         if (typeof setCameraMode === 'function') setCameraMode('soft');
-        const buildMsg = progress.say('Building board from JSON… 0%');
+        const buildMsg = progress.say('Rendering terrain base layer… 0%');
         const ok = applyState(data, {
+          sliced: true,
+          keepCamera: true,
+          renderOrigin: { x: target.x, z: target.z },
           onProgress(info) {
             const pct = Math.round((info.done / Math.max(1, info.total)) * 100);
+            const phase = info.phase === 'detail' ? 'objects and details' : (info.phase === 'base' ? 'terrain base layer' : 'board');
             if (window.__tinyworldAgent) {
-              window.__tinyworldAgent.update(buildMsg, 'Building board from JSON… ' + pct + '%');
+              window.__tinyworldAgent.update(buildMsg, 'Rendering ' + phase + '… ' + pct + '%');
             }
           },
           onDone() {
@@ -12286,12 +12982,14 @@
         });
         if (!ok) throw new Error('renderer rejected the scene');
         setStatus('done · seed: ' + effectiveSeed, '');
+        progress.done('Building completed.');
       } catch (err) {
         console.error('generate failed:', err);
         hidePlanOverlay();
         progress.error(String(err.message || err).slice(0, 180));
         setStatus(String(err.message || err).slice(0, 140), 'error');
       } finally {
+        if (typeof setGenerationViewLocked === 'function') setGenerationViewLocked(false);
         goBtn.disabled = false;
       }
     });
@@ -12318,58 +13016,125 @@
     if (!form || !grip || !input || !send || !panel || !toggle || !messages) return;
 
     const POS_KEY = 'tinyworld:agent:input-pos';
-    const PANEL_KEY = 'tinyworld:agent:panel-collapsed';
+    const AUTO_COLLAPSE_MS = 4500;   // expanded → toast
+    const AUTO_HIDE_MS    = 3500;    // toast → hidden after idle (no activity)
+    let collapseTimer = null;
+    let hideTimer = null;
+    let pinnedOpen = false;
 
-    function positionAgentPanel() {
-      const r = form.getBoundingClientRect();
-      const width = r.width;
-      panel.style.width = width + 'px';
-      panel.style.left = Math.max(14, Math.min(window.innerWidth - width - 14, r.left)) + 'px';
-      panel.style.transform = 'none';
-      const panelH = panel.offsetHeight || 46;
-      let top = r.top - panelH - 10;
-      if (top < 14) top = Math.min(window.innerHeight - panelH - 14, r.bottom + 10);
-      panel.style.top = Math.max(14, top) + 'px';
-      panel.style.bottom = 'auto';
+    function clearTimers() {
+      if (collapseTimer) { clearTimeout(collapseTimer); collapseTimer = null; }
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
     }
 
-    function setPanelCollapsed(collapsed) {
+    function scheduleAutoFlow() {
+      // Ratchet: after activity, expand → toast → hide.
+      clearTimers();
+      if (pinnedOpen) return;
+      collapseTimer = setTimeout(() => {
+        panel.classList.add('collapsed');
+        
+        hideTimer = setTimeout(() => {
+          panel.classList.add('hidden');
+        }, AUTO_HIDE_MS);
+      }, AUTO_COLLAPSE_MS);
+    }
+
+    function showPanel() {
+      // Bring the panel in from off-screen if it's hidden.
+      panel.classList.remove('hidden');
+    }
+
+    function setPanelCollapsed(collapsed, opts) {
+      showPanel();
       panel.classList.toggle('collapsed', collapsed);
-      toggle.textContent = collapsed ? 'Expand' : 'Collapse';
-      try { localStorage.setItem(PANEL_KEY, collapsed ? '1' : '0'); } catch (_) {}
-      requestAnimationFrame(positionAgentPanel);
-      if (!collapsed) messages.scrollTop = messages.scrollHeight;
+      if (!collapsed) {
+        messages.scrollTop = messages.scrollHeight;
+        if (opts && opts.pin) {
+          pinnedOpen = true;
+          clearTimers();
+        }
+        if (opts && opts.auto) {
+          pinnedOpen = false;
+          scheduleAutoFlow();
+        }
+      } else {
+        if (opts && opts.auto) {
+          pinnedOpen = false;
+          clearTimers();
+          hideTimer = setTimeout(() => {
+            panel.classList.add('hidden');
+          }, AUTO_HIDE_MS);
+        } else {
+          pinnedOpen = false;
+          clearTimers();
+        }
+      }
     }
 
-      function addAgentMessage(role, text) {
-        const div = document.createElement('div');
-        div.className = 'agent-msg ' + role;
-        div.textContent = text;
-        messages.appendChild(div);
+    // Progress placeholder helpers — during work, the chat input's
+    // placeholder mirrors the latest assistant status. The toast pill
+    // is reserved for the final result.
+    const DEFAULT_PLACEHOLDER = input.placeholder || 'Ask the agent to change this world…';
+    function setInputProgress(text) {
+      input.placeholder = text || DEFAULT_PLACEHOLDER;
+    }
+    function clearInputProgress() {
+      input.placeholder = DEFAULT_PLACEHOLDER;
+    }
+
+    function addAgentMessage(role, text) {
+      const div = document.createElement('div');
+      div.className = 'agent-msg ' + role;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+      return div;
+    }
+
+    function fireToast() {
+      // Slide in the collapsed pill and start the auto-hide countdown.
+      showPanel();
+      panel.classList.add('collapsed');
+      pinnedOpen = false;
+      clearTimers();
+      hideTimer = setTimeout(() => {
+        panel.classList.add('hidden');
+      }, AUTO_HIDE_MS);
+    }
+
+    window.__tinyworldAgent = {
+      open() { setPanelCollapsed(false, { pin: true }); },
+      // Adds a message to the conversation history. Assistant text is
+      // mirrored in the input placeholder as a live progress hint. No
+      // toast is fired — that's reserved for `done()`.
+      add(role, text) {
+        if (role === 'assistant') setInputProgress(text);
+        return addAgentMessage(role, text);
+      },
+      // Updates an existing message + the placeholder. No toast.
+      update(node, text, role) {
+        if (!node) return;
+        if (role) node.className = 'agent-msg ' + role;
+        node.textContent = text;
         messages.scrollTop = messages.scrollHeight;
-        requestAnimationFrame(positionAgentPanel);
-        return div;
-      }
+        setInputProgress(text);
+      },
+      // Final / result. Records to history, slides the toast in, and
+      // restores the default placeholder once the toast has decayed.
+      done(text, role) {
+        role = role || 'assistant';
+        const node = addAgentMessage(role, text);
+        setInputProgress(text);
+        fireToast();
+        setTimeout(() => {
+          if (input.placeholder === text) clearInputProgress();
+        }, AUTO_HIDE_MS + 600);
+        return node;
+      },
+    };
 
-      window.__tinyworldAgent = {
-        open() {
-          setPanelCollapsed(false);
-          requestAnimationFrame(positionAgentPanel);
-        },
-        add(role, text) {
-          setPanelCollapsed(false);
-          return addAgentMessage(role, text);
-        },
-        update(node, text, role) {
-          if (!node) return;
-          if (role) node.className = 'agent-msg ' + role;
-          node.textContent = text;
-          messages.scrollTop = messages.scrollHeight;
-          requestAnimationFrame(positionAgentPanel);
-        },
-      };
-
-      function applyStoredPosition() {
+    function applyStoredPosition() {
       try {
         const raw = localStorage.getItem(POS_KEY);
         if (!raw) return;
@@ -12379,14 +13144,174 @@
         form.style.top = Math.max(14, Math.min(window.innerHeight - 54, p.y)) + 'px';
         form.style.bottom = 'auto';
         form.style.transform = 'none';
-        requestAnimationFrame(positionAgentPanel);
       } catch (_) {}
     }
 
-    toggle.addEventListener('click', () => setPanelCollapsed(!panel.classList.contains('collapsed')));
-    setPanelCollapsed(localStorage.getItem(PANEL_KEY) !== '0');
+    // Toggle button: manual collapse/expand. Expanding manually pins it open
+    // until the user collapses again or sends a new prompt.
+    toggle.addEventListener('click', e => {
+      e.stopPropagation();
+      const willCollapse = !panel.classList.contains('collapsed');
+      if (willCollapse) setPanelCollapsed(true);
+      else setPanelCollapsed(false, { pin: true });
+    });
+
+    // Clicking the collapsed ticker expands the panel (and pins it),
+    // but not if that "click" was the tail of a drag gesture.
+    let suppressNextClick = false;
+    panel.addEventListener('click', e => {
+      if (suppressNextClick) { suppressNextClick = false; e.stopPropagation(); return; }
+      if (!panel.classList.contains('collapsed')) return;
+      if (e.target.closest('.agent-panel-toggle')) return;
+      setPanelCollapsed(false, { pin: true });
+    });
+
+    // -- drag-to-position the whole panel --
+    // Bottom-right anchored, so we store offsets from those edges. That
+    // keeps the "expand grows upward" behavior intact wherever the user
+    // parks it.
+    const PANEL_POS_KEY = 'tinyworld:agent:panel-pos';
+    let panelDrag = null;
+
+    function applyStoredPanelPosition() {
+      try {
+        const raw = localStorage.getItem(PANEL_POS_KEY);
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        if (!Number.isFinite(p.right) || !Number.isFinite(p.bottom)) return;
+        panel.style.right = p.right + 'px';
+        panel.style.bottom = p.bottom + 'px';
+      } catch (_) {}
+    }
+
+    panel.addEventListener('pointerdown', e => {
+      // Don't steal pointer events from interactive children.
+      if (e.target.closest('button, input, textarea, a, .agent-messages')) {
+        // Header text + outer pill area: allow drag.
+        if (!e.target.closest('.agent-panel-head, .agent-panel.collapsed')) return;
+      }
+      const r = panel.getBoundingClientRect();
+      panelDrag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        rightAtStart: window.innerWidth - r.right,
+        bottomAtStart: window.innerHeight - r.bottom,
+        moved: false,
+      };
+      try { panel.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    panel.addEventListener('pointermove', e => {
+      if (!panelDrag) return;
+      const dx = e.clientX - panelDrag.startX;
+      const dy = e.clientY - panelDrag.startY;
+      if (!panelDrag.moved && Math.hypot(dx, dy) < 4) return;
+      panelDrag.moved = true;
+      panel.classList.add('dragging');
+      const w = panel.offsetWidth;
+      const h = panel.offsetHeight;
+      const right = Math.max(8, Math.min(window.innerWidth - w - 8, panelDrag.rightAtStart - dx));
+      const bottom = Math.max(8, Math.min(window.innerHeight - h - 8, panelDrag.bottomAtStart - dy));
+      panel.style.right = right + 'px';
+      panel.style.bottom = bottom + 'px';
+    });
+
+    function endPanelDrag(e) {
+      if (!panelDrag) return;
+      const moved = panelDrag.moved;
+      panelDrag = null;
+      panel.classList.remove('dragging');
+      if (moved) {
+        suppressNextClick = true;
+        const r = panel.getBoundingClientRect();
+        try {
+          localStorage.setItem(PANEL_POS_KEY, JSON.stringify({
+            right: Math.round(window.innerWidth - r.right),
+            bottom: Math.round(window.innerHeight - r.bottom),
+          }));
+        } catch (_) {}
+      }
+    }
+    panel.addEventListener('pointerup', endPanelDrag);
+    panel.addEventListener('pointercancel', endPanelDrag);
+
+    // Start hidden (off-screen). The panel slides in as a toast only when
+    // the agent has something to say.
+    panel.classList.add('collapsed');
+    panel.classList.add('hidden');
+    
     applyStoredPosition();
-    requestAnimationFrame(positionAgentPanel);
+    applyStoredPanelPosition();
+
+    // Up arrow in the chat input slides the panel in and expands it to
+    // show the full conversation (pinned open).
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowUp' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        setPanelCollapsed(false, { pin: true });
+      }
+    });
+
+    // -- suggestion chips below the input --
+    const SUGGESTIONS = [
+      'make it snowy',
+      'add a river running across',
+      'build a small village',
+      'add a forest of trees',
+      'make it nighttime',
+      'place a castle in the middle',
+      'add a path through it',
+      'make it a desert',
+      'add some sheep and cows',
+      'build a farm with crops',
+      'add a mountain in the corner',
+      'create a town square with houses',
+      'add a bridge over the water',
+      'clear everything to grass',
+      'add a lava lake',
+      'make a snowy mountain village',
+    ];
+    const sugBox = document.getElementById('agent-suggestions');
+    const MAX_CHIPS = 4;
+
+    function renderSuggestions() {
+      const q = input.value.trim().toLowerCase();
+      if (!q) {
+        sugBox.hidden = true;
+        sugBox.innerHTML = '';
+        return;
+      }
+      const matches = SUGGESTIONS
+        .filter(s => s.toLowerCase().includes(q))
+        .slice(0, MAX_CHIPS);
+      if (!matches.length) {
+        sugBox.hidden = true;
+        sugBox.innerHTML = '';
+        return;
+      }
+      sugBox.innerHTML = '';
+      matches.forEach(s => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'agent-suggestion-chip';
+        chip.textContent = s;
+        chip.addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          input.value = s;
+          input.focus();
+          renderSuggestions();
+        });
+        sugBox.appendChild(chip);
+      });
+      sugBox.hidden = false;
+    }
+    input.addEventListener('input', renderSuggestions);
+    input.addEventListener('focus', renderSuggestions);
+    input.addEventListener('blur', () => {
+      // Defer so a chip click still registers before we hide the list.
+      setTimeout(() => { sugBox.hidden = true; }, 150);
+    });
 
     let drag = null;
     grip.addEventListener('pointerdown', e => {
@@ -12404,38 +13329,41 @@
       form.style.top = y + 'px';
       form.style.bottom = 'auto';
       form.style.transform = 'none';
-      positionAgentPanel();
     });
     function endDrag() {
       if (!drag) return;
       drag = null;
       form.classList.remove('dragging');
       const r = form.getBoundingClientRect();
-      positionAgentPanel();
       try { localStorage.setItem(POS_KEY, JSON.stringify({ x: r.left, y: r.top })); } catch (_) {}
     }
     grip.addEventListener('pointerup', endDrag);
     grip.addEventListener('pointercancel', endDrag);
-    window.addEventListener('resize', positionAgentPanel);
 
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const prompt = input.value.trim();
       if (!prompt || send.disabled) return;
-      setPanelCollapsed(false);
+      // User message lives only in the conversation history; no toast.
       addAgentMessage('user', prompt);
       input.value = '';
+      // Progress flows through the placeholder while work runs.
       const thinking = addAgentMessage('assistant', 'Working on it…');
+      setInputProgress('Working on it…');
       send.disabled = true;
       try {
         const cfg = getAIProviderState();
         if (!cfg.key) throw new Error('Add an API key in Settings → AI first.');
         const data = await generateWorld(cfg.provider, cfg.model, cfg.key, prompt);
         if (!applyState(data)) throw new Error('The generated world was rejected by the renderer.');
-        thinking.textContent = 'Done — I updated the world.';
+        // Record final state in history + fire the toast.
+        thinking.textContent = 'Building completed.';
+        window.__tinyworldAgent && window.__tinyworldAgent.done && window.__tinyworldAgent.done('Building completed.');
       } catch (err) {
+        const msg = String(err.message || err).slice(0, 180);
         thinking.className = 'agent-msg error';
-        thinking.textContent = String(err.message || err).slice(0, 180);
+        thinking.textContent = msg;
+        window.__tinyworldAgent && window.__tinyworldAgent.done && window.__tinyworldAgent.done(msg, 'error');
       } finally {
         send.disabled = false;
       }
@@ -12658,40 +13586,140 @@
       });
     }
 
-    const TILE_STAGGER = 0.018;
-    // Progressive build: process a chunk of cells per microtask so a
-    // 32×32 or 48×48 grid doesn't freeze the page.  We yield every
-    // ~256 cells (worst-case ~16ms each on slow GPUs) so the input
-    // queue, rAF, and tile drop-in animations stay responsive.  Order
-    // is row-major so the world appears to fill from one edge.
+    const TILE_STAGGER = opts.sliced ? 0.010 : 0.018;
+    // Progressive build: process chunks through rAF so large grids stay
+    // responsive. In sliced mode the first pass lays terrain only, then
+    // the second pass drops objects/extras. Both passes are distance
+    // ranked from the current camera target so nearby/central content
+    // appears first instead of filling row-by-row.
     const cells = [];
     for (let x = 0; x < GRID; x++) for (let z = 0; z < GRID; z++) cells.push([x, z]);
-      const CHUNK = Math.max(64, Math.min(512, Math.floor(GRID * GRID / 8)));
-      function buildOneChunk(start) {
-        const end = Math.min(cells.length, start + CHUNK);
-      for (let i = start; i < end; i++) {
-        const [x, z] = cells[i];
+    const renderOrigin = opts.renderOrigin || { x: target.x, z: target.z };
+    const originX = Number.isFinite(renderOrigin.x) ? renderOrigin.x : (GRID - 1) / 2;
+    const originZ = Number.isFinite(renderOrigin.z) ? renderOrigin.z : (GRID - 1) / 2;
+    const rankedCells = cells.slice().sort((a, b) => {
+      const ax = a[0] + 0.5 - originX;
+      const az = a[1] + 0.5 - originZ;
+      const bx = b[0] + 0.5 - originX;
+      const bz = b[1] + 0.5 - originZ;
+      const ad = ax * ax + az * az;
+      const bd = bx * bx + bz * bz;
+      return ad === bd ? (a[1] - b[1]) || (a[0] - b[0]) : ad - bd;
+    });
+
+    const buildItems = [];
+    if (opts.sliced) {
+      for (const [x, z] of rankedCells) buildItems.push({ x, z, phase: 'base' });
+      for (const [x, z] of rankedCells) {
         const o = overrides.get(x + ',' + z);
+        if (o && (o.kind || (o.extras && o.extras.length))) buildItems.push({ x, z, phase: 'detail' });
+      }
+    } else {
+      for (const [x, z] of rankedCells) buildItems.push({ x, z, phase: 'full' });
+    }
+
+    const CHUNK = opts.sliced
+      ? Math.max(8, Math.min(256, Math.floor(Math.max(1, GRID * GRID) / 24)))
+      : Math.max(32, Math.min(384, Math.floor(Math.max(1, GRID * GRID) / 8)));
+    function paintBuildItem(item, itemIndex) {
+      const x = item.x, z = item.z;
+      const o = overrides.get(x + ',' + z);
+      const base = {
+        terrain: o ? o.terrain : 'grass',
+        terrainFloors: o ? o.terrainFloors : 1,
+        tileDelay: (itemIndex % CHUNK) * TILE_STAGGER,
+        objectDelay: (itemIndex % CHUNK) * TILE_STAGGER + 0.04,
+      };
+      if (item.phase === 'base') {
         setCell(x, z, {
-          terrain: o ? o.terrain : 'grass',
-          terrainFloors: o ? o.terrainFloors : 1,
-          kind:    o ? o.kind    : null,
-          floors:  o ? o.floors  : 1,
-          buildingType: o ? o.buildingType : null,
-          fenceSide: o ? o.fenceSide : null,
-          extras:  o ? o.extras  : [],
-          rotationY: o ? o.rotationY : 0,
-          offsetX:   o ? o.offsetX   : 0,
-          offsetZ:   o ? o.offsetZ   : 0,
-          tileDelay:   (i % CHUNK) * TILE_STAGGER,
-          objectDelay: (i % CHUNK) * TILE_STAGGER + 0.04,
+          ...base,
+          kind: null,
+          floors: 1,
+          buildingType: null,
+          fenceSide: null,
+          extras: [],
+          rotationY: 0,
+          offsetX: 0,
+          offsetZ: 0,
           forceTile: true,
-          });
+        });
+        return;
+      }
+      setCell(x, z, {
+        ...base,
+        kind: o ? o.kind : null,
+        floors: o ? o.floors : 1,
+        buildingType: o ? o.buildingType : null,
+        fenceSide: o ? o.fenceSide : null,
+        extras: o ? o.extras : [],
+        rotationY: o ? o.rotationY : 0,
+        offsetX: o ? o.offsetX : 0,
+        offsetZ: o ? o.offsetZ : 0,
+        forceTile: item.phase !== 'detail',
+      });
+    }
+
+    function finishApplyState() {
+      // Final pass: rebuild every tile so adjacency-aware terrains
+      // (path / shore / dirt edges) settle correctly now that all
+      // neighbours exist.
+      for (let x = 0; x < GRID; x++) {
+        for (let z = 0; z < GRID; z++) {
+          renderCellTile(x, z, { animate: false });
+          if (world[x][z].kind === 'bridge') renderCellObject(x, z, { animate: false });
         }
-        if (typeof opts.onProgress === 'function') {
-          try { opts.onProgress({ done: end, total: cells.length }); } catch (_) {}
-        }
-        if (end < cells.length) {
+      }
+
+      // Replay out-of-home overrides — ghost board cells the user has
+      // built / erased / modified. setCell handles any global coord via
+      // tilePos, so the home cellMesh path renders them on top of (and in
+      // place of) the regenerated ghost board.
+      for (const o of overrides.values()) {
+        if (!o.__outOfHome) continue;
+        const x = o.__x, z = o.__z;
+        if (!world[x]) world[x] = [];
+        setCell(x, z, {
+          terrain: o.terrain,
+          terrainFloors: o.terrainFloors,
+          kind: o.kind,
+          floors: o.floors,
+          buildingType: o.buildingType,
+          fenceSide: o.fenceSide,
+          extras: o.extras,
+          rotationY: o.rotationY,
+          offsetX: o.offsetX,
+          offsetZ: o.offsetZ,
+          userEdited: true,
+          animate: false,
+          forceTile: true,
+        });
+        // Re-tag as user-edited so future ghost board builds know to skip.
+        if (world[x] && world[x][z]) world[x][z].userEdited = true;
+      }
+
+      suppressSave = false;
+      if (!opts.keepCamera) resetCameraDefaults();
+      if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+      if (data.toolId) {
+        const tool = TOOLS.find(t => t.id === data.toolId);
+        if (tool) selectTool(tool);
+      }
+      saveState();
+      if (typeof opts.onDone === 'function') {
+        try { opts.onDone(); } catch (_) {}
+      }
+    }
+
+    function buildOneChunk(start) {
+      const end = Math.min(buildItems.length, start + CHUNK);
+      for (let i = start; i < end; i++) {
+        paintBuildItem(buildItems[i], i);
+      }
+      if (typeof opts.onProgress === 'function') {
+        const last = buildItems[Math.max(0, end - 1)];
+        try { opts.onProgress({ done: end, total: buildItems.length, phase: last && last.phase }); } catch (_) {}
+      }
+      if (end < buildItems.length) {
         // Yield to the event loop so animations + input keep firing.
         if (typeof requestAnimationFrame === 'function') {
           requestAnimationFrame(() => buildOneChunk(end));
@@ -12699,58 +13727,11 @@
           setTimeout(() => buildOneChunk(end), 0);
         }
       } else {
-        // Final pass: rebuild every tile so adjacency-aware terrains
-        // (path / shore / dirt edges) settle correctly now that all
-        // neighbours exist.
-          for (let x = 0; x < GRID; x++) {
-            for (let z = 0; z < GRID; z++) {
-              renderCellTile(x, z, { animate: false });
-              if (world[x][z].kind === 'bridge') renderCellObject(x, z, { animate: false });
-            }
-          }
-          if (typeof opts.onDone === 'function') {
-            try { opts.onDone(); } catch (_) {}
-          }
-        }
+        finishApplyState();
       }
-      buildOneChunk(0);
-
-    // Replay out-of-home overrides — ghost board cells the user has
-    // built / erased / modified. setCell handles any global coord via
-    // tilePos, so the home cellMesh path renders them on top of (and in
-    // place of) the regenerated ghost board.
-    for (const o of overrides.values()) {
-      if (!o.__outOfHome) continue;
-      const x = o.__x, z = o.__z;
-      if (!world[x]) world[x] = [];
-      setCell(x, z, {
-        terrain: o.terrain,
-        terrainFloors: o.terrainFloors,
-        kind: o.kind,
-        floors: o.floors,
-        buildingType: o.buildingType,
-        fenceSide: o.fenceSide,
-        extras: o.extras,
-        rotationY: o.rotationY,
-        offsetX: o.offsetX,
-        offsetZ: o.offsetZ,
-        userEdited: true,
-        animate: false,
-        forceTile: true,
-      });
-      // Re-tag as user-edited so future ghost board builds know to skip.
-      if (world[x] && world[x][z]) world[x][z].userEdited = true;
     }
 
-    suppressSave = false;
-
-      if (!opts.keepCamera) resetCameraDefaults();
-    if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
-    if (data.toolId) {
-      const tool = TOOLS.find(t => t.id === data.toolId);
-      if (tool) selectTool(tool);
-    }
-    saveState();
+    buildOneChunk(0);
     return true;
   }
 
@@ -13350,8 +14331,8 @@
     window.__loggedIn = false;
     function setLoggedInState(isLoggedIn) {
       window.__loggedIn = !!isLoggedIn;
-      logoutBtn.hidden = !isLoggedIn;
-      accountBtn.hidden = !isLoggedIn;
+      if (logoutBtn) logoutBtn.hidden = !isLoggedIn;
+      if (accountBtn) accountBtn.hidden = !isLoggedIn;
       const loginBtnTop = document.getElementById('auth-login-btn-top');
       if (loginBtnTop) loginBtnTop.hidden = !!isLoggedIn;
       // Lock badges + tooltips for the gated buttons.
@@ -13486,7 +14467,7 @@
     });
 
     // Logout — drop back to anonymous mode, no forced re-login.
-    logoutBtn.addEventListener('click', async () => {
+    if (logoutBtn) logoutBtn.addEventListener('click', async () => {
       try {
         await Auth.logout();
       } catch (_) {}
@@ -13690,38 +14671,116 @@
 
   (function wireMinimap() {
     const wrap = document.getElementById('minimap-wrap');
-    const foldBtn = document.getElementById('minimap-fold-btn');
     const sizeEl = document.getElementById('minimap-size');
     const fpsEl = document.getElementById('minimap-fps');
-    if (!wrap || !foldBtn) return;
+    if (!wrap) return;
     function paintSize() { if (sizeEl) sizeEl.textContent = GRID + '×' + GRID; }
     paintSize();
     // Restore collapsed state.
     try {
       if (localStorage.getItem('tinyworld:minimap.collapsed') === '1') wrap.classList.add('collapsed');
     } catch (_) {}
-    foldBtn.addEventListener('click', () => {
+    function toggleCollapsed() {
       wrap.classList.toggle('collapsed');
       try { localStorage.setItem('tinyworld:minimap.collapsed', wrap.classList.contains('collapsed') ? '1' : '0'); } catch (_) {}
-    });
+    }
     // Keyboard shortcut: N toggles the minimap (matches OWB).
     window.addEventListener('keydown', e => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 'n' || e.key === 'N') foldBtn.click();
+      if (e.key === 'n' || e.key === 'N') toggleCollapsed();
     });
-    // FPS readout — sampled every 500ms from statsFrameTimes if available.
-    setInterval(() => {
-      if (!fpsEl) return;
-      if (typeof statsFrameTimes === 'undefined' || !statsFrameTimes.length) {
-        fpsEl.textContent = '60 fps';
-        return;
+
+    // -- draggable minimap --
+    // Stored as top/left offsets so any viewport size resolves the same.
+    const MINIMAP_POS_KEY = 'tinyworld:minimap.pos';
+    function applyStoredMinimapPos() {
+      try {
+        const raw = localStorage.getItem(MINIMAP_POS_KEY);
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        if (!Number.isFinite(p.top) || !Number.isFinite(p.left)) return;
+        // Clamp inside viewport.
+        const w = wrap.offsetWidth || 200;
+        const h = wrap.offsetHeight || 200;
+        const top = Math.max(8, Math.min(window.innerHeight - h - 8, p.top));
+        const left = Math.max(8, Math.min(window.innerWidth - w - 8, p.left));
+        wrap.style.top = top + 'px';
+        wrap.style.left = left + 'px';
+        wrap.style.right = 'auto';
+        wrap.style.bottom = 'auto';
+      } catch (_) {}
+    }
+    let mmDrag = null;
+    wrap.addEventListener('pointerdown', e => {
+      // Don't hijack clicks on the canvas/buttons inside if any are added later.
+      if (e.target.closest('button, a, input, select, textarea')) return;
+      const r = wrap.getBoundingClientRect();
+      mmDrag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        topAtStart: r.top,
+        leftAtStart: r.left,
+        moved: false,
+      };
+      try { wrap.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    wrap.addEventListener('pointermove', e => {
+      if (!mmDrag) return;
+      const dx = e.clientX - mmDrag.startX;
+      const dy = e.clientY - mmDrag.startY;
+      if (!mmDrag.moved && Math.hypot(dx, dy) < 4) return;
+      mmDrag.moved = true;
+      wrap.classList.add('dragging');
+      const w = wrap.offsetWidth;
+      const h = wrap.offsetHeight;
+      const top = Math.max(8, Math.min(window.innerHeight - h - 8, mmDrag.topAtStart + dy));
+      const left = Math.max(8, Math.min(window.innerWidth - w - 8, mmDrag.leftAtStart + dx));
+      wrap.style.top = top + 'px';
+      wrap.style.left = left + 'px';
+      wrap.style.right = 'auto';
+      wrap.style.bottom = 'auto';
+    });
+    function endMinimapDrag() {
+      if (!mmDrag) return;
+      const moved = mmDrag.moved;
+      mmDrag = null;
+      wrap.classList.remove('dragging');
+      if (moved) {
+        const r = wrap.getBoundingClientRect();
+        try {
+          localStorage.setItem(MINIMAP_POS_KEY, JSON.stringify({
+            top: Math.round(r.top),
+            left: Math.round(r.left),
+          }));
+        } catch (_) {}
       }
-      const sum = statsFrameTimes.reduce((a, b) => a + b, 0);
-      const avg = sum / statsFrameTimes.length;
-      const fps = avg > 0 ? (1000 / avg) : 60;
-      fpsEl.textContent = Math.round(fps) + ' fps';
-    }, 500);
+    }
+    wrap.addEventListener('pointerup', endMinimapDrag);
+    wrap.addEventListener('pointercancel', endMinimapDrag);
+    applyStoredMinimapPos();
+    // FPS readout — own RAF sampler so it reflects real frame time
+    // regardless of whether the dev stats overlay is enabled.
+    if (fpsEl) {
+      const samples = [];
+      let last = 0;
+      function tick(now) {
+        if (last) {
+          samples.push(now - last);
+          if (samples.length > 60) samples.shift();
+        }
+        last = now;
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+      setInterval(() => {
+        if (!samples.length) return;
+        const sum = samples.reduce((a, b) => a + b, 0);
+        const avg = sum / samples.length;
+        const fps = avg > 0 ? (1000 / avg) : 0;
+        fpsEl.textContent = Math.round(fps) + ' fps';
+      }, 500);
+    }
     // Repaint on grid-size change.
     window.addEventListener('tinyworld:grid-resized', paintSize);
     // First paint.

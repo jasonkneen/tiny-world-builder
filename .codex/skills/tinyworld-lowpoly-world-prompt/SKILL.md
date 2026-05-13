@@ -9,6 +9,9 @@ The built-in model should act like a compact low-poly diorama designer, not a ra
 
 Prompt principles:
 
+- Generate should be text-only by default: use OpenAI `gpt-5.5` for validated
+  world JSON and do not add an image-generation topology prepass unless the
+  user explicitly asks for images again.
 - Start from a readable scene concept: village, farm, canal, ridge, market, castle, garden, or mixed landmark.
 - Use strong silhouettes: tall/short contrast, clustered houses, towers, hills, trees, walls, and clear negative space.
 - Make terrain do composition work: paths lead the eye, water creates crossings, dirt groups crops, grass gives breathing room.

@@ -81,6 +81,15 @@ Omitting fields (especially `extras: []`) caused subtle bugs in the
 old generator when ghost data flowed through helpers that assumed the
 full shape.
 
+## Blank ghost boards
+
+The Generate dialog can disable outside auto-fill. That path sets
+`ghostBoardsBlank = true`, clears existing ghost boards, and lets
+`makeGhostWorld(...)` return deterministic blank grass cells for every
+off-home board. Keep this as an early return inside `makeGhostWorld` so
+panning remains cheap and no generated scenery appears outside the
+current generated board.
+
 ## Don't
 
 - Don't make paths or rivers depend on both `boardX` and `boardZ` —
