@@ -11382,9 +11382,10 @@
   scene.add(snowMesh);
 
   function makeSplashPool(count, { color, size, life, opacity }) {
-    const geo = new THREE.BoxGeometry(size, 0.015, size);
+    const geo = new THREE.RingGeometry(size * 0.28, size * 0.62, 18);
+    geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity, depthWrite: false,
+      color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide,
     });
     const mesh = new THREE.InstancedMesh(geo, mat, count);
     mesh.frustumCulled = false;
@@ -11420,10 +11421,13 @@
     if (snowSurface && snowSurface.material) snowSurface.material.opacity = (0.14 + 0.22 * heavy) * weatherSplashIntensity;
   }
 
-  function makeWeatherBuildPool(count, { color, size, opacity }) {
-    const geo = new THREE.BoxGeometry(size, 0.012, size);
+  function makeWeatherBuildPool(count, { color, size, opacity, shape = 'square' }) {
+    const geo = shape === 'circle'
+      ? new THREE.CircleGeometry(size * 0.5, 18)
+      : new THREE.BoxGeometry(size, 0.012, size);
+    if (shape === 'circle') geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshBasicMaterial({
-      color, transparent: true, opacity, depthWrite: false,
+      color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide,
     });
     const mesh = new THREE.InstancedMesh(geo, mat, count);
     mesh.frustumCulled = false;
@@ -11446,7 +11450,7 @@
     return mesh;
   }
 
-  const rainSurface = makeWeatherBuildPool(650, { color: 0x84aeca, size: 0.36, opacity: 0.12 });
+  const rainSurface = makeWeatherBuildPool(650, { color: 0x84aeca, size: 0.36, opacity: 0.12, shape: 'circle' });
   scene.add(rainSurface);
   const snowSurface = makeWeatherBuildPool(1200, { color: 0xffffff, size: 0.42, opacity: 0.24 });
   scene.add(snowSurface);
