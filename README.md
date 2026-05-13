@@ -80,7 +80,7 @@ per-frame animations (tree sway, crop bob, smoke origin) check
 
 Newer systems are still routed through that same contract:
 
-- **Ghost boards** lazily generate and fade surrounding boards as the camera pans.
+- **Preview boards** lazily generate surrounding boards as the camera pans; preview distance/window/opacity settings auto-scale from board size but remain user-adjustable.
 - **AI generation / Auto** validate sparse v4 worlds against the embedded schema.
 - **Local world slots** keep multiple named saves in browser storage.
 - **Weather, time, clouds, and crop duster** are decorative scene systems layered on the same renderer.

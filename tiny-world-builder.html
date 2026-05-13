@@ -3298,12 +3298,12 @@
           <section class="settings-panel" data-settings-panel="world">
             <div class="settings-section-title">World</div>
             <div class="range-row">
-              <span>View distance</span>
+              <span>Preview distance</span>
               <input id="render-distance" type="range" min="1" max="4" step="1" />
               <output id="render-distance-value"></output>
             </div>
-            <div class="range-row" hidden>
-              <span>Visible size</span>
+            <div class="range-row">
+              <span>Preview window</span>
               <input id="render-visible-size" type="range" min="8" max="72" step="1" />
               <output id="render-visible-size-value"></output>
             </div>
@@ -3317,18 +3317,18 @@
                 <option value="48">48 × 48</option>
               </select>
             </label>
-            <div class="range-row" hidden>
-              <span>Ghost opacity</span>
+            <div class="range-row">
+              <span>Preview opacity</span>
               <input id="render-ghost-opacity" type="range" min="5" max="100" step="1" />
               <output id="render-ghost-opacity-value"></output>
             </div>
-            <div class="range-row" hidden>
-              <span>Ghost floors</span>
+            <div class="range-row">
+              <span>Preview floors</span>
               <input id="render-floor-opacity" type="range" min="10" max="100" step="1" />
               <output id="render-floor-opacity-value"></output>
             </div>
-            <div class="range-row" hidden>
-              <span>Ghost objects</span>
+            <div class="range-row">
+              <span>Preview objects</span>
               <input id="render-object-opacity" type="range" min="0" max="100" step="1" />
               <output id="render-object-opacity-value"></output>
             </div>
@@ -3598,7 +3598,7 @@
     objectOpacity: 'tinyworld:render:objectOpacity',
     version: 'tinyworld:render:version',
   };
-  const RENDER_SETTINGS_VERSION = '15';
+  const RENDER_SETTINGS_VERSION = '16';
   const RENDER_DEFAULTS = {
     // Defaults tuned to keep image quality crisp while still trimming
     // a few cheap things off the per-frame budget.
@@ -3606,8 +3606,11 @@
     //     pixelated under DPR>1 — the visible "smoothing fails" issue).
     //   - shadow kept at 'balanced' (PCF filtering 1024 map).  'low'
     //     swaps in BasicShadowMap with no filtering → jagged dropouts.
-    //   - visibleDistance trimmed to 2, clouds + cloudShadow trimmed
-    //     because those are pure CPU/GPU saves with no aesthetic cost.
+    //   - preview distance/window are auto-sized from GRID on first load and
+    //     whenever the board size changes, so large boards don't preload too
+    //     much neighbouring preview content.
+    //   - clouds + cloudShadow trimmed because those are pure CPU/GPU saves
+    //     with no aesthetic cost.
     //   - post-processing settings were removed in v14; colour sliders are
     //     direct CSS filters on the canvas.
     resolution: '1',
@@ -3622,14 +3625,14 @@
     cloudSpeed: '0.35',
     cloudHeight: '6',
     cloudShadow: '0',
-    smoothing: '0.7',
     tiltBlur: '3.5',
     tiltFocus: '18',
     ghostOpacity: '1',
     floorOpacity: '1',
     objectOpacity: '1',
   };
-  if (localStorage.getItem(RENDER_LS.version) !== RENDER_SETTINGS_VERSION) {
+  const renderSettingsReset = localStorage.getItem(RENDER_LS.version) !== RENDER_SETTINGS_VERSION;
+  if (renderSettingsReset) {
     for (const key of Object.values(RENDER_LS)) localStorage.removeItem(key);
     for (const [key, value] of Object.entries(RENDER_DEFAULTS)) localStorage.setItem(RENDER_LS[key], value);
     localStorage.setItem(RENDER_LS.version, RENDER_SETTINGS_VERSION);
@@ -3687,20 +3690,39 @@
   let renderContrast = storedNumber(RENDER_LS.contrast, 1.0, 0.85, 1.25);
   let renderShadowQuality = localStorage.getItem(RENDER_LS.shadow) || 'balanced';
   let renderLighting = storedNumber(RENDER_LS.lighting, 1.0, 0.5, 1.45);
-  let renderVisibleDistance = Math.round(storedNumber(RENDER_LS.visibleDistance, 2, 1, 4));
-  // Visible-square size starts equal to the home grid so the world
-  // only grows as the camera pans. On the FIRST pan we expand it to
-  // ~1.5x the home grid so the user gets a generous look-ahead window
-  // as they explore.
-  let renderVisibleSize = GRID;
+  function previewSettingsForGrid(grid, explored) {
+    const g = Math.max(HOME_GRID_MIN, Math.min(HOME_GRID_MAX, grid || GRID));
+    const distance = g <= 12 ? 2 : 1;
+    const visibleSize = g <= 8  ? (explored ? 12 : 8)
+                    : g <= 12 ? (explored ? 14 : 10)
+                    : g <= 20 ? (explored ? 16 : 12)
+                    : g <= 32 ? (explored ? 18 : 14)
+                              : (explored ? 20 : 16);
+    return { distance, visibleSize };
+  }
+  const initialPreviewSettings = previewSettingsForGrid(GRID, false);
+  let renderVisibleDistance = Math.round(storedNumber(RENDER_LS.visibleDistance, initialPreviewSettings.distance, 1, 4));
+  // Visible-square size controls the surrounding Preview boards only; the
+  // editable home board is always fully rendered. Defaults are intentionally
+  // smaller on large boards so panning doesn't reveal/preload too many cells.
+  let renderVisibleSize = Math.round(storedNumber(RENDER_LS.visibleSize, initialPreviewSettings.visibleSize, 8, Math.round(HOME_GRID_MAX * 1.5)));
+  if (renderSettingsReset) {
+    renderVisibleDistance = initialPreviewSettings.distance;
+    renderVisibleSize = initialPreviewSettings.visibleSize;
+    try {
+      localStorage.setItem(RENDER_LS.visibleDistance, String(renderVisibleDistance));
+      localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize));
+    } catch (_) {}
+  }
   let hasUserPanned = false;
   function visibleSizeForExplorer() {
-    return Math.round(GRID * 1.5);
+    return previewSettingsForGrid(GRID, true).visibleSize;
   }
   function expandVisibleSizeOnFirstMove() {
     if (hasUserPanned) return;
     hasUserPanned = true;
     renderVisibleSize = visibleSizeForExplorer();
+    try { localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize)); } catch (_) {}
     if (typeof updateGhostRenderBubble === 'function') updateGhostRenderBubble();
   }
   let renderCloudAmount = storedNumber(RENDER_LS.clouds, 0.61, 0, 1);
@@ -3711,17 +3733,9 @@
   let renderCloudShadow = storedNumber(RENDER_LS.cloudShadow, 0.5, 0, 1);
   let renderTiltBlur = storedNumber(RENDER_LS.tiltBlur, 3.5, 0, 8);
   let renderTiltFocus = storedNumber(RENDER_LS.tiltFocus, 18, 15, 80);
-  // Forced to 100% — the three ghost opacities are locked at 1 even if
-  // the user previously dragged the (now hidden) sliders. Any stored
-  // values from older sessions are ignored.
-  const renderGhostOpacity = 1;
-  const renderFloorOpacity = 1;
-  const renderObjectOpacity = 1;
-  try {
-    localStorage.removeItem(RENDER_LS.ghostOpacity);
-    localStorage.removeItem(RENDER_LS.floorOpacity);
-    localStorage.removeItem(RENDER_LS.objectOpacity);
-  } catch (_) {}
+  let renderGhostOpacity = storedNumber(RENDER_LS.ghostOpacity, 1, 0.05, 1);
+  let renderFloorOpacity = storedNumber(RENDER_LS.floorOpacity, 1, 0.10, 1);
+  let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
   const renderer = new THREE.WebGLRenderer({
     canvas: canvasEl,
     antialias: true,
@@ -3755,6 +3769,23 @@
   function setRenderVisibleSize(value) {
     renderVisibleSize = Math.max(8, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.round(value)));
     if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+  }
+
+  function applyAutoPreviewSettingsForGrid(opts = {}) {
+    const settings = previewSettingsForGrid(GRID, opts.explored !== undefined ? opts.explored : hasUserPanned);
+    if (opts.deferEnsure) {
+      renderVisibleDistance = settings.distance;
+      renderVisibleSize = settings.visibleSize;
+      if (typeof ghostPreloadRadius !== 'undefined') ghostPreloadRadius = renderVisibleDistance;
+      if (typeof ghostOuterFadeTiles !== 'undefined') ghostOuterFadeTiles = 2 + renderVisibleDistance * 2;
+    } else {
+      setRenderVisibleDistance(settings.distance);
+      setRenderVisibleSize(settings.visibleSize);
+    }
+    try {
+      localStorage.setItem(RENDER_LS.visibleDistance, String(renderVisibleDistance));
+      localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize));
+    } catch (_) {}
   }
 
   function applyCloudSettings() {
@@ -6979,6 +7010,7 @@
 
   function prepareFadeable(group, opts) {
     const { ghost = false, opacity = 1, grayscale = false } = opts || {};
+    group.userData.preview = !!ghost;
     const displayOpacity = displayOpacityForRole(group, opacity);
     group.userData.currentOpacity = opacity;
     group.userData.targetOpacity = opacity;
@@ -7017,12 +7049,10 @@
 
   function displayOpacityForRole(root, opacity) {
     if (opacity <= 0) return 0;
-    if (opacity >= 1) return 1;
-    const objectOpacity = Math.min(1, opacity * renderObjectOpacity);
-    if (root.userData.fadeRole === 'tile') {
-      return Math.min(1, opacity * renderFloorOpacity);
-    }
-    return objectOpacity;
+    const revealOpacity = Math.min(1, opacity);
+    if (!root.userData.preview) return revealOpacity;
+    const roleOpacity = root.userData.fadeRole === 'tile' ? renderFloorOpacity : renderObjectOpacity;
+    return Math.min(1, revealOpacity * renderGhostOpacity * roleOpacity);
   }
 
   function applyElementOpacity(root, opacity) {
@@ -10126,7 +10156,7 @@
     } catch (_) {}
 
     GRID = n;
-    renderVisibleSize = hasUserPanned ? Math.round(GRID * 1.5) : GRID;
+    applyAutoPreviewSettingsForGrid({ explored: hasUserPanned, deferEnsure: true });
     try { localStorage.setItem('tinyworld:home-grid', String(GRID)); } catch (_) {}
     updateUnsavedCopyForGrid();
     if (typeof buildHomeBorder === 'function') buildHomeBorder();
@@ -10454,7 +10484,7 @@
       ghostOpacityValue.textContent = ghostOpacityEl.value + '%';
       floorOpacityValue.textContent = floorOpacityEl.value + '%';
       objectOpacityValue.textContent = objectOpacityEl.value + '%';
-      status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · view ' + renderVisibleDistance + ' · size ' + renderVisibleSize + 'x' + renderVisibleSize;
+      status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · preview ' + renderVisibleDistance + ' / ' + renderVisibleSize + 'x' + renderVisibleSize;
     }
 
     function persistSettings() {
@@ -10472,7 +10502,9 @@
       localStorage.setItem(RENDER_LS.cloudShadow, renderCloudShadow.toFixed(2));
       localStorage.setItem(RENDER_LS.tiltBlur, renderTiltBlur.toFixed(1));
       localStorage.setItem(RENDER_LS.tiltFocus, renderTiltFocus.toFixed(0));
-      // ghost opacities are locked at 1 — nothing to persist
+      localStorage.setItem(RENDER_LS.ghostOpacity, renderGhostOpacity.toFixed(2));
+      localStorage.setItem(RENDER_LS.floorOpacity, renderFloorOpacity.toFixed(2));
+      localStorage.setItem(RENDER_LS.objectOpacity, renderObjectOpacity.toFixed(2));
     }
 
     function applyFromControls() {
@@ -10495,8 +10527,9 @@
       renderTiltBlur = parseFloat(tiltBlurEl.value);
       renderTiltFocus = parseInt(tiltFocusEl.value, 10);
       applyTiltShiftSettings();
-      // Ghost opacities are locked at 100 % — slider inputs are hidden
-      // and reassigning these consts would throw. Intentionally a no-op.
+      renderGhostOpacity = parseInt(ghostOpacityEl.value, 10) / 100;
+      renderFloorOpacity = parseInt(floorOpacityEl.value, 10) / 100;
+      renderObjectOpacity = parseInt(objectOpacityEl.value, 10) / 100;
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();
@@ -10549,8 +10582,7 @@
     resetBtn.addEventListener('click', () => {
       setShadowQuality('balanced');
       setRenderResolutionScale(1);
-      setRenderVisibleDistance(2);
-      setRenderVisibleSize(16);
+      applyAutoPreviewSettingsForGrid({ explored: hasUserPanned });
       renderBrightness = 1;
       renderLighting = 1.0;
       applyLightingSettings();
@@ -10565,7 +10597,9 @@
       renderTiltBlur = 3.5;
       renderTiltFocus = 18;
       applyTiltShiftSettings();
-      // ghost opacities already pinned to 1
+      renderGhostOpacity = 1;
+      renderFloorOpacity = 1;
+      renderObjectOpacity = 1;
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();

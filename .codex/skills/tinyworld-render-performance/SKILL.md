@@ -24,8 +24,8 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Default color grade should stay neutral: brightness 1, saturation 1, contrast 1.
 - Render settings are user-adjustable and persisted in `localStorage` under `tinyworld:render:*`.
 - Scene/screen controls must keep working in the direct-render path: resolution, shadow quality, lighting, visible distance, visible size, clouds, tilt-shift blur/focus, and ghost opacity.
-- Visible size is the fully opaque torch square in tile-width units; default is 8x8 and the control may expand it up to 20x20. Do not subtract half a tile from this radius, or the board edge starts fading inside the requested size.
-- Ghost opacity 100% means the ghost-strength control itself is maxed, not that the visible-size boundary expands. Outside the visible-size square must still be visibly weaker than the fully rendered center.
+- Preview window is the reveal square around the camera target in tile-width units. It auto-scales by board size (large boards get a tighter window for performance) and can be user-adjusted. Do not subtract half a tile from this radius, or the board edge starts fading inside the requested size.
+- Preview opacity / floors / objects are user-adjustable display multipliers for surrounding preview boards. The home board stays fully opaque regardless of those controls.
 - Do not reintroduce post-only shader controls unless the user explicitly asks for a post pipeline.
 - Shadow maps should stay modest unless a visual defect proves otherwise.
 - The sun is the only shadow caster. Its angle is fixed in world space
