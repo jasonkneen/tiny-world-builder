@@ -1,0 +1,5 @@
+interface:
+  display_name: "Three.js Primitive Reconstructor"
+  short_description: "Turn low-poly reference images into robust primitive-only Three.js HTML scenes."
+  icon: "cube"
+  accent_color: "#2299E8"
