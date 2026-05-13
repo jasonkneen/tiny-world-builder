@@ -2385,7 +2385,7 @@
         </label>
         <label class="gen-check">
           <input type="checkbox" id="gen-plan-first" />
-          <span>Sketch a topology plan first <em class="gen-hint">(uses gpt-image-1, OpenAI key)</em></span>
+          <span>Sketch a topology plan first <em class="gen-hint">(uses gpt-image-2, OpenAI key)</em></span>
         </label>
       </div>
 
@@ -2557,7 +2557,9 @@
               </select>
             </label>
             <label>Model
-              <select id="gen-model"></select>
+              <input id="gen-model" list="gen-model-list" autocomplete="off" spellcheck="false" placeholder="gpt-5.2-latest" />
+              <datalist id="gen-model-list"></datalist>
+              <div class="profile-hint" style="margin-top:4px;">Type any model name your key has access to. Suggestions are just shortcuts.</div>
             </label>
             <label>API key <span style="font-weight:400;font-size:11px;">(stored in this browser only)</span>
               <input id="gen-key" type="password" autocomplete="off" placeholder="sk-... / xai-... / etc" />
@@ -11447,7 +11449,7 @@
   // Expose for tests / command palette.
   window.__generateProceduralWorld = generateProceduralWorld;
 
-  // Item 12 — ask gpt-image-1 to draft a topology sketch first so the
+  // Item 12 — ask gpt-image-2 to draft a topology sketch first so the
   // text model has a visual reference for valleys / hills / water.
   // Returns a data: URL or hosted URL (whatever the API returns).  Best
   // effort: callers are expected to fall back if this throws.
@@ -11468,7 +11470,7 @@
       method: 'POST',
       headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
       body: JSON.stringify({
-        model: 'gpt-image-1',
+        model: 'gpt-image-2',
         prompt: imgPrompt,
         size: '1024x1024',
         n: 1,
@@ -11984,7 +11986,7 @@
       goBtn.disabled = true;
       setStatus(planFirst ? 'sketching plan…' : 'generating', 'busy');
       try {
-        // Optional pre-pass: ask gpt-image-1 for a top-down topology sketch,
+        // Optional pre-pass: ask gpt-image-2 for a top-down topology sketch,
         // then attach the image URL as additional context. Best-effort — if
         // image generation fails, we fall back to plain text generation.
         let planImageUrl = null;
