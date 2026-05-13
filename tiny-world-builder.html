@@ -12355,9 +12355,18 @@
     }
 
     const TILE_STAGGER = 0.018;
-    let i = 0;
-    for (let x = 0; x < GRID; x++) {
-      for (let z = 0; z < GRID; z++) {
+    // Progressive build: process a chunk of cells per microtask so a
+    // 32×32 or 48×48 grid doesn't freeze the page.  We yield every
+    // ~256 cells (worst-case ~16ms each on slow GPUs) so the input
+    // queue, rAF, and tile drop-in animations stay responsive.  Order
+    // is row-major so the world appears to fill from one edge.
+    const cells = [];
+    for (let x = 0; x < GRID; x++) for (let z = 0; z < GRID; z++) cells.push([x, z]);
+    const CHUNK = Math.max(64, Math.min(512, Math.floor(GRID * GRID / 8)));
+    function buildOneChunk(start) {
+      const end = Math.min(cells.length, start + CHUNK);
+      for (let i = start; i < end; i++) {
+        const [x, z] = cells[i];
         const o = overrides.get(x + ',' + z);
         setCell(x, z, {
           terrain: o ? o.terrain : 'grass',
@@ -12370,22 +12379,31 @@
           rotationY: o ? o.rotationY : 0,
           offsetX:   o ? o.offsetX   : 0,
           offsetZ:   o ? o.offsetZ   : 0,
-          tileDelay:   i * TILE_STAGGER,
-          objectDelay: i * TILE_STAGGER + 0.04,
+          tileDelay:   (i % CHUNK) * TILE_STAGGER,
+          objectDelay: (i % CHUNK) * TILE_STAGGER + 0.04,
           forceTile: true,
         });
-        i++;
+      }
+      if (end < cells.length) {
+        // Yield to the event loop so animations + input keep firing.
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => buildOneChunk(end));
+        } else {
+          setTimeout(() => buildOneChunk(end), 0);
+        }
+      } else {
+        // Final pass: rebuild every tile so adjacency-aware terrains
+        // (path / shore / dirt edges) settle correctly now that all
+        // neighbours exist.
+        for (let x = 0; x < GRID; x++) {
+          for (let z = 0; z < GRID; z++) {
+            renderCellTile(x, z, { animate: false });
+            if (world[x][z].kind === 'bridge') renderCellObject(x, z, { animate: false });
+          }
+        }
       }
     }
-    // Rebuild all tiles once more after every cell has its final terrain.
-    // Without this, restore/import/generate could render early path/shore cells
-    // before their later neighbours existed, leaving missing bands until edited.
-    for (let x = 0; x < GRID; x++) {
-      for (let z = 0; z < GRID; z++) {
-        renderCellTile(x, z, { animate: false });
-        if (world[x][z].kind === 'bridge') renderCellObject(x, z, { animate: false });
-      }
-    }
+    buildOneChunk(0);
 
     // Replay out-of-home overrides — ghost board cells the user has
     // built / erased / modified. setCell handles any global coord via
