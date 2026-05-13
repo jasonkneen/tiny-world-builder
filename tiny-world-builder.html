@@ -2834,8 +2834,13 @@
         <button class="pill" data-weather="snow">Snow</button>
       </div>
     </div>
+    <label class="time-row">
+      <span class="time-row-label">Weather intensity</span>
+      <input id="weather-intensity" type="range" min="0" max="100" step="5" value="100" />
+      <span class="time-row-val" id="weather-intensity-readout">100%</span>
+    </label>
     <div class="time-foot">
-      <em>Visual tint only — affects sky overlay and brand accent.</em>
+      <em>Weather affects sky tint; intensity controls rain and snow particles.</em>
     </div>
   </div>
 
@@ -11186,7 +11191,9 @@
   const WEATHER_FLOOR = TOP_H + 0.05;
   const WEATHER_VOLUME = Math.max(HOME_GRID_MAX * 0.75, 18);
   const WEATHER_CEIL = Math.max(renderCloudHeight + 6, 14);
+  const WEATHER_INTENSITY_LS = 'tinyworld:weather-intensity.v1';
   let weatherMode = 'clear';
+  let weatherIntensity = storedNumber(WEATHER_INTENSITY_LS, 1, 0, 1);
 
   function makePrecip({ count, geometry, material, dropSpeed, drift, randomRot }) {
     const mesh = new THREE.InstancedMesh(geometry, material, count);
@@ -11389,8 +11396,12 @@
 
   function setWeatherMode(mode) {
     weatherMode = mode;
-    setPrecipActive(rainMesh, mode === 'rain' ? 420 : 0);
-    setPrecipActive(snowMesh, mode === 'snow' ? 320 : 0);
+    setPrecipActive(rainMesh, mode === 'rain' ? Math.round(420 * weatherIntensity) : 0);
+    setPrecipActive(snowMesh, mode === 'snow' ? Math.round(320 * weatherIntensity) : 0);
+  }
+  function setWeatherIntensity(value) {
+    weatherIntensity = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
+    setWeatherMode(weatherMode);
   }
   // Watch body class for weather changes — this is the integration with
   // the existing time-weather popup which writes body.weather-* classes.
@@ -15858,6 +15869,8 @@
       const readout = document.getElementById('time-readout');
       const seasonPills = document.getElementById('season-pills');
       const weatherPills = document.getElementById('weather-pills');
+      const intensityRange = document.getElementById('weather-intensity');
+      const intensityReadout = document.getElementById('weather-intensity-readout');
 
       function paintPills() {
         if (seasonPills) seasonPills.querySelectorAll('.pill').forEach(p => {
@@ -15870,6 +15883,8 @@
       function paintReadout() {
         if (range) range.value = String(todMinutes);
         if (readout) readout.textContent = formatTime(todMinutes);
+        if (intensityRange) intensityRange.value = String(Math.round(weatherIntensity * 100));
+        if (intensityReadout) intensityReadout.textContent = Math.round(weatherIntensity * 100) + '%';
       }
       paintPills(); paintReadout();
 
@@ -15905,6 +15920,14 @@
           applyWeather(weather);
           paintPills();
           try { localStorage.setItem(WEATHER_LS, weather); } catch (_) {}
+        });
+      }
+      if (intensityRange) {
+        intensityRange.addEventListener('input', () => {
+          const value = Math.max(0, Math.min(100, parseInt(intensityRange.value, 10) || 0));
+          if (typeof setWeatherIntensity === 'function') setWeatherIntensity(value / 100);
+          paintReadout();
+          try { localStorage.setItem(WEATHER_INTENSITY_LS, weatherIntensity.toFixed(2)); } catch (_) {}
         });
       }
     }

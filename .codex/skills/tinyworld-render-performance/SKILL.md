@@ -28,7 +28,7 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Preview opacity / floors / objects are user-adjustable display multipliers for surrounding preview boards. The home board stays fully opaque regardless of those controls.
 - Do not reintroduce post-only shader controls unless the user explicitly asks for a post pipeline.
 - Shadow maps should stay modest unless a visual defect proves otherwise.
-- Rain/snow should use in-world instanced box particles plus instanced splash/puff pools. Do not reintroduce CSS/screen-space rain or snow overlays; impacts should only appear on rendered tile surfaces.
+- Rain/snow should use in-world instanced box particles plus instanced splash/puff pools. Do not reintroduce CSS/screen-space rain or snow overlays; impacts should only appear on rendered tile surfaces. Weather intensity should scale active instance counts rather than reallocating geometry.
 - The sun is the only shadow caster. Its angle is fixed in world space
   (`SUN_OFFSET = (7, 12, 5)`) but its position and `sun.target` follow
   the camera `target` via `updateSunFollow()` (called from
