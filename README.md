@@ -63,9 +63,31 @@ Direct seeded URL:
 http://localhost:3000/tiny-world-builder?demo=vehicles&seed=tide-ridge-428
 ```
 
-Loading that URL creates the map, places three cars, assigns a target to each
-car, and starts them driving. The seed is deterministic; change the `seed=`
-value to get the same road layout with different deterministic scenery.
+Large-scale route stress URL:
+
+```text
+http://localhost:3000/tiny-world-builder?demo=vehicles-large&seed=metro-culdesac-128&stats=1
+```
+
+Large demo URL params:
+
+- `size=` / `mapSize=` / `grid=` / `gridSize=` — rounded to the nearest valid demo grid size from `12` through `256` (`12`, `16`, `20`, `32`, `48`, `64`, `96`, `128`, `256`).
+- `cars=` / `carCount=` / `vehicles=` / `vehicleCount=` — clamped to `1..120` and capped by available unique route endpoints.
+
+Example:
+
+```text
+http://localhost:3000/tiny-world-builder?demo=vehicles-large&seed=ridge-loop-917&size=128&cars=18&stats=1
+```
+
+The large route defaults to a deterministic 128×128 map with arterial roads,
+ring roads, bridge crossings, 200+ cul-de-sac endpoints, and 36 runtime vehicles
+retargeting through long paths. Use it for route planner / traffic scale checks;
+the default bare-port redirect still opens the smaller watchable demo.
+
+Loading either URL creates the map, places delivery bots, assigns targets, and starts
+vehicles driving. The seed is deterministic; change the `seed=` value to get the
+same road layout with different deterministic scenery.
 
 You can also drive runtime vehicles through the same relay/API path used by `send-command.js`.
 

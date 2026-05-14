@@ -22,7 +22,7 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Per-frame object work is set-based: `animatedCellObjects` tracks swaying
   trees/tufts and `smokeHouseObjects` tracks chimney sources. Do not return to
   scanning every `cellMeshes` entry each frame for these effects.
-- Generated/imported world application supports sliced progressive rendering. In sliced mode, `applyState(..., { sliced: true })` sorts terrain and object/detail passes by distance from `opts.renderOrigin` or the current camera `target`, so visible/nearby cells appear before farther cells. Preserve that distance-ranked ordering when changing generation rendering.
+- Generated/imported world application supports sliced progressive rendering. In sliced mode, `applyState(..., { sliced: true })` sorts terrain and object/detail passes by distance from `opts.renderOrigin` or the current camera `target`, so visible/nearby cells appear before farther cells. Preserve that distance-ranked ordering when changing generation rendering. Demo/stress routes may pass `skipGhostBoards: true` to keep a large home board from also preloading preview boards; in that mode `applyState` should zero the in-memory preview distance, sync the ghost budget, and clear ghost boards without persisting render settings.
 - Home grids above the windowing threshold are **intent-full / render-windowed**: `world[][]` may hold the full 512×512 board, but `cellMeshes` must only hold the camera-centred home render window. Keep large-grid bulk load/clear paths on intent writes plus `requestHomeRenderWindowSync()`, not `GRID²` mesh rebuilds.
 - The final generated/imported settle pass should only rebuild
   adjacency-sensitive terrain (paths, water/shore neighbours, bridges), not the

@@ -27,6 +27,7 @@ Guidance for AI coding agents working in this repo. Read this before touching
   - `.codex/skills/tinyworld-tile-variation` — repeat-click levels and terrain/object variation.
   - `.codex/skills/tinyworld-visual-qa` — browser checks and visual QA.
   - `.codex/skills/tinyworld-render-performance` — renderer, shadows, clouds, and GPU budget.
+  - `.codex/skills/tinyworld-webxr` — WebXR AR desk placement, floating boards, VR immersion, and headset input.
   - `.codex/skills/tinyworld-lowpoly-world-prompt` — model prompting for coherent low-poly worlds.
   - `.codex/skills/tinyworld-lowpoly-stylized-3d` — low-poly/stylized 3D asset design, imports, materials, scale, and animation.
   - `.codex/skills/tinyworld-integrations` — API, webhook, SSE, MCP, plugin, and automation examples.

@@ -179,6 +179,46 @@
     z-index: 12;
   }
   .controls::-webkit-scrollbar { display: none; }
+  .xr-panel {
+    position: fixed;
+    left: 74px;
+    bottom: 18px;
+    z-index: 16;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.66);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .xr-panel .btn {
+    padding: 7px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .xr-status {
+    max-width: 260px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 0 6px;
+  }
+  body.xr-active .xr-panel { background: rgba(42, 39, 34, 0.72); }
+  body.xr-active .xr-status { color: rgba(255, 255, 255, 0.86); }
+  body.xr-active .brand,
+  body.xr-active .controls,
+  body.xr-active .toolbar,
+  body.xr-active .appbar,
+  body.xr-active #minimap,
+  body.xr-active #agent-input,
+  body.xr-active #agent-panel {
+    opacity: 0.08;
+    pointer-events: none;
+  }
   .btn {
     background: transparent;
     border: 1px solid transparent;
@@ -3113,7 +3153,7 @@
   </div>
 
   <div class="controls">
-    <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your 8 by 8 grid">
+    <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your grid">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
     </button>
     <button class="btn icon" id="persp" data-tooltip="Perspective" aria-label="Toggle camera mode">
@@ -3150,6 +3190,13 @@
     <button class="btn icon" id="render-settings" data-tooltip="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
+  </div>
+
+  <div class="xr-panel" id="xr-panel" aria-label="XR modes">
+    <button class="btn" id="xr-surface" type="button">AR desk</button>
+    <button class="btn" id="xr-float" type="button">Float</button>
+    <button class="btn" id="xr-inside" type="button">Enter world</button>
+    <span class="xr-status" id="xr-status">WebXR needs HTTPS and a compatible headset/browser.</span>
   </div>
 
   <button class="showcase-exit" id="showcase-exit" type="button" aria-label="Exit showcase mode">
@@ -4008,10 +4055,15 @@
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.NoToneMapping;
+  renderer.xr.enabled = true;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf4ede0);
+  const defaultSceneBackground = scene.background.clone();
+  const xrWorldRoot = new THREE.Group();
+  xrWorldRoot.name = 'xr-world-root';
+  scene.add(xrWorldRoot);
   const cloudLayer = document.getElementById('cloud-layer');
 
   function setRenderResolutionScale(value) {
@@ -6700,12 +6752,13 @@
   };
 
   const M_VEHICLE = {
-    body:        new THREE.MeshLambertMaterial({ color: 0xd8a45e }),
-    roof:        new THREE.MeshLambertMaterial({ color: 0x2f2f33 }),
-    wheel:       new THREE.MeshLambertMaterial({ color: 0x171717 }),
-    light:       new THREE.MeshLambertMaterial({ color: 0xffe082 }),
-    tailLight:   new THREE.MeshLambertMaterial({ color: 0xd94a4a }),
-    signal:      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+    shell:       new THREE.MeshLambertMaterial({ color: 0xf1eee7 }),
+    dark:        new THREE.MeshLambertMaterial({ color: 0x1c1e21 }),
+    tire:        new THREE.MeshLambertMaterial({ color: 0x141618 }),
+    hub:         new THREE.MeshLambertMaterial({ color: 0xe6e2d8 }),
+    light:       new THREE.MeshLambertMaterial({ color: 0xfff2c4, emissive: 0xffd96a, emissiveIntensity: 0.35 }),
+    pole:        new THREE.MeshLambertMaterial({ color: 0x2a2c30 }),
+    flag:        new THREE.MeshLambertMaterial({ color: 0xff7a1a, side: THREE.DoubleSide }),
     beacon:      new THREE.MeshBasicMaterial({ color: 0x20f7c7, transparent: true, opacity: 0.82, depthWrite: false }),
   };
 
@@ -6811,58 +6864,132 @@
     return g;
   }
 
-  function makeVehicle() {
+  function makeVehicleUpperShellGeometry(w, l, h, insetX, insetZ) {
+    const x1 = w / 2;
+    const x2 = w / 2 - insetX;
+    const z1 = l / 2;
+    const z2 = l / 2 - insetZ;
+    const vertices = [
+      -x1, 0, -z1,  x1, 0, -z1,  x1, 0, z1,  -x1, 0, z1,
+      -x2, h, -z2,  x2, h, -z2,  x2, h, z2,  -x2, h, z2,
+    ];
+    const indices = [
+      0, 1, 2, 0, 2, 3,
+      4, 6, 5, 4, 7, 6,
+      0, 5, 1, 0, 4, 5,
+      1, 6, 2, 1, 5, 6,
+      2, 7, 3, 2, 6, 7,
+      3, 4, 0, 3, 7, 4,
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function makeVehicle(opts = {}) {
     const g = new THREE.Group();
-    g.scale.setScalar(1.28);
     const wheels = [];
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.62), M_VEHICLE.body);
-    body.position.set(0, 0.17, 0);
-    g.add(body);
+    const flagPivots = [];
+    const visualScale = clampVehicleNumber(Number(opts.visualScale), VEHICLE_VISUAL_SCALE_MIN, VEHICLE_VISUAL_SCALE_MAX, vehicleVisualScaleForGrid());
+    const WHEEL_R = VEHICLE_BASE_WHEEL_RADIUS;
+    const BODY_W = 0.62;
+    const BODY_L = 0.84;
+    const BODY_LOWER_H = 0.24;
+    const BODY_UPPER_H = 0.17;
+    const BODY_Y0 = 0.04;
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.10, 0.34), M_VEHICLE.roof);
-    roof.position.set(0, 0.28, 0.06);
-    g.add(roof);
+    const lower = new THREE.Mesh(new THREE.BoxGeometry(BODY_W, BODY_LOWER_H, BODY_L), M_VEHICLE.shell);
+    lower.position.y = BODY_Y0 + BODY_LOWER_H / 2;
+    g.add(lower);
 
-    const light1 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.03), M_VEHICLE.light);
-    light1.position.set(-0.08, 0.18, 0.30);
-    g.add(light1);
+    const upper = new THREE.Mesh(
+      makeVehicleUpperShellGeometry(BODY_W, BODY_L, BODY_UPPER_H, 0.08, 0.10),
+      M_VEHICLE.shell
+    );
+    upper.position.y = BODY_Y0 + BODY_LOWER_H;
+    g.add(upper);
 
-    const light2 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.03), M_VEHICLE.signal);
-    light2.position.set(0.08, 0.18, 0.30);
-    g.add(light2);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.24, BODY_LOWER_H * 0.52, 0.024), M_VEHICLE.dark);
+    strip.position.set(0, BODY_Y0 + BODY_LOWER_H * 0.60, BODY_L / 2 + 0.006);
+    g.add(strip);
 
-    const tail1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.03), M_VEHICLE.tailLight);
-    tail1.position.set(-0.08, 0.18, -0.30);
-    g.add(tail1);
-
-    const tail2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.03), M_VEHICLE.tailLight);
-    tail2.position.set(0.08, 0.18, -0.30);
-    g.add(tail2);
-
-    const wheelGeo = new THREE.BoxGeometry(0.03, 0.08, 0.14);
-    function addWheel(x, z) {
-      const w = new THREE.Mesh(wheelGeo, M_VEHICLE.wheel);
-      w.position.set(x, 0.07, z);
-      wheels.push(w);
-      g.add(w);
+    function addHeadlight(x) {
+      const light = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.045, 0.024), M_VEHICLE.light);
+      light.position.set(x, BODY_Y0 + 0.07, BODY_L / 2 + 0.012);
+      g.add(light);
     }
-    addWheel(-0.18, 0.22);
-    addWheel(0.18, 0.22);
-    addWheel(-0.18, -0.22);
-    addWheel(0.18, -0.22);
+    addHeadlight(-0.19);
+    addHeadlight(0.19);
 
-    const beacon = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.014, 8, 32), M_VEHICLE.beacon);
-    beacon.position.set(0, 0.50, 0);
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(BODY_W * 0.96, 0.04, 0.026), M_VEHICLE.dark);
+    bumper.position.set(0, BODY_Y0 + 0.02, BODY_L / 2 + 0.012);
+    g.add(bumper);
+
+    function addSideAccent(side) {
+      const accent = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.028, BODY_L - 0.06), M_VEHICLE.dark);
+      accent.position.set(side * (BODY_W / 2 + 0.002), BODY_Y0 + BODY_LOWER_H - 0.012, 0);
+      g.add(accent);
+    }
+    addSideAccent(-1);
+    addSideAccent(1);
+
+    const wheelGeo = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.11, 10);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const hubGeo = new THREE.CylinderGeometry(0.055, 0.055, 0.115, 8);
+    hubGeo.rotateZ(Math.PI / 2);
+    const wx = BODY_W / 2 + 0.035;
+    const wz = BODY_L / 2 - 0.20;
+
+    function addWheel(x, z) {
+      const tire = new THREE.Mesh(wheelGeo, M_VEHICLE.tire);
+      tire.position.set(x, 0, z);
+      g.add(tire);
+      const hub = new THREE.Mesh(hubGeo, M_VEHICLE.hub);
+      hub.position.copy(tire.position);
+      g.add(hub);
+      wheels.push(tire, hub);
+    }
+    addWheel(-wx, wz);
+    addWheel(wx, wz);
+    addWheel(-wx, -wz);
+    addWheel(wx, -wz);
+
+    const poleBaseY = BODY_Y0 + BODY_LOWER_H + BODY_UPPER_H;
+    const poleX = BODY_W * 0.30;
+    const poleZ = -BODY_L * 0.26;
+    const poleH = 0.52;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, poleH, 6), M_VEHICLE.pole);
+    pole.position.set(poleX, poleBaseY + poleH / 2, poleZ);
+    g.add(pole);
+
+    const flagPivot = new THREE.Group();
+    flagPivot.position.set(poleX + 0.01, poleBaseY + poleH - 0.14, poleZ);
+    g.add(flagPivot);
+    flagPivots.push(flagPivot);
+
+    const flagGeo = new THREE.BufferGeometry();
+    flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      0, 0.14, 0,
+      0.22, 0.04, 0,
+      0, -0.08, 0,
+    ], 3));
+    flagGeo.setIndex([0, 1, 2]);
+    flagGeo.computeVertexNormals();
+    const flag = new THREE.Mesh(flagGeo, M_VEHICLE.flag);
+    flagPivot.add(flag);
+
+    const beacon = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.010, 8, 28), M_VEHICLE.beacon);
+    beacon.position.set(0, BODY_Y0 + BODY_LOWER_H + 0.02, 0);
     beacon.rotation.x = Math.PI / 2;
     g.add(beacon);
 
-    const marker = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.24, 4), M_VEHICLE.light);
-    marker.position.set(0, 0.74, 0);
-    marker.rotation.y = Math.PI / 4;
-    g.add(marker);
-
-    g.userData = { kind: 'vehicle', wheels };
+    g.userData = { kind: 'vehicle', wheels, flagPivots, visualScale };
+    g.scale.setScalar(visualScale);
     castReceive(g);
+    beacon.castShadow = false;
+    beacon.receiveShadow = false;
     return g;
   }
 
@@ -6910,14 +7037,17 @@
   const MAX_FLOORS = 8;
 
   const worldGroup = new THREE.Group();
-  scene.add(worldGroup);
+  xrWorldRoot.add(worldGroup);
 
-  const VEHICLE_BODY_Y_OFFSET = 0.14;
+  const VEHICLE_BASE_WHEEL_RADIUS = 0.13;
+  const VEHICLE_BODY_Y_GAP = 0.035;
   const VEHICLE_ACCEL = 8;
   const VEHICLE_BRAKE = 6.8;
   const VEHICLE_TURN_RATE = 3.1;
   const VEHICLE_WAYPOINT_EPSILON = 0.10;
   const VEHICLE_DEFAULT_SPEED = 1.6;
+  const VEHICLE_VISUAL_SCALE_MIN = 0.20;
+  const VEHICLE_VISUAL_SCALE_MAX = 1.8;
   const VEHICLE_COLLISION_RADIUS = 0.84;
   const VEHICLE_YIELD_RADIUS = 1.35;
   const VEHICLE_LANE_WIDTH = 0.42;
@@ -7002,6 +7132,26 @@
 
   function vehicleRoadHeightAtCell(x, z) {
     return TOP_H + terrainRiseAt(x, z);
+  }
+
+  function vehicleVisualScaleForGrid(grid = GRID) {
+    const g = coerceGridSize(grid, GRID);
+    if (g >= 256) return 0.40;
+    if (g >= 128) return 0.355;
+    if (g >= 64) return 0.31;
+    if (g >= 32) return 0.28;
+    return 0.25;
+  }
+
+  function vehicleBodyYOffsetForScale(scale = 1) {
+    return VEHICLE_BASE_WHEEL_RADIUS * Math.max(VEHICLE_VISUAL_SCALE_MIN, Math.min(VEHICLE_VISUAL_SCALE_MAX, scale)) + VEHICLE_BODY_Y_GAP;
+  }
+
+  function vehicleYAtCellForState(state, cellX, cellZ) {
+    const yOffset = state && Number.isFinite(state.bodyYOffset)
+      ? state.bodyYOffset
+      : vehicleBodyYOffsetForScale(state && Number.isFinite(state.visualScale) ? state.visualScale : 1);
+    return vehicleRoadHeightAtCell(cellX, cellZ) + yOffset;
   }
 
   function resolveRoadCellNearCell(cellX, cellZ, maxRadius = GRID * 2) {
@@ -7138,13 +7288,18 @@
     if (!start) return null;
 
     const id = rawId || nextVehicleRuntimeId();
-    const mesh = makeVehicle();
+    const visualScale = clampVehicleNumber(Number(opts.visualScale), VEHICLE_VISUAL_SCALE_MIN, VEHICLE_VISUAL_SCALE_MAX, vehicleVisualScaleForGrid(GRID));
+    const mesh = makeVehicle({ visualScale });
     const p = tilePos(start.x, start.z);
 
     const state = {
       id,
       mesh,
       wheels: mesh.userData.wheels || [],
+      flagPivots: mesh.userData.flagPivots || [],
+      visualScale,
+      bodyYOffset: vehicleBodyYOffsetForScale(visualScale),
+      animOffset: Math.random() * Math.PI * 2,
       x: p.x,
       z: p.z,
       angle: clampVehicleNumber(Number(opts.angle), -Math.PI, Math.PI, 0),
@@ -7171,7 +7326,7 @@
       ? { x: opts.goalX, z: opts.goalZ }
       : null;
 
-    mesh.position.set(p.x, vehicleRoadHeightAtCell(start.x, start.z) + VEHICLE_BODY_Y_OFFSET, p.z);
+    mesh.position.set(p.x, vehicleYAtCellForState(state, start.x, start.z), p.z);
     mesh.rotation.y = state.angle;
     mesh.castShadow = true;
     mesh.receiveShadow = false;
@@ -7403,6 +7558,8 @@
       blockedFor: state.blockedFor,
       collisionBrake: state.collisionBrake,
       trafficRerouteCooldown: state.trafficRerouteCooldown,
+      visualScale: state.visualScale,
+      gridSize: GRID,
       visible: !!(state.mesh && state.mesh.visible),
     }));
     let minDistance = null;
@@ -7427,8 +7584,7 @@
     }
     const currentCell = vehicleCellFromWorld(state.x, state.z);
     if (currentCell.inside) {
-      const rise = vehicleRoadHeightAtCell(currentCell.cellX, currentCell.cellZ);
-      state.mesh.position.y = rise + VEHICLE_BODY_Y_OFFSET;
+      state.mesh.position.y = vehicleYAtCellForState(state, currentCell.cellX, currentCell.cellZ);
     }
 
     if (!state.path.length && state.pathGoal && state.mode !== 'manual') {
@@ -7521,6 +7677,12 @@
     for (const w of state.wheels) {
       w.rotation.x += state.speed * dt * 0.4;
     }
+
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const flutter = Math.sin(nowMs * 0.005 + state.animOffset) * 0.22;
+    for (const flagPivot of state.flagPivots) {
+      flagPivot.rotation.y = flutter;
+    }
   }
 
   function tickVehicles(dt) {
@@ -7564,6 +7726,7 @@
         accel: Number(msg.accel),
         brake: Number(msg.brake),
         turnRate: Number(msg.turnRate),
+        visualScale: Number(msg.visualScale || msg.scale),
         controls: msg.controls,
         mode: msg.mode || (Number.isFinite(Number(msg.goalX)) && Number.isFinite(Number(msg.goalZ)) ? 'auto' : 'manual'),
         goalX: Number(msg.goalX),
@@ -7600,9 +7763,18 @@
 
   // -------- seeded vehicle demo --------
   const VEHICLE_DEMO_DEFAULT_SEED = 'tide-ridge-428';
+  const VEHICLE_DEMO_LARGE_SEED = 'metro-culdesac-128';
+  const VEHICLE_DEMO_LARGE_SIZE_DEFAULT = 128;
+  const VEHICLE_DEMO_LARGE_SIZE_MIN = 12;
+  const VEHICLE_DEMO_LARGE_SIZE_MAX = 256;
+  const VEHICLE_DEMO_LARGE_CARS_DEFAULT = 36;
+  const VEHICLE_DEMO_LARGE_CARS_MAX = 120;
   const vehicleDemoTimers = [];
   let vehicleDemoInterval = 0;
   let activeVehicleDemoSeed = '';
+  let activeVehicleDemoVariant = 'standard';
+  let activeVehicleDemoSize = 0;
+  let activeVehicleDemoCarCount = 0;
 
   function stopSeededVehicleDemo(opts = {}) {
     while (vehicleDemoTimers.length) clearTimeout(vehicleDemoTimers.pop());
@@ -7624,10 +7796,50 @@
     return timer;
   }
 
-  function vehicleDemoShareUrl(seed = VEHICLE_DEMO_DEFAULT_SEED) {
+  function readVehicleDemoParam(params, names) {
+    for (const name of names) {
+      if (params.has(name)) return params.get(name);
+    }
+    return null;
+  }
+
+  function coerceLargeVehicleDemoSize(value, fallback = VEHICLE_DEMO_LARGE_SIZE_DEFAULT) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const n = parseInt(value, 10);
+    const allowed = HOME_GRID_OPTIONS.filter(size => size >= VEHICLE_DEMO_LARGE_SIZE_MIN && size <= VEHICLE_DEMO_LARGE_SIZE_MAX);
+    if (isValidGridSize(n) && n >= VEHICLE_DEMO_LARGE_SIZE_MIN && n <= VEHICLE_DEMO_LARGE_SIZE_MAX) return n;
+    let best = allowed.includes(fallback) ? fallback : VEHICLE_DEMO_LARGE_SIZE_DEFAULT;
+    let bestDist = Infinity;
+    for (const size of allowed) {
+      const dist = Math.abs(size - n);
+      if (dist < bestDist) {
+        best = size;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  function coerceVehicleDemoCarCount(value, fallback = VEHICLE_DEMO_LARGE_CARS_DEFAULT, max = VEHICLE_DEMO_LARGE_CARS_MAX) {
+    if (value === null || value === undefined || value === '') return fallback;
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.min(max, n));
+  }
+
+  function vehicleDemoShareUrl(seed = VEHICLE_DEMO_DEFAULT_SEED, opts = {}) {
     const url = new URL(window.location.href);
-    url.searchParams.set('demo', 'vehicles');
-    url.searchParams.set('seed', String(seed || VEHICLE_DEMO_DEFAULT_SEED));
+    for (const key of ['size', 'mapSize', 'grid', 'gridSize', 'cars', 'carCount', 'vehicles', 'vehicleCount']) {
+      url.searchParams.delete(key);
+    }
+    if (opts.variant === 'large') {
+      url.searchParams.set('demo', 'vehicles-large');
+      if (opts.size) url.searchParams.set('size', String(opts.size));
+      if (opts.carCount) url.searchParams.set('cars', String(opts.carCount));
+    } else {
+      url.searchParams.set('demo', 'vehicles');
+    }
+    url.searchParams.set('seed', String(seed || (opts.variant === 'large' ? VEHICLE_DEMO_LARGE_SEED : VEHICLE_DEMO_DEFAULT_SEED)));
     return url.href;
   }
 
@@ -7639,14 +7851,33 @@
       hashParams.forEach((value, key) => { if (!params.has(key)) params.set(key, value); });
     }
     const demo = normalizeVehicleAction(params.get('demo') || params.get('twbDemo'));
-    const enabled = demo === 'vehicles' || demo === 'vehicle-demo' || params.get('vehicleDemo') === '1' || params.has('vehicleSeed');
+    const scale = normalizeVehicleAction(params.get('scale') || params.get('vehicleScale'));
+    const rawSize = readVehicleDemoParam(params, ['size', 'mapSize', 'grid', 'gridSize']);
+    const rawCars = readVehicleDemoParam(params, ['cars', 'carCount', 'vehicles', 'vehicleCount']);
+    const requestedSize = rawSize !== null ? coerceLargeVehicleDemoSize(rawSize) : null;
+    const requestedCars = rawCars !== null ? coerceVehicleDemoCarCount(rawCars, null) : null;
+    const large = demo === 'vehicles-large'
+      || demo === 'large-vehicles'
+      || demo === 'vehicle-large'
+      || scale === 'large'
+      || scale === 'stress'
+      || requestedSize !== null
+      || (requestedCars !== null && requestedCars > 3);
+    const enabled = large
+      || demo === 'vehicles'
+      || demo === 'vehicle-demo'
+      || params.get('vehicleDemo') === '1'
+      || params.has('vehicleSeed');
     if (!enabled) return null;
     return {
-      seed: params.get('seed') || params.get('vehicleSeed') || params.get('worldSeed') || VEHICLE_DEMO_DEFAULT_SEED,
+      seed: params.get('seed') || params.get('vehicleSeed') || params.get('worldSeed') || (large ? VEHICLE_DEMO_LARGE_SEED : VEHICLE_DEMO_DEFAULT_SEED),
+      variant: large ? 'large' : 'standard',
+      size: large ? (requestedSize || VEHICLE_DEMO_LARGE_SIZE_DEFAULT) : null,
+      carCount: large ? requestedCars : null,
     };
   }
 
-  function showVehicleDemoBadge(seed, vehicleCount) {
+  function showVehicleDemoBadge(seed, vehicleCount, opts = {}) {
     if (!document || !document.body) return;
     document.body.classList.add('vehicle-demo-active');
     let badge = document.getElementById('vehicle-demo-badge');
@@ -7668,7 +7899,8 @@
     title.textContent = 'Vehicle demo running';
 
     const detail = document.createElement('span');
-    detail.textContent = vehicleCount + ' cars driving roads · seed ' + seed;
+    const sizeText = opts.gridSize && opts.gridSize !== HOME_GRID_DEFAULT ? opts.gridSize + '×' + opts.gridSize + ' map · ' : '';
+    detail.textContent = vehicleCount + ' delivery bots driving roads · ' + sizeText + 'seed ' + seed;
 
     badge.append(dot, title, detail);
   }
@@ -7680,7 +7912,254 @@
     if (badge) badge.remove();
   }
 
-  function buildSeededVehicleDemo(seed = VEHICLE_DEMO_DEFAULT_SEED) {
+  function buildLargeScaleVehicleDemo(seed = VEHICLE_DEMO_LARGE_SEED, opts = {}) {
+    const rng = makeMulberry32('vehicle-demo-large:' + seed);
+    const size = coerceLargeVehicleDemoSize(opts.size, VEHICLE_DEMO_LARGE_SIZE_DEFAULT);
+    const roadCells = new Set();
+    const waterCells = new Set();
+    const culdesacEndpoints = [];
+    const keyOf = (x, z) => x + ',' + z;
+    const inBounds = (x, z) => x >= 0 && x < size && z >= 0 && z < size;
+    const addRoad = (x, z) => {
+      if (!inBounds(x, z)) return;
+      roadCells.add(keyOf(x, z));
+    };
+    const addWater = (x, z) => {
+      if (!inBounds(x, z)) return;
+      waterCells.add(keyOf(x, z));
+    };
+    const pushEndpoint = (x, z) => {
+      if (!inBounds(x, z)) return;
+      const key = keyOf(x, z);
+      if (roadCells.has(key)) culdesacEndpoints.push([x, z]);
+    };
+    const edgeInset = Math.max(4, Math.round(size * 0.03125));
+    const firstArterial = Math.max(edgeInset, Math.round(size * 0.0625));
+    const lastArterial = size - firstArterial;
+    const arterialStep = Math.max(6, Math.round(size / 10.67));
+    const arterials = [];
+    for (let coord = firstArterial; coord <= lastArterial; coord += arterialStep) {
+      arterials.push(coord);
+    }
+    if (!arterials.includes(lastArterial)) arterials.push(lastArterial);
+
+    for (const z of arterials) {
+      for (let x = edgeInset; x < size - edgeInset; x++) addRoad(x, z);
+    }
+    for (const x of arterials) {
+      for (let z = edgeInset; z < size - edgeInset; z++) addRoad(x, z);
+    }
+
+    const addRectRoad = (x0, z0, x1, z1) => {
+      for (let x = x0; x <= x1; x++) {
+        addRoad(x, z0);
+        addRoad(x, z1);
+      }
+      for (let z = z0; z <= z1; z++) {
+        addRoad(x0, z);
+        addRoad(x1, z);
+      }
+    };
+    const addScaledRing = (lo, hi) => {
+      const x0 = Math.max(edgeInset, Math.min(size - edgeInset - 4, Math.round(size * lo)));
+      const z0 = x0;
+      const x1 = Math.min(size - edgeInset - 1, Math.max(x0 + 4, Math.round(size * hi)));
+      const z1 = x1;
+      addRectRoad(x0, z0, x1, z1);
+    };
+    addScaledRing(0.109375, 0.8828125);
+    addScaledRing(0.296875, 0.6953125);
+    addScaledRing(0.40625, 0.5859375);
+
+    const addCuldesac = (entryX, entryZ, dirX, dirZ, length) => {
+      let endX = entryX;
+      let endZ = entryZ;
+      for (let i = 0; i <= length; i++) {
+        endX = entryX + dirX * i;
+        endZ = entryZ + dirZ * i;
+        addRoad(endX, endZ);
+      }
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (Math.abs(dx) + Math.abs(dz) > 2) continue;
+          addRoad(endX + dx, endZ + dz);
+        }
+      }
+      pushEndpoint(endX, endZ);
+    };
+
+    for (let xi = 0; xi < arterials.length - 1; xi++) {
+      for (let zi = 0; zi < arterials.length - 1; zi++) {
+        const x0 = arterials[xi];
+        const x1 = arterials[xi + 1];
+        const z0 = arterials[zi];
+        const z1 = arterials[zi + 1];
+        const midX = Math.floor((x0 + x1) / 2);
+        const midZ = Math.floor((z0 + z1) / 2);
+        const jitter = Math.max(1, Math.round(arterialStep * 0.17));
+        const len = Math.max(3, Math.min(Math.max(4, Math.floor(size / 16)), Math.floor((x1 - x0) * 0.45)));
+        if (rng() < 0.62) addCuldesac(x0, midZ, 1, 0, len);
+        if (rng() < 0.48) addCuldesac(x1, midZ + (rng() < 0.5 ? -jitter : jitter), -1, 0, len);
+        if (rng() < 0.54) addCuldesac(midX + (rng() < 0.5 ? -jitter : jitter), z0, 0, 1, len);
+        if (rng() < 0.42) addCuldesac(midX, z1, 0, -1, len);
+      }
+    }
+
+    const riverHalfWidth = size >= 96 ? 1 : 0;
+    const verticalRiverX = Math.round(size * 0.5);
+    const horizontalRiverZ = Math.round(size * 0.265625);
+    const verticalCurveAmp = Math.max(1, Math.round(size * 0.0234375));
+    const horizontalCurveAmp = Math.max(1, Math.round(size * 0.015625));
+    for (let z = 0; z < size; z++) {
+      const curve = Math.round(Math.sin(z * 0.18) * verticalCurveAmp);
+      for (let w = -riverHalfWidth; w <= riverHalfWidth; w++) addWater(verticalRiverX + curve + w, z);
+    }
+    for (let x = 0; x < size; x++) {
+      const curve = Math.round(Math.cos(x * 0.16) * horizontalCurveAmp);
+      for (let w = -riverHalfWidth; w <= riverHalfWidth; w++) addWater(x, horizontalRiverZ + curve + w);
+    }
+
+    const cells = [];
+    const seen = new Set();
+    function pushCell(x, z, terrain, kind = null, floors = 1, terrainFloors = 1, extras = []) {
+      if (!inBounds(x, z)) return;
+      const key = keyOf(x, z);
+      if (seen.has(key)) {
+        const idx = cells.findIndex(c => c.x === x && c.z === z);
+        if (idx >= 0) cells.splice(idx, 1);
+      }
+      seen.add(key);
+      cells.push({
+        x,
+        z,
+        terrain,
+        kind,
+        floors,
+        terrainFloors,
+        buildingType: null,
+        fenceSide: null,
+        extras,
+      });
+    }
+
+    for (const key of waterCells) {
+      const [x, z] = key.split(',').map(Number);
+      pushCell(x, z, 'water', null);
+    }
+    for (const key of roadCells) {
+      const [x, z] = key.split(',').map(Number);
+      if (waterCells.has(key)) pushCell(x, z, 'water', 'bridge');
+      else pushCell(x, z, 'path', null);
+    }
+
+    const occupied = new Set([...roadCells, ...waterCells]);
+    const roadList = Array.from(roadCells).map(k => k.split(',').map(Number));
+    const decorKinds = ['tree', 'tree', 'bush', 'tuft', 'flower', 'rock', 'sheep', 'cow'];
+    const decorCount = Math.min(2400, Math.max(120, Math.round(720 * (size * size) / (VEHICLE_DEMO_LARGE_SIZE_DEFAULT * VEHICLE_DEMO_LARGE_SIZE_DEFAULT))));
+    for (let i = 0; i < decorCount; i++) {
+      const road = roadList[Math.floor(rng() * roadList.length)];
+      if (!road) continue;
+      const [rx, rz] = road;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const [dx, dz] = dirs[Math.floor(rng() * dirs.length)];
+      const x = rx + dx * (1 + Math.floor(rng() * 3));
+      const z = rz + dz * (1 + Math.floor(rng() * 3));
+      const key = keyOf(x, z);
+      if (!inBounds(x, z) || occupied.has(key)) continue;
+      occupied.add(key);
+      if (rng() < 0.34) {
+        pushCell(x, z, 'grass', 'house', 1 + Math.floor(rng() * 2), 1, rng() < 0.35 ? [{ kind: 'tuft', floors: 1 }] : []);
+      } else {
+        pushCell(x, z, 'grass', decorKinds[Math.floor(rng() * decorKinds.length)], 1 + Math.floor(rng() * 2));
+      }
+    }
+
+    const endpointKeys = new Set();
+    const endpoints = [];
+    for (const point of culdesacEndpoints) {
+      const key = keyOf(point[0], point[1]);
+      if (endpointKeys.has(key) || !roadCells.has(key)) continue;
+      endpointKeys.add(key);
+      endpoints.push(point);
+    }
+    const sampleIndexes = [0, 0.22, 0.44, 0.66, 0.88, 1]
+      .map(t => Math.min(arterials.length - 1, Math.max(0, Math.round((arterials.length - 1) * t))));
+    const sampleArterials = Array.from(new Set(sampleIndexes.map(i => arterials[i])));
+    for (const z of sampleArterials) {
+      for (const x of sampleArterials) {
+        const key = keyOf(x, z);
+        if (!endpointKeys.has(key) && roadCells.has(key)) {
+          endpointKeys.add(key);
+          endpoints.push([x, z]);
+        }
+      }
+    }
+    if (!endpoints.length && roadList.length) {
+      const fallbackStep = Math.max(1, Math.floor(roadList.length / 24));
+      for (let i = 0; i < roadList.length; i += fallbackStep) endpoints.push(roadList[i]);
+    }
+
+    const vehicles = [];
+    const requestedCarCount = coerceVehicleDemoCarCount(opts.carCount, null, VEHICLE_DEMO_LARGE_CARS_MAX);
+    const defaultVehicleCount = Math.min(VEHICLE_DEMO_LARGE_CARS_DEFAULT, Math.max(12, Math.floor(endpoints.length / 4)));
+    const maxVehicleCount = Math.min(VEHICLE_DEMO_LARGE_CARS_MAX, Math.max(1, endpoints.length));
+    const vehicleCount = Math.min(maxVehicleCount, Math.max(1, requestedCarCount || defaultVehicleCount));
+    const endpointAt = (index) => endpoints[((index % endpoints.length) + endpoints.length) % endpoints.length];
+    const usedStarts = new Set();
+    const pickUniqueEndpoint = (index) => {
+      for (let i = 0; i < endpoints.length; i++) {
+        const point = endpointAt(index + i);
+        const key = keyOf(point[0], point[1]);
+        if (usedStarts.has(key)) continue;
+        usedStarts.add(key);
+        return point;
+      }
+      return endpointAt(index);
+    };
+    for (let i = 0; i < vehicleCount; i++) {
+      const base = Math.floor(i * endpoints.length / vehicleCount) + i * 7;
+      const start = pickUniqueEndpoint(base);
+      const targets = [
+        endpointAt(base + Math.floor(endpoints.length * 0.47)),
+        endpointAt(base + Math.floor(endpoints.length * 0.63)),
+        endpointAt(base + Math.floor(endpoints.length * 0.79)),
+      ].filter(point => point && (point[0] !== start[0] || point[1] !== start[1]));
+      vehicles.push({
+        id: 'metro-' + String(i + 1).padStart(2, '0'),
+        label: 'large route ' + (i + 1),
+        start,
+        targets,
+        maxSpeed: 1.05 + (i % 5) * 0.12,
+      });
+    }
+
+    return {
+      seed,
+      variant: 'large',
+      renderOrigin: { x: size / 2, z: size / 2 },
+      interval: 9000,
+      spawnDelay: vehicleCount > 12 ? 45 : 140,
+      world: {
+        v: 4,
+        gridSize: size,
+        cameraMode: 'soft',
+        toolId: 'select',
+        cells,
+      },
+      stats: {
+        roadCells: roadCells.size,
+        waterCells: waterCells.size,
+        culdesacs: endpoints.length,
+        requestedCars: requestedCarCount,
+        cars: vehicleCount,
+        size,
+      },
+      vehicles,
+    };
+  }
+
+  function buildSeededVehicleDemo(seed = VEHICLE_DEMO_DEFAULT_SEED, opts = {}) {
+    if (opts.variant === 'large') return buildLargeScaleVehicleDemo(seed || VEHICLE_DEMO_LARGE_SEED, opts);
     const rng = makeMulberry32('vehicle-demo:' + seed);
     const roadCells = new Set();
     const waterRow = 4;
@@ -7777,12 +8256,15 @@
   }
 
   function runSeededVehicleDemo(seed = VEHICLE_DEMO_DEFAULT_SEED, opts = {}) {
-    const spec = buildSeededVehicleDemo(seed || VEHICLE_DEMO_DEFAULT_SEED);
+    const spec = buildSeededVehicleDemo(seed || (opts.variant === 'large' ? VEHICLE_DEMO_LARGE_SEED : VEHICLE_DEMO_DEFAULT_SEED), opts);
     stopSeededVehicleDemo({ clearVehicles: true });
     activeVehicleDemoSeed = spec.seed;
+    activeVehicleDemoVariant = spec.variant || 'standard';
+    activeVehicleDemoSize = spec.world && spec.world.gridSize ? spec.world.gridSize : 0;
+    activeVehicleDemoCarCount = spec.vehicles.length;
     try { localStorage.setItem('tinyworld:vehicle-demo:last-seed', spec.seed); } catch (_) {}
     dismissWelcomeForDemo();
-    showVehicleDemoBadge(spec.seed, spec.vehicles.length);
+    showVehicleDemoBadge(spec.seed, spec.vehicles.length, { gridSize: activeVehicleDemoSize });
     if (typeof setCameraMode === 'function') setCameraMode('soft');
     if (typeof resetCameraDefaults === 'function') resetCameraDefaults();
 
@@ -7791,6 +8273,7 @@
       if (typeof setCameraMode === 'function') setCameraMode('soft');
       if (typeof resetCameraDefaults === 'function') resetCameraDefaults();
       clearVehicleRuntime();
+      const spawnDelay = Number.isFinite(spec.spawnDelay) ? spec.spawnDelay : 280;
       spec.vehicles.forEach((vehicle, index) => {
         queueVehicleDemoStep(() => {
           spawnVehicle({
@@ -7800,7 +8283,7 @@
             mode: 'manual',
             maxSpeed: vehicle.maxSpeed,
           });
-        }, 280 * index);
+        }, spawnDelay * index);
       });
       queueVehicleDemoStep(() => {
         let cycle = 0;
@@ -7808,11 +8291,19 @@
         vehicleDemoInterval = setInterval(() => {
           cycle += 1;
           applyVehicleDemoTargets(spec, cycle);
-        }, opts.interval || 4500);
-      }, 1100 + spec.vehicles.length * 280);
+        }, opts.interval || spec.interval || 4500);
+      }, 1100 + spec.vehicles.length * spawnDelay);
       window.__lastVehicleDemo = {
         seed: spec.seed,
-        shareUrl: vehicleDemoShareUrl(spec.seed),
+        variant: spec.variant || 'standard',
+        stats: spec.stats || null,
+        gridSize: spec.world && spec.world.gridSize,
+        carCount: spec.vehicles.length,
+        shareUrl: vehicleDemoShareUrl(spec.seed, {
+          variant: spec.variant,
+          size: spec.world && spec.world.gridSize,
+          carCount: spec.vehicles.length,
+        }),
         vehicles: spec.vehicles.map(v => ({ id: v.id, start: v.start, targets: v.targets })),
       };
       console.info('[vehicle-demo] seed', spec.seed, window.__lastVehicleDemo.shareUrl);
@@ -7820,7 +8311,8 @@
 
     const ok = applyState(spec.world, {
       sliced: true,
-      renderOrigin: { x: 0, z: 0 },
+      renderOrigin: spec.renderOrigin || { x: 0, z: 0 },
+      skipGhostBoards: spec.variant === 'large',
       onDone: startVehicles,
     });
     if (!ok) {
@@ -7847,7 +8339,7 @@
   const selectedCells = new Set();
   const selectionGroup = new THREE.Group();
   selectionGroup.name = 'selection-highlights';
-  scene.add(selectionGroup);
+  xrWorldRoot.add(selectionGroup);
   const selectionMat = new THREE.MeshBasicMaterial({
     color: 0x3c82f7,
     transparent: true,
@@ -8209,7 +8701,7 @@
   // boards begin. Rebuilt whenever GRID changes.
   const homeBorderGroup = new THREE.Group();
   homeBorderGroup.name = 'homeBorder';
-  scene.add(homeBorderGroup);
+  xrWorldRoot.add(homeBorderGroup);
   const HOME_BORDER_COLOR = 0x2a1a0e;
   const HOME_BORDER_Y = 0.04;
   const homeBorderStripMat = new THREE.MeshBasicMaterial({ color: HOME_BORDER_COLOR });
@@ -10156,7 +10648,7 @@
   const hoverMesh = new THREE.Mesh(hoverGeo, M.hover);
   hoverMesh.position.y = TOP_H + 0.01;
   hoverMesh.visible = false;
-  scene.add(hoverMesh);
+  xrWorldRoot.add(hoverMesh);
 
   let currentHover = null;
 
@@ -10253,7 +10745,7 @@
     const sig = ghostToolSignature(selectedTool);
     if (sig === ghostPreviewKey && ghostPreview) return;
     if (ghostPreview) {
-      scene.remove(ghostPreview);
+      if (ghostPreview.parent) ghostPreview.parent.remove(ghostPreview);
       disposeGroup(ghostPreview);
       ghostPreview = null;
     }
@@ -10262,7 +10754,7 @@
     ghostPreview = buildGhostMesh(selectedTool);
     if (ghostPreview) {
       ghostPreview.visible = false;
-      scene.add(ghostPreview);
+      xrWorldRoot.add(ghostPreview);
     }
   }
 
@@ -10339,6 +10831,351 @@
     hoverMesh.visible = false;
     currentHover = null;
   }
+
+  // -------- WebXR modes --------
+  const xrStatusEl = document.getElementById('xr-status');
+  const xrButtons = {
+    surface: document.getElementById('xr-surface'),
+    float: document.getElementById('xr-float'),
+    inside: document.getElementById('xr-inside'),
+  };
+  const xrBoardScale = {
+    surface: () => Math.max(0.012, Math.min(0.09, 0.72 / Math.max(1, GRID))),
+    float: () => Math.max(0.018, Math.min(0.14, 1.1 / Math.max(1, GRID))),
+    inside: () => 1,
+  };
+  const xrControllerRay = new THREE.Ray();
+  const xrControllerDir = new THREE.Vector3();
+  const xrControllerPos = new THREE.Vector3();
+  const xrLocalPoint = new THREE.Vector3();
+  const xrForward = new THREE.Vector3();
+  const xrPosePos = new THREE.Vector3();
+  const xrPoseQuat = new THREE.Quaternion();
+  const xrPoseScale = new THREE.Vector3();
+  let xrMode = null;
+  let xrSession = null;
+  let xrHitTestSource = null;
+  let xrHitTestSourceRequested = false;
+  let xrReticleHit = null;
+  let xrAnchor = null;
+  let xrBoardPlaced = true;
+  let xrWasShowcase = false;
+
+  const xrReticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.08, 0.105, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: 0x3a72c8, transparent: true, opacity: 0.88 })
+  );
+  xrReticle.name = 'xr-placement-reticle';
+  xrReticle.matrixAutoUpdate = false;
+  xrReticle.visible = false;
+  scene.add(xrReticle);
+
+  function setXRStatus(message) {
+    if (xrStatusEl) xrStatusEl.textContent = message;
+  }
+
+  function setXRButtonsDisabled(disabled) {
+    Object.keys(xrButtons).forEach(k => {
+      if (xrButtons[k]) xrButtons[k].disabled = !!disabled;
+    });
+  }
+
+  function resetXRWorldTransform() {
+    xrWorldRoot.visible = true;
+    xrWorldRoot.position.set(0, 0, 0);
+    xrWorldRoot.quaternion.identity();
+    xrWorldRoot.scale.set(1, 1, 1);
+    xrWorldRoot.updateMatrixWorld(true);
+    xrBoardPlaced = true;
+  }
+
+  function setXRRootFromPose(position, quaternion, scale) {
+    xrWorldRoot.visible = true;
+    xrWorldRoot.position.copy(position);
+    xrWorldRoot.quaternion.copy(quaternion);
+    xrWorldRoot.scale.setScalar(scale);
+    xrWorldRoot.updateMatrixWorld(true);
+    xrBoardPlaced = true;
+  }
+
+  function placeXRBoardAtReticle() {
+    if (!xrReticle.visible) return false;
+    xrReticle.matrix.decompose(xrPosePos, xrPoseQuat, xrPoseScale);
+    setXRRootFromPose(xrPosePos, xrPoseQuat, xrBoardScale.surface());
+    xrReticle.visible = false;
+    setXRStatus('Board anchored. Aim/select a tile to edit it, or end XR from the headset menu.');
+    if (xrReticleHit && xrReticleHit.createAnchor) {
+      xrReticleHit.createAnchor().then(anchor => {
+        xrAnchor = anchor;
+      }).catch(() => {
+        xrAnchor = null;
+      });
+    }
+    return true;
+  }
+
+  function placeXRFloatingBoard() {
+    camera.updateMatrixWorld(true);
+    camera.getWorldPosition(xrPosePos);
+    camera.getWorldDirection(xrForward);
+    xrForward.normalize();
+    xrPosePos.addScaledVector(xrForward, 1.35);
+    if (xrMode === 'float') xrPosePos.y -= 0.32;
+    const yaw = Math.atan2(xrForward.x, xrForward.z);
+    xrPoseQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    setXRRootFromPose(xrPosePos, xrPoseQuat, xrBoardScale.float());
+    setXRStatus('Tiny World is floating. Aim/select tiles with your controller or hand ray.');
+  }
+
+  function placeXRInsideWorld() {
+    xrWorldRoot.visible = true;
+    xrWorldRoot.position.set(0, 0, 0);
+    xrWorldRoot.quaternion.identity();
+    xrWorldRoot.scale.setScalar(xrBoardScale.inside());
+    xrWorldRoot.updateMatrixWorld(true);
+    xrBoardPlaced = true;
+    setXRStatus('You are inside the environment. Walk/turn naturally; aim/select tiles to edit.');
+  }
+
+  function pickTileFromXRController(controller) {
+    if (!controller) return null;
+    controller.updateMatrixWorld(true);
+    xrControllerPos.setFromMatrixPosition(controller.matrixWorld);
+    xrControllerDir.set(0, 0, -1).transformDirection(controller.matrixWorld).normalize();
+    xrControllerRay.origin.copy(xrControllerPos);
+    xrControllerRay.direction.copy(xrControllerDir);
+    raycaster.ray.copy(xrControllerRay);
+    const hits = raycaster.intersectObjects(worldGroup.children, true);
+    for (const h of hits) {
+      let n = h.object;
+      while (n && n.userData.gx === undefined) n = n.parent;
+      if (!n || n.userData.gx === undefined || !n.visible) continue;
+      const boardX = n.userData.boardX || 0;
+      const boardZ = n.userData.boardZ || 0;
+      const p = (boardX || boardZ)
+        ? ghostCellPos(boardX, boardZ, n.userData.gx, n.userData.gz)
+        : tilePos(n.userData.gx, n.userData.gz);
+      xrLocalPoint.copy(h.point);
+      xrWorldRoot.worldToLocal(xrLocalPoint);
+      return {
+        x: n.userData.gx,
+        z: n.userData.gz,
+        boardX,
+        boardZ,
+        worldX: p.x,
+        worldZ: p.z,
+        localX: xrLocalPoint.x - p.x,
+        localZ: xrLocalPoint.z - p.z,
+      };
+    }
+    return null;
+  }
+
+  function updateXRControllerHover() {
+    if (!xrSession || !xrBoardPlaced) return;
+    const hit = pickTileFromXRController(renderer.xr.getController(0))
+      || pickTileFromXRController(renderer.xr.getController(1));
+    if (hit) {
+      currentHover = hit;
+      hoverMesh.position.set(hit.worldX, hoverHeightForCell(hit), hit.worldZ);
+      hoverMesh.visible = true;
+    } else {
+      currentHover = null;
+      hoverMesh.visible = false;
+    }
+    updateGhostPlacement();
+  }
+
+  function onXRSelect(event) {
+    if (!xrSession) return;
+    if (xrMode === 'surface' && !xrBoardPlaced) {
+      placeXRBoardAtReticle();
+      return;
+    }
+    if (xrMode === 'float' && !xrBoardPlaced) {
+      placeXRFloatingBoard();
+      return;
+    }
+    const hit = pickTileFromXRController(event.target) || currentHover;
+    if (!hit || (selectedTool && selectedTool.select)) return;
+    currentHover = hit;
+    applyToolToCell(hit);
+    hoverMesh.position.set(hit.worldX, hoverHeightForCell(hit), hit.worldZ);
+    hoverMesh.visible = true;
+    updateGhostPlacement();
+  }
+
+  const xrControllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
+  xrControllers.forEach(controller => {
+    controller.addEventListener('select', onXRSelect);
+    scene.add(controller);
+  });
+
+  async function isXRSupported(mode) {
+    if (!navigator.xr || !navigator.xr.isSessionSupported) return false;
+    try { return await navigator.xr.isSessionSupported(mode); }
+    catch (_) { return false; }
+  }
+
+  async function preferredFloatingSessionMode() {
+    if (await isXRSupported('immersive-ar')) return 'immersive-ar';
+    if (await isXRSupported('immersive-vr')) return 'immersive-vr';
+    return null;
+  }
+
+  function sessionInitForXRMode(mode, sessionMode) {
+    if (mode === 'surface') {
+      return {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['anchors', 'dom-overlay', 'local-floor'],
+        domOverlay: { root: document.body },
+      };
+    }
+    const optionalFeatures = ['local-floor', 'bounded-floor', 'hand-tracking', 'dom-overlay'];
+    return sessionMode === 'immersive-ar'
+      ? { optionalFeatures, domOverlay: { root: document.body } }
+      : { optionalFeatures };
+  }
+
+  async function startXRMode(mode) {
+    if (!navigator.xr || !navigator.xr.requestSession) {
+      setXRStatus('WebXR is not available here. Use HTTPS and a WebXR headset browser.');
+      return;
+    }
+    if (xrSession) {
+      try { await xrSession.end(); } catch (_) {}
+    }
+    const sessionMode = mode === 'surface'
+      ? 'immersive-ar'
+      : (mode === 'inside' ? 'immersive-vr' : await preferredFloatingSessionMode());
+    if (!sessionMode || !(await isXRSupported(sessionMode))) {
+      setXRStatus(mode === 'inside' ? 'Immersive VR is not supported on this device.' : 'Immersive AR/VR is not supported on this device.');
+      return;
+    }
+    setXRButtonsDisabled(true);
+    setXRStatus('Starting XR…');
+    try {
+      renderer.xr.setReferenceSpaceType(mode === 'inside' ? 'local-floor' : 'local');
+      const session = await navigator.xr.requestSession(sessionMode, sessionInitForXRMode(mode, sessionMode));
+      await renderer.xr.setSession(session);
+      xrMode = mode;
+      xrSession = session;
+      xrHitTestSource = null;
+      xrHitTestSourceRequested = false;
+      xrReticleHit = null;
+      xrAnchor = null;
+      xrWasShowcase = document.body.classList.contains('showcase');
+      document.body.classList.add('xr-active');
+      scene.background = sessionMode === 'immersive-ar' ? null : defaultSceneBackground.clone();
+      if (mode === 'surface') {
+        xrBoardPlaced = false;
+        xrWorldRoot.visible = false;
+        xrReticle.visible = false;
+        setXRStatus('Look at a flat desk/table until the ring appears, then pinch/select to place the board.');
+      } else if (mode === 'float') {
+        xrBoardPlaced = false;
+        xrWorldRoot.visible = false;
+        setXRStatus('Pinch/select once to float the board in front of you.');
+      } else {
+        placeXRInsideWorld();
+      }
+      session.addEventListener('end', () => {
+        xrSession = null;
+        xrMode = null;
+        xrHitTestSource = null;
+        xrHitTestSourceRequested = false;
+        xrReticleHit = null;
+        xrAnchor = null;
+        xrReticle.visible = false;
+        scene.background = defaultSceneBackground.clone();
+        document.body.classList.remove('xr-active');
+        resetXRWorldTransform();
+        setXRButtonsDisabled(false);
+        setXRStatus('Exited XR. Use AR desk, Float, or Enter world to jump back in.');
+        if (xrWasShowcase && !document.body.classList.contains('showcase')) {
+          document.body.classList.add('showcase');
+        }
+      });
+    } catch (err) {
+      console.error('WebXR start failed:', err);
+      resetXRWorldTransform();
+      xrReticle.visible = false;
+      scene.background = defaultSceneBackground.clone();
+      document.body.classList.remove('xr-active');
+      setXRButtonsDisabled(false);
+      setXRStatus('Could not start XR: ' + String(err && err.message ? err.message : err).slice(0, 120));
+    }
+  }
+
+  function updateXRFrame(frame) {
+    if (!xrSession || !frame) return;
+    if (xrMode === 'surface' && xrAnchor && frame.trackedAnchors && frame.trackedAnchors.has(xrAnchor)) {
+      const anchorPose = frame.getPose(xrAnchor.anchorSpace, renderer.xr.getReferenceSpace());
+      if (anchorPose) {
+        xrPosePos.set(
+          anchorPose.transform.position.x,
+          anchorPose.transform.position.y,
+          anchorPose.transform.position.z
+        );
+        xrPoseQuat.set(
+          anchorPose.transform.orientation.x,
+          anchorPose.transform.orientation.y,
+          anchorPose.transform.orientation.z,
+          anchorPose.transform.orientation.w
+        );
+        setXRRootFromPose(xrPosePos, xrPoseQuat, xrBoardScale.surface());
+      }
+    }
+    if (xrMode === 'surface' && !xrBoardPlaced && !xrHitTestSourceRequested) {
+      const session = renderer.xr.getSession();
+      if (session && session.requestReferenceSpace && session.requestHitTestSource) {
+        session.requestReferenceSpace('viewer').then(referenceSpace => {
+          session.requestHitTestSource({ space: referenceSpace }).then(source => {
+            xrHitTestSource = source;
+          }).catch(() => {
+            setXRStatus('Hit-test was unavailable; try Float mode instead.');
+          });
+        });
+        xrHitTestSourceRequested = true;
+      }
+    }
+    if (xrMode === 'surface' && !xrBoardPlaced && xrHitTestSource) {
+      const hitTestResults = frame.getHitTestResults(xrHitTestSource);
+      if (hitTestResults.length) {
+        const hit = hitTestResults[0];
+        const pose = hit.getPose(renderer.xr.getReferenceSpace());
+        if (pose) {
+          xrReticle.visible = true;
+          xrReticle.matrix.fromArray(pose.transform.matrix);
+          xrReticleHit = hit;
+        }
+      } else {
+        xrReticle.visible = false;
+        xrReticleHit = null;
+      }
+    }
+    updateXRControllerHover();
+  }
+
+  async function refreshXRSupportUI() {
+    const hasXR = !!(navigator.xr && navigator.xr.isSessionSupported);
+    if (!hasXR) {
+      setXRStatus('WebXR unavailable: open over HTTPS in a compatible headset browser.');
+      setXRButtonsDisabled(true);
+      return;
+    }
+    const ar = await isXRSupported('immersive-ar');
+    const vr = await isXRSupported('immersive-vr');
+    if (xrButtons.surface) xrButtons.surface.disabled = !ar;
+    if (xrButtons.float) xrButtons.float.disabled = !(ar || vr);
+    if (xrButtons.inside) xrButtons.inside.disabled = !vr;
+    setXRStatus(ar || vr ? 'XR ready: AR desk pins the board to a surface; Float suspends it; Enter world scales it 1:1.' : 'No immersive WebXR session is supported on this device.');
+  }
+
+  if (xrButtons.surface) xrButtons.surface.addEventListener('click', () => startXRMode('surface'));
+  if (xrButtons.float) xrButtons.float.addEventListener('click', () => startXRMode('float'));
+  if (xrButtons.inside) xrButtons.inside.addEventListener('click', () => startXRMode('inside'));
+  refreshXRSupportUI();
 
   // -------- tools --------
   const TOOLS = [
@@ -11915,10 +12752,12 @@
     if (bannerText) bannerText.textContent = `Areas outside your ${GRID}×${GRID} grid aren't saved`;
     const confirmCopy = document.getElementById('confirm-reset-copy');
     if (confirmCopy) confirmCopy.textContent = `This replaces your current build with the preset village. You'll lose anything you've placed on the ${GRID}×${GRID} grid.`;
+    const homeBtn = document.getElementById('home');
+    if (homeBtn) homeBtn.setAttribute('aria-label', `Center on your ${GRID} by ${GRID} grid`);
   }
   updateUnsavedCopyForGrid();
 
-  // Smoothly tween the camera target/zoom back to the home 8x8 grid
+  // Smoothly tween the camera target/zoom back to the current home grid
   // without touching world data — used by the Home button.
   let homeTween = null;
   function flyHomeCamera() {
@@ -11927,7 +12766,7 @@
       az: azimuth, po: polar,
     };
     const end = {
-      tx: DEFAULT_TARGET.x, tz: DEFAULT_TARGET.z, view: DEFAULT_VIEW_SIZE,
+      tx: DEFAULT_TARGET.x, tz: DEFAULT_TARGET.z, view: DEFAULT_VIEW_SIZE * (GRID / HOME_GRID_DEFAULT),
       az: DEFAULT_AZIMUTH, po: DEFAULT_POLAR,
     };
     homeTween = { start, end, t: 0, dur: 0.55 };
@@ -12498,7 +13337,7 @@
         vx: (Math.random() - 0.5) * 0.15,
         vz: (Math.random() - 0.5) * 0.15,
       };
-      scene.add(s);
+      xrWorldRoot.add(s);
       smokeParticles.push(s);
     }
   }
@@ -12515,7 +13354,7 @@
       const sc = 1 + t * 1.4;
       s.scale.set(sc, sc, sc);
       if (t >= 1) {
-        scene.remove(s);
+        if (s.parent) s.parent.remove(s);
         s.material.dispose();
         smokeParticles.splice(i, 1);
       }
@@ -12551,7 +13390,7 @@
         vx: Math.cos(a) * (0.85 + Math.random() * 0.5),
         vz: Math.sin(a) * (0.85 + Math.random() * 0.5),
       };
-      scene.add(d);
+      xrWorldRoot.add(d);
       smokeParticles.push(d);
     }
   }
@@ -12665,7 +13504,7 @@
   // this block runs much later). syncCloudPopulation guards on `clouds`.
   var cloudGroup = new THREE.Group();
   cloudGroup.name = 'clouds';
-  scene.add(cloudGroup);
+  xrWorldRoot.add(cloudGroup);
   var clouds = [];
   var CLOUD_MAX = 18;
   var CLOUD_RANGE_X = 24; // wrap-around x extent (centred on 0)
@@ -12900,12 +13739,12 @@
     color: 0xbcd0e4, transparent: true, opacity: 0.55, depthWrite: false,
   });
   const rainMesh = makePrecip({ count: 700, geometry: rainGeo, material: rainMat, dropSpeed: 14, drift: 0.5, randomRot: false });
-  scene.add(rainMesh);
+  xrWorldRoot.add(rainMesh);
 
   const snowGeo = new THREE.BoxGeometry(0.10, 0.10, 0.10);
   const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthWrite: false });
   const snowMesh = makePrecip({ count: 520, geometry: snowGeo, material: snowMat, dropSpeed: 1.4, drift: 0.9, randomRot: true });
-  scene.add(snowMesh);
+  xrWorldRoot.add(snowMesh);
 
   function makeSplashPool(count, { color, size, life, opacity }) {
     const geo = new THREE.RingGeometry(size * 0.28, size * 0.62, 18);
@@ -12940,7 +13779,7 @@
 
   const rainSplash = makeSplashPool(260, { color: 0xe6f3ff, size: 0.38, life: 0.46, opacity: 0.82 });
   rainSplash.renderOrder = 30;
-  scene.add(rainSplash);
+  xrWorldRoot.add(rainSplash);
 
   function applyWeatherSplashOpacity() {
     const heavy = weatherEffectFactor();
@@ -12982,10 +13821,10 @@
 
   const rainSurface = makeWeatherBuildPool(900, { color: 0x9ed1f0, size: 0.42, opacity: 0.20, shape: 'circle' });
   rainSurface.renderOrder = 28;
-  scene.add(rainSurface);
+  xrWorldRoot.add(rainSurface);
   const snowSurface = makeWeatherBuildPool(1400, { color: 0xffffff, size: 0.48, opacity: 0.34 });
   snowSurface.renderOrder = 29;
-  scene.add(snowSurface);
+  xrWorldRoot.add(snowSurface);
   applyWeatherSplashOpacity();
 
   function clampWeatherDecalToCell(x, z, radius) {
@@ -13259,7 +14098,7 @@
   const cropDusterRoot = new THREE.Group();
   cropDusterRoot.name = 'cropDuster';
   cropDusterRoot.visible = false;
-  scene.add(cropDusterRoot);
+  xrWorldRoot.add(cropDusterRoot);
   const cropDusterMaterials = [];
   let cropDusterModel = null;
   let cropDusterTime = 0;
@@ -13347,7 +14186,7 @@
     bannerMesh.receiveShadow = false;
     bannerMesh.renderOrder = 1;
     bannerMesh.userData.basePositions = geo.attributes.position.array.slice();
-    scene.add(bannerMesh);
+    xrWorldRoot.add(bannerMesh);
 
     // Tow wire: a thin line from the plane's tail to the leading edge of
     // the banner. Two-vertex BufferGeometry, mutated in updateCropDuster.
@@ -13359,7 +14198,7 @@
     bannerWire.frustumCulled = false;
     bannerWire.castShadow = false;
     bannerWire.receiveShadow = false;
-    scene.add(bannerWire);
+    xrWorldRoot.add(bannerWire);
   }
   function setBannerText(text) {
     ensureBanner();
@@ -13638,7 +14477,7 @@
       vy: 0.03 + Math.random() * 0.05,
       vz: (Math.random() - 0.5) * 0.34,
     };
-    scene.add(p);
+    xrWorldRoot.add(p);
     cropDustParticles.push(p);
   }
 
@@ -13660,7 +14499,7 @@
       const s = 1 + u * 3.0;
       p.scale.set(s, s * 0.65, s);
       if (u >= 1) {
-        scene.remove(p);
+        if (p.parent) p.parent.remove(p);
         p.material.dispose();
         cropDustParticles.splice(i, 1);
       }
@@ -13794,9 +14633,8 @@
     docHidden = !!document.hidden;
   });
 
-  function animate(now) {
-    requestAnimationFrame(animate);
-    if (docHidden) {
+  function animate(now, xrFrame) {
+    if (docHidden && !xrSession) {
       // Tab is backgrounded — keep the rAF heartbeat (browsers throttle
       // it anyway) but skip per-frame work + render. prevT reset so the
       // first frame after resume doesn't see a giant dt.
@@ -13862,6 +14700,7 @@
       }
     }
     updateSmoke(dt);
+    updateXRFrame(xrFrame);
 
     renderScene();
   }
@@ -16346,7 +17185,11 @@
         else resetCameraDefaults();
       }
       requestHomeRenderWindowSync({ force: true });
-      if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+      if (opts.skipGhostBoards) {
+        renderVisibleDistance = 0;
+        syncGhostRenderBudget();
+        if (typeof clearGhostWorld === 'function') clearGhostWorld();
+      } else if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
       if (data.toolId) {
         const tool = TOOLS.find(t => t.id === data.toolId);
         if (tool) selectTool(tool);
@@ -16514,7 +17357,11 @@
         if (data.cameraMode && okCameraMode.has(data.cameraMode)) setCameraMode(data.cameraMode);
         else resetCameraDefaults();
       }
-      if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+      if (opts.skipGhostBoards) {
+        renderVisibleDistance = 0;
+        syncGhostRenderBudget();
+        if (typeof clearGhostWorld === 'function') clearGhostWorld();
+      } else if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
       if (data.toolId) {
         const tool = TOOLS.find(t => t.id === data.toolId);
         if (tool) selectTool(tool);
@@ -17431,10 +18278,15 @@
     }
     ensureGhostBoardsAroundTarget();
     onResize();
-    requestAnimationFrame(animate);
+    renderer.setAnimationLoop(animate);
     const vehicleDemoRequest = getVehicleDemoUrlRequest();
     if (vehicleDemoRequest) {
-      setTimeout(() => runSeededVehicleDemo(vehicleDemoRequest.seed, { fromUrl: true }), 0);
+      setTimeout(() => runSeededVehicleDemo(vehicleDemoRequest.seed, {
+        fromUrl: true,
+        variant: vehicleDemoRequest.variant,
+        size: vehicleDemoRequest.size,
+        carCount: vehicleDemoRequest.carCount,
+      }), 0);
     }
   }
 
@@ -18552,8 +19404,20 @@
       items.push({ group: 'World', label: 'Run vehicle seed demo', hint: 'map + cars + targets from ' + VEHICLE_DEMO_DEFAULT_SEED, run: () => {
         runSeededVehicleDemo(VEHICLE_DEMO_DEFAULT_SEED);
       } });
+      items.push({ group: 'World', label: 'Run large vehicle stress demo', hint: '128×128 roads, bridges, cul-de-sacs, 36 cars', run: () => {
+        runSeededVehicleDemo(VEHICLE_DEMO_LARGE_SEED, {
+          variant: 'large',
+          size: VEHICLE_DEMO_LARGE_SIZE_DEFAULT,
+          carCount: VEHICLE_DEMO_LARGE_CARS_DEFAULT,
+        });
+      } });
       items.push({ group: 'World', label: 'Copy vehicle seed demo URL', hint: 'shareable cars-on-roads seed', run: async () => {
-        const url = vehicleDemoShareUrl(activeVehicleDemoSeed || VEHICLE_DEMO_DEFAULT_SEED);
+        const variant = activeVehicleDemoVariant === 'large' ? 'large' : 'standard';
+        const url = vehicleDemoShareUrl(activeVehicleDemoSeed || (variant === 'large' ? VEHICLE_DEMO_LARGE_SEED : VEHICLE_DEMO_DEFAULT_SEED), {
+          variant,
+          size: variant === 'large' ? (activeVehicleDemoSize || VEHICLE_DEMO_LARGE_SIZE_DEFAULT) : null,
+          carCount: variant === 'large' ? (activeVehicleDemoCarCount || VEHICLE_DEMO_LARGE_CARS_DEFAULT) : null,
+        });
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(url);
           console.info('[vehicle-demo] copied share URL', url);

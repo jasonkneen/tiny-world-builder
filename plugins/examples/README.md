@@ -120,8 +120,25 @@ For a shareable browser-only seeded demo, open:
 http://localhost:3000/tiny-world-builder?demo=vehicles&seed=tide-ridge-428
 ```
 
-That path does not require the SSE relay: the app itself creates the seeded map,
-places cars, assigns one target per car, and starts them driving.
+For a larger browser-only scale test, open:
+
+```text
+http://localhost:3000/tiny-world-builder?demo=vehicles-large&seed=metro-culdesac-128&stats=1
+```
+
+Param aliases for the large route:
+
+- map size: `size=`, `mapSize=`, `grid=`, or `gridSize=` (nearest valid demo grid size from `12` through `256`: `12`, `16`, `20`, `32`, `48`, `64`, `96`, `128`, `256`)
+- car count: `cars=`, `carCount=`, `vehicles=`, or `vehicleCount=` (`1..120`, capped by available starts)
+
+```text
+http://localhost:3000/tiny-world-builder?demo=vehicles-large&seed=ridge-loop-917&size=128&cars=18&stats=1
+```
+
+The large route uses arterial roads, bridge crossings, cul-de-sacs, and
+autonomous vehicles on long routes. Neither path requires the SSE relay: the app
+itself creates the seeded map, places delivery bots, assigns one or more targets per vehicle,
+and starts them driving.
 
 `vehicle-road-demo.js` is a no-dependency MCP client that talks to
 `mcp-stdio-bridge.js`, paints a road/water/bridge network through the SSE relay,

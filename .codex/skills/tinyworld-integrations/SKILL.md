@@ -31,13 +31,15 @@ Examples live under `plugins/examples/`:
   to `mcp-stdio-bridge.js`, paints a visible road/water/bridge network, spawns
   runtime vehicles, and retargets them in a loop so the browser remains
   watchably active.
-- The app also supports a browser-native shareable vehicle demo URL:
-  `?demo=vehicles&seed=tide-ridge-428`. It creates the map, places cars,
-  assigns targets, and starts driving without requiring the SSE relay. Keep this
-  demo visually self-identifying: show an active badge, hide overlays that cover
-  the road network, and make vehicles obvious with beacons/markers. During local
-  demo work, `tools/dev-server.js` should make bare `http://localhost:3000/`
-  and no-query `http://localhost:3000/tiny-world-builder` redirect to that seed
-  so the user can simply open the port or remembered app URL and watch it.
+- The app also supports browser-native shareable vehicle demo URLs:
+  - `?demo=vehicles&seed=tide-ridge-428` creates the small/default visible road demo.
+  - `?demo=vehicles-large&seed=metro-culdesac-128&stats=1` creates the default 128×128 scale test with arterial/ring roads, bridge crossings, 200+ cul-de-sac endpoints, and 36 autonomous vehicles on long routes.
+  - Large-demo params: `size=` / `mapSize=` / `grid=` / `gridSize=` accept the nearest valid demo grid size from `12` through `256` (`12`, `16`, `20`, `32`, `48`, `64`, `96`, `128`, `256`); `cars=` / `carCount=` / `vehicles=` / `vehicleCount=` accept `1..120` and are capped by available unique endpoints.
+  Keep these demos visually self-identifying: show an active badge, hide overlays
+  that cover the road network, and make vehicles obvious with beacons/markers.
+  During local demo work, `tools/dev-server.js` should make bare
+  `http://localhost:3000/` and no-query `http://localhost:3000/tiny-world-builder`
+  redirect to the small seed so the user can simply open the port or remembered
+  app URL and watch it. Use the large URL explicitly for scale/perf checks.
 
 When changing command shape, update the app bridge and these examples together.
