@@ -3643,21 +3643,41 @@
 
   // -------- constants --------
   // GRID is the home board edge length. Mutable: the user can resize it
-  // to 8 / 12 / 16 / 20 / 32 / 48 from Render Settings. Tiles outside the current
+  // from tiny 8×8 dioramas up to 512×512 worlds. Tiles outside the current
   // home grid are still tracked in world[][] (used by ghost boards and
   // export) but rendered grayscale; growing GRID brings those tiles into
-  // the home area and rebuilds them in full colour.
+  // the home area and rebuilds them in full colour. Very large boards use
+  // a camera-centred render window so world data can scale without trying
+  // to keep 262k tile meshes alive at once.
   const HOME_GRID_DEFAULT = 8;
   const HOME_GRID_MIN = 8;
-  // Expanded grid options so users can produce OWB-scale worlds.  32+
-  // uses the same per-cell renderer (no instancing) so it taxes the
-  // GPU on weak machines — the low-fps DPR backoff in the animate
-  // loop and the resolution-scale slider in Settings are the safety
-  // valves.  HOME_GRID_MAX bumps with the option list so the
-  // world[][] pre-allocation still covers every reachable cell.
-  const HOME_GRID_MAX = 48;
-  const HOME_GRID_OPTIONS = [8, 12, 16, 20, 32, 48];
+  const HOME_GRID_MAX = 512;
+  const HOME_GRID_OPTIONS = [8, 12, 16, 20, 32, 48, 64, 96, 128, 256, 512];
+  const HOME_GRID_OPTION_SET = new Set(HOME_GRID_OPTIONS);
   let GRID = HOME_GRID_DEFAULT;
+
+  function isValidGridSize(n) {
+    return Number.isInteger(n) && HOME_GRID_OPTION_SET.has(n);
+  }
+
+  function coerceGridSize(value, fallback = HOME_GRID_DEFAULT) {
+    const n = parseInt(value, 10);
+    if (isValidGridSize(n)) return n;
+    return isValidGridSize(fallback) ? fallback : HOME_GRID_DEFAULT;
+  }
+
+  function fillGridSizeSelect(el) {
+    if (!el) return;
+    const prev = coerceGridSize(el.value, GRID);
+    el.innerHTML = '';
+    for (const size of HOME_GRID_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = String(size);
+      opt.textContent = size + ' × ' + size;
+      el.appendChild(opt);
+    }
+    el.value = String(prev);
+  }
   // Tooltips render in one fixed body-level element so they are never
   // clipped by scrolling toolbars, minimaps, or flyouts.
   (function wireFixedTooltips() {
@@ -3752,7 +3772,7 @@
   })();
   try {
     const stored = parseInt(localStorage.getItem('tinyworld:home-grid') || '', 10);
-    if (HOME_GRID_OPTIONS.includes(stored)) GRID = stored;
+    GRID = coerceGridSize(stored, GRID);
   } catch (_) {}
   const TILE = 1;
   const TOP_H = 0.18;     // grass slab thickness
@@ -3872,17 +3892,37 @@
   let renderContrast = storedNumber(RENDER_LS.contrast, 1.0, 0.85, 1.25);
   let renderShadowQuality = localStorage.getItem(RENDER_LS.shadow) || 'balanced';
   let renderLighting = storedNumber(RENDER_LS.lighting, 1.0, 0.5, 1.45);
+  function renderBudgetForGrid(grid) {
+    const g = coerceGridSize(grid, GRID);
+    if (g >= 256) return { maxDistance: 0, ghostRadius: 0, visibleScale: 1.0, homeWindowMin: 24, homeWindowMax: 72, queueCap: 72 };
+    if (g >= 128) return { maxDistance: 0, ghostRadius: 0, visibleScale: 1.0, homeWindowMin: 28, homeWindowMax: 88, queueCap: 88 };
+    if (g >= 96)  return { maxDistance: 1, ghostRadius: 1, visibleScale: 1.05, homeWindowMin: 32, homeWindowMax: 112, queueCap: 112 };
+    if (g >= 64)  return { maxDistance: 1, ghostRadius: 1, visibleScale: 1.10, homeWindowMin: 36, homeWindowMax: 128, queueCap: 128 };
+    return { maxDistance: g <= 12 ? 2 : 1, ghostRadius: g <= 12 ? 2 : 1, visibleScale: 1.125, homeWindowMin: g, homeWindowMax: g, queueCap: 256 };
+  }
+
+  function maxRenderVisibleDistanceForGrid(grid) {
+    return renderBudgetForGrid(grid).maxDistance;
+  }
+
+  function maxRenderVisibleSizeForGrid(grid) {
+    const g = coerceGridSize(grid, GRID);
+    const budget = renderBudgetForGrid(g);
+    return Math.max(g, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.ceil(g * budget.visibleScale)));
+  }
+
   function previewSettingsForGrid(grid, explored) {
-    const g = Math.max(HOME_GRID_MIN, Math.min(HOME_GRID_MAX, grid || GRID));
-    const distance = g <= 12 ? 2 : 1;
-    const visibleSize = explored ? Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.ceil(g * 1.125)) : g;
+    const g = coerceGridSize(grid, GRID);
+    const budget = renderBudgetForGrid(g);
+    const distance = Math.min(budget.maxDistance, g <= 12 ? 2 : 1);
+    const visibleSize = explored ? maxRenderVisibleSizeForGrid(g) : g;
     return { distance, visibleSize };
   }
   const initialPreviewSettings = previewSettingsForGrid(GRID, false);
-  let renderVisibleDistance = Math.round(storedNumber(RENDER_LS.visibleDistance, initialPreviewSettings.distance, 1, 4));
+  let renderVisibleDistance = Math.round(storedNumber(RENDER_LS.visibleDistance, initialPreviewSettings.distance, 0, maxRenderVisibleDistanceForGrid(GRID)));
   // Visible-square size controls the surrounding Preview boards only; it must
   // never be smaller than the editable home grid.
-  let renderVisibleSize = Math.max(GRID, Math.round(storedNumber(RENDER_LS.visibleSize, initialPreviewSettings.visibleSize, GRID, Math.round(HOME_GRID_MAX * 1.5))));
+  let renderVisibleSize = Math.max(GRID, Math.round(storedNumber(RENDER_LS.visibleSize, initialPreviewSettings.visibleSize, GRID, maxRenderVisibleSizeForGrid(GRID))));
   if (renderSettingsReset) {
     renderVisibleDistance = initialPreviewSettings.distance;
     renderVisibleSize = initialPreviewSettings.visibleSize;
@@ -3936,15 +3976,25 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, BASE_DPR_CAP) * renderResolutionScale);
   }
 
+  function ghostBoardsEnabledForGrid() {
+    return renderBudgetForGrid(GRID).ghostRadius > 0;
+  }
+
+  function syncGhostRenderBudget() {
+    if (typeof ghostPreloadRadius === 'undefined') return;
+    const budget = renderBudgetForGrid(GRID);
+    ghostPreloadRadius = ghostBoardsEnabledForGrid() ? Math.min(renderVisibleDistance, budget.ghostRadius) : 0;
+    ghostOuterFadeTiles = ghostPreloadRadius > 0 ? 2 + ghostPreloadRadius * 2 : VIEW_EDGE_FADE_TILES;
+  }
+
   function setRenderVisibleDistance(value) {
-    renderVisibleDistance = Math.max(1, Math.min(4, Math.round(value)));
-    ghostPreloadRadius = renderVisibleDistance;
-    ghostOuterFadeTiles = 2 + renderVisibleDistance * 2;
+    renderVisibleDistance = Math.max(0, Math.min(maxRenderVisibleDistanceForGrid(GRID), Math.round(value)));
+    syncGhostRenderBudget();
     if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
   }
 
   function setRenderVisibleSize(value) {
-    renderVisibleSize = Math.max(GRID, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.round(value)));
+    renderVisibleSize = Math.max(GRID, Math.min(maxRenderVisibleSizeForGrid(GRID), Math.round(value)));
     if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
   }
 
@@ -3953,8 +4003,8 @@
     if (opts.deferEnsure) {
       renderVisibleDistance = settings.distance;
       renderVisibleSize = settings.visibleSize;
-      if (typeof ghostPreloadRadius !== 'undefined') ghostPreloadRadius = renderVisibleDistance;
-      if (typeof ghostOuterFadeTiles !== 'undefined') ghostOuterFadeTiles = 2 + renderVisibleDistance * 2;
+      syncGhostRenderBudget();
+      if (typeof requestHomeRenderWindowSync === 'function') requestHomeRenderWindowSync({ force: true });
     } else {
       setRenderVisibleDistance(settings.distance);
       setRenderVisibleSize(settings.visibleSize);
@@ -6606,6 +6656,15 @@
     hoof:      new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
   };
 
+  const M_VEHICLE = {
+    body:        new THREE.MeshLambertMaterial({ color: 0xd8a45e }),
+    roof:        new THREE.MeshLambertMaterial({ color: 0x2f2f33 }),
+    wheel:       new THREE.MeshLambertMaterial({ color: 0x171717 }),
+    light:       new THREE.MeshLambertMaterial({ color: 0xffe082 }),
+    tailLight:   new THREE.MeshLambertMaterial({ color: 0xd94a4a }),
+    signal:      new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  };
+
   function makeFlower() {
     const g = new THREE.Group();
     // Small grass cluster at base.
@@ -6708,6 +6767,50 @@
     return g;
   }
 
+  function makeVehicle() {
+    const g = new THREE.Group();
+    const wheels = [];
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.62), M_VEHICLE.body);
+    body.position.set(0, 0.17, 0);
+    g.add(body);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.10, 0.34), M_VEHICLE.roof);
+    roof.position.set(0, 0.28, 0.06);
+    g.add(roof);
+
+    const light1 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.03), M_VEHICLE.light);
+    light1.position.set(-0.08, 0.18, 0.30);
+    g.add(light1);
+
+    const light2 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.03), M_VEHICLE.signal);
+    light2.position.set(0.08, 0.18, 0.30);
+    g.add(light2);
+
+    const tail1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.03), M_VEHICLE.tailLight);
+    tail1.position.set(-0.08, 0.18, -0.30);
+    g.add(tail1);
+
+    const tail2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.03), M_VEHICLE.tailLight);
+    tail2.position.set(0.08, 0.18, -0.30);
+    g.add(tail2);
+
+    const wheelGeo = new THREE.BoxGeometry(0.03, 0.08, 0.14);
+    function addWheel(x, z) {
+      const w = new THREE.Mesh(wheelGeo, M_VEHICLE.wheel);
+      w.position.set(x, 0.07, z);
+      wheels.push(w);
+      g.add(w);
+    }
+    addWheel(-0.18, 0.22);
+    addWheel(0.18, 0.22);
+    addWheel(-0.18, -0.22);
+    addWheel(0.18, -0.22);
+
+    g.userData = { kind: 'vehicle', wheels };
+    castReceive(g);
+    return g;
+  }
+
   // -------- world data --------
   // world[x][z] stores intent: terrain + the kind of object on it (string or null).
   // cellMeshes[key] stores the rendered meshes (tile + object). The object mesh
@@ -6753,6 +6856,484 @@
 
   const worldGroup = new THREE.Group();
   scene.add(worldGroup);
+
+  const VEHICLE_BODY_Y_OFFSET = 0.14;
+  const VEHICLE_ACCEL = 8;
+  const VEHICLE_BRAKE = 6.8;
+  const VEHICLE_TURN_RATE = 3.1;
+  const VEHICLE_WAYPOINT_EPSILON = 0.10;
+  const VEHICLE_DEFAULT_SPEED = 1.6;
+  const vehicleFleet = new Map();
+  let nextVehicleId = 1;
+
+  function clampVehicleNumber(v, lo, hi, fallback) {
+    if (!Number.isFinite(v)) return fallback;
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function nextVehicleRuntimeId() {
+    return 'vehicle-' + String(nextVehicleId++);
+  }
+
+  function worldToCellCoord(v) {
+    return Math.round(v + GRID / 2 - 0.5);
+  }
+
+  function normalizeVehicleAction(action) {
+    return String(action || '').trim().toLowerCase();
+  }
+
+  function vehicleCellFromWorld(x, z) {
+    const cellX = worldToCellCoord(x);
+    const cellZ = worldToCellCoord(z);
+    return {
+      cellX,
+      cellZ,
+      cell: getWorldCell(cellX, cellZ),
+      inside: cellX >= 0 && cellX < GRID && cellZ >= 0 && cellZ < GRID,
+    };
+  }
+
+  function isVehicleRoadCell(x, z) {
+    if (x < 0 || x >= GRID || z < 0 || z >= GRID) return false;
+    const c = getWorldCell(x, z);
+    return !!c && (c.terrain === 'path' || c.kind === 'bridge');
+  }
+
+  function vehicleRoadHeightAtCell(x, z) {
+    return TOP_H + terrainRiseAt(x, z);
+  }
+
+  function resolveRoadCellNearCell(cellX, cellZ, maxRadius = GRID * 2) {
+    if (!Number.isFinite(cellX) || !Number.isFinite(cellZ)) return null;
+    const sx = Math.round(cellX);
+    const sz = Math.round(cellZ);
+    if (isVehicleRoadCell(sx, sz)) return { x: sx, z: sz };
+
+    if (maxRadius <= 0) return null;
+    const queue = [[sx, sz, 0]];
+    const seen = new Set([sx + ',' + sz]);
+    let head = 0;
+
+    while (head < queue.length) {
+      const [cx, cz, d] = queue[head++];
+      if (d > 0 && isVehicleRoadCell(cx, cz)) return { x: cx, z: cz };
+      if (d >= maxRadius) continue;
+      const neighbors = [
+        [cx + 1, cz, d + 1],
+        [cx - 1, cz, d + 1],
+        [cx, cz + 1, d + 1],
+        [cx, cz - 1, d + 1],
+      ];
+      for (const [nx, nz, nd] of neighbors) {
+        const k = nx + ',' + nz;
+        if (nx < -GRID || nx >= GRID * 2 || nz < -GRID || nz >= GRID * 2) continue;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        queue.push([nx, nz, nd]);
+      }
+    }
+
+    return null;
+  }
+
+  function resolveRoadCellFromCommand(x, z, maxRadius = GRID * 2) {
+    return resolveRoadCellNearCell(Number(x), Number(z), maxRadius);
+  }
+
+  function resolveRoadCellFromWorld(x, z, maxRadius = GRID * 2) {
+    const start = vehicleCellFromWorld(x, z);
+    return resolveRoadCellNearCell(start.cellX, start.cellZ, maxRadius);
+  }
+
+  function normalizeVehicleControls(value) {
+    return {
+      forward: !!(value && value.forward),
+      reverse: !!(value && value.reverse),
+      left: !!(value && value.left),
+      right: !!(value && value.right),
+    };
+  }
+
+  function normalizeVehicleAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
+  function pathKey(x, z) {
+    return x + ',' + z;
+  }
+
+  function findVehiclePath(start, goal) {
+    const s = resolveRoadCellFromWorld(start.x, start.z, 0);
+    const g = resolveRoadCellFromWorld(goal.x, goal.z, 0);
+    if (!s || !g) return [];
+    if (s.x === g.x && s.z === g.z) return [];
+
+    const startKey = pathKey(s.x, s.z);
+    const goalKey = pathKey(g.x, g.z);
+
+    const open = [{ x: s.x, z: s.z, g: 0, f: Math.abs(g.x - s.x) + Math.abs(g.z - s.z) }];
+    const seen = new Set();
+    const cameFrom = new Map();
+    const gScore = new Map([[startKey, 0]]);
+
+    while (open.length) {
+      open.sort((a, b) => a.f - b.f);
+      const cur = open.shift();
+      const curKey = pathKey(cur.x, cur.z);
+      if (seen.has(curKey)) continue;
+      seen.add(curKey);
+      if (curKey === goalKey) break;
+
+      const candidates = [
+        [cur.x + 1, cur.z],
+        [cur.x - 1, cur.z],
+        [cur.x, cur.z + 1],
+        [cur.x, cur.z - 1],
+      ];
+      for (const [nx, nz] of candidates) {
+        if (!isVehicleRoadCell(nx, nz)) continue;
+        const nk = pathKey(nx, nz);
+        const tg = cur.g + 1;
+        const prev = gScore.get(nk);
+        if (prev !== undefined && tg >= prev) continue;
+        gScore.set(nk, tg);
+        cameFrom.set(nk, curKey);
+        open.push({ x: nx, z: nz, g: tg, f: tg + Math.abs(g.x - nx) + Math.abs(g.z - nz) });
+      }
+    }
+
+    if (!gScore.has(goalKey)) return [];
+
+    const cells = [];
+    let cursor = goalKey;
+    while (cursor && cursor !== startKey) {
+      const [cx, cz] = cursor.split(',').map(v => Number(v));
+      cells.push({ x: cx, z: cz });
+      cursor = cameFrom.get(cursor);
+      if (cursor === undefined) return [];
+    }
+
+    cells.reverse();
+    return cells.map(c => {
+      const p = tilePos(c.x, c.z);
+      return {
+        x: p.x,
+        z: p.z,
+        cellX: c.x,
+        cellZ: c.z,
+      };
+    });
+  }
+
+  function makeVehicleState(opts) {
+    const rawId = (typeof opts.id === 'string' && opts.id.trim()) ? opts.id.trim() : '';
+    if (rawId && vehicleFleet.has(rawId)) {
+      removeVehicle(rawId);
+    }
+    const start = resolveRoadCellFromCommand(opts.x, opts.z);
+    if (!start) return null;
+
+    const id = rawId || nextVehicleRuntimeId();
+    const mesh = makeVehicle();
+    const p = tilePos(start.x, start.z);
+
+    const state = {
+      id,
+      mesh,
+      wheels: mesh.userData.wheels || [],
+      x: p.x,
+      z: p.z,
+      angle: clampVehicleNumber(Number(opts.angle), -Math.PI, Math.PI, 0),
+      speed: 0,
+      mode: normalizeVehicleAction(opts.mode) || 'manual',
+      maxSpeed: clampVehicleNumber(Number(opts.maxSpeed), 0.2, 4.5, VEHICLE_DEFAULT_SPEED),
+      maxReverseSpeed: clampVehicleNumber(Number(opts.maxReverseSpeed), 0.2, 2.2, 1.1),
+      accel: clampVehicleNumber(Number(opts.accel), 0.5, 16, VEHICLE_ACCEL),
+      brake: clampVehicleNumber(Number(opts.brake), 0.5, 22, VEHICLE_BRAKE),
+      turnRate: clampVehicleNumber(Number(opts.turnRate), 1, 7, VEHICLE_TURN_RATE),
+      controls: normalizeVehicleControls(opts.controls),
+      goal: null,
+      path: [],
+      pathIndex: 0,
+      pathGoal: null,
+      remove: false,
+    };
+
+    state.goal = Number.isFinite(opts.goalX) && Number.isFinite(opts.goalZ)
+      ? { x: opts.goalX, z: opts.goalZ }
+      : null;
+
+    mesh.position.set(p.x, vehicleRoadHeightAtCell(start.x, start.z) + VEHICLE_BODY_Y_OFFSET, p.z);
+    mesh.rotation.y = state.angle;
+    mesh.castShadow = true;
+    mesh.receiveShadow = false;
+    worldGroup.add(mesh);
+
+    registerRuntimeObject(mesh);
+    vehicleFleet.set(id, state);
+
+    if (state.mode !== 'manual' && state.goal) {
+      const worldGoal = resolveRoadCellFromCommand(state.goal.x, state.goal.z, GRID);
+      if (worldGoal) {
+        const goalPoint = tilePos(worldGoal.x, worldGoal.z);
+        const path = findVehiclePath({ x: p.x, z: p.z }, { x: goalPoint.x, z: goalPoint.z });
+        state.path = path;
+        state.pathGoal = { x: state.goal.x, z: state.goal.z };
+        state.pathIndex = 0;
+        if (path[0]) {
+          state.angle = Math.atan2(path[0].x - state.x, path[0].z - state.z);
+          mesh.rotation.y = state.angle;
+        }
+      }
+    }
+
+    return state;
+  }
+
+  function getVehicleById(idOrAll) {
+    if (typeof idOrAll === 'string') return vehicleFleet.get(idOrAll) || null;
+    for (const state of vehicleFleet.values()) return state;
+    return null;
+  }
+
+  function clearVehicleRuntime() {
+    for (const state of vehicleFleet.values()) {
+      if (state.mesh) {
+        if (state.mesh.parent) state.mesh.parent.remove(state.mesh);
+        disposeGroup(state.mesh);
+      }
+    }
+    vehicleFleet.clear();
+  }
+
+  function spawnVehicle(msg) {
+    const state = makeVehicleState(msg);
+    if (state) {
+      return state;
+    }
+    return null;
+  }
+
+  function removeVehicle(idOrAll) {
+    if (idOrAll === 'all' || idOrAll === '*') {
+      clearVehicleRuntime();
+      return true;
+    }
+
+    const state = getVehicleById(idOrAll);
+    if (!state) return false;
+
+    if (state.mesh) {
+      if (state.mesh.parent) state.mesh.parent.remove(state.mesh);
+      disposeGroup(state.mesh);
+    }
+    vehicleFleet.delete(state.id);
+    return true;
+  }
+
+  function updateVehicleGoal(idOrAll, x, z) {
+    const state = getVehicleById(idOrAll);
+    if (!state) return false;
+
+    const target = resolveRoadCellFromCommand(x, z, GRID);
+    if (!target) return false;
+
+    const goalPoint = tilePos(target.x, target.z);
+    const path = findVehiclePath({ x: state.x, z: state.z }, {
+      x: goalPoint.x,
+      z: goalPoint.z,
+    });
+
+    state.path = path;
+    state.pathIndex = 0;
+    state.goal = target;
+    state.pathGoal = { x, z };
+    state.mode = 'auto';
+    if (path[0] && Math.abs(state.speed) < 0.05) {
+      state.angle = Math.atan2(path[0].x - state.x, path[0].z - state.z);
+      state.mesh.rotation.y = state.angle;
+    }
+    return true;
+  }
+
+  function setVehicleControls(idOrAll, controls) {
+    const state = getVehicleById(idOrAll);
+    if (!state) return false;
+    state.controls = normalizeVehicleControls(controls);
+    if (state.controls.forward || state.controls.reverse || state.controls.left || state.controls.right) {
+      state.mode = 'manual';
+    }
+    return true;
+  }
+
+  function tickVehicle(state, dt) {
+    const currentCell = vehicleCellFromWorld(state.x, state.z);
+    if (currentCell.inside) {
+      const rise = vehicleRoadHeightAtCell(currentCell.cellX, currentCell.cellZ);
+      state.mesh.position.y = rise + VEHICLE_BODY_Y_OFFSET;
+    }
+
+    if (!state.path.length && state.pathGoal && state.mode !== 'manual') {
+      updateVehicleGoal(state.id, state.pathGoal.x, state.pathGoal.z);
+    }
+
+    let throttle = 0;
+    let steer = 0;
+
+    if (state.mode === 'manual') {
+      throttle = state.controls.forward ? 1 : (state.controls.reverse ? -1 : 0);
+      steer = (state.controls.left ? -1 : 0) + (state.controls.right ? 1 : 0);
+    } else if (state.path.length) {
+      const target = state.path[state.pathIndex];
+      if (!target) {
+        state.path = [];
+        state.pathIndex = 0;
+        state.pathGoal = null;
+        state.mode = 'manual';
+        state.speed = 0;
+      } else {
+        const dx = target.x - state.x;
+        const dz = target.z - state.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < VEHICLE_WAYPOINT_EPSILON) {
+          state.pathIndex += 1;
+          if (state.pathIndex >= state.path.length) {
+            state.path = [];
+            state.pathIndex = 0;
+            state.pathGoal = null;
+            state.mode = 'manual';
+            state.speed = 0;
+          }
+        } else if (state.pathIndex < state.path.length) {
+          const desired = Math.atan2(dx, dz);
+          const delta = normalizeVehicleAngle(desired - state.angle);
+          const maxTurn = state.turnRate * dt;
+          if (Math.abs(delta) > maxTurn) {
+            state.angle += Math.sign(delta) * maxTurn;
+          } else {
+            state.angle = desired;
+          }
+          throttle = 1;
+        }
+      }
+    }
+
+    if (steer) {
+      const steerAmount = Math.sign(steer) * state.turnRate * dt * (Math.abs(state.speed) > 0.1 ? 1 : 0.6);
+      state.angle += steerAmount;
+    }
+
+    if (throttle > 0) state.speed += state.accel * throttle * dt;
+    else if (throttle < 0) state.speed -= state.accel * Math.abs(throttle) * dt;
+    else state.speed *= Math.max(0, 1 - state.brake * dt * 0.4);
+
+    state.speed = clampVehicleNumber(state.speed, -state.maxReverseSpeed, state.maxSpeed, 0);
+
+    if (!Number.isFinite(state.speed)) state.speed = 0;
+
+    const dx = Math.sin(state.angle) * state.speed * dt;
+    const dz = Math.cos(state.angle) * state.speed * dt;
+    const nextX = state.x + dx;
+    const nextZ = state.z + dz;
+
+    const nextCell = vehicleCellFromWorld(nextX, nextZ);
+    if (!nextCell.inside || !isVehicleRoadCell(nextCell.cellX, nextCell.cellZ)) {
+      state.speed *= 0.15;
+      if (state.path.length && state.pathGoal) {
+        updateVehicleGoal(state.id, state.pathGoal.x, state.pathGoal.z);
+      }
+      return;
+    }
+
+    state.x = nextX;
+    state.z = nextZ;
+    state.mesh.position.x = state.x;
+    state.mesh.position.z = state.z;
+    state.mesh.rotation.y = state.angle;
+
+    for (const w of state.wheels) {
+      w.rotation.x += state.speed * dt * 0.4;
+    }
+  }
+
+  function tickVehicles(dt) {
+    if (!vehicleFleet.size) return;
+
+    const remove = [];
+    for (const [id, state] of vehicleFleet) {
+      tickVehicle(state, dt);
+      if (state.remove) remove.push(id);
+    }
+
+    for (const id of remove) removeVehicle(id);
+
+    for (const state of vehicleFleet.values()) {
+      if (state.path.length && state.pathIndex < state.path.length) {
+        const wp = state.path[state.pathIndex];
+        if (!wp || !isVehicleRoadCell(wp.cellX, wp.cellZ)) {
+          if (state.pathGoal) updateVehicleGoal(state.id, state.pathGoal.x, state.pathGoal.z);
+          else {
+            state.path = [];
+            state.pathIndex = 0;
+          }
+        }
+      }
+    }
+  }
+
+  function handleVehicleRemoteCommand(msg) {
+    const raw = normalizeVehicleAction(msg.action || msg.op);
+    if (!raw) return;
+    const action = raw === 'vehicle' ? 'spawn' : raw.replace(/^vehicle[_-]/, '');
+
+    if (action === 'spawn') {
+      const state = spawnVehicle({
+        id: msg.id,
+        x: Number(msg.x),
+        z: Number(msg.z),
+        angle: Number(msg.angle),
+        maxSpeed: Number(msg.maxSpeed),
+        maxReverseSpeed: Number(msg.maxReverseSpeed),
+        accel: Number(msg.accel),
+        brake: Number(msg.brake),
+        turnRate: Number(msg.turnRate),
+        controls: msg.controls,
+        mode: msg.mode || (Number.isFinite(Number(msg.goalX)) && Number.isFinite(Number(msg.goalZ)) ? 'auto' : 'manual'),
+        goalX: Number(msg.goalX),
+        goalZ: Number(msg.goalZ),
+      });
+      if (!state && typeof console !== 'undefined') {
+        console.warn('[vehicle] failed to spawn', msg);
+      }
+      return;
+    }
+
+    if (action === 'set_goal') {
+      const gx = Number.isFinite(Number(msg.x)) ? Number(msg.x) : Number(msg.goalX);
+      const gz = Number.isFinite(Number(msg.z)) ? Number(msg.z) : Number(msg.goalZ);
+      updateVehicleGoal(msg.id || msg.vehicleId, gx, gz);
+      return;
+    }
+
+    if (action === 'controls' || action === 'set_controls') {
+      setVehicleControls(msg.id || msg.vehicleId, normalizeVehicleControls(msg.controls || msg));
+      return;
+    }
+
+    if (action === 'remove') {
+      removeVehicle(msg.id || msg.vehicleId || 'all');
+      return;
+    }
+
+    if (action === 'clear' || action === 'clear_all') {
+      clearVehicleRuntime();
+      return;
+    }
+  }
 
   function tilePos(x, z) {
     return new THREE.Vector3(x - GRID / 2 + 0.5, 0, z - GRID / 2 + 0.5);
@@ -6955,6 +7536,56 @@
     return { terrain: 'grass', terrainFloors: 1, kind: null, floors: 1, buildingType: null, fenceSide: null, extras: [] };
   }
 
+  function cloneExtras(extras) {
+    return Array.isArray(extras) ? extras.map(e => ({
+      kind: e.kind || e.k || null,
+      fenceSide: e.fenceSide || e.s || null,
+      floors: e.floors || e.f || 1,
+    })) : [];
+  }
+
+  function writeWorldIntentCell(x, z, src, userEdited = false) {
+    if (!world[x]) world[x] = [];
+    const cell = {
+      terrain: (src && src.terrain) || 'grass',
+      terrainFloors: (src && src.terrainFloors) || 1,
+      kind: (src && src.kind) || null,
+      floors: (src && src.floors) || 1,
+      buildingType: (src && src.buildingType) || null,
+      fenceSide: (src && src.fenceSide) || null,
+      extras: cloneExtras(src && src.extras),
+      rotationY: (src && src.rotationY) || 0,
+      offsetX: (src && src.offsetX) || 0,
+      offsetZ: (src && src.offsetZ) || 0,
+    };
+    if (cell.kind !== 'house') cell.buildingType = null;
+    if (cell.kind !== 'fence') cell.fenceSide = null;
+    if (userEdited || (src && src.userEdited)) cell.userEdited = true;
+    world[x][z] = cell;
+    return cell;
+  }
+
+  function resetHomeWorldIntent() {
+    for (let x = 0; x < GRID; x++) {
+      if (!world[x]) world[x] = [];
+      for (let z = 0; z < GRID; z++) world[x][z] = defaultCell();
+    }
+  }
+
+  function disposeCellMeshEntry(key) {
+    const entry = cellMeshes[key];
+    if (!entry) return;
+    if (entry.tile)   { worldGroup.remove(entry.tile);   disposeGroup(entry.tile); }
+    if (entry.object) { worldGroup.remove(entry.object); disposeGroup(entry.object); }
+    if (entry.extras) for (const m of entry.extras) { worldGroup.remove(m); disposeGroup(m); }
+    delete cellMeshes[key];
+  }
+
+  function disposeAllCellMeshes() {
+    for (const key of Object.keys(cellMeshes)) disposeCellMeshEntry(key);
+    dropAnims.length = 0;
+  }
+
   function getWorldCell(x, z) {
     return (world[x] && world[x][z]) ? world[x][z] : defaultCell();
   }
@@ -6965,8 +7596,108 @@
     return world[x][z];
   }
 
+  const HOME_RENDER_WINDOW_THRESHOLD = 96;
+  let homeRenderBounds = null;
+  let homeRenderQueue = [];
+  let homeRenderQueued = new Set();
+
+  function useWindowedHomeRendering() {
+    return GRID > HOME_RENDER_WINDOW_THRESHOLD;
+  }
+
+  function homeRenderWindowRadius() {
+    const budget = renderBudgetForGrid(GRID);
+    const baseView = DEFAULT_VIEW_SIZE * (GRID / HOME_GRID_DEFAULT);
+    const zoomRatio = viewSize / Math.max(DEFAULT_VIEW_SIZE, baseView);
+    const maxR = Math.max(budget.homeWindowMin, Math.floor(budget.homeWindowMax / 2));
+    if (zoomRatio > 1.75) return Math.max(budget.homeWindowMin, Math.floor(maxR * 0.55));
+    if (zoomRatio > 1.20) return Math.max(budget.homeWindowMin, Math.floor(maxR * 0.75));
+    if (zoomRatio < 0.55) return Math.min(budget.homeWindowMax, Math.floor(maxR * 1.45));
+    return maxR;
+  }
+
+  function computeHomeRenderBounds() {
+    const radius = homeRenderWindowRadius();
+    const cx = Math.max(0, Math.min(GRID - 1, Math.round(target.x + GRID / 2 - 0.5)));
+    const cz = Math.max(0, Math.min(GRID - 1, Math.round(target.z + GRID / 2 - 0.5)));
+    return {
+      x0: Math.max(0, cx - radius),
+      x1: Math.min(GRID - 1, cx + radius),
+      z0: Math.max(0, cz - radius),
+      z1: Math.min(GRID - 1, cz + radius),
+      cx,
+      cz,
+    };
+  }
+
+  function boundsEqual(a, b) {
+    return !!a && !!b && a.x0 === b.x0 && a.x1 === b.x1 && a.z0 === b.z0 && a.z1 === b.z1;
+  }
+
+  function cellInBounds(x, z, b) {
+    return !!b && x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1;
+  }
+
+  function isCellInHomeRenderWindow(x, z) {
+    if (!useWindowedHomeRendering()) return true;
+    if (!homeRenderBounds) homeRenderBounds = computeHomeRenderBounds();
+    return cellInBounds(x, z, homeRenderBounds);
+  }
+
+  function pruneHomeRenderWindow(bounds) {
+    for (const key of Object.keys(cellMeshes)) {
+      const [x, z] = key.split(',').map(Number);
+      if (x < 0 || x >= GRID || z < 0 || z >= GRID) continue;
+      if (!cellInBounds(x, z, bounds)) disposeCellMeshEntry(key);
+    }
+  }
+
+  function requestHomeRenderWindowSync(opts = {}) {
+    if (!useWindowedHomeRendering()) return;
+    const nextBounds = computeHomeRenderBounds();
+    if (!opts.force && boundsEqual(homeRenderBounds, nextBounds) && homeRenderQueue.length) return;
+    if (!opts.force && boundsEqual(homeRenderBounds, nextBounds)) return;
+    homeRenderBounds = nextBounds;
+    pruneHomeRenderWindow(homeRenderBounds);
+    homeRenderQueue = [];
+    homeRenderQueued.clear();
+    for (let x = homeRenderBounds.x0; x <= homeRenderBounds.x1; x++) {
+      for (let z = homeRenderBounds.z0; z <= homeRenderBounds.z1; z++) {
+        const key = x + ',' + z;
+        const entry = cellMeshes[key];
+        if (entry && entry.tile) continue;
+        homeRenderQueue.push([x, z, key]);
+        homeRenderQueued.add(key);
+      }
+    }
+    homeRenderQueue.sort((a, b) => {
+      const adx = a[0] - homeRenderBounds.cx, adz = a[1] - homeRenderBounds.cz;
+      const bdx = b[0] - homeRenderBounds.cx, bdz = b[1] - homeRenderBounds.cz;
+      return (adx * adx + adz * adz) - (bdx * bdx + bdz * bdz);
+    });
+  }
+
+  function processHomeRenderQueue(budgetMs) {
+    if (!useWindowedHomeRendering() || !homeRenderQueue.length) return;
+    const start = performance.now();
+    const cap = renderBudgetForGrid(GRID).queueCap;
+    let built = 0;
+    while (homeRenderQueue.length && performance.now() - start < budgetMs && built < cap) {
+      const [x, z, key] = homeRenderQueue.shift();
+      homeRenderQueued.delete(key);
+      if (!isCellInHomeRenderWindow(x, z)) continue;
+      renderCellTile(x, z, { animate: false });
+      renderCellObject(x, z, { animate: false, impactDust: false });
+      built++;
+    }
+    if (built) {
+      updateHomeBoardFade();
+      if (typeof window.__requestMinimapRepaint === 'function') window.__requestMinimapRepaint();
+    }
+  }
+
   function shouldRenderCellMesh(x, z) {
-    if (x >= 0 && x < GRID && z >= 0 && z < GRID) return true;
+    if (x >= 0 && x < GRID && z >= 0 && z < GRID) return isCellInHomeRenderWindow(x, z);
     if (cellMeshes[x + ',' + z]) return true;
     return !!(world[x] && world[x][z] && world[x][z].userEdited);
   }
@@ -7012,8 +7743,8 @@
   const ghostBoardCells = new Map(); // 'boardX,boardZ' -> 8x8 local board cells
   let ghostBoardsBlank = false;
   const VIEW_EDGE_FADE_TILES = 2;
-  let ghostPreloadRadius = renderVisibleDistance;
-  let ghostOuterFadeTiles = 2 + renderVisibleDistance * 2;
+  let ghostPreloadRadius = ghostBoardsEnabledForGrid() ? Math.min(renderVisibleDistance, renderBudgetForGrid(GRID).ghostRadius) : 0;
+  let ghostOuterFadeTiles = ghostPreloadRadius > 0 ? 2 + ghostPreloadRadius * 2 : VIEW_EDGE_FADE_TILES;
   const opacityRoots = new Set();
 
   function ghostBoardKey(boardX, boardZ) {
@@ -7522,6 +8253,7 @@
   }
 
   function buildGhostBoard(boardX, boardZ) {
+    if (!ghostBoardsEnabledForGrid()) return;
     if (boardX === 0 && boardZ === 0) return;
     const key = ghostBoardKey(boardX, boardZ);
     if (ghostBoards.has(key)) return;
@@ -7678,8 +8410,14 @@
       return da - db;
     });
   }
+  function clearPendingGhostBoards() {
+    pendingGhostBoards.length = 0;
+    pendingGhostBoardSet.clear();
+  }
+
   function processGhostBoardQueue(budgetMs) {
     if (!pendingGhostBoards.length) return;
+    if (!ghostBoardsEnabledForGrid()) { clearPendingGhostBoards(); return; }
     const start = performance.now();
     let built = 0;
     while (pendingGhostBoards.length && performance.now() - start < budgetMs) {
@@ -7695,6 +8433,13 @@
     if (built) updateGhostRenderBubble();
   }
   function ensureGhostBoardsAroundTarget() {
+    syncGhostRenderBudget();
+    if (!ghostBoardsEnabledForGrid()) {
+      clearPendingGhostBoards();
+      for (const board of ghostBoards.values()) board.visible = false;
+      updateGhostRenderBubble();
+      return;
+    }
     const cx = boardFromTargetCoord(target.x);
     const cz = boardFromTargetCoord(target.z);
     for (let bx = cx - ghostPreloadRadius; bx <= cx + ghostPreloadRadius; bx++) {
@@ -8802,16 +9547,11 @@
       if (e.extras) for (const m of e.extras) { worldGroup.remove(m); disposeGroup(m); }
     }
     for (const k of Object.keys(cellMeshes)) delete cellMeshes[k];
-    for (let x = 0; x < GRID; x++)
-      for (let z = 0; z < GRID; z++)
-        world[x][z] = { terrain: null, kind: null, floors: 1, buildingType: null, fenceSide: null };
+    resetHomeWorldIntent();
     dropAnims.length = 0;
 
     // Build the layout in one shot so each cell only animates once.
     const layout = {};
-    for (let x = 0; x < GRID; x++)
-      for (let z = 0; z < GRID; z++)
-        layout[x + ',' + z] = { terrain: 'grass', kind: null };
 
     // Build a richer starter diorama: river + bridge, cottage lane, tiny
     // turret-wall, farm plots, and landmark rocks. It exercises the adjacency
@@ -8858,7 +9598,7 @@
     const OBJECT_STAGGER = 0.035;
     for (let x = 0; x < GRID; x++) {
       for (let z = 0; z < GRID; z++) {
-        const cell = layout[x + ',' + z];
+        const cell = layout[x + ',' + z] || { terrain: 'grass', kind: null };
         let terrain = cell.terrain || 'grass';
         let kind = cell.kind || null;
         if (kind === 'bridge') terrain = 'water';
@@ -8876,6 +9616,12 @@
           fenceSide,
         };
       }
+    }
+
+    if (useWindowedHomeRendering()) {
+      requestHomeRenderWindowSync({ force: true });
+      saveState();
+      return;
     }
 
     for (let x = 0; x < GRID; x++) {
@@ -10518,7 +11264,7 @@
     setCameraMode(DEFAULT_CAMERA_MODE);
   }
 
-  // Resize the home board between the allowed presets (8 / 12 / 16 / 20 / 32 / 48).
+  // Resize the home board between the allowed presets (8 through 512).
   // World data outside the previous board is preserved in world[][] —
   // growing the grid brings those tiles into the home area (so the
   // existing 'outside home' grayscale is no longer applied to them).
@@ -10526,7 +11272,8 @@
   // in their outside-home form; expansion is the primary path.
   function setHomeGridSize(n, opts) {
     const skipRebuild = !!(opts && opts.skipRebuild);
-    if (!HOME_GRID_OPTIONS.includes(n) || n === GRID) return;
+    n = coerceGridSize(n, GRID);
+    if (n === GRID) return;
 
     // Backup the full pre-resize state to localStorage so the user can
     // recover if a resize ever drops something we didn't preserve.
@@ -10579,6 +11326,14 @@
     }
 
     if (skipRebuild) return;
+
+    if (useWindowedHomeRendering()) {
+      resetCameraDefaults();
+      requestHomeRenderWindowSync({ force: true });
+      if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+      saveState();
+      return;
+    }
 
     suppressSave = true;
     // Rebuild every home cell from the surviving world data.
@@ -10738,7 +11493,9 @@
 
   function doReset() {
     hasUserPanned = false;
+    clearVehicleRuntime();
     renderVisibleSize = GRID;
+    if (typeof requestHomeRenderWindowSync === 'function') requestHomeRenderWindowSync({ force: true });
     // Reset always returns to the original 8x8 grid, regardless of what
     // the user resized to. setHomeGridSize is a no-op if GRID is already
     // at the default. skipRebuild because loadInitialScene immediately
@@ -10784,6 +11541,15 @@
   })();
   function doClear() {
     if (typeof playSfx === 'function') playSfx('whoosh');
+    clearVehicleRuntime();
+    if (useWindowedHomeRendering()) {
+      resetHomeWorldIntent();
+      disposeAllCellMeshes();
+      requestHomeRenderWindowSync({ force: true });
+      saveState();
+      if (typeof fireWebhook === 'function') fireWebhook('world.clear', {});
+      return;
+    }
     const TILE_STAGGER = 0.022;
     for (let x = 0; x < GRID; x++)
       for (let z = 0; z < GRID; z++)
@@ -10812,6 +11578,7 @@
     const distanceEl = document.getElementById('render-distance');
     const visibleSizeEl = document.getElementById('render-visible-size');
     const homeGridEl = document.getElementById('render-home-grid');
+    fillGridSizeSelect(homeGridEl);
     const brightnessEl = document.getElementById('render-brightness');
     const lightingEl = document.getElementById('render-lighting');
     const saturationEl = document.getElementById('render-saturation');
@@ -10853,8 +11620,11 @@
     function syncControls() {
       shadowEl.value = renderShadowQuality;
       resolutionEl.value = String(Math.round(renderResolutionScale * 100));
-      distanceEl.value = String(renderVisibleDistance);
+      distanceEl.min = '0';
+      distanceEl.max = String(maxRenderVisibleDistanceForGrid(GRID));
       visibleSizeEl.min = String(GRID);
+      visibleSizeEl.max = String(maxRenderVisibleSizeForGrid(GRID));
+      distanceEl.value = String(renderVisibleDistance);
       visibleSizeEl.value = String(renderVisibleSize);
       if (homeGridEl) homeGridEl.value = String(GRID);
       brightnessEl.value = String(Math.round(renderBrightness * 100));
@@ -11550,7 +12320,7 @@
   // splash/puff slabs on impact. This keeps precipitation in-world instead of
   // as a screen-space point overlay and costs one draw call per weather layer.
   const WEATHER_FLOOR = TOP_H + 0.05;
-  const WEATHER_VOLUME = Math.max(HOME_GRID_MAX * 0.75, 18);
+  const WEATHER_VOLUME = Math.max(Math.min(HOME_GRID_MAX, 96) * 0.75, 18);
   const WEATHER_CEIL = Math.max(renderCloudHeight + 6, 14);
   const WEATHER_INTENSITY_LS = 'tinyworld:weather-intensity.v2';
   const WEATHER_SPLASHES_LS = 'tinyworld:weather-splashes.v1';
@@ -12540,7 +13310,13 @@
     if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
     tickWeather(dt);
     updateClouds(dt);
+    tickVehicles(dt);
     updateCropDuster(dt);
+    if (useWindowedHomeRendering()) {
+      requestHomeRenderWindowSync();
+      if (homeRenderQueue.length) processHomeRenderQueue(5);
+    }
+
     // Drain the ghost-board build queue in small slices so visible-distance
     // changes and Reset don't lock up the frame.
     if (pendingGhostBoards.length) processGhostBoardQueue(6);
@@ -12619,7 +13395,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://tinyworld.local/world.schema.json",
     "title": "TinyWorld",
-    "description": "Scene description for the Tiny World Builder. The renderer supports home grids from 8x8 to 48x48, plus sparse user-edited ghost-board cells outside the home grid. Each non-default cell has a terrain, optional object kind, separate object floors and terrainFloors counts, optional house buildingType, optional fenceSide, optional decorative extras, and optional within-tile transform.",
+    "description": "Scene description for the Tiny World Builder. The renderer supports home grids from 8x8 to 512x512, plus sparse user-edited ghost-board cells outside the home grid. Each non-default cell has a terrain, optional object kind, separate object floors and terrainFloors counts, optional house buildingType, optional fenceSide, optional decorative extras, and optional within-tile transform.",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -12642,7 +13418,12 @@
           16,
           20,
           32,
-          48
+          48,
+          64,
+          96,
+          128,
+          256,
+          512
         ],
         "description": "Optional home board edge length. Defaults to the current app grid when omitted."
       },
@@ -12672,8 +13453,8 @@
     "$defs": {
       "coord": {
         "type": "integer",
-        "minimum": -96,
-        "maximum": 96
+        "minimum": -1024,
+        "maximum": 1024
       },
       "terrain": {
         "type": "string",
@@ -13081,7 +13862,7 @@
   ].join('\n');
 
   function buildSystemPrompt(gridSize) {
-    const size = HOME_GRID_OPTIONS.includes(gridSize) ? gridSize : GRID;
+    const size = coerceGridSize(gridSize, GRID);
     const maxCoord = size - 1;
     return [
       'You are a level designer and low-poly primitive assembler for the Tiny World Builder, a ' + size + 'x' + size + ' isometric voxel scene.',
@@ -13247,7 +14028,7 @@
     if (!Array.isArray(data.cells)) return 'cells must be an array';
     const okCameraMode = new Set(['ortho','topdown','soft','perspective','fp']);
     if (data.cameraMode !== undefined && !okCameraMode.has(data.cameraMode)) return 'cameraMode invalid: ' + data.cameraMode;
-    if (data.gridSize !== undefined && !HOME_GRID_OPTIONS.includes(data.gridSize)) return 'gridSize invalid: ' + data.gridSize;
+    if (data.gridSize !== undefined && !isValidGridSize(data.gridSize)) return 'gridSize invalid: ' + data.gridSize;
     const okTerrain = new Set(['grass','path','dirt','water','stone','lava','sand','snow']);
     const okKind = new Set([null,'house','tree','fence','rock','bridge','crop','corn','wheat','pumpkin','carrot','sunflower','tuft','flower','bush','cow','sheep']);
     const okBT = new Set([null,'cottage','manor','tower','turret','skyscraper']);
@@ -13379,7 +14160,7 @@
   //   4. Place settlement cells with cluster-friendly hints so houses
   //      auto-promote when adjacent (handled by setCell's clustering).
   function generateProceduralWorld({ seed, biomes, elevation, gridSize }) {
-    const size = HOME_GRID_OPTIONS.includes(gridSize) ? gridSize : GRID;
+    const size = coerceGridSize(gridSize, GRID);
     const rng = makeMulberry32(seed || randomSeed());
 
     // ---- fbm value noise (OWB-style coherent terrain) ----------------
@@ -13667,7 +14448,7 @@
   window.__generateProceduralWorld = generateProceduralWorld;
 
   async function generateWorld(provider, model, key, userPrompt, gridSize) {
-    const requestedGridSize = HOME_GRID_OPTIONS.includes(gridSize) ? gridSize : GRID;
+    const requestedGridSize = coerceGridSize(gridSize, GRID);
     const system = buildSystemPrompt(requestedGridSize);
     const def = AI_DEFAULTS[provider];
     if (!def) throw new Error('unknown provider: ' + provider);
@@ -13684,7 +14465,7 @@
       throw new Error('response was not parseable JSON');
     }
     normalizeWorldCells(parsed);
-    if (HOME_GRID_OPTIONS.includes(requestedGridSize)) parsed.gridSize = requestedGridSize;
+    if (isValidGridSize(requestedGridSize)) parsed.gridSize = requestedGridSize;
     const err = validateWorld(parsed);
     if (err) {
       console.warn('[generate] failed schema check:', err, parsed);
@@ -13905,6 +14686,7 @@
     const seedCopyBtn = document.getElementById('gen-seed-copy');
     const seedPasteBtn = document.getElementById('gen-seed-paste');
     const gridSizeEl = document.getElementById('gen-grid-size');
+    fillGridSizeSelect(gridSizeEl);
     const disableAutofillEl = document.getElementById('gen-disable-autofill');
     const proceduralEl = document.getElementById('gen-procedural');
     if (proceduralEl) proceduralEl.checked = localStorage.getItem('tinyworld:gen:procedural') === '1';
@@ -13922,12 +14704,12 @@
     if (seedEl) seedEl.value = localStorage.getItem(GEN_LS.seed) || '';
     if (gridSizeEl) {
       const storedGridSize = parseInt(localStorage.getItem(GEN_LS.gridSize) || '', 10);
-      gridSizeEl.value = String(HOME_GRID_OPTIONS.includes(storedGridSize) ? storedGridSize : GRID);
+      gridSizeEl.value = String(coerceGridSize(storedGridSize, GRID));
     }
 
     function selectedGenGridSize() {
       const value = gridSizeEl ? parseInt(gridSizeEl.value, 10) : GRID;
-      return HOME_GRID_OPTIONS.includes(value) ? value : GRID;
+      return coerceGridSize(value, GRID);
     }
 
     function paintSliders(group, state, slidersEl, sumEl) {
@@ -14191,7 +14973,7 @@
       promptEl.value = localStorage.getItem(AI_LS.prompt) || promptEl.value;
       if (gridSizeEl) {
         const storedGridSize = parseInt(localStorage.getItem(GEN_LS.gridSize) || '', 10);
-        gridSizeEl.value = String(HOME_GRID_OPTIONS.includes(storedGridSize) ? storedGridSize : GRID);
+        gridSizeEl.value = String(coerceGridSize(storedGridSize, GRID));
       }
       setStatus('');
       openTinyModal(modal, promptEl);
@@ -14959,15 +15741,17 @@
       return false;
     }
     if (data.v !== 1 && data.v !== 2 && data.v !== 3 && data.v !== 4) return false;
+    if (vehicleFleet.size) clearVehicleRuntime();
 
     // Restore the saved home grid size before painting cells so the new
     // tiles are framed correctly and ghost boards land in the right
     // position. Falls back to the current GRID if the save predates the
     // gridSize field.
-    if (HOME_GRID_OPTIONS.includes(data.gridSize) && data.gridSize !== GRID) {
+    const restoredGridSize = coerceGridSize(data.gridSize, GRID);
+    if (restoredGridSize !== GRID) {
       // The cell loop below repaints every tile, so skip the rebuild
       // step inside setHomeGridSize and just dispose old meshes.
-      setHomeGridSize(data.gridSize, { skipRebuild: true });
+      setHomeGridSize(restoredGridSize, { skipRebuild: true });
     }
     suppressSave = true;
     const overrides = new Map();
@@ -15040,6 +15824,31 @@
         __x: x,
         __z: z,
       });
+    }
+
+    if (useWindowedHomeRendering()) {
+      resetHomeWorldIntent();
+      disposeAllCellMeshes();
+      for (const o of overrides.values()) {
+        writeWorldIntentCell(o.__x, o.__z, o, !!o.__outOfHome);
+      }
+      suppressSave = false;
+      if (!opts.keepCamera) {
+        const okCameraMode = new Set(['ortho','topdown','soft','perspective','fp']);
+        if (data.cameraMode && okCameraMode.has(data.cameraMode)) setCameraMode(data.cameraMode);
+        else resetCameraDefaults();
+      }
+      requestHomeRenderWindowSync({ force: true });
+      if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+      if (data.toolId) {
+        const tool = TOOLS.find(t => t.id === data.toolId);
+        if (tool) selectTool(tool);
+      }
+      saveState();
+      if (typeof opts.onDone === 'function') {
+        try { opts.onDone(); } catch (_) {}
+      }
+      return true;
     }
 
     const TILE_STAGGER = opts.sliced ? 0.010 : 0.018;
@@ -15407,7 +16216,14 @@
 
   function applyRemoteCommand(msg) {
     if (!msg || typeof msg !== 'object') return;
-    const op = msg.op || msg.event;
+    const op = normalizeVehicleAction(msg.op || msg.event);
+    if (!op) return;
+
+    if (op.startsWith('vehicle')) {
+      handleVehicleRemoteCommand(msg);
+      return;
+    }
+
     if (op === 'place' || op === 'set_cell') {
       const { x, z, terrain, kind, floors, buildingType, fenceSide, rotationY, offsetX, offsetZ } = msg;
       if (!Number.isFinite(x) || !Number.isFinite(z)) return;
@@ -16195,6 +17011,9 @@
   function minimapViewCellCount() {
     return Math.max(GRID, Math.min(HOME_GRID_MAX, Math.ceil(renderVisibleSize || GRID)));
   }
+  function minimapDrawCellCount(logicalCells) {
+    return Math.min(logicalCells, GRID >= 256 ? 192 : (GRID >= 128 ? 224 : logicalCells));
+  }
   function minimapGlobalCell(gx, gz) {
     const bx = Math.floor(gx / GRID);
     const bz = Math.floor(gz / GRID);
@@ -16215,8 +17034,10 @@
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const N = minimapViewCellCount();
+    const S = minimapDrawCellCount(N);
     const W = canvas.width, H = canvas.height;
-    const cw = W / N, ch = H / N;
+    const cw = W / S, ch = H / S;
+    const sampleStep = N / S;
     const centerGx = Math.floor(target.x + GRID / 2);
     const centerGz = Math.floor(target.z + GRID / 2);
     const startGx = centerGx - Math.floor(N / 2);
@@ -16226,10 +17047,10 @@
     if (sizeEl) sizeEl.textContent = N + '×' + N + ' map';
     ctx.clearRect(0, 0, W, H);
     // Terrain pass.
-    for (let x = 0; x < N; x++) {
-      for (let z = 0; z < N; z++) {
-        const gx = startGx + x;
-        const gz = startGz + z;
+    for (let x = 0; x < S; x++) {
+      for (let z = 0; z < S; z++) {
+        const gx = startGx + Math.floor(x * sampleStep);
+        const gz = startGz + Math.floor(z * sampleStep);
         const cell = minimapGlobalCell(gx, gz);
         const terrain = (cell && cell.terrain) || 'grass';
         let colorHex = minimapTerrainHex(terrain);
@@ -16244,10 +17065,10 @@
       }
     }
     // Kind silhouettes.
-    for (let x = 0; x < N; x++) {
-      for (let z = 0; z < N; z++) {
-        const gx = startGx + x;
-        const gz = startGz + z;
+    for (let x = 0; x < S; x++) {
+      for (let z = 0; z < S; z++) {
+        const gx = startGx + Math.floor(x * sampleStep);
+        const gz = startGz + Math.floor(z * sampleStep);
         const cell = minimapGlobalCell(gx, gz);
         if (!cell || !cell.kind) continue;
         drawMinimapProp(ctx, cell.kind, x * cw + cw / 2, z * ch + ch / 2, Math.min(cw, ch));

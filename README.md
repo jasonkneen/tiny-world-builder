@@ -47,6 +47,18 @@ netlify deploy --build
 | Reset to preset   | reset button                           |
 | Clear to grass    | `C`                                    |
 
+## Vehicle runtime (Road AI)
+
+You can drive runtime vehicles through the same relay/API path used by `send-command.js`.
+
+- `vehicle-spawn --x <n> --z <n> --mode auto|manual --goalX <n> --goalZ <n>`
+- `vehicle-goal --id <id> --x <n> --z <n>`
+- `vehicle-controls --id <id> [--forward] [--reverse] [--left] [--right]`
+- `vehicle-remove --id <id|all>`
+- `vehicle-clear`
+
+Vehicles only move on `path` cells (or bridge cells used as road bridges). If no path exists between goal and start, the car idles.
+
 ## Tools
 
 `Grass` · `Path` · `Dirt` · `Water` · `Stone` · `Lava` · `Sand` · `Snow` ·

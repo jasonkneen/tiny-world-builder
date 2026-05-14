@@ -15,8 +15,7 @@ The app has browser-local integration points, not a backend API:
 - Inbound automation uses `EventSource` against the configured Developer-panel
   SSE URL. Each SSE `data:` payload must be one JSON command accepted by
   `applyRemoteCommand`.
-- Supported inbound ops are currently `place` / `set_cell`, `clear`, and
-  `reset`.
+- Supported inbound ops include `place` / `set_cell`, `clear`, `reset`, plus runtime-only vehicle controls: `vehicle_spawn`, `vehicle_set_goal`, `vehicle_controls`, `vehicle_remove`, and `vehicle_clear`.
 
 Examples live under `plugins/examples/`:
 

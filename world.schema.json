@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tinyworld.local/world.schema.json",
   "title": "TinyWorld",
-  "description": "Scene description for the Tiny World Builder. The renderer supports home grids from 8x8 to 48x48, plus sparse user-edited ghost-board cells outside the home grid. Each non-default cell has a terrain, optional object kind, separate object floors and terrainFloors counts, optional house buildingType, optional fenceSide, optional decorative extras, and optional within-tile transform.",
+  "description": "Scene description for the Tiny World Builder. The renderer supports home grids from 8x8 to 512x512, plus sparse user-edited ghost-board cells outside the home grid. Each non-default cell has a terrain, optional object kind, separate object floors and terrainFloors counts, optional house buildingType, optional fenceSide, optional decorative extras, and optional within-tile transform.",
   "type": "object",
   "additionalProperties": false,
   "required": ["v", "cells"],
@@ -14,7 +14,7 @@
     },
     "gridSize": {
       "type": "integer",
-      "enum": [8, 12, 16, 20, 32, 48],
+      "enum": [8, 12, 16, 20, 32, 48, 64, 96, 128, 256, 512],
       "description": "Optional home board edge length. Defaults to the current app grid when omitted."
     },
     "cells": {
@@ -33,7 +33,7 @@
     }
   },
   "$defs": {
-    "coord": { "type": "integer", "minimum": -96, "maximum": 96 },
+    "coord": { "type": "integer", "minimum": -1024, "maximum": 1024 },
     "terrain": {
       "type": "string",
       "enum": ["grass", "path", "dirt", "water", "stone", "lava", "sand", "snow"],

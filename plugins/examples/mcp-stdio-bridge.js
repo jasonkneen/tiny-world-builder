@@ -35,6 +35,75 @@ const tools = [
     },
   },
   {
+    name: 'tinyworld_vehicle_spawn',
+    description: 'Spawn a runtime vehicle and optionally give it an auto-route goal.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x', 'z'],
+      properties: {
+        x: { type: 'integer', minimum: 0, description: 'Home-grid x coordinate.' },
+        z: { type: 'integer', minimum: 0, description: 'Home-grid z coordinate.' },
+        id: { type: ['string', 'null'], default: null, description: 'Optional stable vehicle id (auto-generated if omitted).' },
+        angle: { type: 'number', minimum: -3.1416, maximum: 3.1416, default: 0 },
+        mode: { type: 'string', enum: ['manual', 'auto'], default: 'manual' },
+        goalX: { type: ['number', 'integer'], description: 'Optional goal x coordinate. Requires road cells to move.' },
+        goalZ: { type: ['number', 'integer'], description: 'Optional goal z coordinate. Requires road cells to move.' },
+        maxSpeed: { type: 'number', minimum: 0.2, maximum: 4.5 },
+        maxReverseSpeed: { type: 'number', minimum: 0.1, maximum: 2.2 },
+        accel: { type: 'number', minimum: 0.5, maximum: 16 },
+        brake: { type: 'number', minimum: 0.5, maximum: 22 },
+        turnRate: { type: 'number', minimum: 1, maximum: 7 },
+      },
+    },
+  },
+  {
+    name: 'tinyworld_vehicle_set_goal',
+    description: 'Give an existing vehicle a destination road tile and recompute its route.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id', 'x', 'z'],
+      properties: {
+        id: { type: 'string' },
+        x: { type: 'integer', minimum: 0 },
+        z: { type: 'integer', minimum: 0 },
+      },
+    },
+  },
+  {
+    name: 'tinyworld_vehicle_controls',
+    description: 'Drive a vehicle manually (manual mode).',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['id'],
+      properties: {
+        id: { type: 'string' },
+        forward: { type: 'boolean', default: false },
+        reverse: { type: 'boolean', default: false },
+        left: { type: 'boolean', default: false },
+        right: { type: 'boolean', default: false },
+      },
+    },
+  },
+  {
+    name: 'tinyworld_vehicle_remove',
+    description: 'Remove one vehicle or all runtime vehicles.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string', description: 'Vehicle id. Omit to clear all.' },
+      },
+    },
+  },
+  {
+    name: 'tinyworld_vehicle_clear',
+    description: 'Remove all vehicles currently active in the runtime.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+  },
+  {
     name: 'tinyworld_clear',
     description: 'Clear the current Tiny World board to grass through the local SSE relay.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
@@ -115,6 +184,52 @@ async function callTool(name, args = {}) {
       buildingType: args.buildingType || null,
       fenceSide: args.fenceSide || null,
     }));
+  }
+  if (name === 'tinyworld_vehicle_spawn') {
+    return textContent(await postCommand({
+      op: 'vehicle_spawn',
+      x: args.x,
+      z: args.z,
+      id: args.id || undefined,
+      angle: args.angle,
+      mode: args.mode,
+      goalX: args.goalX,
+      goalZ: args.goalZ,
+      maxSpeed: args.maxSpeed,
+      maxReverseSpeed: args.maxReverseSpeed,
+      accel: args.accel,
+      brake: args.brake,
+      turnRate: args.turnRate,
+    }));
+  }
+  if (name === 'tinyworld_vehicle_set_goal') {
+    return textContent(await postCommand({
+      op: 'vehicle_set_goal',
+      id: args.id,
+      x: args.x,
+      z: args.z,
+    }));
+  }
+  if (name === 'tinyworld_vehicle_controls') {
+    return textContent(await postCommand({
+      op: 'vehicle_controls',
+      id: args.id,
+      controls: {
+        forward: !!args.forward,
+        reverse: !!args.reverse,
+        left: !!args.left,
+        right: !!args.right,
+      },
+    }));
+  }
+  if (name === 'tinyworld_vehicle_remove') {
+    return textContent(await postCommand({
+      op: 'vehicle_remove',
+      id: args.id || 'all',
+    }));
+  }
+  if (name === 'tinyworld_vehicle_clear') {
+    return textContent(await postCommand({ op: 'vehicle_clear' }));
   }
   if (name === 'tinyworld_clear') {
     return textContent(await postCommand({ op: 'clear' }));
