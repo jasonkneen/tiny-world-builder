@@ -5020,7 +5020,18 @@
         riser.position.y = -DIRT_H;
         g.add(riser);
       } else {
-        const riser = new THREE.Mesh(roundedSlab(riserSize, DIRT_H + rise, riserBevel), M.dirt);
+        // Choose a riser material that matches the terrain so we don't get ugly brown dirt
+        // "legs" showing under paths or under water.
+        let riserMat = M.dirt;
+        if (terrain === 'path')  riserMat = M.pathTrim;
+        if (terrain === 'water') riserMat = M.waterDk;
+        if (terrain === 'dirt')  riserMat = M.dirtRich;
+        if (terrain === 'stone') riserMat = M.stone;
+        if (terrain === 'lava')  riserMat = M.lava;
+        if (terrain === 'sand')  riserMat = M.sand;
+        if (terrain === 'snow')  riserMat = M.snow;
+
+        const riser = new THREE.Mesh(roundedSlab(riserSize, DIRT_H + rise, riserBevel), riserMat);
         riser.position.y = -DIRT_H;
         g.add(riser);
       }
@@ -9842,7 +9853,15 @@
                    (terrain === 'sand')  ? M.sand :
                    (terrain === 'snow')  ? M.snow : M.grass;
 
-    const dirtMesh = new THREE.InstancedMesh(cheapGhostGeomDirt, M.dirt, CHEAP_GHOST_CAPACITY);
+    const riserMat = (terrain === 'path')  ? M.pathTrim :
+                     (terrain === 'water') ? M.waterDk :
+                     (terrain === 'dirt')  ? M.dirtRich :
+                     (terrain === 'stone') ? M.stone :
+                     (terrain === 'lava')  ? M.lava :
+                     (terrain === 'sand')  ? M.sand :
+                     (terrain === 'snow')  ? M.snow : M.dirt;
+
+    const dirtMesh = new THREE.InstancedMesh(cheapGhostGeomDirt, riserMat, CHEAP_GHOST_CAPACITY);
     const topMesh  = new THREE.InstancedMesh(cheapGhostGeomTop, topMat, CHEAP_GHOST_CAPACITY);
 
     for (const m of [dirtMesh, topMesh]) {
@@ -9998,7 +10017,15 @@
                    (terrain === 'sand')  ? M.sand :
                    (terrain === 'snow')  ? M.snow : M.grass;
 
-    const dirtMesh = new THREE.InstancedMesh(homeTileGeomDirt, M.dirt, homeTileCapacity);
+    const riserMat = (terrain === 'path')  ? M.pathTrim :
+                     (terrain === 'water') ? M.waterDk :
+                     (terrain === 'dirt')  ? M.dirtRich :
+                     (terrain === 'stone') ? M.stone :
+                     (terrain === 'lava')  ? M.lava :
+                     (terrain === 'sand')  ? M.sand :
+                     (terrain === 'snow')  ? M.snow : M.dirt;
+
+    const dirtMesh = new THREE.InstancedMesh(homeTileGeomDirt, riserMat, homeTileCapacity);
     const topMesh  = new THREE.InstancedMesh(homeTileGeomTop, topMat, homeTileCapacity);
 
     for (const m of [dirtMesh, topMesh]) {
