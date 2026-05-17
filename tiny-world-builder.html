@@ -2713,6 +2713,42 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
+  .stamp-builder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
+    max-height: min(62vh, 560px);
+    overflow: auto;
+    padding-right: 2px;
+  }
+  .stamp-card {
+    border: 1px solid rgba(68, 48, 24, 0.14);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.50);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 148px;
+  }
+  .stamp-card canvas {
+    width: 96px;
+    height: 96px;
+    align-self: center;
+  }
+  .stamp-card strong {
+    font-size: 12px;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .stamp-card .stamp-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .stamp-card .stamp-actions .btn {
+    flex: 1;
+    min-width: 0;
+  }
   @media (max-width: 700px) {
     .settings-layout { grid-template-columns: 1fr; }
     .settings-tabs {
@@ -3445,6 +3481,9 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
     </button>
     <input type="file" id="import-file" accept=".json,application/json" hidden />
+    <button class="btn icon" id="stamp-builder" data-tooltip="Stamp builder" aria-label="Open stamp builder">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="m3 7 9 5v10l-9-5V7Z"/><path d="m21 7-9 5v10l9-5V7Z"/></svg>
+    </button>
     <button class="btn icon" id="generate" data-tooltip="Generate from prompt" aria-label="Generate world from prompt" data-ai-interface hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
     </button>
@@ -3915,6 +3954,11 @@
               <output id="render-object-opacity-value"></output>
             </div>
             <div class="range-row">
+              <span>Voxel gap</span>
+              <input id="render-voxel-gap" type="range" min="0" max="14" step="1" />
+              <output id="render-voxel-gap-value"></output>
+            </div>
+            <div class="range-row">
               <span>Brightness</span>
               <input id="render-brightness" type="range" min="75" max="130" step="1" />
               <output id="render-brightness-value"></output>
@@ -4019,6 +4063,21 @@
       <div class="modal-foot">
         <span id="render-status"></span>
         <button class="btn" id="render-reset" type="button">Reset</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="stamp-builder-modal" class="modal" hidden>
+    <form class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="stamp-builder-title" onsubmit="return false">
+      <div class="modal-head">
+        <strong id="stamp-builder-title">Stamp builder</strong>
+        <button class="modal-close" id="stamp-builder-close" title="Close">×</button>
+      </div>
+      <p class="modal-copy">Preview, select, and refresh voxel stamp builds. Building enhancement will plug into this workshop.</p>
+      <div class="stamp-builder-grid" id="stamp-builder-grid"></div>
+      <div class="modal-foot">
+        <span id="stamp-builder-status"></span>
+        <button class="btn" id="stamp-builder-rebuild" type="button">Refresh stamps</button>
       </div>
     </form>
   </div>
@@ -4238,6 +4297,7 @@
     ghostOpacity: 'tinyworld:render:ghostOpacity',
     floorOpacity: 'tinyworld:render:floorOpacity',
     objectOpacity: 'tinyworld:render:objectOpacity',
+    voxelGap: 'tinyworld:render:voxelGap',
     pixelSize: 'tinyworld:render:pixelSize',
     pixelDepthEdge: 'tinyworld:render:pixelDepthEdge',
     pixelNormalEdge: 'tinyworld:render:pixelNormalEdge',
@@ -4279,6 +4339,7 @@
     ghostOpacity: '1',
     floorOpacity: '1',
     objectOpacity: '1',
+    voxelGap: '0',
     pixelSize: '1',
     // Keep the old-school mode as chunky colour pixels by default. The
     // depth/normal edge layers are optional because they outline real tile
@@ -4416,6 +4477,7 @@
   let renderGhostOpacity = storedNumber(RENDER_LS.ghostOpacity, 1, 0.05, 1);
   let renderFloorOpacity = storedNumber(RENDER_LS.floorOpacity, 1, 0.10, 1);
   let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
+  let renderVoxelGap = storedNumber(RENDER_LS.voxelGap, 0, 0, 0.14);
   function applyBackdropSettings() {
     document.documentElement.style.setProperty('--backdrop-strength', renderBackdrop.toFixed(2));
   }
@@ -5522,8 +5584,9 @@
       if (terrain === 'sand')  topMat = M.sand;
       if (terrain === 'snow')  topMat = M.snow;
 
-      // Clean physical slab: flat top surface, vertical cap thickness, no
-      // chamfered per-tile bevels. This keeps the settled terrain smooth.
+      // One whole logical tile panel: no artificial gaps inside a cell. The
+      // voxel resolution belongs to objects/stamps; terrain/path cells must
+      // still read as full panels aligned to the board grid.
       const top = new THREE.Mesh(getBoxGeometry(topSize, TOP_H, topSize), topMat);
       top.position.y = rise + TOP_H * 0.5;
       g.add(top);
@@ -7620,6 +7683,537 @@
     g.userData = { kind: 'sheep' };
     castReceive(g);
     return g;
+  }
+
+  // -------- voxel stamp renderer --------
+  // The main builder still owns intent, placement, repeat-click levels, save/load
+  // and animations. This layer replaces the visual stamp factories with chunky
+  // box-built assets so the board and tools read as one voxel system.
+  function vbox(parent, w, h, d, x, y, z, mat, opts = {}) {
+    const gap = opts.noGap ? 0 : Math.max(0, Math.min(0.14, renderVoxelGap || 0));
+    const gw = Math.max(0.006, w - gap);
+    const gh = Math.max(0.006, h - gap);
+    const gd = Math.max(0.006, d - gap);
+    const geo = getBoxGeometry(gw, gh, gd);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x || 0, y || h / 2, z || 0);
+    if (opts.ry) mesh.rotation.y = opts.ry;
+    if (opts.rx) mesh.rotation.x = opts.rx;
+    if (opts.rz) mesh.rotation.z = opts.rz;
+    parent.add(mesh);
+    return mesh;
+  }
+
+  function vcylinder(parent, radius, height, x, y, z, mat, segments = 12, opts = {}) {
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, segments), mat);
+    mesh.position.set(x || 0, y || height / 2, z || 0);
+    if (opts.ry) mesh.rotation.y = opts.ry;
+    parent.add(mesh);
+    return mesh;
+  }
+
+  function voxelWindow(parent, x, y, z, face = 'z', mat = M.windowB) {
+    if (face === 'x') {
+      vbox(parent, 0.026, 0.14, 0.13, x, y, z, M.woodTrim);
+      vbox(parent, 0.030, 0.10, 0.09, x + Math.sign(x || 1) * 0.004, y, z, mat, { bevel: 0.006 });
+      vbox(parent, 0.034, 0.012, 0.09, x + Math.sign(x || 1) * 0.008, y, z, M.woodTrim, { bevel: 0.004 });
+      vbox(parent, 0.034, 0.10, 0.010, x + Math.sign(x || 1) * 0.009, y, z, M.woodTrim, { bevel: 0.004 });
+    } else {
+      vbox(parent, 0.13, 0.14, 0.026, x, y, z, M.woodTrim);
+      vbox(parent, 0.09, 0.10, 0.030, x, y, z + Math.sign(z || 1) * 0.004, mat, { bevel: 0.006 });
+      vbox(parent, 0.09, 0.012, 0.034, x, y, z + Math.sign(z || 1) * 0.008, M.woodTrim, { bevel: 0.004 });
+      vbox(parent, 0.010, 0.10, 0.034, x, y, z + Math.sign(z || 1) * 0.009, M.woodTrim, { bevel: 0.004 });
+    }
+  }
+
+  function voxelDoor(parent, x, z, face = 'z', h = 0.34) {
+    const y = h / 2;
+    if (face === 'x') {
+      vbox(parent, 0.045, h, 0.18, x, y, z, M.door);
+      vbox(parent, 0.052, 0.04, 0.23, x + Math.sign(x || 1) * 0.006, h + 0.02, z, M.woodTrim);
+      vbox(parent, 0.030, 0.030, 0.030, x + Math.sign(x || 1) * 0.028, y, z + 0.055, M.knob);
+    } else {
+      vbox(parent, 0.18, h, 0.045, x, y, z, M.door);
+      vbox(parent, 0.23, 0.04, 0.052, x, h + 0.02, z + Math.sign(z || 1) * 0.006, M.woodTrim);
+      vbox(parent, 0.030, 0.030, 0.030, x + 0.055, y, z + Math.sign(z || 1) * 0.028, M.knob);
+    }
+  }
+
+  function voxelSteppedRoof(parent, width, depth, y, roofMat = M.roofBlue, trimMat = M.roofBlueD, orientation = 'z') {
+    const alongZ = orientation === 'z';
+    const steps = [
+      { w: width + 0.24, h: 0.10, d: depth + 0.24 },
+      { w: width + 0.02, h: 0.10, d: depth + 0.18 },
+      { w: Math.max(0.20, width - 0.24), h: 0.10, d: depth + 0.10 },
+      { w: 0.16, h: 0.08, d: depth + 0.04 },
+    ];
+    steps.forEach((s, i) => {
+      const mat = i === steps.length - 1 ? trimMat : roofMat;
+      const w = alongZ ? s.w : s.d;
+      const d = alongZ ? s.d : s.w;
+      vbox(parent, w, s.h, d, 0, y + i * 0.085 + s.h / 2, 0, mat);
+    });
+  }
+
+  function voxelChimney(parent, x, y, z, tops) {
+    vbox(parent, 0.12, 0.38, 0.12, x, y + 0.19, z, M.chimney);
+    vbox(parent, 0.16, 0.06, 0.16, x, y + 0.41, z, M.chimney);
+    tops.push(new THREE.Vector3(x, y + 0.47, z));
+  }
+
+  function makeVoxelLinearHouse(length = 1, orientation = 'z', floors = 1, opts = {}) {
+    const g = new THREE.Group();
+    const f = Math.max(1, Math.min(MAX_FLOORS, floors || 1));
+    const alongZ = orientation === 'z';
+    const bodyW = 0.76;
+    const bodyD = length === 1 ? 0.72 : length * TILE - 0.18;
+    const wallH = 0.46 + (f - 1) * 0.34;
+    const wallMat = opts.wallMat || M.wallCream;
+    const wallDark = opts.wallDark || M.wallTrim;
+    const roofMat = opts.roofMat || M.roofBlue;
+    const roofDark = opts.roofDark || M.roofBlueD;
+    const house = new THREE.Group();
+    const chimneyTops = [];
+
+    vbox(house, bodyW, wallH, bodyD, 0, wallH / 2, 0, wallMat);
+    vbox(house, bodyW + 0.04, 0.06, bodyD + 0.04, 0, 0.03, 0, wallDark);
+    voxelSteppedRoof(house, bodyW, bodyD, wallH, roofMat, roofDark, 'z');
+
+    const frontZ = bodyD / 2 + 0.026;
+    const backZ = -bodyD / 2 - 0.026;
+    voxelDoor(house, -0.13, frontZ, 'z');
+    voxelWindow(house, 0.20, 0.32, frontZ, 'z');
+    voxelWindow(house, -0.20, 0.32, backZ, 'z');
+    if (length > 1) {
+      for (let i = 0; i < length; i++) {
+        const cellZ = -((length - 1) / 2) + i;
+        voxelWindow(house, bodyW / 2 + 0.024, 0.34, cellZ, 'x');
+        voxelWindow(house, -bodyW / 2 - 0.024, 0.34, cellZ, 'x');
+      }
+    } else {
+      voxelWindow(house, bodyW / 2 + 0.024, 0.34, 0.02, 'x');
+      voxelWindow(house, -bodyW / 2 - 0.024, 0.34, -0.02, 'x');
+    }
+    for (let floor = 1; floor < f; floor++) {
+      const y = 0.32 + floor * 0.34;
+      voxelWindow(house, -0.18, y, frontZ, 'z');
+      voxelWindow(house, 0.18, y, frontZ, 'z');
+      voxelWindow(house, -0.18, y, backZ, 'z');
+      voxelWindow(house, 0.18, y, backZ, 'z');
+    }
+
+    const chimneys = Math.max(1, Math.min(3, Math.ceil(length / 2)));
+    for (let i = 0; i < chimneys; i++) {
+      const z = length === 1 ? -0.08 : -bodyD / 2 + 0.35 + i * (bodyD - 0.7) / Math.max(1, chimneys - 1);
+      voxelChimney(house, -0.24, wallH + 0.12, z, chimneyTops);
+    }
+
+    if (!alongZ) {
+      house.rotation.y = Math.PI / 2;
+      const ax = new THREE.Vector3(0, 1, 0);
+      g.userData = { kind: 'house', chimneyTops: chimneyTops.map(v => v.clone().applyAxisAngle(ax, Math.PI / 2)) };
+    } else {
+      g.userData = { kind: 'house', chimneyTops };
+    }
+    g.add(house);
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelSquareHouse(floors = 1) {
+    const g = new THREE.Group();
+    const f = Math.max(1, Math.min(MAX_FLOORS, floors || 1));
+    const side = 1.82;
+    const wallH = 0.48 + (f - 1) * 0.34;
+    const half = side / 2;
+    const chimneyTops = [];
+
+    vbox(g, side, wallH, side, 0, wallH / 2, 0, M.wallCream);
+    vbox(g, side + 0.08, 0.08, side + 0.08, 0, 0.04, 0, M.wallTrim);
+    for (let i = 0; i < 5; i++) {
+      const s = side + 0.30 - i * 0.32;
+      vbox(g, Math.max(0.22, s), 0.10, Math.max(0.22, s), 0, wallH + 0.05 + i * 0.085, 0, i === 4 ? M.roofBlueD : M.roofBlue);
+    }
+    voxelDoor(g, 0, half + 0.028, 'z', 0.36);
+    for (const x of [-0.48, 0.48]) voxelWindow(g, x, 0.34, half + 0.032, 'z');
+    for (const z of [-0.45, 0.45]) {
+      voxelWindow(g, half + 0.032, 0.34, z, 'x');
+      voxelWindow(g, -half - 0.032, 0.34, z, 'x');
+    }
+    for (let floor = 1; floor < f; floor++) {
+      const y = 0.32 + floor * 0.34;
+      for (const x of [-0.48, 0.48]) {
+        voxelWindow(g, x, y, half + 0.032, 'z');
+        voxelWindow(g, x, y, -half - 0.032, 'z');
+      }
+    }
+    voxelChimney(g, -0.54, wallH + 0.12, -0.54, chimneyTops);
+    voxelChimney(g, 0.54, wallH + 0.12, 0.54, chimneyTops);
+    g.userData = { kind: 'house', chimneyTops };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelCompositeHouse(topology, floors = 1) {
+    const { mainOrientation, mainCells, branches, bbox } = topology;
+    const composite = new THREE.Group();
+    const allChimneyTops = [];
+    const bboxCX = (bbox.xMin + bbox.xMax) / 2;
+    const bboxCZ = (bbox.zMin + bbox.zMax) / 2;
+    const first = mainCells[0], last = mainCells[mainCells.length - 1];
+    const mainCX = mainOrientation === 'z' ? first.x : (first.x + last.x) / 2;
+    const mainCZ = mainOrientation === 'z' ? (first.z + last.z) / 2 : first.z;
+    const mainWing = makeVoxelLinearHouse(mainCells.length, mainOrientation, floors);
+    mainWing.position.set(mainCX - bboxCX, 0, mainCZ - bboxCZ);
+    composite.add(mainWing);
+    (mainWing.userData.chimneyTops || []).forEach(top => allChimneyTops.push(new THREE.Vector3(top.x + mainWing.position.x, top.y, top.z + mainWing.position.z)));
+
+    const SHIFT = 0.12;
+    const ax = new THREE.Vector3(0, 1, 0);
+    for (const br of branches) {
+      const orientation = (br.axis === '+x' || br.axis === '-x') ? 'x' : 'z';
+      const wing = makeVoxelLinearHouse(1, orientation, floors);
+      const flip = br.axis === '-x' || br.axis === '-z';
+      if (flip) wing.rotation.y += Math.PI;
+      let wx = br.x - bboxCX;
+      let wz = br.z - bboxCZ;
+      if      (br.axis === '+x') wx -= SHIFT;
+      else if (br.axis === '-x') wx += SHIFT;
+      else if (br.axis === '+z') wz -= SHIFT;
+      else                       wz += SHIFT;
+      wing.position.set(wx, 0, wz);
+      composite.add(wing);
+      for (const top of (wing.userData.chimneyTops || [])) {
+        const r = flip ? top.clone().applyAxisAngle(ax, Math.PI) : top.clone();
+        allChimneyTops.push(new THREE.Vector3(r.x + wx, r.y, r.z + wz));
+      }
+    }
+    composite.userData = { kind: 'house', chimneyTops: allChimneyTops };
+    castReceive(composite);
+    return composite;
+  }
+
+  function makeVoxelManor(floors = 1) {
+    const g = makeVoxelLinearHouse(2, 'x', floors, {
+      wallMat: M.manorBrick,
+      wallDark: M.manorTrim,
+      roofMat: M.manorRoof,
+      roofDark: M.manorRoofD,
+    });
+    vbox(g, 0.54, 0.08, 0.18, 0, 0.04, 0.70, M.manorTrim);
+    for (const x of [-0.18, 0, 0.18]) vbox(g, 0.055, 0.46, 0.055, x, 0.27, 0.72, M.manorTrim);
+    vbox(g, 0.62, 0.08, 0.18, 0, 0.54, 0.72, M.manorTrim);
+    return g;
+  }
+
+  function makeVoxelSkyscraper(floors = 4) {
+    const g = new THREE.Group();
+    const f = Math.max(4, Math.min(16, floors || 4));
+    const floorH = 0.24;
+    const h = f * floorH;
+    vbox(g, 0.78, h, 0.78, 0, h / 2, 0, M.skyBody);
+    for (let i = 0; i < f; i++) {
+      const y = i * floorH + floorH * 0.55;
+      vbox(g, 0.045, 0.11, 0.58, 0.415, y, 0, M.skyGlass);
+      vbox(g, 0.045, 0.11, 0.58, -0.415, y, 0, M.skyGlass);
+      vbox(g, 0.58, 0.11, 0.045, 0, y, 0.415, M.skyGlass);
+      vbox(g, 0.58, 0.11, 0.045, 0, y, -0.415, M.skyGlass);
+      if (i % 2 === 0) vbox(g, 0.84, 0.025, 0.84, 0, i * floorH + 0.02, 0, M.skyFrame);
+    }
+    vbox(g, 0.88, 0.08, 0.88, 0, h + 0.04, 0, M.skyRoof);
+    vbox(g, 0.18, 0.12, 0.16, -0.20, h + 0.14, 0.18, M.castleStoneD);
+    vbox(g, 0.035, 0.42, 0.035, 0.20, h + 0.27, -0.16, M.skyFrame);
+    voxelDoor(g, 0, 0.42, 'z', 0.32);
+    g.userData = { kind: 'house', chimneyTops: [] };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelTurret(floors = 1, roofed = false, palette = null) {
+    const g = new THREE.Group();
+    const f = Math.max(1, Math.min(MAX_FLOORS, floors || 1));
+    const wallH = 0.48 + (f - 1) * 0.34;
+    const stone = (palette && palette.stone) || (roofed ? M.towerStone : M.castleStone);
+    const stoneD = (palette && palette.stoneD) || (roofed ? M.towerStoneD : M.castleStoneD);
+    const roof = (palette && palette.roof) || M.towerRoof;
+    const roofD = (palette && palette.roofD) || M.towerRoofD;
+    const stack = [[0.58, 0.58], [0.72, 0.42], [0.42, 0.72], [0.58, 0.58]];
+    for (let i = 0; i < f + 1; i++) {
+      const dims = stack[i % stack.length];
+      vbox(g, dims[0], 0.24, dims[1], 0, i * 0.22 + 0.12, 0, i % 2 ? stoneD : stone);
+    }
+    vbox(g, 0.82, 0.08, 0.82, 0, wallH + 0.04, 0, stoneD);
+    if (roofed) {
+      for (let i = 0; i < 4; i++) {
+        const s = 0.74 - i * 0.14;
+        vbox(g, s, 0.11, s, 0, wallH + 0.10 + i * 0.10, 0, i === 3 ? roofD : roof);
+      }
+      vbox(g, 0.035, 0.26, 0.035, 0, wallH + 0.62, 0, stoneD);
+    } else {
+      for (const x of [-0.30, 0, 0.30]) {
+        vbox(g, 0.11, 0.14, 0.11, x, wallH + 0.15, 0.34, stone);
+        vbox(g, 0.11, 0.14, 0.11, x, wallH + 0.15, -0.34, stone);
+        vbox(g, 0.11, 0.14, 0.11, 0.34, wallH + 0.15, x, stone);
+        vbox(g, 0.11, 0.14, 0.11, -0.34, wallH + 0.15, x, stone);
+      }
+      vbox(g, 0.025, 0.26, 0.025, 0, wallH + 0.34, 0, stoneD);
+      vbox(g, 0.16, 0.09, 0.025, 0.09, wallH + 0.42, 0, M.flagRed);
+    }
+    voxelDoor(g, 0, 0.34, 'z', 0.34);
+    vbox(g, 0.10, 0.18, 0.030, 0, wallH * 0.58, 0.425, M.castleSlit);
+    vbox(g, 0.030, 0.18, 0.10, 0.425, wallH * 0.52, 0, M.castleSlit);
+    g.userData = { kind: 'house', chimneyTops: [] };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelTree(level = 1) {
+    const g = new THREE.Group();
+    const L = Math.max(1, Math.min(MAX_FLOORS, level || 1));
+    const trunkH = 0.46 + (L - 1) * 0.08;
+    const trunkW = 0.15 + (L - 1) * 0.014;
+    vbox(g, trunkW, trunkH, trunkW, 0, trunkH / 2, 0, M.trunk);
+    const y = trunkH;
+    vbox(g, 0.62 + L * 0.04, 0.26 + L * 0.02, 0.62 + L * 0.04, 0, y + 0.12, 0, M.leaves);
+    vbox(g, 0.48 + L * 0.035, 0.24 + L * 0.018, 0.48 + L * 0.035, 0, y + 0.32, 0, M.leavesDk);
+    vbox(g, 0.30 + L * 0.025, 0.20, 0.30 + L * 0.025, 0, y + 0.50, 0, M.leaves);
+    if (L >= 4) {
+      vbox(g, 0.22, 0.18, 0.22, 0.30, y + 0.20, -0.24, M.leavesDk);
+      vbox(g, 0.20, 0.16, 0.20, -0.28, y + 0.18, 0.24, M.leaves);
+    }
+    g.userData = { kind: 'tree', swayPhase: Math.random() * Math.PI * 2 };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false) {
+    const g = new THREE.Group();
+    const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
+    const count = 4 + Math.min(extra, 5);
+    for (let i = 0; i < count; i++) {
+      const a = i * 1.67 + cellRand(seedX, seedZ, 700 + i);
+      const r = i === 0 ? 0 : 0.16 + cellRand(seedX, seedZ, 720 + i) * 0.22;
+      const w = 0.16 + cellRand(seedX, seedZ, 740 + i) * 0.16 + extra * 0.012;
+      const h = 0.12 + cellRand(seedX, seedZ, 760 + i) * 0.20 + extra * 0.018;
+      const mat = i % 3 === 0 ? M.rockHi : (i % 3 === 1 ? M.rockDk : M.rock);
+      vbox(g, w, h, w * (0.8 + cellRand(seedX, seedZ, 780 + i) * 0.4), Math.cos(a) * r, h / 2 - (inWater ? 0.05 : 0), Math.sin(a) * r, mat, { ry: a * 0.7 });
+    }
+    if (neighbors && (neighbors.n || neighbors.s || neighbors.e || neighbors.w)) {
+      if (neighbors.n) vbox(g, 0.34, 0.10, 0.22, 0, 0.05, -0.36, M.rockDk);
+      if (neighbors.s) vbox(g, 0.34, 0.10, 0.22, 0, 0.05, 0.36, M.rockDk);
+      if (neighbors.e) vbox(g, 0.22, 0.10, 0.34, 0.36, 0.05, 0, M.rockDk);
+      if (neighbors.w) vbox(g, 0.22, 0.10, 0.34, -0.36, 0.05, 0, M.rockDk);
+    }
+    g.userData = { kind: 'rock' };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelBridge(orientation, level = 1) {
+    const g = new THREE.Group();
+    const lv = Math.max(1, Math.min(4, level || 1));
+    const stone = lv >= 3;
+    const deckMat = stone ? M.castleStone : M.bridgeWood;
+    const trimMat = stone ? M.castleStoneD : M.bridgeWoodD;
+    vbox(g, 0.98, 0.10 + lv * 0.015, 0.62, 0, 0.08 + lv * 0.01, 0, deckMat);
+    for (const z of [-0.31, 0.31]) {
+      vbox(g, 0.96, 0.12 + lv * 0.025, 0.08, 0, 0.20 + lv * 0.015, z, trimMat);
+      for (const x of [-0.38, 0, 0.38]) vbox(g, 0.07, 0.25 + lv * 0.04, 0.07, x, 0.16 + lv * 0.02, z, trimMat);
+    }
+    if (lv >= 2) {
+      voxelSteppedRoof(g, 0.92, 0.66, 0.42, stone ? M.castleStone : M.bridgeWood, trimMat, 'z');
+    }
+    if (orientation === 'z') g.rotation.y = Math.PI / 2;
+    g.userData = { kind: 'bridge', level: lv };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelFence(side = 'n', level = 1, castle = false, roadGate = false, pathOrientation = 'x') {
+    const g = new THREE.Group();
+    const lv = Math.max(1, Math.min(MAX_FLOORS, level || 1));
+    const normalized = FENCE_SIDES.has(side) ? side : 'n';
+    const alongX = roadGate ? pathOrientation === 'x' : (normalized === 'n' || normalized === 's' || normalized === 'center-x');
+    const offsetX = normalized === 'w' ? -0.43 : normalized === 'e' ? 0.43 : 0;
+    const offsetZ = normalized === 'n' ? -0.43 : normalized === 's' ? 0.43 : 0;
+    const mat = castle || lv >= 4 ? M.castleStone : (lv >= 3 ? M.fenceSteel : M.fence);
+    const dark = castle || lv >= 4 ? M.castleStoneD : (lv >= 3 ? M.fenceWire : M.fence);
+
+    if (roadGate && lv === 1) {
+      g.userData = { kind: 'fence', level: lv, side: normalized };
+      return g;
+    }
+    if (castle || lv >= 4 || roadGate) {
+      const h = roadGate ? 0.62 + Math.max(0, lv - 3) * 0.05 : (castle ? 0.56 : 0.46);
+      if (roadGate) {
+        for (const s of [-1, 1]) vbox(g, 0.14, h, 0.14, alongX ? s * 0.42 : 0, h / 2, alongX ? 0 : s * 0.42, mat);
+        vbox(g, alongX ? 1.02 : 0.16, 0.12, alongX ? 0.16 : 1.02, 0, h + 0.06, 0, dark);
+      } else {
+        vbox(g, alongX ? 1.08 : 0.18, h, alongX ? 0.18 : 1.08, offsetX, h / 2, offsetZ, mat);
+        vbox(g, alongX ? 1.12 : 0.22, 0.06, alongX ? 0.22 : 1.12, offsetX, h + 0.03, offsetZ, dark);
+        for (const a of [-0.35, 0, 0.35]) {
+          vbox(g, 0.11, 0.12, 0.11, alongX ? a : offsetX, h + 0.12, alongX ? offsetZ : a, mat);
+        }
+      }
+    } else {
+      const postH = lv === 2 ? 0.40 : 0.32;
+      const ends = alongX ? [[-0.50, offsetZ], [0.50, offsetZ]] : [[offsetX, -0.50], [offsetX, 0.50]];
+      ends.forEach(([x, z]) => vbox(g, 0.09, postH, 0.09, x, postH / 2, z, mat));
+      for (const y of [0.12, 0.26, ...(lv >= 3 ? [0.40] : [])]) {
+        vbox(g, alongX ? 1.08 : 0.045, 0.055, alongX ? 0.045 : 1.08, offsetX, y, offsetZ, dark);
+      }
+    }
+    g.userData = { kind: 'fence', level: lv, side: normalized };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelCropKind(kind, level = 1) {
+    const g = new THREE.Group();
+    const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
+    const positions = [
+      [-0.24, -0.24], [0, -0.24], [0.24, -0.24],
+      [-0.24, 0], [0, 0], [0.24, 0],
+      [-0.24, 0.24], [0, 0.24], [0.24, 0.24],
+    ];
+    const count = kind === 'tuft' ? 5 : Math.min(positions.length, 3 + extra);
+    for (let i = 0; i < count; i++) {
+      const [x, z] = positions[(i * 2 + extra) % positions.length];
+      if (kind === 'corn') {
+        vbox(g, 0.045, 0.54, 0.045, x, 0.27, z, M.cornStalk);
+        vbox(g, 0.07, 0.14, 0.07, x + 0.04, 0.34, z, M.cornCob);
+        vbox(g, 0.10, 0.08, 0.045, x - 0.04, 0.44, z, M.cornLeaf);
+      } else if (kind === 'wheat') {
+        vbox(g, 0.030, 0.35, 0.030, x, 0.175, z, M.wheatStalk);
+        vbox(g, 0.070, 0.10, 0.050, x, 0.40, z, M.wheatHead);
+      } else if (kind === 'pumpkin') {
+        vbox(g, 0.20, 0.14, 0.20, x, 0.07, z, i % 2 ? M.pumpkinDk : M.pumpkin);
+        vbox(g, 0.04, 0.07, 0.04, x, 0.17, z, M.pumpkinStem);
+      } else if (kind === 'carrot') {
+        vbox(g, 0.065, 0.06, 0.065, x, 0.03, z, M.carrotBody);
+        vbox(g, 0.035, 0.15, 0.035, x, 0.12, z, M.cropStem);
+      } else if (kind === 'sunflower') {
+        vbox(g, 0.04, 0.58, 0.04, x, 0.29, z, M.sunflowerStalk);
+        vbox(g, 0.18, 0.14, 0.055, x, 0.63, z, M.sunflowerPetal);
+        vbox(g, 0.08, 0.08, 0.06, x, 0.64, z + 0.01, M.sunflowerCenter);
+      } else if (kind === 'flower') {
+        vbox(g, 0.03, 0.16, 0.03, x, 0.08, z, M.leavesDk);
+        vbox(g, 0.11, 0.06, 0.11, x, 0.19, z, [M_PLANT.petalRed, M_PLANT.petalYellow, M_PLANT.petalPurple][i % 3]);
+      } else if (kind === 'bush') {
+        vbox(g, 0.28, 0.22, 0.28, x, 0.11, z, i % 2 ? M.leavesDk : M.leaves);
+        if (i % 3 === 0) vbox(g, 0.05, 0.05, 0.05, x + 0.06, 0.24, z, M_PLANT.bushBerry);
+      } else if (kind === 'tuft') {
+        vbox(g, 0.05, 0.12 + (i % 3) * 0.025, 0.05, x * 0.45, 0.06 + (i % 3) * 0.012, z * 0.45, M.leaves);
+      } else {
+        vbox(g, 0.07, 0.12, 0.07, x, 0.06, z, M.cropStem);
+        vbox(g, 0.18, 0.16, 0.18, x, 0.17, z, M.cropLeaf);
+      }
+    }
+    g.userData = { kind };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelPumpkinCarriage() {
+    const g = new THREE.Group();
+    vbox(g, 0.56, 0.38, 0.46, 0, 0.25, 0, M.pumpkin);
+    vbox(g, 0.62, 0.08, 0.50, 0, 0.42, 0, M.pumpkinDk);
+    voxelWindow(g, 0, 0.28, 0.255, 'z', M.windowB);
+    vbox(g, 0.05, 0.12, 0.05, 0, 0.52, 0, M.pumpkinStem);
+    for (const x of [-0.26, 0.26]) {
+      for (const z of [-0.24, 0.24]) {
+        vbox(g, 0.13, 0.13, 0.07, x, 0.09, z, M.woodTrim);
+        vbox(g, 0.06, 0.06, 0.08, x, 0.09, z, M.knob);
+      }
+    }
+    g.userData = { kind: 'pumpkin', carriage: true, swayPhase: Math.random() * Math.PI * 2 };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelAnimal(kind) {
+    const g = new THREE.Group();
+    const sheep = kind === 'sheep';
+    const bodyMat = sheep ? M_ANIMAL.sheepWool : M_ANIMAL.cowWhite;
+    const faceMat = sheep ? M_ANIMAL.sheepFace : M_ANIMAL.cowWhite;
+    vbox(g, sheep ? 0.34 : 0.42, sheep ? 0.24 : 0.26, sheep ? 0.22 : 0.24, 0, 0.22, 0, bodyMat);
+    vbox(g, sheep ? 0.14 : 0.18, sheep ? 0.14 : 0.16, sheep ? 0.12 : 0.16, 0.24, 0.30, 0, faceMat);
+    if (!sheep) {
+      vbox(g, 0.16, 0.04, 0.12, 0.02, 0.36, 0.05, M_ANIMAL.cowSpot);
+      vbox(g, 0.08, 0.08, 0.10, 0.36, 0.26, 0, M_ANIMAL.cowMuzzle);
+    } else {
+      for (const x of [-0.10, 0, 0.10]) vbox(g, 0.10, 0.06, 0.10, x, 0.36, 0.03, M_ANIMAL.sheepWool);
+    }
+    [[0.13, -0.08], [0.13, 0.08], [-0.13, -0.08], [-0.13, 0.08]].forEach(([x, z]) => {
+      vbox(g, 0.06, 0.14, 0.06, x, 0.07, z, M_ANIMAL.hoof);
+    });
+    g.userData = { kind };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelRenderForCell(kind, x, z, cell, level) {
+    let mesh = null;
+    let posX = null;
+    let posZ = null;
+    let setGridUserData = true;
+
+    if (kind === 'tree') mesh = makeVoxelTree(level);
+    else if (kind === 'rock') mesh = makeVoxelRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water');
+    else if (kind === 'bridge') mesh = makeVoxelBridge(getBridgeOrientation(x, z), level);
+    else if (kind === 'tuft' || kind === 'flower' || kind === 'bush' || kind === 'crop' || kind === 'corn' || kind === 'wheat' || kind === 'carrot' || kind === 'sunflower') mesh = makeVoxelCropKind(kind, level);
+    else if (kind === 'pumpkin') mesh = (level >= MAX_FLOORS && isCarriagePumpkin(x, z)) ? makeVoxelPumpkinCarriage() : makeVoxelCropKind('pumpkin', level);
+    else if (kind === 'cow' || kind === 'sheep') mesh = makeVoxelAnimal(kind);
+    else if (kind === 'fence') {
+      if (cell.terrain === 'path') {
+        const pn = getPathNeighbors(x, z);
+        const pathAxis = (pn.e || pn.w) ? 'x' : (pn.n || pn.s) ? 'z' : 'x';
+        mesh = makeVoxelFence(normalizeFenceSide(cell.fenceSide), level, false, true, pathAxis);
+      } else {
+        mesh = makeVoxelFence(normalizeFenceSide(cell.fenceSide), level, isCastleFence(x, z), false);
+      }
+    } else if (kind === 'house') {
+      const floors = cell.floors || 1;
+      const bType = cell.buildingType || null;
+      if (bType === 'skyscraper') {
+        mesh = makeVoxelSkyscraper(Math.max(floors, 4));
+      } else if (bType === 'manor') {
+        mesh = makeVoxelManor(floors);
+      } else if (bType === 'tower') {
+        mesh = makeVoxelTurret(Math.max(floors, 2), true, towerPaletteWithAppearance(getMergedBuildingPalette(x, z, 'tower'), cell.appearance));
+      } else if (bType === 'turret') {
+        mesh = makeVoxelTurret(floors, false);
+      } else {
+        const cluster = findHouseCluster(x, z);
+        if (!cluster.isAnchor) return { skip: true };
+        if (cluster.kind === 'turret') {
+          mesh = makeVoxelTurret(floors, false);
+        } else if (cluster.kind === 'solo') {
+          mesh = makeVoxelLinearHouse(1, 'z', floors);
+        } else if (cluster.kind === 'linear') {
+          mesh = makeVoxelLinearHouse(cluster.length, cluster.orientation, floors);
+          const a = tilePos(cluster.anchorX, cluster.anchorZ);
+          posX = a.x;
+          posZ = a.z;
+          if (cluster.orientation === 'x') posX += (cluster.length - 1) * TILE / 2;
+          else posZ += (cluster.length - 1) * TILE / 2;
+          setGridUserData = false;
+        } else if (cluster.kind === 'composite') {
+          mesh = makeVoxelCompositeHouse(cluster.topology, floors);
+          const t = cluster.topology;
+          posX = (t.bbox.xMin + t.bbox.xMax) / 2 - GRID / 2 + 0.5;
+          posZ = (t.bbox.zMin + t.bbox.zMax) / 2 - GRID / 2 + 0.5;
+          setGridUserData = false;
+        } else if (cluster.kind === 'square') {
+          mesh = makeVoxelSquareHouse(floors);
+          posX = (cluster.anchorX + 0.5) - GRID / 2 + 0.5;
+          posZ = (cluster.anchorZ + 0.5) - GRID / 2 + 0.5;
+          setGridUserData = false;
+        }
+      }
+    }
+
+    return mesh ? { mesh, posX, posZ, setGridUserData } : null;
   }
 
   function makeVehicleUpperShellGeometry(w, l, h, insetX, insetZ) {
@@ -10340,29 +10934,28 @@
     const cell = cells[x][z];
     const level = cell.floors || 1;
     let mesh = null;
-    if      (cell.kind === 'tree')      mesh = makeTree(level);
-    else if (cell.kind === 'rock')      mesh = makeRock(getGhostRockNeighbors(cells, x, z), level, x + 1000, z + 1000);
-    else if (cell.kind === 'bridge')    mesh = makeBridge(ghostBridgeOrientation(cells, x, z), cell.floors || 1);
-    else if (cell.kind === 'tuft')      mesh = makeTuft();
-    else if (cell.kind === 'flower')    mesh = makeFlower();
-    else if (cell.kind === 'bush')      mesh = makeBush();
-    else if (cell.kind === 'cow')       mesh = makeCow();
-    else if (cell.kind === 'sheep')     mesh = makeSheep();
-    else if (cell.kind === 'crop')      mesh = makeCrop();
-    else if (cell.kind === 'corn')      mesh = makeCorn();
-    else if (cell.kind === 'wheat')     mesh = makeWheat();
-    else if (cell.kind === 'pumpkin')   mesh = makePumpkin();
-    else if (cell.kind === 'carrot')    mesh = makeCarrot();
-    else if (cell.kind === 'sunflower') mesh = makeSunflower();
-    else if (cell.kind === 'fence')     mesh = makeFence(normalizeFenceSide(cell.fenceSide), level);
+    if      (cell.kind === 'tree')      mesh = makeVoxelTree(level);
+    else if (cell.kind === 'rock')      mesh = makeVoxelRock(getGhostRockNeighbors(cells, x, z), level, x + 1000, z + 1000);
+    else if (cell.kind === 'bridge')    mesh = makeVoxelBridge(ghostBridgeOrientation(cells, x, z), cell.floors || 1);
+    else if (cell.kind === 'tuft')      mesh = makeVoxelCropKind('tuft', level);
+    else if (cell.kind === 'flower')    mesh = makeVoxelCropKind('flower', level);
+    else if (cell.kind === 'bush')      mesh = makeVoxelCropKind('bush', level);
+    else if (cell.kind === 'cow')       mesh = makeVoxelAnimal('cow');
+    else if (cell.kind === 'sheep')     mesh = makeVoxelAnimal('sheep');
+    else if (cell.kind === 'crop')      mesh = makeVoxelCropKind('crop', level);
+    else if (cell.kind === 'corn')      mesh = makeVoxelCropKind('corn', level);
+    else if (cell.kind === 'wheat')     mesh = makeVoxelCropKind('wheat', level);
+    else if (cell.kind === 'pumpkin')   mesh = makeVoxelCropKind('pumpkin', level);
+    else if (cell.kind === 'carrot')    mesh = makeVoxelCropKind('carrot', level);
+    else if (cell.kind === 'sunflower') mesh = makeVoxelCropKind('sunflower', level);
+    else if (cell.kind === 'fence')     mesh = makeVoxelFence(normalizeFenceSide(cell.fenceSide), level);
     else if (cell.kind === 'house') {
-      if (cell.buildingType === 'manor') mesh = makeManor(level);
-      else if (cell.buildingType === 'tower') mesh = makeStoneTower(Math.max(level, 2));
-      else if (cell.buildingType === 'turret') mesh = makeTurret(level);
-      else if (cell.buildingType === 'skyscraper') mesh = makeSkyscraper(Math.max(level, 4));
-      else mesh = makeHouse(level);
+      if (cell.buildingType === 'manor') mesh = makeVoxelManor(level);
+      else if (cell.buildingType === 'tower') mesh = makeVoxelTurret(Math.max(level, 2), true);
+      else if (cell.buildingType === 'turret') mesh = makeVoxelTurret(level, false);
+      else if (cell.buildingType === 'skyscraper') mesh = makeVoxelSkyscraper(Math.max(level, 4));
+      else mesh = makeVoxelLinearHouse(1, 'z', level);
     }
-    if (mesh && cell.kind !== 'house' && cell.kind !== 'fence' && cell.kind !== 'rock') addEnhancementBits(mesh, cell.kind, level);
     return mesh;
   }
 
@@ -11875,7 +12468,14 @@
     let posX = null, posZ = null;
     let setGridUserData = true;
 
-    if      (kind === 'tree')      mesh = makeTree(level);
+    const voxelRender = makeVoxelRenderForCell(kind, x, z, cell, level);
+    if (voxelRender && voxelRender.skip) return;
+    if (voxelRender) {
+      mesh = voxelRender.mesh;
+      posX = voxelRender.posX;
+      posZ = voxelRender.posZ;
+      setGridUserData = voxelRender.setGridUserData !== false;
+    } else if (kind === 'tree')      mesh = makeTree(level);
     else if (kind === 'rock')      mesh = makeRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water');
     else if (kind === 'bridge')    mesh = makeBridge(getBridgeOrientation(x, z), level);
     else if (kind === 'tuft')      mesh = makeTuft();
@@ -11958,7 +12558,7 @@
     } else return;
 
     if (!mesh) return;
-    if (kind !== 'house' && kind !== 'fence' && kind !== 'rock') addEnhancementBits(mesh, kind, level);
+    if (!voxelRender && kind !== 'house' && kind !== 'fence' && kind !== 'rock') addEnhancementBits(mesh, kind, level);
     if (posX === null) {
       const p = tilePos(x, z);
       posX = p.x; posZ = p.z;
@@ -12022,8 +12622,8 @@
     const objectY = TOP_H + terrainRiseAt(x, z);
     cell.extras.forEach((ex, i) => {
       let mesh = null;
-      if (ex.kind === 'tuft') mesh = makeTuft();
-      else if (ex.kind === 'fence') mesh = makeFence(normalizeFenceSide(ex.fenceSide), ex.floors || 1);
+      if (ex.kind === 'tuft') mesh = makeVoxelCropKind('tuft', ex.floors || 1);
+      else if (ex.kind === 'fence') mesh = makeVoxelFence(normalizeFenceSide(ex.fenceSide), ex.floors || 1, false, false);
       if (!mesh) return;
       // Smaller, corner-offset extras so they sit alongside the main
       // kind without overlapping its silhouette.
@@ -13083,25 +13683,29 @@
   function makeThumbObject(tool) {
     const k = tool.kind;
     if (!k) return null;
-    if (k === 'tree')      return makeTree();
-    if (k === 'rock')      return makeRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
-    if (k === 'bridge')    return makeBridge('x');
-    if (k === 'tuft')      return makeTuft();
-    if (k === 'crop')      return makeCrop();
-    if (k === 'corn')      return makeCorn();
-    if (k === 'wheat')     return makeWheat();
-    if (k === 'pumpkin')   return makePumpkin();
-    if (k === 'carrot')    return makeCarrot();
-    if (k === 'sunflower') return makeSunflower();
-    if (k === 'fence')     return makeFence('n', 1);
+    if (k === 'tree')      return makeVoxelTree();
+    if (k === 'rock')      return makeVoxelRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
+    if (k === 'bridge')    return makeVoxelBridge('x');
+    if (k === 'tuft')      return makeVoxelCropKind('tuft');
+    if (k === 'crop')      return makeVoxelCropKind('crop');
+    if (k === 'corn')      return makeVoxelCropKind('corn');
+    if (k === 'wheat')     return makeVoxelCropKind('wheat');
+    if (k === 'pumpkin')   return makeVoxelCropKind('pumpkin');
+    if (k === 'carrot')    return makeVoxelCropKind('carrot');
+    if (k === 'sunflower') return makeVoxelCropKind('sunflower');
+    if (k === 'flower')    return makeVoxelCropKind('flower');
+    if (k === 'bush')      return makeVoxelCropKind('bush');
+    if (k === 'cow')       return makeVoxelAnimal('cow');
+    if (k === 'sheep')     return makeVoxelAnimal('sheep');
+    if (k === 'fence')     return makeVoxelFence('n', 1);
     if (k === 'house') {
       const v = tool.activeVariant;
       const bType = v && v.buildingType;
-      if (bType === 'manor')      return makeManor(2);
-      if (bType === 'tower')      return makeStoneTower(2);
-      if (bType === 'turret')     return makeTurret(2);
-      if (bType === 'skyscraper') return makeSkyscraper(4);
-      return makeHouse(2);
+      if (bType === 'manor')      return makeVoxelManor(2);
+      if (bType === 'tower')      return makeVoxelTurret(2, true);
+      if (bType === 'turret')     return makeVoxelTurret(2, false);
+      if (bType === 'skyscraper') return makeVoxelSkyscraper(4);
+      return makeVoxelLinearHouse(1, 'z', 2);
     }
     return null;
   }
@@ -13134,9 +13738,6 @@
 
     const obj = makeThumbObject(tool);
     if (obj) {
-      if (tool.kind && tool.kind !== 'house' && tool.kind !== 'fence' && tool.kind !== 'rock') {
-        addEnhancementBits(obj, tool.kind, 1);
-      }
       obj.position.y = TOP_H;
       scene.add(obj);
     }
@@ -13259,6 +13860,119 @@
     old.scene.traverse(o => safeDisposeGeometry(o.geometry));
     thumbScenes.delete(toolId);
     buildToolThumb(tool, old.canvas);
+  }
+
+  let voxelStampRefreshTimer = 0;
+  function rebuildVoxelStampRender() {
+    for (const key in cellMeshes) {
+      const parts = key.split(',');
+      const x = parseInt(parts[0], 10);
+      const z = parseInt(parts[1], 10);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+      renderCellObject(x, z, { animate: false, impactDust: false });
+      renderCellExtras(x, z);
+    }
+    if (typeof rebuildExistingGhostBoards === 'function') rebuildExistingGhostBoards();
+    for (const id of Array.from(thumbScenes.keys())) refreshToolThumb(id);
+    if (typeof renderStampBuilderCards === 'function') renderStampBuilderCards();
+  }
+
+  function scheduleVoxelStampRefresh() {
+    if (voxelStampRefreshTimer) clearTimeout(voxelStampRefreshTimer);
+    voxelStampRefreshTimer = setTimeout(() => {
+      voxelStampRefreshTimer = 0;
+      rebuildVoxelStampRender();
+    }, 80);
+  }
+
+  function stampBuilderTools() {
+    const ids = ['house', 'tree', 'rock', 'bridge', 'fence', 'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'flower', 'bush', 'cow', 'sheep'];
+    const tools = [];
+    for (const id of ids) {
+      const tool = TOOLS.find(t => t.id === id);
+      if (!tool) continue;
+      if (tool.variants && tool.variants.length) {
+        for (const variant of tool.variants) {
+          tools.push(Object.assign({}, tool, {
+            id: tool.id + ':' + variant.id,
+            label: variant.label,
+            activeVariant: variant,
+            baseTool: tool,
+          }));
+        }
+      } else {
+        tools.push(tool);
+      }
+    }
+    return tools;
+  }
+
+  function renderStampBuilderThumb(tool, canvas) {
+    ensureThumbRenderer();
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.32));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb39879, 0.46));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.14);
+    sun.position.set(3, 6, 2);
+    scene.add(sun);
+    const tile = makeTile(thumbTerrainFor(tool), { path: {}, terrain: {} }, 0, 0, 1);
+    scene.add(tile);
+    const obj = makeThumbObject(tool);
+    if (obj) {
+      obj.position.y = TOP_H;
+      scene.add(obj);
+    }
+    scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    const cam = new THREE.OrthographicCamera(-1.45, 1.45, 1.85, -0.95, 0.1, 30);
+    cam.position.set(Math.cos(THUMB_BASE_ANGLE) * 3.4, 2.9, Math.sin(THUMB_BASE_ANGLE) * 3.4);
+    cam.lookAt(0, 0.55, 0);
+    thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
+    thumbRenderer.render(scene, cam);
+    const dpr = thumbRenderer.getPixelRatio();
+    canvas.width = THUMB_SIZE * dpr;
+    canvas.height = THUMB_SIZE * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(thumbRenderer.domElement, 0, 0, canvas.width, canvas.height);
+    scene.traverse(o => safeDisposeGeometry(o.geometry));
+  }
+
+  function renderStampBuilderCards() {
+    const grid = document.getElementById('stamp-builder-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (const tool of stampBuilderTools()) {
+      const card = document.createElement('div');
+      card.className = 'stamp-card';
+      const canvas = document.createElement('canvas');
+      const title = document.createElement('strong');
+      title.textContent = tool.label;
+      const actions = document.createElement('div');
+      actions.className = 'stamp-actions';
+      const useBtn = document.createElement('button');
+      useBtn.className = 'btn';
+      useBtn.type = 'button';
+      useBtn.textContent = 'Use';
+      useBtn.addEventListener('click', () => {
+        const realTool = tool.baseTool || tool;
+        if (tool.baseTool && tool.activeVariant) realTool.activeVariant = tool.activeVariant;
+        selectTool(realTool);
+        const status = document.getElementById('stamp-builder-status');
+        if (status) status.textContent = 'Selected ' + tool.label;
+      });
+      const refreshBtn = document.createElement('button');
+      refreshBtn.className = 'btn';
+      refreshBtn.type = 'button';
+      refreshBtn.textContent = 'Refresh';
+      refreshBtn.addEventListener('click', () => {
+        renderStampBuilderThumb(tool, canvas);
+        if (tool.baseTool && typeof refreshToolThumb === 'function') refreshToolThumb(tool.baseTool.id);
+      });
+      actions.append(useBtn, refreshBtn);
+      card.append(canvas, title, actions);
+      grid.appendChild(card);
+      renderStampBuilderThumb(tool, canvas);
+    }
   }
 
   function toolbarIconSvg(id) {
@@ -14900,6 +15614,7 @@
     const ghostOpacityEl = document.getElementById('render-ghost-opacity');
     const floorOpacityEl = document.getElementById('render-floor-opacity');
     const objectOpacityEl = document.getElementById('render-object-opacity');
+    const voxelGapEl = document.getElementById('render-voxel-gap');
     const resolutionValue = document.getElementById('render-resolution-value');
     const distanceValue = document.getElementById('render-distance-value');
     const visibleSizeValue = document.getElementById('render-visible-size-value');
@@ -14922,6 +15637,7 @@
     const ghostOpacityValue = document.getElementById('render-ghost-opacity-value');
     const floorOpacityValue = document.getElementById('render-floor-opacity-value');
     const objectOpacityValue = document.getElementById('render-object-opacity-value');
+    const voxelGapValue = document.getElementById('render-voxel-gap-value');
     const settingsTabs = Array.from(modal.querySelectorAll('[data-settings-tab]'));
     const settingsPanels = Array.from(modal.querySelectorAll('[data-settings-panel]'));
 
@@ -14960,6 +15676,7 @@
       ghostOpacityEl.value = String(Math.round(renderGhostOpacity * 100));
       floorOpacityEl.value = String(Math.round(renderFloorOpacity * 100));
       objectOpacityEl.value = String(Math.round(renderObjectOpacity * 100));
+      voxelGapEl.value = String(Math.round(renderVoxelGap * 100));
       resolutionValue.textContent = resolutionEl.value + '%';
       distanceValue.textContent = distanceEl.value;
       visibleSizeValue.textContent = visibleSizeEl.value + 'x' + visibleSizeEl.value;
@@ -14982,6 +15699,7 @@
       ghostOpacityValue.textContent = ghostOpacityEl.value + '%';
       floorOpacityValue.textContent = floorOpacityEl.value + '%';
       objectOpacityValue.textContent = objectOpacityEl.value + '%';
+      voxelGapValue.textContent = (parseInt(voxelGapEl.value, 10) / 100).toFixed(2);
       status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · preview ' + renderVisibleDistance + ' / ' + renderVisibleSize + 'x' + renderVisibleSize + ' · atmosphere ' + distanceMistEl.value + '%';
     }
 
@@ -15009,9 +15727,11 @@
       localStorage.setItem(RENDER_LS.ghostOpacity, renderGhostOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.floorOpacity, renderFloorOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.objectOpacity, renderObjectOpacity.toFixed(2));
+      localStorage.setItem(RENDER_LS.voxelGap, renderVoxelGap.toFixed(2));
     }
 
     function applyFromControls() {
+      const oldVoxelGap = renderVoxelGap;
       setShadowQuality(shadowEl.value);
       setRenderResolutionScale(parseInt(resolutionEl.value, 10) / 100);
       setRenderVisibleDistance(parseInt(distanceEl.value, 10));
@@ -15042,6 +15762,8 @@
       renderGhostOpacity = parseInt(ghostOpacityEl.value, 10) / 100;
       renderFloorOpacity = parseInt(floorOpacityEl.value, 10) / 100;
       renderObjectOpacity = parseInt(objectOpacityEl.value, 10) / 100;
+      renderVoxelGap = parseInt(voxelGapEl.value, 10) / 100;
+      if (Math.abs(oldVoxelGap - renderVoxelGap) > 0.001) scheduleVoxelStampRefresh();
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();
@@ -15078,7 +15800,7 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
@@ -15120,6 +15842,8 @@
       renderGhostOpacity = 1;
       renderFloorOpacity = 1;
       renderObjectOpacity = 1;
+      renderVoxelGap = 0;
+      scheduleVoxelStampRefresh();
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();
@@ -15127,6 +15851,30 @@
     });
     syncControls();
     applyColorFilterFallback();
+  })();
+
+  (function setupStampBuilder() {
+    const modal = document.getElementById('stamp-builder-modal');
+    const openBtn = document.getElementById('stamp-builder');
+    const closeBtn = document.getElementById('stamp-builder-close');
+    const rebuildBtn = document.getElementById('stamp-builder-rebuild');
+    const status = document.getElementById('stamp-builder-status');
+    if (!modal || !openBtn || !closeBtn) return;
+    function open() {
+      renderStampBuilderCards();
+      if (status) status.textContent = 'Voxel stamps loaded';
+      openTinyModal(modal, closeBtn);
+    }
+    function close() { closeTinyModal(modal); }
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    if (rebuildBtn) {
+      rebuildBtn.addEventListener('click', () => {
+        rebuildVoxelStampRender();
+        if (status) status.textContent = 'Stamps refreshed';
+      });
+    }
   })();
 
   // -------- audio --------
