@@ -5117,6 +5117,7 @@
   const M = {
     grass:     new THREE.MeshLambertMaterial({ color: 0xb0d949, side: THREE.FrontSide }),
     grassEdge: new THREE.MeshLambertMaterial({ color: 0x95c138, side: THREE.FrontSide }),
+    grassHi:   new THREE.MeshLambertMaterial({ color: 0xc6ee68, side: THREE.FrontSide }),
     dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
     dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
     path:      new THREE.MeshLambertMaterial({ color: 0xf2d29c, side: THREE.FrontSide }),
@@ -5522,11 +5523,44 @@
       if (terrain === 'snow')  topMat = M.snow;
 
       // Clean physical slab: flat top surface, vertical cap thickness, no
-      // chamfered per-tile bevels. This keeps the "settled" terrain smooth
-      // while preserving actual depth/substance at exposed edges.
+      // chamfered per-tile bevels. This keeps the settled terrain smooth.
       const top = new THREE.Mesh(getBoxGeometry(topSize, TOP_H, topSize), topMat);
       top.position.y = rise + TOP_H * 0.5;
       g.add(top);
+
+      // Add a tiny bevel-like highlight only on the exposed outer cap edges.
+      // This recreates the old softened slab edge/corner read without putting
+      // diagonal bevel triangles across every tile top.
+      const bevelMat = terrain === 'grass' ? M.grassHi : topMat;
+      const bw = 0.045;
+      const bh = 0.020;
+      const bevelY = topY + 0.002;
+      function addCapBevel(dir) {
+        const alongX = dir === 'n' || dir === 's';
+        const geo = alongX
+          ? getBoxGeometry(topSize - bw * 1.5, bh, bw)
+          : getBoxGeometry(bw, bh, topSize - bw * 1.5);
+        const b = new THREE.Mesh(geo, bevelMat);
+        const off = topSize * 0.5 - bw * 0.5;
+        if (dir === 'n') b.position.set(0, bevelY, -off);
+        if (dir === 's') b.position.set(0, bevelY,  off);
+        if (dir === 'w') b.position.set(-off, bevelY, 0);
+        if (dir === 'e') b.position.set( off, bevelY, 0);
+        g.add(b);
+      }
+      function addCapCorner(xSign, zSign) {
+        const c = new THREE.Mesh(getBoxGeometry(bw, bh, bw), bevelMat);
+        c.position.set(xSign * (topSize * 0.5 - bw * 0.5), bevelY, zSign * (topSize * 0.5 - bw * 0.5));
+        g.add(c);
+      }
+      if (!skipN) addCapBevel('n');
+      if (!skipS) addCapBevel('s');
+      if (!skipW) addCapBevel('w');
+      if (!skipE) addCapBevel('e');
+      if (!skipN && !skipW) addCapCorner(-1, -1);
+      if (!skipN && !skipE) addCapCorner( 1, -1);
+      if (!skipS && !skipW) addCapCorner(-1,  1);
+      if (!skipS && !skipE) addCapCorner( 1,  1);
     }
 
     // Keep terrain surfaces as single clean slabs. Previous decorative

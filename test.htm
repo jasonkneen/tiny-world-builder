@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Three.js Low Poly Environment Props</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #f3eadc; }
+  canvas { display: block; }
+  .editor-panel {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 10;
+    width: 280px;
+    padding: 12px;
+    border: 1px solid rgba(32, 32, 32, 0.16);
+    border-radius: 8px;
+    background: rgba(250, 246, 237, 0.92);
+    box-shadow: 0 12px 30px rgba(40, 28, 12, 0.18);
+    color: #202020;
+    font: 13px/1.35 Arial, sans-serif;
+    backdrop-filter: blur(10px);
+  }
+  .editor-panel h1 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .editor-status {
+    min-height: 34px;
+    margin: 0 0 10px;
+    color: #3d362c;
+  }
+  .editor-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .editor-panel button {
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid rgba(32, 32, 32, 0.18);
+    border-radius: 6px;
+    background: #fffaf0;
+    color: #202020;
+    font: inherit;
+    cursor: pointer;
+  }
+  .editor-panel button[aria-pressed="true"] {
+    background: #202020;
+    color: #fffaf0;
+  }
+  .editor-panel button:disabled,
+  .editor-panel input:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .editor-grid {
+    display: grid;
+    grid-template-columns: 70px repeat(3, 1fr);
+    gap: 6px;
+    align-items: center;
+  }
+  .editor-grid strong {
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .editor-grid span {
+    color: #5c5143;
+    font-size: 12px;
+  }
+  .editor-grid input {
+    min-width: 0;
+    height: 28px;
+    box-sizing: border-box;
+    border: 1px solid rgba(32, 32, 32, 0.14);
+    border-radius: 5px;
+    background: #fffdf7;
+    color: #202020;
+    font: 12px Arial, sans-serif;
+    padding: 0 5px;
+  }
+  .editor-hint {
+    margin: 10px 0 0;
+    color: #6f6251;
+    font-size: 12px;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div class="editor-panel" id="editorPanel">
+  <h1>Asset Editor</h1>
+  <p class="editor-status" id="editorStatus">Click an object to select it.</p>
+  <div class="editor-actions">
+    <button type="button" id="editButton" disabled>Edit</button>
+    <button type="button" id="resetButton" disabled>Reset part</button>
+  </div>
+  <div class="editor-grid" id="editorControls">
+    <span></span><strong>X</strong><strong>Y</strong><strong>Z</strong>
+    <strong>Size</strong>
+    <input id="sizeX" type="number" step="0.05" min="0.02" disabled />
+    <input id="sizeY" type="number" step="0.05" min="0.02" disabled />
+    <input id="sizeZ" type="number" step="0.05" min="0.02" disabled />
+    <strong>Position</strong>
+    <input id="posX" type="number" step="0.05" disabled />
+    <input id="posY" type="number" step="0.05" disabled />
+    <input id="posZ" type="number" step="0.05" disabled />
+  </div>
+  <p class="editor-hint">Select an object, press Edit, then click a part.</p>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf3eadc);
+scene.fog = new THREE.Fog(0xf3eadc, 65, 150);
+
+const camera = new THREE.PerspectiveCamera(28, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(28, 34, 76);
+camera.lookAt(0, 1, 22);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 1, 22);
+controls.minDistance = 8;
+controls.maxDistance = 160;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0xc9b58c, 1.35);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff2d8, 2.25);
+sun.position.set(8, 14, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -54;
+sun.shadow.camera.right = 54;
+sun.shadow.camera.top = 54;
+sun.shadow.camera.bottom = -54;
+sun.shadow.camera.far = 110;
+scene.add(sun);
+
+const M = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0, flatShading: true, ...opts });
+const mats = {
+  grass: M(0x9fe34d), grass2: M(0x7fc33b), grass3: M(0xb7f466),
+  trunk: M(0x8a5526), trunkDark: M(0x6b3f1e),
+  stone: M(0xbec0c2), stoneDark: M(0x888d91),
+  wood: M(0x9a5d28), woodLight: M(0xb77735), woodDark: M(0x6f3d17),
+  reed: M(0xf2c94c), stem: M(0x4c9d32),
+  mushroom: M(0xf4a12d), mushroomStem: M(0xc88b39),
+  flower: M(0xffd642), flowerCenter: M(0x4a2d14),
+  tileDirt: M(0x9a6638), tileDirtDark: M(0x754828), water: M(0x64c7df), waterDark: M(0x3ca7c5),
+  plaster: M(0xf3efe3), plasterDark: M(0xd6d0c1), tileGray: M(0xcac8c1), tileEdge: M(0x787d82),
+  sand: M(0xf3dc93), sandDark: M(0xd6b96a),
+  blueRoof: M(0x58a8eb), blueRoofDark: M(0x2f6fae),
+  white: M(0xf7f3e8), cream: M(0xf6e6c0), black: M(0x252422),
+  pink: M(0xf4a3a9), pinkDark: M(0xd87982), yellow: M(0xf5c63d),
+  orange: M(0xf28b22), orangeDark: M(0xc76018),
+  brown: M(0x8a5a31), brownDark: M(0x4e2e1f),
+  tan: M(0xc18a4a), tanLight: M(0xe0bf79),
+  gray: M(0x9b9b9b), grayDark: M(0x5d5f61),
+  turtle: M(0x5b7f2e), frog: M(0x76b947), blue: M(0x3995c4),
+  shadow: M(0x342718, { transparent: true, opacity: 0.12 })
+};
+
+const root = new THREE.Group();
+scene.add(root);
+
+function tagPart(mesh, type, width, height, depth) {
+  mesh.userData.editorPart = {
+    type,
+    width,
+    height,
+    depth,
+    initialScale: mesh.scale.clone(),
+    initialPosition: mesh.position.clone()
+  };
+  return mesh;
+}
+function add(mesh, parent = root) {
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+function bevelRadius(w, h, d, ratio = 0.14, cap = 0.12) {
+  return Math.max(0.012, Math.min(w, h, d) * ratio, Math.min(Math.min(w, h, d) * 0.48, cap));
+}
+function roundedBoxGeometry(w, h, d, radius = bevelRadius(w, h, d), segments = 2) {
+  return new RoundedBoxGeometry(w, h, d, segments, radius);
+}
+function boxGeometryFor(parent, w, h, d, radius) {
+  if (parent && parent.userData && (parent.userData.blockyAnimal || parent.userData.blockyBuilding)) {
+    return new THREE.BoxGeometry(w, h, d);
+  }
+  return roundedBoxGeometry(w, h, d, radius);
+}
+function triangularPrismGeometry(w, h, d) {
+  const x = w * 0.5;
+  const y = h;
+  const z = d * 0.5;
+  const vertices = new Float32Array([
+    -x, 0, -z, x, 0, -z, 0, y, -z,
+    -x, 0, z, 0, y, z, x, 0, z,
+    -x, 0, -z, -x, 0, z, x, 0, z,
+    -x, 0, -z, x, 0, z, x, 0, -z,
+    -x, 0, -z, 0, y, -z, 0, y, z,
+    -x, 0, -z, 0, y, z, -x, 0, z,
+    x, 0, -z, x, 0, z, 0, y, z,
+    x, 0, -z, 0, y, z, 0, y, -z,
+    0, y, -z, x, 0, -z, x, 0, z,
+    0, y, -z, x, 0, z, 0, y, z
+  ]);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+function box(w, h, d, material, x, y, z, parent = root, radius = bevelRadius(w, h, d)) {
+  const mesh = new THREE.Mesh(boxGeometryFor(parent, w, h, d, radius), material);
+  mesh.position.set(x, y, z);
+  return tagPart(add(mesh, parent), 'box', w, h, d);
+}
+function roof(w, h, d, material, x, y, z, parent = root) {
+  const mesh = new THREE.Mesh(triangularPrismGeometry(w, h, d), material);
+  mesh.position.set(x, y, z);
+  return tagPart(add(mesh, parent), 'roof', w, h, d);
+}
+function cyl(rt, rb, h, seg, material, x, y, z, parent = root) {
+  const isSquarePost = seg <= 4;
+  const postWidth = Math.max(rt, rb) * 2;
+  const geometry = isSquarePost
+    ? roundedBoxGeometry(postWidth, h, postWidth, bevelRadius(postWidth, h, postWidth, 0.16, 0.05), 2)
+    : new THREE.CylinderGeometry(rt, rb, h, seg);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(x, y, z);
+  return tagPart(add(mesh, parent), isSquarePost ? 'post' : 'cylinder', postWidth, h, postWidth);
+}
+function cone(r, h, seg, material, x, y, z, parent = root) {
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), material);
+  mesh.position.set(x, y, z);
+  return tagPart(add(mesh, parent), 'cone', r * 2, h, r * 2);
+}
+function sphere(r, material, x, y, z, parent = root, scale = [1,1,1]) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), material);
+  mesh.position.set(x, y, z);
+  mesh.scale.set(scale[0], scale[1], scale[2]);
+  return tagPart(add(mesh, parent), 'sphere', r * 2, r * 2, r * 2);
+}
+function makeGroup(x, z, s = 1) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.scale.setScalar(s);
+  root.add(g);
+  return g;
+}
+function label(text, x, z, y = 0.12, scale = 0.42) {
+  const group = root.children.find((child) => child.isGroup && Math.abs(child.position.x - x) < 0.04 && Math.abs(child.position.z - z) < 0.04);
+  if (group) group.userData.editorName = text;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = '700 42px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = 'rgba(243, 234, 220, 0.95)';
+  ctx.strokeText(text, 256, 64);
+  ctx.fillStyle = '#202020';
+  ctx.fillText(text, 256, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.position.set(x, y, z + 1.02);
+  sprite.scale.set(2.0 * scale, 0.5 * scale, 1);
+  root.add(sprite);
+  return sprite;
+}
+function labelRow(names, xs, z, scale = 0.34) {
+  names.forEach((name, i) => label(name, xs[i], z, 0.12, scale));
+}
+
+// Tree variants.
+function cubeTree(x, z, scale = 1, levels = 2) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.18, 0.22, 1.35, 4, mats.trunk, 0, 0.68, 0, g).rotation.y = Math.PI / 4;
+  box(1.15, 0.75, 1.15, mats.grass2, 0, 1.45, 0, g);
+  if (levels >= 2) box(0.82, 0.55, 0.82, mats.grass, 0, 2.1, 0, g);
+  if (levels >= 3) box(0.52, 0.38, 0.52, mats.grass3, 0, 2.58, 0, g);
+  return g;
+}
+function cubeTreeWithTopiary(x, z) {
+  const g = cubeTree(x, z, 1, 1);
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    box(0.28, 0.28, 0.28, mats.grass, Math.cos(a) * 0.24, 2.07 + (i % 2) * 0.16, Math.sin(a) * 0.24, g);
+  }
+  box(0.36, 0.36, 0.36, mats.grass3, 0, 2.38, 0, g);
+  box(0.78, 0.1, 0.78, mats.stone, 0, 0.05, 0, g);
+}
+function pineTree(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.16, 0.2, 1.0, 4, mats.trunk, 0, 0.5, 0, g).rotation.y = Math.PI / 4;
+  const c1 = cone(0.9, 0.9, 4, mats.grass2, 0, 1.15, 0, g); c1.rotation.y = Math.PI / 4;
+  const c2 = cone(0.68, 0.8, 4, mats.grass, 0, 1.75, 0, g); c2.rotation.y = Math.PI / 4;
+  const c3 = cone(0.45, 0.72, 4, mats.grass3, 0, 2.3, 0, g); c3.rotation.y = Math.PI / 4;
+}
+function roundTree(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.14, 0.18, 0.95, 6, mats.trunk, 0, 0.47, 0, g);
+  sphere(0.62, mats.grass2, 0, 1.18, 0, g, [1, 0.9, 1]);
+}
+function slimTree(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.13, 0.16, 1.45, 4, mats.trunk, 0, 0.72, 0, g).rotation.y = Math.PI / 4;
+  box(0.62, 0.8, 0.62, mats.grass, 0, 1.62, 0, g);
+  box(0.48, 0.42, 0.48, mats.grass3, 0, 2.2, 0, g);
+}
+
+// Rocks.
+function rockCluster(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  sphere(0.48, mats.stone, -0.18, 0.35, 0, g, [1.2, 0.7, 0.95]);
+  sphere(0.36, mats.stoneDark, 0.38, 0.32, 0.05, g, [1.0, 0.72, 0.85]);
+  sphere(0.15, mats.stone, 0.22, 0.12, 0.55, g, [1.2, 0.55, 0.8]);
+}
+
+// Bushes.
+function bush(x, z, scale = 1, clustered = false) {
+  const g = makeGroup(x, z, scale);
+  if (clustered) {
+    sphere(0.34, mats.grass2, -0.28, 0.32, 0, g, [1, 0.75, 1]);
+    sphere(0.38, mats.grass, 0.05, 0.38, 0.05, g, [1, 0.75, 1]);
+    sphere(0.28, mats.grass3, 0.36, 0.28, 0.08, g, [1, 0.7, 1]);
+  } else {
+    box(0.72, 0.52, 0.72, mats.grass, 0, 0.28, 0, g);
+    box(0.44, 0.34, 0.44, mats.grass3, 0, 0.72, 0, g);
+  }
+}
+
+// Fence pieces.
+function fenceSegment(x, z, rot = 0, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  g.rotation.y = rot;
+  box(0.16, 0.78, 0.16, mats.wood, -0.65, 0.39, 0, g);
+  box(0.16, 0.78, 0.16, mats.wood, 0.65, 0.39, 0, g);
+  box(1.45, 0.14, 0.12, mats.woodLight, 0, 0.28, 0, g);
+  box(1.45, 0.14, 0.12, mats.woodLight, 0, 0.58, 0, g);
+}
+function fenceCorner(x, z) {
+  fenceSegment(x, z, 0, 1);
+  fenceSegment(x + 0.65, z - 0.65, Math.PI / 2, 1);
+}
+
+// Reeds / wheat.
+function reed(x, z, height = 1, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.035, 0.04, 0.95 * height, 6, mats.stem, 0, 0.48 * height, 0, g);
+  cyl(0.11, 0.11, 0.62, 8, mats.reed, 0, 1.08 * height, 0, g);
+  box(0.12, 0.12, 0.12, mats.reed, 0, 1.42 * height, 0, g);
+}
+function reedPatch(x, z, count = 6) {
+  const g = makeGroup(x, z, 1);
+  for (let i = 0; i < count; i++) {
+    const px = (i % 4) * 0.36 - 0.54;
+    const pz = Math.floor(i / 4) * 0.42 - 0.18;
+    const r = new THREE.Group();
+    r.position.set(px, 0, pz);
+    g.add(r);
+    cyl(0.03, 0.035, 0.85 + (i % 3) * 0.22, 6, mats.stem, 0, 0.45, 0, r);
+    cyl(0.1, 0.1, 0.52, 8, mats.reed, 0, 1.0 + (i % 3) * 0.18, 0, r);
+  }
+}
+
+// Mushrooms and flowers.
+function mushroom(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.12, 0.18, 0.42, 8, mats.mushroomStem, 0, 0.22, 0, g);
+  sphere(0.48, mats.mushroom, 0, 0.55, 0, g, [1.15, 0.5, 1.05]);
+}
+function sunflower(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  cyl(0.035, 0.04, 1.1, 8, mats.stem, 0, 0.55, 0, g);
+  cyl(0.22, 0.22, 0.08, 12, mats.flower, 0, 1.17, 0, g).rotation.x = Math.PI / 2;
+  cyl(0.09, 0.09, 0.1, 12, mats.flowerCenter, 0, 1.18, 0, g).rotation.x = Math.PI / 2;
+}
+function tinySapling(x, z) {
+  const g = makeGroup(x, z, 1);
+  cyl(0.06, 0.08, 0.55, 5, mats.trunk, 0, 0.28, 0, g);
+  box(0.28, 0.28, 0.28, mats.grass, 0, 0.66, 0, g);
+  box(0.22, 0.22, 0.22, mats.grass3, 0.18, 0.5, 0.05, g);
+}
+
+// Cactus-like grasses.
+function grassClump(x, z) {
+  const g = makeGroup(x, z, 1);
+  for (let i = 0; i < 5; i++) {
+    const px = (i - 2) * 0.17;
+    cyl(0.035, 0.04, 0.45 + i * 0.08, 6, mats.stem, px, 0.25 + i * 0.04, Math.sin(i) * 0.14, g);
+    box(0.12, 0.16, 0.12, mats.grass, px, 0.55 + i * 0.05, Math.sin(i) * 0.14, g);
+  }
+}
+
+// Animal miniatures.
+function animalBase(x, z, water = false, scale = 0.82) {
+  const g = makeGroup(x, z, scale);
+  box(2.15, 0.26, 1.6, mats.tileDirt, 0, 0.13, 0, g, 0.08);
+  box(1.98, 0.16, 1.44, water ? mats.water : mats.grass, 0, 0.34, 0, g, 0.1);
+  if (water) {
+    box(0.7, 0.04, 0.34, mats.waterDark, -0.45, 0.45, 0.38, g, 0.04);
+    box(0.48, 0.04, 0.28, mats.waterDark, 0.52, 0.45, -0.34, g, 0.04);
+  } else {
+    grassClumpAt(g, -0.66, 0.44, 0.56);
+    box(0.24, 0.12, 0.18, mats.stone, 0.66, 0.46, 0.42, g, 0.04);
+  }
+  g.userData.blockyAnimal = true;
+  return g;
+}
+function grassClumpAt(parent, x, z, scale = 1) {
+  for (let i = 0; i < 3; i++) {
+    box(0.08 * scale, (0.22 + i * 0.06) * scale, 0.08 * scale, mats.grass2, x + i * 0.11 * scale, 0.48 + i * 0.03 * scale, z + Math.sin(i) * 0.05 * scale, parent, 0.02);
+  }
+}
+function eyePair(parent, x, y, z, dx = 0.12, mat = mats.black) {
+  box(0.055, 0.07, 0.035, mat, x - dx, y, z, parent, 0.01);
+  box(0.055, 0.07, 0.035, mat, x + dx, y, z, parent, 0.01);
+}
+function legPair(parent, x, z, mat, h = 0.55) {
+  box(0.15, h, 0.15, mat, x, 0.48 + h * 0.5, z, parent, 0.035);
+}
+function fourLegs(parent, mat, h = 0.48) {
+  legPair(parent, -0.38, -0.28, mat, h);
+  legPair(parent, 0.38, -0.28, mat, h);
+  legPair(parent, -0.38, 0.32, mat, h);
+  legPair(parent, 0.38, 0.32, mat, h);
+}
+function ear(parent, x, y, z, mat, tall = false) {
+  const e = box(tall ? 0.12 : 0.16, tall ? 0.52 : 0.26, 0.1, mat, x, y, z, parent, 0.025);
+  e.rotation.x = tall ? -0.18 : 0;
+  return e;
+}
+function tail(parent, x, y, z, mat, long = false) {
+  const t = box(long ? 0.16 : 0.12, long ? 0.22 : 0.14, long ? 0.55 : 0.32, mat, x, y, z, parent, 0.035);
+  t.rotation.x = long ? -0.58 : -0.32;
+  return t;
+}
+function stripe(parent, x, y, z, mat, vertical = true) {
+  box(vertical ? 0.07 : 0.36, vertical ? 0.38 : 0.07, 0.045, mat, x, y, z, parent, 0.01);
+}
+function spot(parent, x, y, z, mat) {
+  box(0.24, 0.2, 0.05, mat, x, y, z, parent, 0.04);
+}
+function quadruped(x, z, cfg) {
+  const g = animalBase(x, z, false, cfg.scale || 0.82);
+  box(cfg.bodyW || 0.64, cfg.bodyH || 0.55, cfg.bodyD || 0.95, cfg.body, 0, 0.98, 0.02, g, 0.1);
+  box(cfg.headW || 0.42, cfg.headH || 0.42, cfg.headD || 0.42, cfg.head || cfg.body, 0, 1.08, -0.48, g, 0.08);
+  if (cfg.snout) box(0.28, 0.18, 0.18, cfg.snout, 0, 1.02, -0.76, g, 0.04);
+  eyePair(g, 0, 1.14, -0.7, cfg.eyeDx || 0.11);
+  fourLegs(g, cfg.leg || cfg.body, cfg.legH || 0.5);
+  if (cfg.ears !== false) {
+    ear(g, -0.17, cfg.tallEars ? 1.43 : 1.34, -0.48, cfg.ear || cfg.head || cfg.body, cfg.tallEars);
+    ear(g, 0.17, cfg.tallEars ? 1.43 : 1.34, -0.48, cfg.ear || cfg.head || cfg.body, cfg.tallEars);
+  }
+  if (cfg.tail !== false) tail(g, 0, 1.02, 0.5, cfg.tailMat || cfg.body, cfg.longTail);
+  if (cfg.mane) box(0.13, 0.5, 0.16, cfg.mane, 0, 1.18, -0.1, g, 0.02);
+  if (cfg.horns) {
+    const h1 = box(0.08, 0.32, 0.08, cfg.horns, -0.16, 1.52, -0.5, g, 0.018);
+    const h2 = box(0.08, 0.32, 0.08, cfg.horns, 0.16, 1.52, -0.5, g, 0.018);
+    h1.rotation.z = -0.24;
+    h2.rotation.z = 0.24;
+  }
+  return g;
+}
+function chicken(x, z) {
+  const g = animalBase(x, z, false, 0.82);
+  box(0.48, 0.48, 0.52, mats.white, 0, 0.95, 0, g, 0.09);
+  box(0.32, 0.34, 0.32, mats.white, 0, 1.31, -0.3, g, 0.07);
+  box(0.18, 0.12, 0.18, mats.yellow, 0, 1.28, -0.53, g, 0.025);
+  box(0.2, 0.22, 0.12, mats.pinkDark, 0, 1.55, -0.3, g, 0.025);
+  box(0.16, 0.32, 0.12, mats.yellow, -0.13, 0.63, 0.05, g, 0.025);
+  box(0.16, 0.32, 0.12, mats.yellow, 0.13, 0.63, 0.05, g, 0.025);
+  box(0.28, 0.34, 0.14, mats.white, -0.33, 0.95, 0.02, g, 0.04);
+  box(0.28, 0.34, 0.14, mats.white, 0.33, 0.95, 0.02, g, 0.04);
+  eyePair(g, 0, 1.36, -0.48, 0.09);
+  box(0.22, 0.22, 0.22, mats.yellow, -0.55, 0.62, 0.42, g, 0.04);
+  box(0.2, 0.2, 0.2, mats.yellow, -0.2, 0.61, 0.46, g, 0.04);
+}
+function cow(x, z) {
+  const g = quadruped(x, z, { body: mats.white, head: mats.white, leg: mats.white, snout: mats.pink, horns: mats.cream });
+  spot(g, -0.33, 1.08, -0.31, mats.black);
+  spot(g, 0.28, 1.1, 0.36, mats.black);
+  box(0.18, 0.42, 0.18, mats.black, -0.38, 0.75, 0.32, g, 0.04);
+  box(0.2, 0.22, 0.06, mats.pinkDark, -0.08, 1.04, -0.87, g, 0.012);
+  box(0.2, 0.22, 0.06, mats.pinkDark, 0.08, 1.04, -0.87, g, 0.012);
+}
+function pig(x, z) {
+  const g = quadruped(x, z, { body: mats.pink, head: mats.pink, leg: mats.pinkDark, snout: mats.pinkDark, bodyW: 0.7, bodyD: 1.08 });
+  box(0.08, 0.1, 0.04, mats.brown, -0.07, 1.04, -0.87, g, 0.01);
+  box(0.08, 0.1, 0.04, mats.brown, 0.07, 1.04, -0.87, g, 0.01);
+}
+function sheep(x, z) {
+  const g = quadruped(x, z, { body: mats.cream, head: mats.black, leg: mats.black, ear: mats.black, snout: mats.black, bodyW: 0.74, bodyH: 0.68, bodyD: 1.05 });
+  box(0.42, 0.32, 0.42, mats.white, -0.34, 1.17, 0.02, g, 0.08);
+  box(0.42, 0.32, 0.42, mats.white, 0.34, 1.14, 0.05, g, 0.08);
+  box(0.36, 0.3, 0.36, mats.white, 0, 1.28, 0.32, g, 0.08);
+}
+function goat(x, z) {
+  const g = quadruped(x, z, { body: mats.cream, head: mats.white, leg: mats.cream, snout: mats.tanLight, horns: mats.tan, tallEars: true });
+  box(0.16, 0.28, 0.12, mats.cream, 0, 0.86, -0.75, g, 0.02);
+}
+function horse(x, z) {
+  quadruped(x, z, { body: mats.tan, head: mats.tan, leg: mats.brownDark, snout: mats.brown, mane: mats.brownDark, tailMat: mats.brownDark, longTail: true, bodyD: 1.08, legH: 0.64, scale: 0.86 });
+}
+function donkey(x, z) {
+  quadruped(x, z, { body: mats.gray, head: mats.gray, leg: mats.grayDark, snout: mats.cream, mane: mats.grayDark, tailMat: mats.grayDark, tallEars: true, bodyD: 1.0, legH: 0.58 });
+}
+function fox(x, z) {
+  const g = quadruped(x, z, { body: mats.orange, head: mats.orange, leg: mats.orangeDark, snout: mats.white, tailMat: mats.orange, longTail: true });
+  box(0.3, 0.42, 0.08, mats.white, 0, 0.99, -0.32, g, 0.02);
+  box(0.16, 0.18, 0.18, mats.white, 0, 1.12, 0.86, g, 0.03);
+}
+function wolf(x, z) {
+  const g = quadruped(x, z, { body: mats.gray, head: mats.gray, leg: mats.grayDark, snout: mats.cream, tailMat: mats.grayDark, longTail: true });
+  box(0.34, 0.42, 0.08, mats.cream, 0, 0.98, -0.32, g, 0.02);
+}
+function deer(x, z) {
+  const g = quadruped(x, z, { body: mats.tan, head: mats.tan, leg: mats.brown, snout: mats.cream, horns: mats.brown, bodyD: 0.95, legH: 0.62 });
+  for (let i = 0; i < 5; i++) spot(g, -0.35 + i * 0.18, 1.22, 0.36, mats.cream);
+}
+function rabbit(x, z) {
+  const g = animalBase(x, z, false, 0.82);
+  box(0.56, 0.48, 0.62, mats.white, 0, 0.82, 0.04, g, 0.1);
+  box(0.36, 0.34, 0.34, mats.white, 0, 1.08, -0.44, g, 0.08);
+  ear(g, -0.12, 1.48, -0.44, mats.white, true);
+  ear(g, 0.12, 1.48, -0.44, mats.white, true);
+  box(0.08, 0.4, 0.05, mats.pink, -0.12, 1.49, -0.5, g, 0.01);
+  box(0.08, 0.4, 0.05, mats.pink, 0.12, 1.49, -0.5, g, 0.01);
+  eyePair(g, 0, 1.12, -0.62, 0.09);
+  box(0.18, 0.18, 0.18, mats.white, 0, 0.9, 0.46, g, 0.05);
+}
+function raccoonModel(x, z) {
+  const g = quadruped(x, z, { body: mats.gray, head: mats.gray, leg: mats.grayDark, snout: mats.cream, tailMat: mats.grayDark, longTail: true });
+  box(0.34, 0.14, 0.045, mats.black, 0, 1.14, -0.72, g, 0.012);
+  for (let i = 0; i < 3; i++) stripe(g, 0, 1.04, 0.66 + i * 0.1, i % 2 ? mats.gray : mats.black, false);
+}
+function bear(x, z) {
+  quadruped(x, z, { body: mats.brown, head: mats.brown, leg: mats.brownDark, snout: mats.tan, bodyW: 0.76, bodyH: 0.72, bodyD: 1.08, legH: 0.56, scale: 0.86 });
+}
+function panda(x, z) {
+  const g = quadruped(x, z, { body: mats.white, head: mats.white, leg: mats.black, ear: mats.black, snout: mats.white, bodyW: 0.7, bodyH: 0.66, bodyD: 0.94 });
+  box(0.16, 0.18, 0.04, mats.black, -0.13, 1.14, -0.72, g, 0.02);
+  box(0.16, 0.18, 0.04, mats.black, 0.13, 1.14, -0.72, g, 0.02);
+  box(0.36, 0.28, 0.08, mats.black, 0, 0.98, -0.34, g, 0.03);
+}
+function tiger(x, z) {
+  const g = quadruped(x, z, { body: mats.orange, head: mats.orange, leg: mats.white, snout: mats.white, tailMat: mats.orange, longTail: true });
+  for (let i = 0; i < 5; i++) stripe(g, -0.36 + i * 0.18, 1.15, -0.34, mats.black, true);
+  stripe(g, -0.28, 1.18, 0.36, mats.black, true);
+  stripe(g, 0.12, 1.18, 0.36, mats.black, true);
+}
+function turtle(x, z) {
+  const g = animalBase(x, z, false, 0.82);
+  box(0.96, 0.36, 0.76, mats.turtle, 0, 0.82, 0, g, 0.14);
+  box(0.36, 0.24, 0.32, mats.frog, 0, 0.75, -0.58, g, 0.07);
+  eyePair(g, 0, 0.81, -0.72, 0.09);
+  box(0.22, 0.16, 0.22, mats.frog, -0.42, 0.56, -0.32, g, 0.04);
+  box(0.22, 0.16, 0.22, mats.frog, 0.42, 0.56, -0.32, g, 0.04);
+  box(0.22, 0.16, 0.22, mats.frog, -0.42, 0.56, 0.34, g, 0.04);
+  box(0.22, 0.16, 0.22, mats.frog, 0.42, 0.56, 0.34, g, 0.04);
+}
+function crocodile(x, z) {
+  const g = animalBase(x, z, true, 0.82);
+  box(1.1, 0.26, 0.42, mats.frog, 0, 0.72, -0.02, g, 0.07);
+  box(0.56, 0.2, 0.28, mats.frog, 0, 0.72, -0.54, g, 0.05);
+  box(0.32, 0.16, 0.22, mats.frog, 0, 0.7, 0.56, g, 0.04);
+  eyePair(g, 0, 0.85, -0.67, 0.14);
+  for (let i = 0; i < 4; i++) box(0.06, 0.07, 0.06, mats.cream, -0.18 + i * 0.12, 0.62, -0.72, g, 0.01);
+}
+function frog(x, z) {
+  const g = animalBase(x, z, true, 0.82);
+  box(0.64, 0.42, 0.52, mats.frog, 0, 0.84, 0, g, 0.12);
+  box(0.36, 0.26, 0.34, mats.frog, 0, 1.06, -0.34, g, 0.08);
+  eyePair(g, 0, 1.18, -0.5, 0.13);
+  box(0.26, 0.12, 0.3, mats.frog, -0.4, 0.62, 0.16, g, 0.04);
+  box(0.26, 0.12, 0.3, mats.frog, 0.4, 0.62, 0.16, g, 0.04);
+}
+function duck(x, z, goose = false) {
+  const g = animalBase(x, z, true, 0.82);
+  const bodyMat = goose ? mats.white : mats.brown;
+  const headMat = goose ? mats.white : M(0x2d7655);
+  box(0.68, 0.42, 0.52, bodyMat, 0, 0.88, 0.04, g, 0.1);
+  box(0.28, goose ? 0.5 : 0.28, 0.24, headMat, 0, goose ? 1.27 : 1.12, -0.38, g, 0.06);
+  if (goose) box(0.14, 0.58, 0.12, mats.white, 0, 1.04, -0.28, g, 0.04);
+  box(0.26, 0.12, 0.16, mats.yellow, 0, goose ? 1.28 : 1.12, -0.58, g, 0.025);
+  box(0.18, 0.32, 0.1, mats.yellow, -0.14, 0.58, 0.02, g, 0.02);
+  box(0.18, 0.32, 0.1, mats.yellow, 0.14, 0.58, 0.02, g, 0.02);
+  eyePair(g, 0, goose ? 1.35 : 1.18, -0.5, 0.08);
+}
+function fishLike(x, z, cfg) {
+  const g = animalBase(x, z, true, cfg.scale || 0.82);
+  box(cfg.bodyW || 0.95, cfg.bodyH || 0.42, cfg.bodyD || 0.5, cfg.body, 0, 0.82, 0, g, cfg.radius || 0.12);
+  const tailFin = box(0.12, 0.42, 0.42, cfg.tail || cfg.body, 0, 0.82, 0.56, g, 0.02);
+  tailFin.rotation.y = Math.PI / 4;
+  box(0.28, 0.16, 0.12, cfg.fin || cfg.body, -0.52, 0.82, -0.04, g, 0.025);
+  box(0.28, 0.16, 0.12, cfg.fin || cfg.body, 0.52, 0.82, -0.04, g, 0.025);
+  if (cfg.topFin) {
+    const fin = cone(0.2, 0.32, 3, cfg.topFin, 0, 1.12, 0.02, g);
+    fin.rotation.z = Math.PI;
+  }
+  if (cfg.snout) box(0.22, 0.2, 0.16, cfg.snout, 0, 0.82, -0.55, g, 0.04);
+  eyePair(g, 0, 0.92, -0.48, 0.15);
+  return g;
+}
+function octopus(x, z) {
+  const g = animalBase(x, z, true, 0.82);
+  box(0.62, 0.56, 0.58, mats.pink, 0, 0.95, -0.08, g, 0.14);
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    const p = box(0.14, 0.14, 0.5, mats.pinkDark, Math.cos(a) * 0.42, 0.58, Math.sin(a) * 0.42, g, 0.035);
+    p.rotation.y = a;
+  }
+  eyePair(g, 0, 1.05, -0.42, 0.12);
+}
+
+// Building components.
+function componentGroup(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  g.userData.blockyBuilding = true;
+  box(2.0, 0.08, 1.45, mats.shadow, 0, 0.04, 0.08, g, 0.08).castShadow = false;
+  return g;
+}
+function seam(parent, x, y, z, w, vertical = false, mat = mats.tileEdge) {
+  box(vertical ? 0.025 : w, vertical ? w : 0.025, 0.028, mat, x, y, z, parent, 0.006);
+}
+function wallPanel(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(1.55, 0.92, 0.16, variant > 1 ? mats.tileGray : mats.plaster, 0, 0.62, 0, g, 0.06);
+  if (variant === 0) {
+    seam(g, 0, 0.66, -0.09, 1.35);
+    seam(g, -0.35, 0.82, -0.1, 0.38, true);
+    seam(g, 0.35, 0.48, -0.1, 0.34, true);
+  } else if (variant === 1) {
+    box(0.42, 0.34, 0.05, mats.blueRoofDark, -0.24, 0.64, -0.12, g, 0.025);
+    box(0.26, 0.22, 0.06, mats.water, -0.24, 0.64, -0.16, g, 0.018);
+    seam(g, -0.24, 0.64, -0.2, 0.26);
+    seam(g, -0.24, 0.64, -0.2, 0.22, true);
+  } else {
+    for (let row = 0; row < 3; row++) {
+      seam(g, 0, 0.38 + row * 0.25, -0.1, 1.35);
+      for (let col = 0; col < 3; col++) {
+        const offset = row % 2 ? -0.22 : 0.08;
+        seam(g, -0.44 + col * 0.44 + offset, 0.49 + row * 0.25, -0.1, 0.22, true);
+      }
+    }
+  }
+  return g;
+}
+function doorPanel(x, z, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(0.5, 1.25, 0.12, mats.wood, 0, 0.72, 0, g, 0.055);
+  box(0.36, 0.18, 0.04, mats.woodDark, 0, 1.16, -0.08, g, 0.02);
+  box(0.04, 0.04, 0.04, mats.flower, 0.15, 0.72, -0.09, g, 0.01);
+}
+function simpleArch(x, z, railing = false, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(0.26, 1.12, 0.18, mats.plaster, -0.42, 0.62, 0, g, 0.055);
+  box(0.26, 1.12, 0.18, mats.plaster, 0.42, 0.62, 0, g, 0.055);
+  box(1.08, 0.28, 0.18, mats.plaster, 0, 1.14, 0, g, 0.06);
+  box(0.48, 0.58, 0.05, mats.shadow, 0, 0.62, -0.1, g, 0.06);
+  if (railing) {
+    box(0.98, 0.12, 0.14, mats.woodLight, 0, 1.32, -0.06, g, 0.035);
+    box(0.16, 0.34, 0.16, mats.wood, -0.48, 1.34, -0.06, g, 0.035);
+    box(0.16, 0.34, 0.16, mats.wood, 0.48, 1.34, -0.06, g, 0.035);
+  }
+  return g;
+}
+function blueRoofHouse(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(1.1, 0.62, 0.85, mats.plaster, 0, 0.5, 0, g, 0.08);
+  const r = roof(1.35, variant === 2 ? 0.48 : 0.58, 1.08, mats.blueRoof, 0, 0.78, 0, g);
+  r.rotation.z = variant === 1 ? 0.08 : 0;
+  box(0.34, 0.4, 0.07, mats.wood, -0.2, 0.5, -0.45, g, 0.035);
+  box(0.22, 0.18, 0.06, mats.blueRoofDark, 0.34, 0.52, -0.45, g, 0.025);
+  if (variant === 2) box(0.16, 0.48, 0.14, mats.plaster, 0.25, 1.16, 0.16, g, 0.03);
+  return g;
+}
+function roundTent(x, z, flag = false, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  cyl(0.65, 0.68, 0.32, 10, mats.plaster, 0, 0.42, 0, g);
+  const c = cone(0.78, 1.08, 8, mats.blueRoof, 0, 1.1, 0, g);
+  c.rotation.y = Math.PI / 8;
+  box(0.28, 0.3, 0.05, mats.shadow, -0.2, 0.42, -0.62, g, 0.03);
+  cyl(0.06, 0.08, 0.12, 8, mats.flower, 0, 1.68, 0, g);
+  if (flag) {
+    cyl(0.018, 0.018, 0.78, 6, mats.wood, 0, 2.05, 0, g);
+    box(0.36, 0.18, 0.035, mats.pinkDark, 0.18, 2.28, 0, g, 0.015);
+  }
+  return g;
+}
+function column(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(0.42, 0.12, 0.42, mats.plasterDark, 0, 0.18, 0, g, 0.05);
+  if (variant === 0) {
+    cyl(0.1, 0.12, 1.15, 8, mats.plaster, 0, 0.8, 0, g);
+  } else {
+    box(0.22, 1.12, 0.22, mats.plaster, 0, 0.82, 0, g, 0.055);
+  }
+  box(0.38, 0.18, 0.38, mats.plaster, 0, 1.42, 0, g, 0.06);
+}
+function stairBlock(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  const mat = variant === 0 ? mats.woodLight : mats.tileGray;
+  for (let i = 0; i < 5; i++) {
+    box(1.18 - i * 0.08, 0.16, 0.22, mat, 0, 0.2 + i * 0.15, -0.44 + i * 0.19, g, 0.04);
+  }
+  box(0.22, 0.78, 1.0, variant === 0 ? mats.wood : mats.plasterDark, -0.68, 0.55, 0.0, g, 0.035);
+  box(0.22, 0.78, 1.0, variant === 0 ? mats.wood : mats.plasterDark, 0.68, 0.55, 0.0, g, 0.035);
+}
+function bench(x, z, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(1.15, 0.16, 0.42, mats.woodLight, 0, 0.5, 0, g, 0.04);
+  box(1.15, 0.14, 0.14, mats.wood, 0, 0.76, 0.28, g, 0.035);
+  box(0.14, 0.46, 0.14, mats.woodDark, -0.48, 0.35, -0.16, g, 0.03);
+  box(0.14, 0.46, 0.14, mats.woodDark, 0.48, 0.35, -0.16, g, 0.03);
+}
+function builderFence(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  const postMat = variant === 1 ? mats.stem : mats.wood;
+  const railMat = variant === 1 ? mats.tanLight : mats.woodLight;
+  const postCount = variant === 2 ? 5 : 3;
+  for (let i = 0; i < postCount; i++) {
+    const px = -0.64 + i * (1.28 / (postCount - 1));
+    box(0.14, 0.72 + (i % 2) * 0.18, 0.14, postMat, px, 0.52, 0, g, 0.035);
+  }
+  box(1.35, 0.1, 0.1, railMat, 0, 0.46, 0, g, 0.025);
+  box(1.28, 0.1, 0.1, railMat, 0, 0.74, 0, g, 0.025);
+  if (variant === 2) box(1.22, 0.08, 0.08, railMat, 0, 0.98, 0, g, 0.02);
+}
+function floorSlab(x, z, variant = 0, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  const mat = variant === 1 ? mats.woodLight : variant === 2 ? mats.plaster : mats.tileGray;
+  box(1.62, 0.16, 1.18, mat, 0, 0.22, 0, g, 0.06);
+  if (variant === 1) {
+    for (let i = 0; i < 4; i++) seam(g, -0.54 + i * 0.36, 0.32, -0.62, 1.08, true, mats.woodDark);
+    seam(g, 0, 0.33, -0.62, 1.36, false, mats.woodDark);
+  } else {
+    seam(g, 0, 0.34, -0.62, 1.42);
+    seam(g, 0, 0.34, -0.62, 1.08, true);
+  }
+}
+function vinePost(x, z, scale = 1) {
+  const g = componentGroup(x, z, scale);
+  box(0.16, 1.3, 0.16, mats.wood, 0, 0.82, 0, g, 0.035);
+  for (let i = 0; i < 5; i++) {
+    const leaf = box(0.12, 0.22, 0.08, mats.grass2, Math.sin(i) * 0.16, 0.36 + i * 0.18, -0.05, g, 0.025);
+    leaf.rotation.z = i * 0.52;
+  }
+}
+
+// Props and terrain tiles.
+function propGroup(x, z, scale = 1) {
+  const g = makeGroup(x, z, scale);
+  box(1.6, 0.06, 1.1, mats.shadow, 0, 0.03, 0.05, g, 0.08).castShadow = false;
+  return g;
+}
+function signPost(x, z, variant = 0, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.14, 1.1, 0.14, mats.wood, -0.18, 0.62, 0, g, 0.035);
+  box(0.92, 0.28, 0.1, mats.woodLight, 0.1, 1.1, -0.02, g, 0.04);
+  box(0.48, 0.06, 0.035, variant ? mats.flower : mats.cream, 0.14, 1.1, -0.08, g, 0.015);
+  if (variant) box(0.28, 0.18, 0.08, mats.woodDark, 0.5, 1.24, -0.02, g, 0.025);
+}
+function lanternPost(x, z, variant = 0, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.2, 0.22, 0.2, mats.wood, 0, 0.2, 0, g, 0.04);
+  box(0.08, 1.15, 0.08, variant ? mats.tileEdge : mats.woodDark, 0, 0.82, 0, g, 0.025);
+  box(0.28, 0.07, 0.08, mats.woodDark, 0.18, 1.36, 0, g, 0.02);
+  box(0.12, 0.18, 0.12, mats.flower, 0.34, 1.22, 0, g, 0.025);
+  box(0.16, 0.05, 0.16, mats.black, 0.34, 1.34, 0, g, 0.015);
+}
+function barrel(x, z, scale = 1) {
+  const g = propGroup(x, z, scale);
+  cyl(0.34, 0.38, 0.72, 10, mats.woodLight, 0, 0.52, 0, g);
+  cyl(0.36, 0.36, 0.06, 10, mats.woodDark, 0, 0.88, 0, g);
+  cyl(0.36, 0.36, 0.06, 10, mats.woodDark, 0, 0.18, 0, g);
+  box(0.08, 0.62, 0.05, mats.woodDark, -0.18, 0.52, -0.3, g, 0.01);
+  box(0.08, 0.62, 0.05, mats.woodDark, 0.18, 0.52, -0.3, g, 0.01);
+}
+function crate(x, z, open = false, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.72, 0.56, 0.72, mats.wood, 0, 0.42, 0, g, 0.04);
+  box(0.58, 0.08, 0.08, mats.woodDark, 0, 0.5, -0.38, g, 0.012);
+  box(0.08, 0.48, 0.08, mats.woodDark, -0.36, 0.42, -0.36, g, 0.012);
+  box(0.08, 0.48, 0.08, mats.woodDark, 0.36, 0.42, -0.36, g, 0.012);
+  if (open) box(0.5, 0.08, 0.5, mats.sand, 0, 0.76, 0, g, 0.025);
+}
+function table(x, z, variant = 0, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(1.2, 0.16, 0.82, variant ? mats.woodLight : mats.tileGray, 0, 0.66, 0, g, 0.04);
+  for (const px of [-0.5, 0.5]) {
+    for (const pz of [-0.3, 0.3]) box(0.12, 0.6, 0.12, mats.woodDark, px, 0.34, pz, g, 0.025);
+  }
+  seam(g, 0, 0.76, -0.43, 0.92, false, variant ? mats.woodDark : mats.tileEdge);
+  seam(g, -0.24, 0.76, -0.43, 0.62, true, variant ? mats.woodDark : mats.tileEdge);
+}
+function well(x, z, scale = 1) {
+  const g = propGroup(x, z, scale);
+  cyl(0.5, 0.5, 0.42, 12, mats.tileGray, 0, 0.36, 0, g);
+  cyl(0.34, 0.34, 0.48, 12, mats.shadow, 0, 0.42, 0, g).castShadow = false;
+  box(0.12, 0.88, 0.12, mats.wood, -0.48, 0.76, 0, g, 0.025);
+  box(0.12, 0.88, 0.12, mats.wood, 0.48, 0.76, 0, g, 0.025);
+  const r = roof(1.2, 0.42, 0.82, mats.blueRoof, 0, 1.26, 0, g);
+  r.rotation.z = 0.02;
+  box(0.58, 0.08, 0.08, mats.woodDark, 0, 1.02, 0, g, 0.02);
+}
+function obelisk(x, z, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.62, 0.14, 0.62, mats.plasterDark, 0, 0.18, 0, g, 0.04);
+  box(0.42, 1.18, 0.42, mats.plaster, 0, 0.84, 0, g, 0.05);
+  const tip = cone(0.34, 0.44, 4, mats.plasterDark, 0, 1.65, 0, g);
+  tip.rotation.y = Math.PI / 4;
+}
+function pouch(x, z, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.42, 0.42, 0.34, mats.tanLight, 0, 0.34, 0, g, 0.08);
+  box(0.44, 0.08, 0.36, mats.grass3, 0, 0.62, 0, g, 0.025);
+  box(0.3, 0.06, 0.05, mats.woodDark, 0, 0.5, -0.2, g, 0.012);
+}
+function campBox(x, z, scale = 1) {
+  const g = propGroup(x, z, scale);
+  box(0.76, 0.34, 0.72, mats.tileGray, 0, 0.28, 0, g, 0.04);
+  box(0.86, 0.16, 0.78, mats.plaster, 0, 0.54, 0, g, 0.035);
+  box(0.08, 0.24, 0.82, mats.tileEdge, -0.22, 0.56, 0, g, 0.012);
+  box(0.08, 0.24, 0.82, mats.tileEdge, 0.22, 0.56, 0, g, 0.012);
+}
+function terrainTile(x, z, cfg = {}) {
+  const g = makeGroup(x, z, cfg.scale || 1);
+  const height = cfg.height || 0.28;
+  const top = cfg.top || mats.grass;
+  const side = cfg.side || mats.tileDirt;
+  box(1.72, height, 1.32, side, 0, height * 0.5, 0, g, 0.07);
+  box(1.72, 0.16, 1.32, top, 0, height + 0.08, 0, g, 0.09);
+  box(1.78, 0.08, 1.38, cfg.edge || top, 0, height + 0.04, 0, g, 0.06);
+  if (cfg.seams !== false) {
+    seam(g, 0, height + 0.18, -0.68, 1.48, false, cfg.seamMat || mats.grass2);
+    seam(g, 0, height + 0.18, -0.68, 1.08, true, cfg.seamMat || mats.grass2);
+  }
+  if (cfg.mound) sphere(0.46, top, 0.16, height + 0.22, 0.08, g, [1.25, 0.34, 1]);
+  if (cfg.ripple) {
+    box(1.1, 0.04, 0.08, mats.waterDark, -0.04, height + 0.2, -0.18, g, 0.02);
+    box(0.82, 0.04, 0.08, mats.waterDark, 0.18, height + 0.2, 0.22, g, 0.02);
+  }
+  return g;
+}
+
+// Layout matching the reference sheet.
+const xs = [-8, -5.3, -2.6, 0.1, 2.8, 5.4, 8.1];
+cubeTreeWithTopiary(xs[0], -5.2);
+cubeTree(xs[1], -5.2, 1.05, 3);
+cubeTree(xs[2], -5.2, 0.95, 3);
+cubeTree(xs[3], -5.2, 0.95, 3);
+pineTree(xs[4], -5.2, 1.0);
+pineTree(xs[5], -5.2, 1.08);
+cubeTree(xs[6], -5.2, 1.0, 3);
+labelRow(['Topiary', 'Stack tree', 'Soft tree', 'Block tree', 'Pine', 'Tall pine', 'Canopy'], xs, -5.2);
+
+cubeTree(-7.2, -1.9, 1.18, 3);
+slimTree(-4.8, -1.9, 1.0);
+cubeTree(-2.0, -1.9, 0.7, 2);
+roundTree(0.6, -1.9, 0.85);
+roundTree(2.4, -1.9, 0.7);
+rockCluster(4.8, -1.9, 1.0);
+rockCluster(7.2, -1.9, 0.92);
+labelRow(['Big tree', 'Slim tree', 'Small tree', 'Round tree', 'Shrub tree', 'Rocks', 'Pebbles'], [-7.2, -4.8, -2.0, 0.6, 2.4, 4.8, 7.2], -1.9);
+
+cubeTree(-8.2, 1.25, 0.48, 2);
+tinySapling(-7.5, 1.35);
+bush(-5.3, 1.25, 0.8, false);
+bush(-2.7, 1.25, 0.72, true);
+bush(-0.2, 1.25, 0.72, false);
+bush(1.6, 1.25, 0.72, true);
+mushroom(4.3, 1.25, 0.95);
+mushroom(6.4, 1.25, 0.65);
+mushroom(7.4, 1.25, 0.42);
+labelRow(['Mini tree', 'Sapling', 'Bush cube', 'Bush clump', 'Tiny bush', 'Round bush', 'Mushroom', 'Small cap', 'Tiny cap'], [-8.2, -7.5, -5.3, -2.7, -0.2, 1.6, 4.3, 6.4, 7.4], 1.25, 0.28);
+
+grassClump(-8.4, 3.7);
+fenceSegment(-7.4, 4.65, 0, 0.78);
+fenceSegment(-6.1, 4.4, 0, 0.95);
+fenceCorner(-5.0, 3.65);
+reedPatch(-2.8, 4.05, 8);
+reedPatch(0.4, 4.05, 10);
+reedPatch(2.8, 4.05, 11);
+sunflower(5.3, 3.55, 0.8);
+sunflower(6.3, 3.55, 0.6);
+bush(5.1, 4.55, 0.55, true);
+bush(6.4, 4.55, 0.48, true);
+labelRow(['Grass', 'Fence low', 'Fence', 'Fence corner', 'Reeds', 'Cattails', 'Rushes', 'Flower', 'Small flower'], [-8.4, -7.4, -6.1, -5.0, -2.8, 0.4, 2.8, 5.3, 6.3], 4.05, 0.28);
+
+// Animal reference sheet.
+const animalXs = [-8, -4, 0, 4, 8];
+chicken(animalXs[0], 7.2);
+cow(animalXs[1], 7.2);
+pig(animalXs[2], 7.2);
+sheep(animalXs[3], 7.2);
+goat(animalXs[4], 7.2);
+labelRow(['Chicken', 'Cow', 'Pig', 'Sheep', 'Goat'], animalXs, 7.2);
+
+horse(animalXs[0], 10.2);
+donkey(animalXs[1], 10.2);
+fox(animalXs[2], 10.2);
+wolf(animalXs[3], 10.2);
+deer(animalXs[4], 10.2);
+labelRow(['Horse', 'Donkey', 'Fox', 'Wolf', 'Deer'], animalXs, 10.2);
+
+rabbit(animalXs[0], 13.2);
+raccoonModel(animalXs[1], 13.2);
+bear(animalXs[2], 13.2);
+panda(animalXs[3], 13.2);
+tiger(animalXs[4], 13.2);
+labelRow(['Rabbit', 'Raccoon', 'Bear', 'Panda', 'Tiger'], animalXs, 13.2);
+
+turtle(animalXs[0], 16.2);
+crocodile(animalXs[1], 16.2);
+frog(animalXs[2], 16.2);
+duck(animalXs[3], 16.2);
+duck(animalXs[4], 16.2, true);
+labelRow(['Turtle', 'Crocodile', 'Frog', 'Duck', 'Goose'], animalXs, 16.2);
+
+fishLike(animalXs[0], 19.2, { body: mats.blue, fin: mats.waterDark, tail: mats.blue, snout: mats.cream });
+fishLike(animalXs[1], 19.2, { body: mats.gray, fin: mats.grayDark, tail: mats.gray, snout: mats.white, topFin: mats.grayDark, bodyW: 1.18, bodyH: 0.34 });
+fishLike(animalXs[2], 19.2, { body: mats.blueRoofDark, fin: mats.blue, tail: mats.blueRoofDark, bodyW: 1.18, bodyH: 0.48 });
+octopus(animalXs[3], 19.2);
+fishLike(animalXs[4], 19.2, { body: mats.gray, fin: mats.waterDark, tail: mats.gray, snout: mats.white, bodyW: 1.1, bodyH: 0.36, scale: 0.84 });
+labelRow(['Fish', 'Shark', 'Whale', 'Octopus', 'Dolphin'], animalXs, 19.2);
+
+// Building component reference sheet.
+const buildXs = [-8, -5.4, -2.8, -0.2, 2.4, 5, 7.6];
+wallPanel(buildXs[0], 22.4, 1);
+wallPanel(buildXs[1], 22.4, 0);
+wallPanel(buildXs[2], 22.4, 2);
+wallPanel(buildXs[3], 22.4, 3);
+doorPanel(buildXs[4], 22.4);
+column(buildXs[5], 22.4, 0);
+blueRoofHouse(buildXs[6], 22.4, 2, 0.95);
+labelRow(['Window wall', 'Plain wall', 'Brick wall', 'Block wall', 'Door', 'Column', 'Roof shell'], buildXs, 22.4, 0.28);
+
+roundTent(buildXs[0], 25.2);
+roundTent(buildXs[1], 25.2, true);
+blueRoofHouse(buildXs[2], 25.2, 0);
+blueRoofHouse(buildXs[3], 25.2, 1);
+column(buildXs[4], 25.2, 1);
+simpleArch(buildXs[5], 25.2);
+simpleArch(buildXs[6], 25.2, true);
+labelRow(['Round hut', 'Flag hut', 'House', 'Lean roof', 'Pillar', 'Arch', 'Gate arch'], buildXs, 25.2, 0.28);
+
+stairBlock(buildXs[0], 28.0, 0, 0.92);
+stairBlock(buildXs[1], 28.0, 1, 0.95);
+bench(buildXs[2], 28.0);
+builderFence(buildXs[3], 28.0, 0);
+builderFence(buildXs[4], 28.0, 1);
+builderFence(buildXs[5], 28.0, 2);
+vinePost(buildXs[6], 28.0);
+labelRow(['Wood stairs', 'Stone stairs', 'Bench', 'Fence', 'Green fence', 'Palisade', 'Vine post'], buildXs, 28.0, 0.28);
+
+floorSlab(buildXs[0], 30.8, 0);
+floorSlab(buildXs[1], 30.8, 1);
+floorSlab(buildXs[2], 30.8, 2);
+floorSlab(buildXs[3], 30.8, 0, 0.82);
+wallPanel(buildXs[4], 30.8, 2, 0.75);
+simpleArch(buildXs[5], 30.8, false, 0.8);
+builderFence(buildXs[6], 30.8, 2, 0.82);
+labelRow(['Stone slab', 'Wood slab', 'White slab', 'Small slab', 'Half wall', 'Small arch', 'Small fence'], buildXs, 30.8, 0.28);
+
+// Props and detail reference sheet.
+signPost(buildXs[0], 33.6, 0, 0.9);
+lanternPost(buildXs[1], 33.6, 0, 0.88);
+signPost(buildXs[2], 33.6, 1, 0.9);
+lanternPost(buildXs[3], 33.6, 1, 0.88);
+barrel(buildXs[4], 33.6, 0.85);
+crate(buildXs[5], 33.6, true, 0.88);
+well(buildXs[6], 33.6, 0.82);
+labelRow(['Sign', 'Lantern', 'Banner sign', 'Iron lamp', 'Barrel', 'Open crate', 'Well'], buildXs, 33.6, 0.28);
+
+table(buildXs[0], 36.0, 0, 0.95);
+crate(buildXs[1], 36.0, false, 0.9);
+crate(buildXs[2], 36.0, true, 0.9);
+pouch(buildXs[3], 36.0, 0.9);
+table(buildXs[4], 36.0, 1, 0.95);
+campBox(buildXs[5], 36.0, 0.9);
+obelisk(buildXs[6], 36.0, 0.88);
+labelRow(['Stone table', 'Crate', 'Supply box', 'Sack', 'Wood table', 'Chest', 'Obelisk'], buildXs, 36.0, 0.28);
+
+well(buildXs[0], 38.4, 0.66);
+table(buildXs[1], 38.4, 1, 1.1);
+barrel(buildXs[2], 38.4, 0.75);
+campBox(buildXs[3], 38.4, 0.74);
+crate(buildXs[4], 38.4, false, 0.72);
+bench(buildXs[5], 38.4, 0.72);
+crate(buildXs[6], 38.4, true, 0.62);
+labelRow(['Mini well', 'Large table', 'Small barrel', 'Stone chest', 'Small crate', 'Small bench', 'Tiny box'], buildXs, 38.4, 0.28);
+
+// Terrain tile reference sheet.
+const tileXs = [-8, -5.6, -3.2, -0.8, 1.6, 4.0, 6.4, 8.8];
+terrainTile(tileXs[0], 41.4, { height: 0.16, scale: 0.9 });
+terrainTile(tileXs[1], 41.4, { height: 0.26, scale: 0.94 });
+terrainTile(tileXs[2], 41.4, { height: 0.44, scale: 0.98 });
+terrainTile(tileXs[3], 41.4, { height: 0.68, scale: 1.0 });
+terrainTile(tileXs[4], 41.4, { height: 0.72, scale: 1.04, mound: true });
+terrainTile(tileXs[5], 41.4, { top: mats.sand, edge: mats.sandDark, seamMat: mats.sandDark, height: 0.2, scale: 0.94 });
+terrainTile(tileXs[6], 41.4, { top: mats.water, edge: mats.waterDark, seamMat: mats.waterDark, side: mats.tileDirtDark, height: 0.26, ripple: true, scale: 0.94 });
+terrainTile(tileXs[7], 41.4, { top: mats.woodLight, edge: mats.woodDark, seamMat: mats.woodDark, side: mats.tileDirtDark, height: 0.18, scale: 0.9 });
+labelRow(['Flat grass', 'Low grass', 'Grass block', 'Tall block', 'Mound tile', 'Sand tile', 'Water tile', 'Wood tile'], tileXs, 41.4, 0.25);
+
+terrainTile(tileXs[0], 44.0, { top: mats.tileGray, edge: mats.tileEdge, seamMat: mats.tileEdge, side: mats.tileDirtDark, height: 0.2, scale: 0.86 });
+terrainTile(tileXs[1], 44.0, { top: mats.plaster, edge: mats.plasterDark, seamMat: mats.tileEdge, side: mats.tileDirtDark, height: 0.16, scale: 0.88 });
+terrainTile(tileXs[2], 44.0, { top: mats.grass3, edge: mats.grass2, height: 0.24, scale: 0.9, mound: true });
+terrainTile(tileXs[3], 44.0, { top: mats.sand, edge: mats.sandDark, seamMat: mats.sandDark, height: 0.16, scale: 0.86 });
+terrainTile(tileXs[4], 44.0, { top: mats.water, edge: mats.waterDark, seamMat: mats.waterDark, side: mats.tileDirtDark, height: 0.18, ripple: true, scale: 0.86 });
+terrainTile(tileXs[5], 44.0, { height: 0.4, scale: 0.9 });
+terrainTile(tileXs[6], 44.0, { height: 0.48, scale: 0.92, mound: true });
+terrainTile(tileXs[7], 44.0, { top: mats.grass3, edge: mats.grass2, height: 0.34, scale: 0.86 });
+labelRow(['Paver', 'White tile', 'Raised grass', 'Desert tile', 'Pond tile', 'Dirt block', 'Hill block', 'Lime block'], tileXs, 44.0, 0.25);
+
+// Title made from primitive bars.
+function titleBar(x, z, w) {
+  box(w, 0.08, 0.08, mats.woodDark, x, 0.05, z);
+}
+
+// Basic part editor.
+const editor = {
+  editMode: false,
+  selectedObject: null,
+  selectedPart: null,
+  pointerDown: null
+};
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const objectBox = new THREE.BoxHelper(new THREE.Group(), 0xffc13b);
+const partBox = new THREE.BoxHelper(new THREE.Group(), 0x2f7bff);
+objectBox.visible = false;
+partBox.visible = false;
+scene.add(objectBox);
+scene.add(partBox);
+
+const editorStatus = document.getElementById('editorStatus');
+const editButton = document.getElementById('editButton');
+const resetButton = document.getElementById('resetButton');
+const editorInputs = {
+  sizeX: document.getElementById('sizeX'),
+  sizeY: document.getElementById('sizeY'),
+  sizeZ: document.getElementById('sizeZ'),
+  posX: document.getElementById('posX'),
+  posY: document.getElementById('posY'),
+  posZ: document.getElementById('posZ')
+};
+const allInputs = Object.values(editorInputs);
+
+function formatNumber(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+}
+function objectName(object) {
+  return object && object.userData.editorName ? object.userData.editorName : 'Object';
+}
+function partName(part) {
+  return part && part.userData.editorPart ? part.userData.editorPart.type : 'part';
+}
+function editableMeshes(object) {
+  const meshes = [];
+  if (!object) return meshes;
+  object.traverse((child) => {
+    if (child.isMesh && child.userData.editorPart && child.material !== mats.shadow) {
+      meshes.push(child);
+    }
+  });
+  return meshes;
+}
+function topLevelObjectFor(mesh) {
+  let current = mesh;
+  while (current && current.parent && current.parent !== root) current = current.parent;
+  return current && current.parent === root && current.isGroup ? current : null;
+}
+function updateEditorBoxes() {
+  objectBox.visible = !!editor.selectedObject;
+  partBox.visible = !!editor.selectedPart;
+  if (editor.selectedObject) objectBox.setFromObject(editor.selectedObject);
+  if (editor.selectedPart) partBox.setFromObject(editor.selectedPart);
+}
+function setInputsEnabled(enabled) {
+  allInputs.forEach((input) => {
+    input.disabled = !enabled;
+  });
+  resetButton.disabled = !enabled;
+}
+function fillPartInputs() {
+  const part = editor.selectedPart;
+  if (!part || !part.userData.editorPart) {
+    allInputs.forEach((input) => {
+      input.value = '';
+    });
+    setInputsEnabled(false);
+    return;
+  }
+  const data = part.userData.editorPart;
+  editorInputs.sizeX.value = formatNumber(data.width * part.scale.x);
+  editorInputs.sizeY.value = formatNumber(data.height * part.scale.y);
+  editorInputs.sizeZ.value = formatNumber(data.depth * part.scale.z);
+  editorInputs.posX.value = formatNumber(part.position.x);
+  editorInputs.posY.value = formatNumber(part.position.y);
+  editorInputs.posZ.value = formatNumber(part.position.z);
+  setInputsEnabled(true);
+}
+function refreshEditorPanel() {
+  editButton.disabled = !editor.selectedObject;
+  editButton.setAttribute('aria-pressed', editor.editMode ? 'true' : 'false');
+  editButton.textContent = editor.editMode ? 'Done' : 'Edit';
+  if (!editor.selectedObject) {
+    editorStatus.textContent = 'Click an object to select it.';
+  } else if (!editor.editMode) {
+    editorStatus.textContent = `${objectName(editor.selectedObject)} selected. Press Edit to change parts.`;
+  } else if (!editor.selectedPart) {
+    editorStatus.textContent = `Editing ${objectName(editor.selectedObject)}. Click one of its parts.`;
+  } else {
+    editorStatus.textContent = `Editing ${partName(editor.selectedPart)} in ${objectName(editor.selectedObject)}.`;
+  }
+  fillPartInputs();
+  updateEditorBoxes();
+}
+function selectObject(object) {
+  editor.selectedObject = object;
+  editor.selectedPart = null;
+  editor.editMode = false;
+  controls.enabled = true;
+  refreshEditorPanel();
+}
+function selectPart(part) {
+  editor.selectedPart = part;
+  refreshEditorPanel();
+}
+function getIntersections(event, candidates) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  return raycaster.intersectObjects(candidates, true);
+}
+function handleCanvasClick(event) {
+  if (event.target !== renderer.domElement) return;
+  if (editor.editMode && editor.selectedObject) {
+    const hit = getIntersections(event, editableMeshes(editor.selectedObject))[0];
+    if (hit) selectPart(hit.object);
+    return;
+  }
+  const meshes = [];
+  root.children.forEach((child) => {
+    if (child.isGroup) meshes.push(...editableMeshes(child));
+  });
+  const hit = getIntersections(event, meshes)[0];
+  selectObject(hit ? topLevelObjectFor(hit.object) : null);
+}
+function applyPartInputs() {
+  const part = editor.selectedPart;
+  if (!part || !part.userData.editorPart) return;
+  const data = part.userData.editorPart;
+  const sx = Math.max(0.02, parseFloat(editorInputs.sizeX.value) || data.width);
+  const sy = Math.max(0.02, parseFloat(editorInputs.sizeY.value) || data.height);
+  const sz = Math.max(0.02, parseFloat(editorInputs.sizeZ.value) || data.depth);
+  part.scale.set(sx / data.width, sy / data.height, sz / data.depth);
+  part.position.set(
+    parseFloat(editorInputs.posX.value) || 0,
+    parseFloat(editorInputs.posY.value) || 0,
+    parseFloat(editorInputs.posZ.value) || 0
+  );
+  updateEditorBoxes();
+}
+function resetSelectedPart() {
+  const part = editor.selectedPart;
+  if (!part || !part.userData.editorPart) return;
+  const data = part.userData.editorPart;
+  part.scale.copy(data.initialScale);
+  part.position.copy(data.initialPosition);
+  refreshEditorPanel();
+}
+
+editButton.addEventListener('click', () => {
+  if (!editor.selectedObject) return;
+  editor.editMode = !editor.editMode;
+  editor.selectedPart = null;
+  controls.enabled = !editor.editMode;
+  refreshEditorPanel();
+});
+resetButton.addEventListener('click', resetSelectedPart);
+allInputs.forEach((input) => input.addEventListener('input', applyPartInputs));
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  editor.pointerDown = { x: event.clientX, y: event.clientY };
+});
+renderer.domElement.addEventListener('pointerup', (event) => {
+  if (!editor.pointerDown) return;
+  const dx = event.clientX - editor.pointerDown.x;
+  const dy = event.clientY - editor.pointerDown.y;
+  editor.pointerDown = null;
+  if (Math.hypot(dx, dy) > 5) return;
+  handleCanvasClick(event);
+});
+refreshEditorPanel();
+
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, renderer.info.render.frame ? 0.016 : 0.016);
+  t += dt;
+  updateEditorBoxes();
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
