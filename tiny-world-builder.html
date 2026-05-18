@@ -4047,6 +4047,10 @@
               <input id="render-voxel-gap" type="range" min="0" max="14" step="1" />
               <output id="render-voxel-gap-value"></output>
             </div>
+            <label class="gen-check">
+              <input type="checkbox" id="render-voxel-terrain" />
+              <span>Voxel terrain <em class="gen-hint">flat shaded panels and path edging</em></span>
+            </label>
             <div class="range-row">
               <span>Brightness</span>
               <input id="render-brightness" type="range" min="75" max="130" step="1" />
@@ -4397,6 +4401,7 @@
     floorOpacity: 'tinyworld:render:floorOpacity',
     objectOpacity: 'tinyworld:render:objectOpacity',
     voxelGap: 'tinyworld:render:voxelGap',
+    voxelTerrain: 'tinyworld:render:voxelTerrain',
     autoExpand: 'tinyworld:render:autoExpand',
     pixelSize: 'tinyworld:render:pixelSize',
     pixelDepthEdge: 'tinyworld:render:pixelDepthEdge',
@@ -4440,6 +4445,7 @@
     floorOpacity: '1',
     objectOpacity: '1',
     voxelGap: '0',
+    voxelTerrain: '1',
     autoExpand: '0',
     pixelSize: '1',
     // Keep the old-school mode as chunky colour pixels by default. The
@@ -4581,6 +4587,7 @@
   let renderFloorOpacity = storedNumber(RENDER_LS.floorOpacity, 1, 0.10, 1);
   let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
   let renderVoxelGap = storedNumber(RENDER_LS.voxelGap, 0, 0, 0.14);
+  let renderVoxelTerrain = localStorage.getItem(RENDER_LS.voxelTerrain) !== '0';
   let renderAutoExpand = localStorage.getItem(RENDER_LS.autoExpand) === '1';
   if (!renderAutoExpand) renderVisibleSize = GRID;
   function applyBackdropSettings() {
@@ -5625,6 +5632,131 @@
     return terrainRiseForLevel(tileLevelForCell(getWorldCell(x, z)));
   }
 
+  function materialHex(mat) {
+    if (!mat || !mat.color) return null;
+    return '#' + mat.color.getHexString();
+  }
+
+  function terrainShadeMaterial(base, amount) {
+    const hex = materialHex(base);
+    const shaded = amount ? shadeHexColor(hex, amount) : hex;
+    return customMaterial(base, shaded) || base;
+  }
+
+  function terrainVoxelMaterials(terrain) {
+    if (terrain === 'path') {
+      return {
+        base: M.path,
+        hi: terrainShadeMaterial(M.path, 10),
+        low: M.pathTrim,
+        edge: M.pathTrim,
+        scuff: M.pathScuff,
+      };
+    }
+    if (terrain === 'water') {
+      return {
+        base: M.water,
+        hi: terrainShadeMaterial(M.water, 16),
+        low: M.waterDk,
+        edge: M.waterFoam,
+        scuff: terrainShadeMaterial(M.waterDk, -10),
+      };
+    }
+    if (terrain === 'dirt') {
+      return {
+        base: M.dirtRich,
+        hi: terrainShadeMaterial(M.dirt, 12),
+        low: M.dirtRich,
+        edge: terrainShadeMaterial(M.dirtRich, -16),
+        scuff: terrainShadeMaterial(M.dirt, -8),
+      };
+    }
+    if (terrain === 'stone') {
+      return {
+        base: M.stone,
+        hi: terrainShadeMaterial(M.stone, 14),
+        low: M.stoneDk,
+        edge: M.stoneDk,
+        scuff: terrainShadeMaterial(M.stone, -8),
+      };
+    }
+    if (terrain === 'lava') {
+      return {
+        base: M.lava,
+        hi: terrainShadeMaterial(M.lava, 18),
+        low: M.lavaCrust,
+        edge: M.lavaCrust,
+        scuff: terrainShadeMaterial(M.lavaCrust, 18),
+      };
+    }
+    if (terrain === 'sand') {
+      return {
+        base: M.sand,
+        hi: terrainShadeMaterial(M.sand, 12),
+        low: M.sandDk,
+        edge: M.sandDk,
+        scuff: terrainShadeMaterial(M.sandDk, -8),
+      };
+    }
+    if (terrain === 'snow') {
+      return {
+        base: M.snow,
+        hi: terrainShadeMaterial(M.snow, 8),
+        low: M.snowDk,
+        edge: M.snowDk,
+        scuff: terrainShadeMaterial(M.snowDk, -10),
+      };
+    }
+    return {
+      base: M.grass,
+      hi: M.grassHi,
+      low: terrainShadeMaterial(M.grass, -10),
+      edge: M.grassEdge,
+      scuff: terrainShadeMaterial(M.grassEdge, -10),
+    };
+  }
+
+  function addVoxelTerrainTop(g, terrain, x, z, rise, topSize, topHeight, pathN, terrainN) {
+    const mats = terrainVoxelMaterials(terrain);
+    const cells = (terrain === 'path' || terrain === 'water' || terrain === 'dirt') ? 4 : 3;
+    const cellSize = topSize / cells;
+    const half = topSize * 0.5;
+    const y = rise + topHeight * 0.5;
+    for (let ix = 0; ix < cells; ix++) {
+      for (let iz = 0; iz < cells; iz++) {
+        const atN = iz === 0;
+        const atS = iz === cells - 1;
+        const atW = ix === 0;
+        const atE = ix === cells - 1;
+        const edgeToDifferentTerrain =
+          (atN && terrainN.n && terrainN.n !== terrain) ||
+          (atS && terrainN.s && terrainN.s !== terrain) ||
+          (atW && terrainN.w && terrainN.w !== terrain) ||
+          (atE && terrainN.e && terrainN.e !== terrain);
+        const pathEdge =
+          terrain === 'path' &&
+          ((atN && !pathN.n) || (atS && !pathN.s) || (atW && !pathN.w) || (atE && !pathN.e));
+        const waterEdge = terrain === 'water' && edgeToDifferentTerrain;
+        const r = cellRand(x * cells + ix, z * cells + iz, terrain === 'path' ? 91 : 53);
+        let mat = mats.base;
+        if (pathEdge || waterEdge) {
+          mat = mats.edge;
+        } else if (edgeToDifferentTerrain && terrain !== 'path') {
+          mat = mats.edge;
+        } else if (r > 0.86) {
+          mat = mats.hi;
+        } else if (r < 0.16) {
+          mat = mats.low;
+        } else if (terrain !== 'water' && r > 0.68) {
+          mat = mats.scuff;
+        }
+        const panel = new THREE.Mesh(getBoxGeometry(cellSize, topHeight, cellSize), mat);
+        panel.position.set(-half + cellSize * (ix + 0.5), y, -half + cellSize * (iz + 0.5));
+        g.add(panel);
+      }
+    }
+  }
+
   function serializeCell(x, z, c) {
     const f = c.floors || 1;
     const tf = terrainLevelForCell(c);
@@ -5736,43 +5868,48 @@
       // voxel resolution belongs to objects/stamps; terrain/path cells must
       // still read as full panels aligned to the board grid.
       const seamOverlap = 0.006;
-      const top = new THREE.Mesh(getBoxGeometry(topSize, TOP_H + seamOverlap, topSize), topMat);
-      top.position.y = rise + TOP_H * 0.5 - seamOverlap * 0.5;
-      g.add(top);
+      const topHeight = TOP_H + seamOverlap;
+      if (renderVoxelTerrain) {
+        addVoxelTerrainTop(g, terrain, x, z, rise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN);
+      } else {
+        const top = new THREE.Mesh(getBoxGeometry(topSize, topHeight, topSize), topMat);
+        top.position.y = rise + TOP_H * 0.5 - seamOverlap * 0.5;
+        g.add(top);
 
-      // Add a tiny bevel-like highlight only on the exposed outer cap edges.
-      // This recreates the old softened slab edge/corner read without putting
-      // diagonal bevel triangles across every tile top.
-      const bevelMat = terrain === 'grass' ? M.grassHi : topMat;
-      const bw = 0.045;
-      const bh = 0.020;
-      const bevelY = topY + 0.002;
-      function addCapBevel(dir) {
-        const alongX = dir === 'n' || dir === 's';
-        const geo = alongX
-          ? getBoxGeometry(topSize - bw * 1.5, bh, bw)
-          : getBoxGeometry(bw, bh, topSize - bw * 1.5);
-        const b = new THREE.Mesh(geo, bevelMat);
-        const off = topSize * 0.5 - bw * 0.5;
-        if (dir === 'n') b.position.set(0, bevelY, -off);
-        if (dir === 's') b.position.set(0, bevelY,  off);
-        if (dir === 'w') b.position.set(-off, bevelY, 0);
-        if (dir === 'e') b.position.set( off, bevelY, 0);
-        g.add(b);
+        // Add a tiny bevel-like highlight only on the exposed outer cap edges.
+        // This recreates the old softened slab edge/corner read without putting
+        // diagonal bevel triangles across every tile top.
+        const bevelMat = terrain === 'grass' ? M.grassHi : topMat;
+        const bw = 0.045;
+        const bh = 0.020;
+        const bevelY = topY + 0.002;
+        function addCapBevel(dir) {
+          const alongX = dir === 'n' || dir === 's';
+          const geo = alongX
+            ? getBoxGeometry(topSize - bw * 1.5, bh, bw)
+            : getBoxGeometry(bw, bh, topSize - bw * 1.5);
+          const b = new THREE.Mesh(geo, bevelMat);
+          const off = topSize * 0.5 - bw * 0.5;
+          if (dir === 'n') b.position.set(0, bevelY, -off);
+          if (dir === 's') b.position.set(0, bevelY,  off);
+          if (dir === 'w') b.position.set(-off, bevelY, 0);
+          if (dir === 'e') b.position.set( off, bevelY, 0);
+          g.add(b);
+        }
+        function addCapCorner(xSign, zSign) {
+          const c = new THREE.Mesh(getBoxGeometry(bw, bh, bw), bevelMat);
+          c.position.set(xSign * (topSize * 0.5 - bw * 0.5), bevelY, zSign * (topSize * 0.5 - bw * 0.5));
+          g.add(c);
+        }
+        if (!skipN) addCapBevel('n');
+        if (!skipS) addCapBevel('s');
+        if (!skipW) addCapBevel('w');
+        if (!skipE) addCapBevel('e');
+        if (!skipN && !skipW) addCapCorner(-1, -1);
+        if (!skipN && !skipE) addCapCorner( 1, -1);
+        if (!skipS && !skipW) addCapCorner(-1,  1);
+        if (!skipS && !skipE) addCapCorner( 1,  1);
       }
-      function addCapCorner(xSign, zSign) {
-        const c = new THREE.Mesh(getBoxGeometry(bw, bh, bw), bevelMat);
-        c.position.set(xSign * (topSize * 0.5 - bw * 0.5), bevelY, zSign * (topSize * 0.5 - bw * 0.5));
-        g.add(c);
-      }
-      if (!skipN) addCapBevel('n');
-      if (!skipS) addCapBevel('s');
-      if (!skipW) addCapBevel('w');
-      if (!skipE) addCapBevel('e');
-      if (!skipN && !skipW) addCapCorner(-1, -1);
-      if (!skipN && !skipE) addCapCorner( 1, -1);
-      if (!skipS && !skipW) addCapCorner(-1,  1);
-      if (!skipS && !skipE) addCapCorner( 1,  1);
     }
 
     // Keep terrain surfaces as single clean slabs. Previous decorative
@@ -13120,6 +13257,19 @@
     if (animate) animateDrop(tile, 2.4, 0.42, delay, easeOutCubic, false);
   }
 
+  function rebuildTerrainRender() {
+    for (const key in cellMeshes) {
+      const parts = key.split(',');
+      const x = parseInt(parts[0], 10);
+      const z = parseInt(parts[1], 10);
+      if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+      renderCellTile(x, z, { animate: false });
+    }
+    if (typeof rebuildExistingGhostBoards === 'function') rebuildExistingGhostBoards();
+    for (const id of Array.from(thumbScenes.keys())) refreshToolThumb(id);
+    if (typeof renderStampBuilderCards === 'function') renderStampBuilderCards();
+  }
+
   function renderCellObject(x, z, opts) {
     if (!shouldRenderCellMesh(x, z)) return;
     const { animate = false, delay = 0, impactDust = true } = opts || {};
@@ -16331,6 +16481,7 @@
     const floorOpacityEl = document.getElementById('render-floor-opacity');
     const objectOpacityEl = document.getElementById('render-object-opacity');
     const voxelGapEl = document.getElementById('render-voxel-gap');
+    const voxelTerrainEl = document.getElementById('render-voxel-terrain');
     const resolutionValue = document.getElementById('render-resolution-value');
     const distanceValue = document.getElementById('render-distance-value');
     const visibleSizeValue = document.getElementById('render-visible-size-value');
@@ -16393,6 +16544,7 @@
       floorOpacityEl.value = String(Math.round(renderFloorOpacity * 100));
       objectOpacityEl.value = String(Math.round(renderObjectOpacity * 100));
       voxelGapEl.value = String(Math.round(renderVoxelGap * 100));
+      if (voxelTerrainEl) voxelTerrainEl.checked = !!renderVoxelTerrain;
       resolutionValue.textContent = resolutionEl.value + '%';
       distanceValue.textContent = distanceEl.value;
       visibleSizeValue.textContent = visibleSizeEl.value + 'x' + visibleSizeEl.value;
@@ -16444,11 +16596,13 @@
       localStorage.setItem(RENDER_LS.floorOpacity, renderFloorOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.objectOpacity, renderObjectOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.voxelGap, renderVoxelGap.toFixed(2));
+      localStorage.setItem(RENDER_LS.voxelTerrain, renderVoxelTerrain ? '1' : '0');
       localStorage.setItem(RENDER_LS.autoExpand, renderAutoExpand ? '1' : '0');
     }
 
     function applyFromControls() {
       const oldVoxelGap = renderVoxelGap;
+      const oldVoxelTerrain = renderVoxelTerrain;
       setShadowQuality(shadowEl.value);
       setRenderResolutionScale(parseInt(resolutionEl.value, 10) / 100);
       setRenderVisibleDistance(parseInt(distanceEl.value, 10));
@@ -16480,7 +16634,9 @@
       renderFloorOpacity = parseInt(floorOpacityEl.value, 10) / 100;
       renderObjectOpacity = parseInt(objectOpacityEl.value, 10) / 100;
       renderVoxelGap = parseInt(voxelGapEl.value, 10) / 100;
+      if (voxelTerrainEl) renderVoxelTerrain = !!voxelTerrainEl.checked;
       if (Math.abs(oldVoxelGap - renderVoxelGap) > 0.001) scheduleVoxelStampRefresh();
+      if (oldVoxelTerrain !== renderVoxelTerrain) rebuildTerrainRender();
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();
@@ -16517,7 +16673,7 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelTerrainEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
@@ -16560,9 +16716,12 @@
       renderFloorOpacity = 1;
       renderObjectOpacity = 1;
       renderVoxelGap = 0;
+      renderVoxelTerrain = true;
       renderAutoExpand = false;
       const autoExpandEl = document.getElementById('minimap-autoexpand');
       if (autoExpandEl) autoExpandEl.checked = false;
+      if (voxelTerrainEl) voxelTerrainEl.checked = true;
+      rebuildTerrainRender();
       scheduleVoxelStampRefresh();
       updateGhostRenderBubble();
       applyColorFilterFallback();
