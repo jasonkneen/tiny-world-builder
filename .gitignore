@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.tinyworld-ai-logs/
 .grok/
 node_modules/
 *.log

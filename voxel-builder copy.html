@@ -1,0 +1,2474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tiny Voxel Builder</title>
+<style>
+  :root {
+    color-scheme: light;
+    --panel: rgba(250, 246, 237, 0.94);
+    --ink: #202020;
+    --muted: #6a5e4e;
+    --line: rgba(32, 32, 32, 0.15);
+    --line-strong: rgba(32, 32, 32, 0.28);
+    --accent: #2472ff;
+    --good: #2f8f5a;
+    --danger: #d05d46;
+    --shadow: 0 16px 40px rgba(52, 39, 24, 0.18);
+  }
+  html,
+  body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #d8cbb8;
+    color: var(--ink);
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  canvas {
+    display: block;
+  }
+  .panel {
+    position: fixed;
+    z-index: 5;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+  .toolbar {
+    top: 14px;
+    left: 14px;
+    width: 292px;
+    padding: 12px;
+  }
+  .editor {
+    top: 14px;
+    right: 14px;
+    width: 320px;
+    max-height: calc(100vh - 28px);
+    overflow: auto;
+    padding: 12px;
+  }
+  h1,
+  h2 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+  h2 {
+    margin-top: 12px;
+    font-size: 12px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button,
+  select,
+  textarea,
+  input {
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fffaf0;
+    color: var(--ink);
+    font: inherit;
+  }
+  button {
+    height: 30px;
+    padding: 0 10px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  }
+  button:hover:not(:disabled) {
+    border-color: var(--line-strong);
+  }
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  button.active,
+  button[aria-pressed="true"] {
+    background: #202020;
+    color: #fffaf0;
+  }
+  button:disabled,
+  input:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .palette button {
+    overflow: hidden;
+    padding: 0 6px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .icon-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 40px;
+    padding: 0;
+  }
+  .icon-button svg {
+    width: 19px;
+    height: 19px;
+    pointer-events: none;
+  }
+  .icon-button .button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .terrain-tile,
+  .stamp-tile {
+    display: grid;
+    align-items: center;
+    justify-items: center;
+    min-height: 48px;
+    gap: 4px;
+    padding: 6px 4px;
+  }
+  .terrain-tile {
+    grid-template-rows: 18px 1fr;
+  }
+  .stamp-tile {
+    grid-template-rows: 28px 1fr;
+  }
+  .terrain-dot {
+    width: 24px;
+    height: 16px;
+    border: 1px solid rgba(32, 32, 32, 0.2);
+    border-radius: 4px;
+    box-shadow: inset 0 -5px rgba(0, 0, 0, 0.12);
+  }
+  .stamp-tile svg {
+    width: 28px;
+    height: 28px;
+  }
+  .tile-label {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font-size: 11px;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status {
+    min-height: 34px;
+    margin: 8px 0 10px;
+    color: var(--muted);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 72px repeat(3, 1fr);
+    gap: 6px;
+    align-items: center;
+  }
+  .grid strong {
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .grid input {
+    min-width: 0;
+    height: 28px;
+    padding: 0 5px;
+  }
+  .slider-grid {
+    display: grid;
+    grid-template-columns: 72px 1fr 44px;
+    gap: 8px;
+    align-items: center;
+  }
+  .slider-grid input {
+    width: 100%;
+  }
+  .slider-grid output {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: right;
+  }
+  textarea {
+    width: 100%;
+    height: 96px;
+    resize: none;
+    padding: 8px;
+    font: 11px/1.35 Menlo, Consolas, monospace;
+  }
+  .hint {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .file-input {
+    width: 100%;
+    height: auto;
+    padding: 6px;
+  }
+  .file-name {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    max-width: 170px;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .image-preview {
+    display: none;
+    width: 100%;
+    max-height: 96px;
+    margin: 8px 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    object-fit: cover;
+  }
+  .drag-readout {
+    position: fixed;
+    left: 50%;
+    bottom: 124px;
+    z-index: 6;
+    min-width: 120px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(250, 246, 237, 0.96);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    font-size: 12px;
+    text-align: center;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+  .drag-readout.show {
+    opacity: 1;
+  }
+  .voxel-palette {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    transform: translateX(-50%);
+    max-width: min(760px, calc(100vw - 32px));
+    flex-wrap: wrap;
+  }
+  .voxel-tools {
+    position: fixed;
+    left: 50%;
+    bottom: 68px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    transform: translateX(-50%);
+  }
+  .voxel-size {
+    display: flex;
+    gap: 6px;
+  }
+  .size-button,
+  .split-button {
+    min-width: 44px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .size-button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .split-button:disabled {
+    opacity: 0.45;
+  }
+  .voxel-swatch {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 8px;
+    box-shadow: inset 0 -7px rgba(0, 0, 0, 0.16);
+  }
+  .voxel-swatch.active {
+    outline: 2px solid #202020;
+    outline-offset: 2px;
+  }
+  .plane-bar {
+    position: fixed;
+    left: 14px;
+    top: 50%;
+    z-index: 5;
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    transform: translateY(-50%);
+  }
+  .plane-readout {
+    min-width: 42px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<section class="panel toolbar">
+  <h1>Tiny Voxel Builder</h1>
+  <div class="icon-row" id="modeButtons">
+    <button class="icon-button" type="button" data-mode="select" title="Select objects">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2"><rect x="4" y="4" width="16" height="16" rx="1.5"/></svg>
+      <span class="button-label">Select</span>
+    </button>
+    <button class="icon-button" type="button" data-mode="terrain" title="Paint terrain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 8 12 13 3 8 12 3Z"/><path d="M5 11.5 12 15.5 19 11.5"/><path d="M5 15.5 12 19.5 19 15.5"/></svg>
+      <span class="button-label">Terrain</span>
+    </button>
+    <button class="icon-button" type="button" data-mode="voxel" title="Draw voxels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="M12 12 20 7.5"/><path d="M12 12v9"/><path d="M12 12 4 7.5"/></svg>
+      <span class="button-label">Voxel</span>
+    </button>
+    <button class="icon-button" type="button" data-mode="stamp" title="Place stamps">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 22,8 12,14 2,8"/><polyline points="2,14 12,20 22,14"/></svg>
+      <span class="button-label">Stamp</span>
+    </button>
+    <button class="icon-button" type="button" data-mode="erase" title="Erase">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18 13.5 9.5a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L13 21H8l-3-3Z"/><path d="M14 9 18 13"/><path d="M7 21h13"/></svg>
+      <span class="button-label">Erase</span>
+    </button>
+  </div>
+  <p class="status" id="statusText">Paint terrain, place stamps, then edit object parts.</p>
+  <h2>Terrain</h2>
+  <div class="palette" id="terrainPalette"></div>
+  <h2>Stamps</h2>
+  <div class="palette" id="stampPalette"></div>
+  <h2>Scene</h2>
+  <div class="row">
+    <button type="button" id="saveButton">Save JSON</button>
+    <button type="button" id="loadButton">Load JSON</button>
+    <button type="button" id="clearButton">Clear</button>
+    <button type="button" id="resetViewButton">Reset View</button>
+  </div>
+  <h2>View</h2>
+  <div class="row" id="cameraButtons">
+    <button type="button" data-camera="iso">Isometric</button>
+    <button type="button" data-camera="soft">Soft Perspective</button>
+    <button type="button" data-camera="perspective">Perspective</button>
+  </div>
+  <h2>Lighting</h2>
+  <div class="slider-grid">
+    <strong>Ambient</strong><input id="ambientLight" type="range" min="0" max="1.2" step="0.02" value="0.50" /><output id="ambientValue">0.50</output>
+    <strong>Sun</strong><input id="sunLight" type="range" min="0" max="2.4" step="0.02" value="1.88" /><output id="sunValue">1.88</output>
+    <strong>Exposure</strong><input id="exposure" type="range" min="0.25" max="1.4" step="0.01" value="1.07" /><output id="exposureValue">1.07</output>
+  </div>
+  <p class="hint">Left-drag paints. Right-drag orbits. Shift/middle-drag pans. Wheel zooms. Q/E rotates stamps.</p>
+</section>
+
+<section class="panel editor">
+  <h1>Selection</h1>
+  <p class="status" id="selectionText">No object selected.</p>
+  <div class="row">
+    <button type="button" id="editButton" disabled>Edit Parts</button>
+    <button type="button" id="copyButton" disabled>Copy</button>
+    <button type="button" id="deleteButton" disabled>Delete</button>
+    <button type="button" id="resetPartButton" disabled>Reset Part</button>
+    <button type="button" id="upscaleButton" disabled>AI Reinterpret</button>
+  </div>
+  <h2>Object</h2>
+  <div class="grid">
+    <span></span><strong>X</strong><strong>Y</strong><strong>Z</strong>
+    <strong>Position</strong>
+    <input id="objX" type="number" step="0.25" disabled />
+    <input id="objY" type="number" step="0.25" disabled />
+    <input id="objZ" type="number" step="0.25" disabled />
+    <strong>Scale</strong>
+    <input id="objScaleX" type="number" step="0.1" min="0.1" disabled />
+    <input id="objScaleY" type="number" step="0.1" min="0.1" disabled />
+    <input id="objScaleZ" type="number" step="0.1" min="0.1" disabled />
+  </div>
+  <div class="row" style="margin-top: 8px;">
+    <button type="button" id="scaleDownButton" disabled>Scale -</button>
+    <button type="button" id="scaleUpButton" disabled>Scale +</button>
+  </div>
+  <h2>Part</h2>
+  <div class="grid">
+    <span></span><strong>X</strong><strong>Y</strong><strong>Z</strong>
+    <strong>Size</strong>
+    <input id="partSizeX" type="number" step="0.05" min="0.05" disabled />
+    <input id="partSizeY" type="number" step="0.05" min="0.05" disabled />
+    <input id="partSizeZ" type="number" step="0.05" min="0.05" disabled />
+    <strong>Position</strong>
+    <input id="partPosX" type="number" step="0.05" disabled />
+    <input id="partPosY" type="number" step="0.05" disabled />
+    <input id="partPosZ" type="number" step="0.05" disabled />
+  </div>
+  <h2>JSON</h2>
+  <textarea id="jsonBox" spellcheck="false"></textarea>
+  <h2>AI Detail Contract</h2>
+  <div class="grid" style="margin-bottom: 8px;">
+    <strong>Model</strong>
+    <select id="aiModel">
+      <optgroup label="Latest">
+        <option value="gpt-5.5" selected>gpt-5.5</option>
+        <option value="gpt-5.5-pro">gpt-5.5-pro</option>
+      </optgroup>
+      <optgroup label="GPT-5.4">
+        <option value="gpt-5.4">gpt-5.4</option>
+        <option value="gpt-5.4-pro">gpt-5.4-pro</option>
+        <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+        <option value="gpt-5.4-nano">gpt-5.4-nano</option>
+      </optgroup>
+      <optgroup label="GPT-5">
+        <option value="gpt-5">gpt-5</option>
+        <option value="gpt-5-mini">gpt-5-mini</option>
+        <option value="gpt-5-nano">gpt-5-nano</option>
+      </optgroup>
+    </select>
+    <strong>Think</strong>
+    <select id="aiReasoning">
+      <option value="low" selected>Low</option>
+      <option value="none">None</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="xhigh">XHigh</option>
+    </select>
+    <strong>Verbose</strong>
+    <select id="aiVerbosity">
+      <option value="low" selected>Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+    </select>
+    <strong>Summary</strong>
+    <select id="aiSummary">
+      <option value="off" selected>Off</option>
+      <option value="auto">Auto</option>
+      <option value="concise">Concise</option>
+      <option value="detailed">Detailed</option>
+    </select>
+    <strong>Max out</strong>
+    <input id="aiMaxOutput" type="number" min="1000" max="128000" step="1000" value="12000" />
+    <span></span>
+    <span></span>
+  </div>
+  <div class="row" style="margin-bottom: 8px;">
+    <input id="imageInput" class="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+    <span id="imageName" class="file-name">No image</span>
+  </div>
+  <img id="imagePreview" class="image-preview" alt="" />
+  <textarea id="aiBox" spellcheck="false"></textarea>
+  <div class="row" style="margin-top: 8px;">
+    <button type="button" id="runAiButton" disabled>Run AI Now</button>
+    <button type="button" id="applyAiButton">Apply AI JSON</button>
+  </div>
+</section>
+<div class="plane-bar">
+  <button class="icon-button" type="button" id="planeUpButton" title="Layer up">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15 12 9l6 6"/></svg>
+    <span class="button-label">Layer up</span>
+  </button>
+  <div class="plane-readout" id="planeReadout">Y 1</div>
+  <button class="icon-button" type="button" id="planeDownButton" title="Layer down">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    <span class="button-label">Layer down</span>
+  </button>
+</div>
+<div class="voxel-tools">
+  <div class="voxel-size" id="voxelSizePalette" aria-label="Voxel size">
+    <button class="size-button active" type="button" data-size="1">1</button>
+    <button class="size-button" type="button" data-size="0.5">1/2</button>
+    <button class="size-button" type="button" data-size="0.25">1/4</button>
+  </div>
+  <button class="split-button" type="button" id="splitVoxelButton" disabled>Split</button>
+  <button class="split-button" type="button" id="mergeVoxelButton" disabled>Merge</button>
+</div>
+<div class="voxel-palette" id="voxelPalette" aria-label="Voxel color palette"></div>
+<div class="drag-readout" id="dragReadout"></div>
+
+<script src="vendor/three/three.r128.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xd8cbb8);
+scene.fog = new THREE.Fog(0xd8cbb8, 70, 145);
+
+const orthoCamera = new THREE.OrthographicCamera(-18, 18, 12, -12, 0.1, 300);
+const softCamera = new THREE.PerspectiveCamera(18, window.innerWidth / window.innerHeight, 0.1, 300);
+const perspectiveCamera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 300);
+let camera = orthoCamera;
+const view = {
+  mode: 'iso',
+  target: new THREE.Vector3(0, 0, 0),
+  yaw: Math.PI / 4,
+  pitch: 0.76,
+  distance: 42,
+  zoom: 1
+};
+function updateCamera() {
+  const cp = Math.cos(view.pitch);
+  [orthoCamera, softCamera, perspectiveCamera].forEach((cam) => {
+    cam.position.set(
+      view.target.x + Math.sin(view.yaw) * cp * view.distance,
+      view.target.y + Math.sin(view.pitch) * view.distance,
+      view.target.z + Math.cos(view.yaw) * cp * view.distance
+    );
+    cam.zoom = view.zoom;
+    cam.lookAt(view.target);
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
+  });
+}
+updateCamera();
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = 0.48;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0xd8c9ad, 0x5b4e3c, 0.28);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xf0c078, 0.72);
+sun.position.set(14, 24, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -40;
+sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40;
+sun.shadow.camera.bottom = -40;
+scene.add(sun);
+
+const root = new THREE.Group();
+const terrainRoot = new THREE.Group();
+const objectRoot = new THREE.Group();
+const voxelRoot = new THREE.Group();
+const ghostRoot = new THREE.Group();
+let terrainPickers = [];
+root.add(terrainRoot, objectRoot, voxelRoot, ghostRoot);
+scene.add(root);
+
+const board = { w: 24, d: 18, tile: 1 };
+const state = {
+  mode: 'terrain',
+  terrain: new Map(),
+  objects: [],
+  selectedObject: null,
+  selectedPart: null,
+  editParts: false,
+  voxels: new Map(),
+  selectedVoxelKey: null,
+  selectedVoxelKeys: new Set(),
+  activeTerrain: 'grass',
+  activeStamp: 'house',
+  activeVoxelMaterial: 'roof',
+  activeVoxelSize: 1,
+  activeLayer: 1,
+  stampRotation: 0,
+  copied: null,
+  nextId: 1,
+  imageDataUrl: null,
+  lighting: {
+    ambient: 0.50,
+    sun: 1.88,
+    exposure: 1.07
+  }
+};
+
+const mats = {};
+function mat(name, color, opts) {
+  mats[name] = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0, ...opts });
+  return mats[name];
+}
+mat('grass', 0x5f8230);
+mat('grass2', 0x436725);
+mat('dirt', 0x5c3c27);
+mat('dirtDark', 0x352316);
+mat('path', 0x7f775c);
+mat('pathDark', 0x514b39);
+mat('water', 0x2c718e);
+mat('waterDark', 0x1a4d62);
+mat('stone', 0x696f70);
+mat('stoneDark', 0x363c3f);
+mat('wood', 0x563116);
+mat('woodDark', 0x1f140c);
+mat('woodLight', 0x74451d);
+mat('cream', 0xa8997d);
+mat('white', 0xbdb29c);
+mat('roof', 0x111824);
+mat('roofEdge', 0x0b111a);
+mat('gold', 0x87621c);
+mat('red', 0x552215);
+mat('pink', 0x8f5364);
+mat('green', 0x255c25);
+mat('crop', 0x4d7027);
+mat('shadow', 0x241a10, { transparent: true, opacity: 0.28 });
+mat('ghost', 0x4ca3ff, { transparent: true, opacity: 0.35 });
+
+const terrainDefs = {
+  grass: { label: 'Grass', top: 'grass', side: 'dirt', height: 1 },
+  path: { label: 'Path', top: 'path', side: 'dirt', height: 1 },
+  water: { label: 'Water', top: 'water', side: 'waterDark', height: 0 },
+  stone: { label: 'Stone', top: 'stone', side: 'stoneDark', height: 1 },
+  raise: { label: 'Raise' },
+  lower: { label: 'Lower' }
+};
+
+const stampDefs = {
+  house: { label: 'House', build: buildHouse },
+  pagoda: { label: 'Pagoda', build: buildPagoda },
+  tower: { label: 'Tower', build: buildTower },
+  torii: { label: 'Torii', build: buildTorii },
+  bridge: { label: 'Bridge', build: buildBridge },
+  cherry: { label: 'Cherry Tree', build: buildCherryTree },
+  bamboo: { label: 'Bamboo', build: buildBamboo },
+  lantern: { label: 'Lantern', build: buildLantern },
+  fence: { label: 'Fence', build: buildFence },
+  crop: { label: 'Crops', build: buildCrops },
+  stairs: { label: 'Stairs', build: buildStairs },
+  well: { label: 'Well', build: buildWell }
+};
+
+const terrainColors = {
+  grass: '#5f8230',
+  path: '#7f775c',
+  water: '#2c718e',
+  stone: '#696f70',
+  raise: '#d9c777',
+  lower: '#5c3c27'
+};
+const stampIcons = {
+  house: '<svg viewBox="0 0 32 32"><path d="M6 17 16 8l10 9v10H6Z" fill="#c7b58d"/><path d="M4 17 16 6l12 11" fill="none" stroke="#111824" stroke-width="3" stroke-linecap="round"/><rect x="14" y="20" width="4" height="7" fill="#563116"/><rect x="9" y="18" width="4" height="4" fill="#2c718e"/><rect x="20" y="18" width="4" height="4" fill="#2c718e"/></svg>',
+  pagoda: '<svg viewBox="0 0 32 32"><rect x="10" y="18" width="12" height="8" fill="#8f3e2f"/><rect x="8" y="15" width="16" height="3" fill="#111824"/><rect x="12" y="10" width="8" height="6" fill="#c7b58d"/><rect x="10" y="7" width="12" height="3" fill="#111824"/><path d="M16 3v5" stroke="#87621c" stroke-width="2"/></svg>',
+  tower: '<svg viewBox="0 0 32 32"><rect x="11" y="11" width="10" height="15" rx="2" fill="#8b918c"/><path d="M9 12h14L16 5Z" fill="#2c718e"/><rect x="14" y="17" width="4" height="5" fill="#111824"/></svg>',
+  torii: '<svg viewBox="0 0 32 32"><rect x="5" y="8" width="22" height="4" fill="#111824"/><rect x="8" y="12" width="16" height="3" fill="#8f3e2f"/><rect x="9" y="15" width="4" height="12" fill="#8f3e2f"/><rect x="19" y="15" width="4" height="12" fill="#8f3e2f"/></svg>',
+  bridge: '<svg viewBox="0 0 32 32"><path d="M6 21c4-8 16-8 20 0" fill="none" stroke="#74451d" stroke-width="4" stroke-linecap="round"/><path d="M6 17h20" stroke="#1f140c" stroke-width="2"/><path d="M9 15v8M23 15v8" stroke="#1f140c" stroke-width="2"/></svg>',
+  cherry: '<svg viewBox="0 0 32 32"><rect x="14" y="18" width="4" height="10" fill="#1f140c"/><circle cx="16" cy="13" r="8" fill="#cc7f93"/><circle cx="10" cy="16" r="5" fill="#bc6b81"/><circle cx="22" cy="16" r="5" fill="#bc6b81"/></svg>',
+  bamboo: '<svg viewBox="0 0 32 32"><path d="M10 27V9M16 27V6M22 27V11" stroke="#255c25" stroke-width="3" stroke-linecap="round"/><path d="m16 13 6-4M16 18l-6-4M22 18l5-3" stroke="#5f8230" stroke-width="3" stroke-linecap="round"/></svg>',
+  lantern: '<svg viewBox="0 0 32 32"><rect x="14" y="19" width="4" height="8" fill="#696f70"/><rect x="11" y="13" width="10" height="7" fill="#87621c"/><rect x="10" y="10" width="12" height="3" fill="#111824"/><rect x="10" y="20" width="12" height="3" fill="#111824"/></svg>',
+  fence: '<svg viewBox="0 0 32 32"><rect x="7" y="10" width="4" height="16" fill="#563116"/><rect x="21" y="10" width="4" height="16" fill="#563116"/><rect x="5" y="14" width="22" height="3" fill="#74451d"/><rect x="5" y="20" width="22" height="3" fill="#74451d"/></svg>',
+  crop: '<svg viewBox="0 0 32 32"><rect x="5" y="18" width="22" height="9" fill="#352316"/><path d="M9 22v-6M15 22v-8M21 22v-6" stroke="#4d7027" stroke-width="3" stroke-linecap="round"/><path d="M9 16h4M15 14h4M21 16h4" stroke="#8ba947" stroke-width="2" stroke-linecap="round"/></svg>',
+  stairs: '<svg viewBox="0 0 32 32"><path d="M8 23h16v-4H13v-4h11v-4H18V7H8Z" fill="#696f70"/></svg>',
+  well: '<svg viewBox="0 0 32 32"><ellipse cx="16" cy="20" rx="8" ry="5" fill="#696f70"/><ellipse cx="16" cy="18" rx="6" ry="3" fill="#1a4d62"/><path d="M10 17V8M22 17V8M9 8h14" stroke="#563116" stroke-width="3" stroke-linecap="round"/></svg>'
+};
+const voxelPaletteColors = [
+  { material: 'grass', color: '#5f8230' },
+  { material: 'grass2', color: '#436725' },
+  { material: 'dirt', color: '#5c3c27' },
+  { material: 'dirtDark', color: '#352316' },
+  { material: 'path', color: '#7f775c' },
+  { material: 'water', color: '#2c718e' },
+  { material: 'stone', color: '#696f70' },
+  { material: 'stoneDark', color: '#363c3f' },
+  { material: 'wood', color: '#563116' },
+  { material: 'woodDark', color: '#1f140c' },
+  { material: 'woodLight', color: '#74451d' },
+  { material: 'cream', color: '#a8997d' },
+  { material: 'white', color: '#bdb29c' },
+  { material: 'roof', color: '#111824' },
+  { material: 'gold', color: '#87621c' },
+  { material: 'red', color: '#552215' },
+  { material: 'pink', color: '#8f5364' },
+  { material: 'green', color: '#255c25' },
+  { material: 'crop', color: '#4d7027' }
+];
+
+function tileKey(x, z) {
+  return `${x},${z}`;
+}
+function worldX(x) {
+  return x - board.w / 2 + 0.5;
+}
+function worldZ(z) {
+  return z - board.d / 2 + 0.5;
+}
+function cellAt(x, z) {
+  return state.terrain.get(tileKey(x, z)) || { type: 'grass', h: 1 };
+}
+function setCell(x, z, patch) {
+  if (x < 0 || z < 0 || x >= board.w || z >= board.d) return;
+  const next = { ...cellAt(x, z), ...patch };
+  next.h = Math.max(next.type === 'water' ? 0 : 1, Math.min(8, next.h));
+  state.terrain.set(tileKey(x, z), next);
+  rebuildTerrain();
+  updateVoxelPositions();
+}
+
+const voxelGeometry = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+function snapVoxelValue(value) {
+  return Math.round(value * 1000) / 1000;
+}
+function voxelKey(x, y, z, size = 1, ox = 0, oy = 0, oz = 0, sx = size, sy = size, sz = size) {
+  return [
+    Math.round(x),
+    Math.max(1, Math.round(y)),
+    Math.round(z),
+    snapVoxelValue(size).toFixed(3),
+    snapVoxelValue(ox).toFixed(3),
+    snapVoxelValue(oy).toFixed(3),
+    snapVoxelValue(oz).toFixed(3),
+    snapVoxelValue(sx).toFixed(3),
+    snapVoxelValue(sy).toFixed(3),
+    snapVoxelValue(sz).toFixed(3)
+  ].join(',');
+}
+function inBoard(x, z) {
+  return x >= 0 && z >= 0 && x < board.w && z < board.d;
+}
+function voxelCenterY(x, y, z) {
+  return groundYForCell({ x, z }) + Math.max(1, y) - 1 + 0.5;
+}
+function positionVoxelMesh(entry) {
+  entry.mesh.position.set(worldX(entry.x) + entry.ox, voxelCenterY(entry.x, entry.y, entry.z) + entry.oy, worldZ(entry.z) + entry.oz);
+}
+function updateVoxelPositions() {
+  state.voxels.forEach(positionVoxelMesh);
+  updateSelectionBoxes();
+}
+function updateVoxelUserData(entry) {
+  entry.mesh.userData.voxel = {
+    key: entry.key,
+    x: entry.x,
+    y: entry.y,
+    z: entry.z,
+    size: entry.size,
+    sx: entry.sx,
+    sy: entry.sy,
+    sz: entry.sz,
+    ox: entry.ox,
+    oy: entry.oy,
+    oz: entry.oz,
+    material: entry.material
+  };
+}
+function addVoxelRaw(x, y, z, material = state.activeVoxelMaterial, size = state.activeVoxelSize, offset = [0, 0, 0], dims = null) {
+  x = Math.round(x);
+  y = Math.max(1, Math.round(y));
+  z = Math.round(z);
+  if (!inBoard(x, z)) return false;
+  const safeMaterial = mats[material] ? material : 'stone';
+  const safeSize = Math.max(0.125, Math.min(1, Number(size) || 1));
+  const ox = snapVoxelValue(offset[0] || 0);
+  const oy = snapVoxelValue(offset[1] || 0);
+  const oz = snapVoxelValue(offset[2] || 0);
+  const sx = snapVoxelValue(dims?.[0] || safeSize);
+  const sy = snapVoxelValue(dims?.[1] || safeSize);
+  const sz = snapVoxelValue(dims?.[2] || safeSize);
+  const key = voxelKey(x, y, z, safeSize, ox, oy, oz, sx, sy, sz);
+  const existing = state.voxels.get(key);
+  if (existing) {
+    existing.material = safeMaterial;
+    existing.mesh.material = mats[safeMaterial];
+    updateVoxelUserData(existing);
+    return false;
+  }
+  const mesh = new THREE.Mesh(voxelGeometry, mats[safeMaterial]);
+  mesh.scale.set(sx, sy, sz);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const entry = { key, x, y, z, size: safeSize, sx, sy, sz, ox, oy, oz, material: safeMaterial, mesh };
+  updateVoxelUserData(entry);
+  positionVoxelMesh(entry);
+  voxelRoot.add(mesh);
+  state.voxels.set(key, entry);
+  return true;
+}
+function removeVoxelEntry(entryOrKey) {
+  const key = typeof entryOrKey === 'string' ? entryOrKey : entryOrKey?.key;
+  if (!key) return false;
+  const entry = state.voxels.get(key);
+  if (!entry) return false;
+  voxelRoot.remove(entry.mesh);
+  state.voxels.delete(key);
+  state.selectedVoxelKeys.delete(key);
+  if (state.selectedVoxelKey === key) {
+    state.selectedVoxelKey = state.selectedVoxelKeys.values().next().value || null;
+  }
+  if (ui.splitVoxelButton) ui.splitVoxelButton.disabled = !state.selectedVoxelKey;
+  if (ui.mergeVoxelButton) ui.mergeVoxelButton.disabled = state.selectedVoxelKeys.size < 2;
+  return true;
+}
+function removeVoxelRaw(x, y, z, size = 1, offset = [0, 0, 0]) {
+  return removeVoxelEntry(voxelKey(x, y, z, size, offset[0] || 0, offset[1] || 0, offset[2] || 0));
+}
+function clearVoxels() {
+  while (voxelRoot.children.length) voxelRoot.remove(voxelRoot.children[0]);
+  state.voxels.clear();
+  state.selectedVoxelKeys.clear();
+  selectVoxel(null);
+}
+function normalizeVoxelTarget(cx, cy, cz, size) {
+  const x = Math.round(cx);
+  const y = Math.max(1, Math.round(cy));
+  const z = Math.round(cz);
+  return {
+    x,
+    y,
+    z,
+    size,
+    offset: [
+      snapVoxelValue(cx - x),
+      snapVoxelValue(cy - y),
+      snapVoxelValue(cz - z)
+    ]
+  };
+}
+function quantizeVoxelTarget(cx, cy, cz, size) {
+  const safeSize = Math.max(0.125, Math.min(1, Number(size) || 1));
+  const snap = 1 / safeSize;
+  return normalizeVoxelTarget(
+    Math.round(cx * snap) / snap,
+    Math.round(cy * snap) / snap,
+    Math.round(cz * snap) / snap,
+    safeSize
+  );
+}
+
+function addMesh(parent, mesh, data) {
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  if (data) {
+    mesh.userData.part = {
+      id: data.id || `part-${parent.children.length + 1}`,
+      kind: data.kind || 'box',
+      material: data.material || materialName(mesh.material),
+      size: data.size.slice(),
+      baseScale: mesh.scale.clone(),
+      basePosition: mesh.position.clone()
+    };
+  }
+  parent.add(mesh);
+  return mesh;
+}
+function materialName(material) {
+  const hit = Object.entries(mats).find((entry) => entry[1] === material);
+  return hit ? hit[0] : 'stone';
+}
+function box(parent, id, size, pos, material) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  return addMesh(parent, mesh, { id, size, kind: 'box', material: materialName(material) });
+}
+function cyl(parent, id, radius, height, pos, material, segments = 8) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, segments), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  return addMesh(parent, mesh, { id, size: [radius * 2, height, radius * 2], kind: 'cylinder', material: materialName(material) });
+}
+function cone(parent, id, radius, height, pos, material, segments = 4) {
+  const mesh = new THREE.Mesh(new THREE.ConeGeometry(radius, height, segments), material);
+  mesh.position.set(pos[0], pos[1], pos[2]);
+  return addMesh(parent, mesh, { id, size: [radius * 2, height, radius * 2], kind: 'cone', material: materialName(material) });
+}
+function partGroup(record) {
+  const group = new THREE.Group();
+  group.userData.objectId = record.id;
+  group.userData.stamp = record.stamp;
+  group.position.set(record.x, record.y, record.z);
+  group.scale.set(record.scale?.[0] || 1, record.scale?.[1] || 1, record.scale?.[2] || 1);
+  group.rotation.y = record.rotation || 0;
+  objectRoot.add(group);
+  record.group = group;
+  return group;
+}
+function createRecord(stamp, x, y, z, rotation) {
+  const record = { id: state.nextId++, stamp, x, y, z, rotation: rotation || 0, scale: [1, 1, 1], parts: [] };
+  state.objects.push(record);
+  stampDefs[stamp].build(record);
+  selectObject(record);
+  updateJson();
+  return record;
+}
+function rebuildObject(record) {
+  if (record.group) objectRoot.remove(record.group);
+  if (record.customParts) {
+    buildCustomObject(record);
+  } else {
+    stampDefs[record.stamp].build(record);
+    applySavedParts(record);
+  }
+  if (state.selectedObject === record) updateSelectionBoxes();
+}
+function buildCustomObject(record) {
+  const g = partGroup(record);
+  record.customParts.forEach((part) => {
+    const material = mats[part.material] || mats.stone;
+    let mesh;
+    if (part.kind === 'cylinder') {
+      mesh = cyl(g, part.id, part.size[0] * 0.5, part.size[1], part.pos, material, part.segments || 8);
+    } else if (part.kind === 'cone') {
+      mesh = cone(g, part.id, part.size[0] * 0.5, part.size[1], part.pos, material, part.segments || 4);
+    } else {
+      mesh = box(g, part.id, part.size, part.pos, material);
+    }
+    mesh.scale.set(part.scale?.[0] || 1, part.scale?.[1] || 1, part.scale?.[2] || 1);
+  });
+}
+function applySavedParts(record) {
+  if (!record.parts || !record.group) return;
+  const saved = new Map(record.parts.map((part) => [part.id, part]));
+  record.group.traverse((child) => {
+    if (!child.isMesh || !child.userData.part) return;
+    const patch = saved.get(child.userData.part.id);
+    if (!patch) return;
+    child.scale.set(patch.scale[0], patch.scale[1], patch.scale[2]);
+    child.position.set(patch.pos[0], patch.pos[1], patch.pos[2]);
+  });
+}
+function captureParts(record) {
+  const parts = [];
+  if (!record || !record.group) return parts;
+  record.group.traverse((child) => {
+    if (!child.isMesh || !child.userData.part) return;
+    parts.push({
+      id: child.userData.part.id,
+      scale: [child.scale.x, child.scale.y, child.scale.z],
+      pos: [child.position.x, child.position.y, child.position.z]
+    });
+  });
+  record.parts = parts;
+  return parts;
+}
+function serializeCustomParts(record) {
+  const parts = [];
+  if (!record || !record.group) return parts;
+  record.group.traverse((child) => {
+    if (!child.isMesh || !child.userData.part) return;
+    const data = child.userData.part;
+    parts.push({
+      id: data.id,
+      kind: data.kind,
+      material: data.material,
+      size: data.size.slice(),
+      pos: [child.position.x, child.position.y, child.position.z],
+      scale: [child.scale.x, child.scale.y, child.scale.z]
+    });
+  });
+  return parts;
+}
+function compactPartsForAi(parts) {
+  const buckets = new Map();
+  parts.forEach((part) => {
+    const baseId = String(part.id || 'part').replace(/-v-\d+-\d+-\d+$/, '').replace(/-\d+$/, '');
+    const key = `${baseId}|${part.kind}|${part.material}`;
+    const bucket = buckets.get(key) || {
+      id: baseId,
+      kind: part.kind,
+      material: part.material,
+      count: 0,
+      min: [Infinity, Infinity, Infinity],
+      max: [-Infinity, -Infinity, -Infinity],
+      sampleSize: part.size
+    };
+    bucket.count += 1;
+    for (let axis = 0; axis < 3; axis++) {
+      const half = (part.size?.[axis] || 0) * 0.5;
+      bucket.min[axis] = Math.min(bucket.min[axis], (part.pos?.[axis] || 0) - half);
+      bucket.max[axis] = Math.max(bucket.max[axis], (part.pos?.[axis] || 0) + half);
+    }
+    buckets.set(key, bucket);
+  });
+  return Array.from(buckets.values()).slice(0, 120).map((bucket) => ({
+    id: bucket.id,
+    kind: bucket.kind,
+    material: bucket.material,
+    count: bucket.count,
+    size: bucket.max.map((value, axis) => Number((value - bucket.min[axis]).toFixed(3))),
+    pos: bucket.max.map((value, axis) => Number(((value + bucket.min[axis]) * 0.5).toFixed(3))),
+    sampleSize: bucket.sampleSize
+  }));
+}
+
+function buildHouse(record) {
+  const g = partGroup(record);
+  box(g, 'base', [2.2, 0.35, 1.8], [0, 0.18, 0], mats.stone);
+  box(g, 'body', [1.8, 1.1, 1.35], [0, 0.9, 0], mats.cream);
+  box(g, 'front-beam', [1.95, 0.15, 0.12], [0, 1.25, -0.74], mats.woodDark);
+  box(g, 'door', [0.42, 0.72, 0.08], [0, 0.72, -0.72], mats.wood);
+  box(g, 'window-left', [0.28, 0.28, 0.08], [-0.55, 0.9, -0.72], mats.white);
+  box(g, 'window-right', [0.28, 0.28, 0.08], [0.55, 0.9, -0.72], mats.white);
+  box(g, 'roof-slab', [2.35, 0.28, 1.85], [0, 1.55, 0], mats.roof);
+  box(g, 'roof-cap', [2.0, 0.2, 1.5], [0, 1.82, 0], mats.roofEdge);
+  box(g, 'lantern-left', [0.18, 0.24, 0.1], [-0.82, 0.74, -0.78], mats.gold);
+  box(g, 'lantern-right', [0.18, 0.24, 0.1], [0.82, 0.74, -0.78], mats.gold);
+}
+function buildPagoda(record) {
+  const g = partGroup(record);
+  box(g, 'stone-base', [2.25, 0.4, 2.0], [0, 0.2, 0], mats.stone);
+  for (let i = 0; i < 3; i++) {
+    const y = 0.65 + i * 0.9;
+    const w = 1.6 - i * 0.26;
+    box(g, `floor-${i}`, [w, 0.55, w], [0, y, 0], i % 2 ? mats.cream : mats.red);
+    box(g, `roof-${i}`, [w + 0.6, 0.22, w + 0.6], [0, y + 0.42, 0], mats.roof);
+    box(g, `roof-cap-${i}`, [w + 0.25, 0.14, w + 0.25], [0, y + 0.63, 0], mats.roofEdge);
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) box(g, `gold-${i}-${sx}-${sz}`, [0.16, 0.16, 0.16], [sx * (w * 0.5 + 0.22), y + 0.62, sz * (w * 0.5 + 0.22)], mats.gold);
+    }
+  }
+  cyl(g, 'spire', 0.08, 0.75, [0, 3.75, 0], mats.gold, 6);
+}
+function buildTower(record) {
+  const g = partGroup(record);
+  box(g, 'base', [1.45, 0.34, 1.45], [0, 0.17, 0], mats.stone);
+  box(g, 'shaft', [1.05, 2.2, 1.05], [0, 1.42, 0], mats.cream);
+  box(g, 'frame-front', [1.12, 1.9, 0.12], [0, 1.36, -0.59], mats.woodDark);
+  box(g, 'window', [0.34, 0.34, 0.08], [0, 1.55, -0.66], mats.white);
+  box(g, 'balcony', [1.6, 0.18, 1.6], [0, 2.62, 0], mats.wood);
+  box(g, 'roof', [1.5, 0.34, 1.5], [0, 2.98, 0], mats.roof);
+  box(g, 'roof-top', [0.9, 0.24, 0.9], [0, 3.34, 0], mats.roofEdge);
+  box(g, 'finial', [0.32, 0.32, 0.32], [0, 3.68, 0], mats.gold);
+}
+function buildTorii(record) {
+  const g = partGroup(record);
+  box(g, 'left-post', [0.24, 1.7, 0.24], [-0.72, 0.85, 0], mats.red);
+  box(g, 'right-post', [0.24, 1.7, 0.24], [0.72, 0.85, 0], mats.red);
+  box(g, 'top-beam', [2.0, 0.24, 0.36], [0, 1.78, 0], mats.red);
+  box(g, 'top-cap', [2.25, 0.16, 0.42], [0, 2.0, 0], mats.roof);
+  box(g, 'center-plaque', [0.38, 0.32, 0.1], [0, 1.58, -0.18], mats.gold);
+}
+function buildBridge(record) {
+  const g = partGroup(record);
+  box(g, 'deck', [2.1, 0.18, 0.72], [0, 0.55, 0], mats.woodLight);
+  for (let i = 0; i < 4; i++) {
+    box(g, `plank-${i}`, [0.38, 0.08, 0.78], [-0.72 + i * 0.48, 0.68, 0], mats.wood);
+  }
+  box(g, 'rail-left', [2.05, 0.12, 0.12], [0, 0.95, -0.45], mats.woodDark);
+  box(g, 'rail-right', [2.05, 0.12, 0.12], [0, 0.95, 0.45], mats.woodDark);
+  for (const x of [-0.9, 0.9]) {
+    box(g, `post-a-${x}`, [0.14, 0.62, 0.14], [x, 0.72, -0.45], mats.woodDark);
+    box(g, `post-b-${x}`, [0.14, 0.62, 0.14], [x, 0.72, 0.45], mats.woodDark);
+  }
+}
+function buildCherryTree(record) {
+  const g = partGroup(record);
+  box(g, 'trunk', [0.34, 1.1, 0.34], [0, 0.55, 0], mats.woodDark);
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    box(g, `blossom-${i}`, [0.55, 0.42, 0.55], [Math.cos(a) * 0.42, 1.32 + (i % 2) * 0.18, Math.sin(a) * 0.42], mats.pink);
+  }
+  box(g, 'top-blossom', [0.52, 0.42, 0.52], [0, 1.76, 0], mats.pink);
+}
+function buildBamboo(record) {
+  const g = partGroup(record);
+  for (let i = 0; i < 5; i++) {
+    const x = -0.5 + i * 0.25;
+    box(g, `stem-${i}`, [0.12, 1.45 + (i % 2) * 0.35, 0.12], [x, 0.75 + (i % 2) * 0.18, Math.sin(i) * 0.2], mats.green);
+    box(g, `leaf-${i}`, [0.34, 0.12, 0.12], [x + 0.16, 1.2 + (i % 2) * 0.35, Math.sin(i) * 0.2], mats.grass2);
+  }
+}
+function buildLantern(record) {
+  const g = partGroup(record);
+  box(g, 'base', [0.42, 0.22, 0.42], [0, 0.11, 0], mats.stone);
+  box(g, 'post', [0.22, 0.72, 0.22], [0, 0.58, 0], mats.stoneDark);
+  box(g, 'lamp', [0.42, 0.42, 0.42], [0, 1.08, 0], mats.gold);
+  box(g, 'cap', [0.58, 0.16, 0.58], [0, 1.37, 0], mats.roof);
+}
+function buildFence(record) {
+  const g = partGroup(record);
+  box(g, 'left-post', [0.18, 0.75, 0.18], [-0.7, 0.38, 0], mats.woodDark);
+  box(g, 'right-post', [0.18, 0.75, 0.18], [0.7, 0.38, 0], mats.woodDark);
+  box(g, 'rail-low', [1.5, 0.12, 0.12], [0, 0.3, 0], mats.woodLight);
+  box(g, 'rail-high', [1.5, 0.12, 0.12], [0, 0.58, 0], mats.woodLight);
+}
+function buildCrops(record) {
+  const g = partGroup(record);
+  box(g, 'plot', [1.7, 0.2, 1.2], [0, 0.1, 0], mats.dirtDark);
+  for (let x = 0; x < 4; x++) {
+    for (let z = 0; z < 3; z++) {
+      box(g, `crop-${x}-${z}`, [0.18, 0.28, 0.18], [-0.55 + x * 0.36, 0.34, -0.35 + z * 0.35], mats.crop);
+    }
+  }
+}
+function buildStairs(record) {
+  const g = partGroup(record);
+  for (let i = 0; i < 5; i++) {
+    box(g, `step-${i}`, [1.2, 0.16, 0.28], [0, 0.08 + i * 0.15, -0.55 + i * 0.24], mats.stone);
+  }
+}
+function buildWell(record) {
+  const g = partGroup(record);
+  cyl(g, 'stone-ring', 0.5, 0.4, [0, 0.28, 0], mats.stone, 12);
+  box(g, 'left-post', [0.12, 0.9, 0.12], [-0.52, 0.82, 0], mats.wood);
+  box(g, 'right-post', [0.12, 0.9, 0.12], [0.52, 0.82, 0], mats.wood);
+  box(g, 'roof', [1.25, 0.22, 0.9], [0, 1.32, 0], mats.roof);
+}
+
+function rebuildTerrain() {
+  while (terrainRoot.children.length) terrainRoot.remove(terrainRoot.children[0]);
+  terrainPickers = [];
+  for (let x = 0; x < board.w; x++) {
+    for (let z = 0; z < board.d; z++) {
+      const cell = cellAt(x, z);
+      const def = terrainDefs[cell.type] || terrainDefs.grass;
+      const wx = worldX(x);
+      const wz = worldZ(z);
+      if (cell.type !== 'water') {
+        const side = new THREE.Mesh(new THREE.BoxGeometry(1, cell.h, 1), mats[def.side]);
+        side.position.set(wx, cell.h * 0.5, wz);
+        side.castShadow = true;
+        side.receiveShadow = true;
+        side.userData.tile = { x, z };
+        terrainRoot.add(side);
+      }
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1, 0.1, 1), mats[def.top]);
+      top.position.set(wx, Math.max(0.05, cell.h) + 0.05, wz);
+      top.castShadow = true;
+      top.receiveShadow = true;
+      top.userData.tile = { x, z };
+      terrainRoot.add(top);
+      terrainPickers.push(top);
+      if (cell.type === 'path') {
+        const seam = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 1.02), mats.pathDark);
+        seam.position.set(wx, cell.h + 0.12, wz);
+        seam.userData.tile = { x, z };
+        terrainRoot.add(seam);
+      }
+    }
+  }
+}
+function seedTerrain() {
+  for (let x = 0; x < board.w; x++) {
+    for (let z = 0; z < board.d; z++) state.terrain.set(tileKey(x, z), { type: 'grass', h: 1 });
+  }
+  for (let x = 8; x <= 15; x++) setCell(x, 8, { type: 'water', h: 0 });
+  for (let z = 5; z <= 13; z++) setCell(11, z, { type: 'water', h: 0 });
+  for (let x = 4; x <= 19; x++) setCell(x, 12, { type: 'path', h: 1 });
+  for (let z = 3; z <= 15; z++) setCell(6, z, { type: 'path', h: 1 });
+}
+
+function cellFromHit(event) {
+  setPointer(event);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(terrainPickers, false);
+  if (!hits.length) return null;
+  return hits[0].object.userData.tile || null;
+}
+function voxelHit(event) {
+  setPointer(event);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(voxelRoot.children, false);
+  if (!hits.length) return null;
+  const mesh = hits[0].object;
+  const voxel = state.voxels.get(mesh.userData.voxel?.key);
+  if (!voxel) return null;
+  const normal = hits[0].face ? hits[0].face.normal : new THREE.Vector3(0, 1, 0);
+  const targetSize = state.activeVoxelSize;
+  const faceSize = Math.abs(normal.x) ? voxel.sx : Math.abs(normal.y) ? voxel.sy : voxel.sz;
+  const adjacent = normalizeVoxelTarget(
+    voxel.x + voxel.ox + Math.round(normal.x) * (faceSize * 0.5 + targetSize * 0.5),
+    voxel.y + voxel.oy + Math.round(normal.y) * (faceSize * 0.5 + targetSize * 0.5),
+    voxel.z + voxel.oz + Math.round(normal.z) * (faceSize * 0.5 + targetSize * 0.5),
+    targetSize
+  );
+  return { voxel, adjacent, mesh };
+}
+function voxelTargetFromEvent(event) {
+  const hit = voxelHit(event);
+  if (hit && inBoard(hit.adjacent.x, hit.adjacent.z)) return hit.adjacent;
+  const cell = cellFromHit(event);
+  if (!cell) return null;
+  const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(groundYForCell(cell) + state.activeLayer - 1 + state.activeVoxelSize * 0.5)), new THREE.Vector3());
+  if (!point) return { x: cell.x, y: state.activeLayer, z: cell.z, size: state.activeVoxelSize, offset: [0, 0, 0] };
+  return quantizeVoxelTarget(
+    point.x - worldX(0),
+    state.activeLayer,
+    point.z - worldZ(0),
+    state.activeVoxelSize
+  );
+}
+function groundYForCell(cell) {
+  const data = cellAt(cell.x, cell.z);
+  return Math.max(0.1, data.h + 0.1);
+}
+function placeActiveStamp(cell) {
+  const x = worldX(cell.x);
+  const z = worldZ(cell.z);
+  createRecord(state.activeStamp, x, groundYForCell(cell), z, state.stampRotation);
+}
+
+const pointer = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+function setPointer(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+function objectHit(event) {
+  setPointer(event);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(objectRoot.children, true);
+  if (!hits.length) return null;
+  const part = hits[0].object;
+  let current = part;
+  while (current && current.parent !== objectRoot) current = current.parent;
+  const record = state.objects.find((item) => item.group === current);
+  return { record, part };
+}
+
+const objectBox = new THREE.BoxHelper(new THREE.Group(), 0xffc13b);
+const partBox = new THREE.BoxHelper(new THREE.Group(), 0x2f7bff);
+const voxelBox = new THREE.BoxHelper(new THREE.Group(), 0xfff1a8);
+objectBox.visible = false;
+partBox.visible = false;
+voxelBox.visible = false;
+scene.add(objectBox, partBox, voxelBox);
+
+function selectObject(record) {
+  state.selectedObject = record || null;
+  state.selectedPart = null;
+  state.editParts = false;
+  state.selectedVoxelKey = null;
+  state.selectedVoxelKeys.clear();
+  if (ui.splitVoxelButton) ui.splitVoxelButton.disabled = true;
+  if (ui.mergeVoxelButton) ui.mergeVoxelButton.disabled = true;
+  refreshEditor();
+}
+function selectPart(part) {
+  state.selectedPart = part || null;
+  refreshEditor();
+}
+function selectVoxel(entry) {
+  if (entry) {
+    state.selectedObject = null;
+    state.selectedPart = null;
+    state.editParts = false;
+  }
+  state.selectedVoxelKey = entry ? entry.key : null;
+  state.selectedVoxelKeys.clear();
+  if (entry) state.selectedVoxelKeys.add(entry.key);
+  if (ui.splitVoxelButton) ui.splitVoxelButton.disabled = !entry;
+  if (ui.mergeVoxelButton) ui.mergeVoxelButton.disabled = state.selectedVoxelKeys.size < 2;
+  refreshEditor();
+}
+function toggleVoxelSelection(entry) {
+  if (!entry) return;
+  state.selectedObject = null;
+  state.selectedPart = null;
+  state.editParts = false;
+  if (state.selectedVoxelKeys.has(entry.key)) {
+    state.selectedVoxelKeys.delete(entry.key);
+  } else {
+    state.selectedVoxelKeys.add(entry.key);
+  }
+  state.selectedVoxelKey = state.selectedVoxelKeys.values().next().value || null;
+  ui.splitVoxelButton.disabled = !state.selectedVoxelKey;
+  ui.mergeVoxelButton.disabled = state.selectedVoxelKeys.size < 2;
+  refreshEditor();
+}
+function updateSelectionBoxes() {
+  objectBox.visible = !!state.selectedObject;
+  partBox.visible = !!state.selectedPart;
+  voxelBox.visible = !!state.selectedVoxelKey;
+  if (state.selectedObject && state.selectedObject.group) objectBox.setFromObject(state.selectedObject.group);
+  if (state.selectedPart) partBox.setFromObject(state.selectedPart);
+  if (state.selectedVoxelKey && state.voxels.has(state.selectedVoxelKey)) voxelBox.setFromObject(state.voxels.get(state.selectedVoxelKey).mesh);
+}
+
+const ui = {
+  status: document.getElementById('statusText'),
+  selection: document.getElementById('selectionText'),
+  modeButtons: document.getElementById('modeButtons'),
+  cameraButtons: document.getElementById('cameraButtons'),
+  terrainPalette: document.getElementById('terrainPalette'),
+  stampPalette: document.getElementById('stampPalette'),
+  editButton: document.getElementById('editButton'),
+  copyButton: document.getElementById('copyButton'),
+  deleteButton: document.getElementById('deleteButton'),
+  resetPartButton: document.getElementById('resetPartButton'),
+  upscaleButton: document.getElementById('upscaleButton'),
+  scaleDownButton: document.getElementById('scaleDownButton'),
+  scaleUpButton: document.getElementById('scaleUpButton'),
+  saveButton: document.getElementById('saveButton'),
+  loadButton: document.getElementById('loadButton'),
+  clearButton: document.getElementById('clearButton'),
+  resetViewButton: document.getElementById('resetViewButton'),
+  ambientLight: document.getElementById('ambientLight'),
+  ambientValue: document.getElementById('ambientValue'),
+  sunLight: document.getElementById('sunLight'),
+  sunValue: document.getElementById('sunValue'),
+  exposure: document.getElementById('exposure'),
+  exposureValue: document.getElementById('exposureValue'),
+  jsonBox: document.getElementById('jsonBox'),
+  objX: document.getElementById('objX'),
+  objY: document.getElementById('objY'),
+  objZ: document.getElementById('objZ'),
+  objScaleX: document.getElementById('objScaleX'),
+  objScaleY: document.getElementById('objScaleY'),
+  objScaleZ: document.getElementById('objScaleZ'),
+  partSizeX: document.getElementById('partSizeX'),
+  partSizeY: document.getElementById('partSizeY'),
+  partSizeZ: document.getElementById('partSizeZ'),
+  partPosX: document.getElementById('partPosX'),
+  partPosY: document.getElementById('partPosY'),
+  partPosZ: document.getElementById('partPosZ'),
+  aiModel: document.getElementById('aiModel'),
+  aiReasoning: document.getElementById('aiReasoning'),
+  aiVerbosity: document.getElementById('aiVerbosity'),
+  aiSummary: document.getElementById('aiSummary'),
+  aiMaxOutput: document.getElementById('aiMaxOutput'),
+  imageInput: document.getElementById('imageInput'),
+  imageName: document.getElementById('imageName'),
+  imagePreview: document.getElementById('imagePreview'),
+  aiBox: document.getElementById('aiBox'),
+  runAiButton: document.getElementById('runAiButton'),
+  applyAiButton: document.getElementById('applyAiButton'),
+  voxelPalette: document.getElementById('voxelPalette'),
+  voxelSizePalette: document.getElementById('voxelSizePalette'),
+  splitVoxelButton: document.getElementById('splitVoxelButton'),
+  mergeVoxelButton: document.getElementById('mergeVoxelButton'),
+  planeReadout: document.getElementById('planeReadout'),
+  planeUpButton: document.getElementById('planeUpButton'),
+  planeDownButton: document.getElementById('planeDownButton'),
+  dragReadout: document.getElementById('dragReadout')
+};
+const objectInputs = [ui.objX, ui.objY, ui.objZ, ui.objScaleX, ui.objScaleY, ui.objScaleZ];
+const partInputs = [ui.partSizeX, ui.partSizeY, ui.partSizeZ, ui.partPosX, ui.partPosY, ui.partPosZ];
+
+function fmt(value) {
+  return Number(value).toFixed(2);
+}
+function intFromInput(input, fallback, min, max) {
+  const value = Number.parseInt(input.value, 10);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
+}
+function refreshAiRequestPreview() {
+  if (state.selectedObject) ui.aiBox.value = JSON.stringify(buildAiReinterpretRequest(state.selectedObject), null, 2);
+}
+function refreshEditor() {
+  const record = state.selectedObject;
+  ui.editButton.disabled = !record;
+  ui.copyButton.disabled = !record;
+  ui.deleteButton.disabled = !record;
+  ui.upscaleButton.disabled = !record;
+  ui.runAiButton.disabled = !record;
+  ui.scaleDownButton.disabled = !record;
+  ui.scaleUpButton.disabled = !record;
+  ui.editButton.setAttribute('aria-pressed', state.editParts ? 'true' : 'false');
+  ui.editButton.textContent = state.editParts ? 'Done' : 'Edit Parts';
+  if (!record) {
+    ui.selection.textContent = 'No object selected.';
+    objectInputs.forEach((input) => {
+      input.value = '';
+      input.disabled = true;
+    });
+  } else {
+    ui.selection.textContent = state.editParts
+      ? `Editing ${stampDefs[record.stamp].label}. Click a part.`
+      : `${stampDefs[record.stamp].label} selected.`;
+    ui.objX.value = fmt(record.x);
+    ui.objY.value = fmt(record.y);
+    ui.objZ.value = fmt(record.z);
+    ui.objScaleX.value = fmt(record.scale?.[0] || 1);
+    ui.objScaleY.value = fmt(record.scale?.[1] || 1);
+    ui.objScaleZ.value = fmt(record.scale?.[2] || 1);
+    objectInputs.forEach((input) => {
+      input.disabled = false;
+    });
+  }
+  const part = state.selectedPart;
+  ui.resetPartButton.disabled = !part;
+  if (!part || !part.userData.part) {
+    partInputs.forEach((input) => {
+      input.value = '';
+      input.disabled = true;
+    });
+  } else {
+    const data = part.userData.part;
+    ui.partSizeX.value = fmt(data.size[0] * part.scale.x);
+    ui.partSizeY.value = fmt(data.size[1] * part.scale.y);
+    ui.partSizeZ.value = fmt(data.size[2] * part.scale.z);
+    ui.partPosX.value = fmt(part.position.x);
+    ui.partPosY.value = fmt(part.position.y);
+    ui.partPosZ.value = fmt(part.position.z);
+    partInputs.forEach((input) => {
+      input.disabled = false;
+    });
+  }
+  updateSelectionBoxes();
+}
+function refreshModeButtons() {
+  ui.modeButtons.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.mode === state.mode);
+  });
+}
+function refreshCameraButtons() {
+  ui.cameraButtons.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.camera === view.mode);
+  });
+}
+function makePalette() {
+  Object.entries(terrainDefs).forEach(([id, def]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'terrain-tile';
+    button.title = def.label;
+    button.innerHTML = `<span class="terrain-dot" style="background:${terrainColors[id] || '#777'}"></span><span class="tile-label">${def.label}</span>`;
+    button.addEventListener('click', () => {
+      state.activeTerrain = id;
+      state.mode = 'terrain';
+      refreshModeButtons();
+      makeActiveButtons();
+    });
+    button.dataset.terrain = id;
+    ui.terrainPalette.appendChild(button);
+  });
+  Object.entries(stampDefs).forEach(([id, def]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'stamp-tile';
+    button.title = def.label;
+    button.innerHTML = `${stampIcons[id] || ''}<span class="tile-label">${def.label}</span>`;
+    button.addEventListener('click', () => {
+      state.activeStamp = id;
+      state.mode = 'stamp';
+      refreshModeButtons();
+      makeActiveButtons();
+      rebuildGhost();
+    });
+    button.dataset.stamp = id;
+    ui.stampPalette.appendChild(button);
+  });
+  makeActiveButtons();
+  makeVoxelPalette();
+}
+function makeActiveButtons() {
+  ui.terrainPalette.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.terrain === state.activeTerrain && state.mode === 'terrain');
+  });
+  ui.stampPalette.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.stamp === state.activeStamp && state.mode === 'stamp');
+  });
+  refreshVoxelPalette();
+}
+function makeVoxelPalette() {
+  voxelPaletteColors.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'voxel-swatch';
+    button.title = item.material;
+    button.style.background = item.color;
+    button.dataset.material = item.material;
+    button.addEventListener('click', () => {
+      state.activeVoxelMaterial = item.material;
+      state.mode = 'voxel';
+      refreshModeButtons();
+      makeActiveButtons();
+      updateGhost(null);
+    });
+    ui.voxelPalette.appendChild(button);
+  });
+  refreshVoxelPalette();
+}
+function refreshVoxelPalette() {
+  if (!ui.voxelPalette) return;
+  ui.voxelPalette.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', button.dataset.material === state.activeVoxelMaterial && state.mode === 'voxel');
+  });
+  ui.voxelSizePalette.querySelectorAll('button').forEach((button) => {
+    button.classList.toggle('active', Number(button.dataset.size) === state.activeVoxelSize);
+  });
+  ui.splitVoxelButton.disabled = !state.selectedVoxelKey;
+  refreshPlaneReadout();
+}
+function setActiveLayer(layer) {
+  state.activeLayer = Math.max(1, Math.min(24, Math.round(layer)));
+  refreshPlaneReadout();
+}
+function refreshPlaneReadout() {
+  if (ui.planeReadout) ui.planeReadout.textContent = `Y ${state.activeLayer}`;
+}
+
+function applyObjectInputs() {
+  const record = state.selectedObject;
+  if (!record) return;
+  record.x = parseFloat(ui.objX.value) || 0;
+  record.y = parseFloat(ui.objY.value) || 0;
+  record.z = parseFloat(ui.objZ.value) || 0;
+  record.scale = [
+    Math.max(0.1, parseFloat(ui.objScaleX.value) || 1),
+    Math.max(0.1, parseFloat(ui.objScaleY.value) || 1),
+    Math.max(0.1, parseFloat(ui.objScaleZ.value) || 1)
+  ];
+  record.group.position.set(record.x, record.y, record.z);
+  record.group.scale.set(record.scale[0], record.scale[1], record.scale[2]);
+  updateSelectionBoxes();
+  updateJson();
+}
+function scaleSelectedObject(amount) {
+  const record = state.selectedObject;
+  if (!record) return;
+  const current = record.scale || [1, 1, 1];
+  record.scale = current.map((value) => Math.max(0.1, value * amount));
+  record.group.scale.set(record.scale[0], record.scale[1], record.scale[2]);
+  refreshEditor();
+  updateJson();
+}
+function upscaleSelectedObject() {
+  const record = state.selectedObject;
+  if (!record || !record.group) return;
+  const objectScale = record.scale || [1, 1, 1];
+  ui.aiBox.value = JSON.stringify(buildAiReinterpretRequest(record), null, 2);
+  if (objectScale.every((value) => Math.abs(value - 1) < 0.01) && record.customParts) {
+    applySemanticDetails(record);
+    record.customParts = serializeCustomParts(record);
+    updateJson();
+    return;
+  }
+  const source = [];
+  record.group.traverse((child) => {
+    if (child.isMesh && child.userData.part) source.push(child);
+  });
+  while (record.group.children.length) record.group.remove(record.group.children[0]);
+  source.forEach((mesh, index) => {
+    const data = mesh.userData.part;
+    const material = mats[data.material] || mesh.material || mats.stone;
+    const scaledSize = [
+      data.size[0] * mesh.scale.x * objectScale[0],
+      data.size[1] * mesh.scale.y * objectScale[1],
+      data.size[2] * mesh.scale.z * objectScale[2]
+    ];
+    const scaledPos = [
+      mesh.position.x * objectScale[0],
+      mesh.position.y * objectScale[1],
+      mesh.position.z * objectScale[2]
+    ];
+    if (data.kind !== 'box') {
+      const id = `${data.id}-up-${index}`;
+      const created = data.kind === 'cylinder'
+        ? cyl(record.group, id, scaledSize[0] * 0.5, scaledSize[1], scaledPos, material, 8)
+        : cone(record.group, id, scaledSize[0] * 0.5, scaledSize[1], scaledPos, material, 4);
+      created.scale.set(1, 1, 1);
+      return;
+    }
+    const counts = scaledSize.map((size, axis) => Math.max(1, Math.min(6, Math.ceil(size / Math.max(data.size[axis], 0.05)))));
+    while (counts[0] * counts[1] * counts[2] > 96) {
+      const largestAxis = counts.indexOf(Math.max(...counts));
+      counts[largestAxis] -= 1;
+    }
+    const chunk = [
+      scaledSize[0] / counts[0],
+      scaledSize[1] / counts[1],
+      scaledSize[2] / counts[2]
+    ];
+    for (let ix = 0; ix < counts[0]; ix++) {
+      for (let iy = 0; iy < counts[1]; iy++) {
+        for (let iz = 0; iz < counts[2]; iz++) {
+          const pos = [
+            scaledPos[0] + (ix - (counts[0] - 1) / 2) * chunk[0],
+            scaledPos[1] + (iy - (counts[1] - 1) / 2) * chunk[1],
+            scaledPos[2] + (iz - (counts[2] - 1) / 2) * chunk[2]
+          ];
+          box(record.group, `${data.id}-v-${ix}-${iy}-${iz}`, chunk, pos, material);
+        }
+      }
+    }
+  });
+  record.scale = [1, 1, 1];
+  record.group.scale.set(1, 1, 1);
+  record.customParts = serializeCustomParts(record);
+  record.parts = [];
+  state.selectedPart = null;
+  applySemanticDetails(record);
+  record.customParts = serializeCustomParts(record);
+  refreshEditor();
+  updateJson();
+}
+function buildAiReinterpretRequest(record) {
+  const scale = record.scale || [1, 1, 1];
+  return {
+    task: 'reinterpret_scaled_voxel_object',
+    model: ui.aiModel.value.trim() || 'gpt-5.5',
+    reasoningEffort: ui.aiReasoning.value,
+    reasoningSummary: ui.aiSummary.value,
+    textVerbosity: ui.aiVerbosity.value,
+    maxOutputTokens: intFromInput(ui.aiMaxOutput, 12000, 1000, 128000),
+    instruction: 'Rebuild this object as a richer low-poly voxel model after scaling. Do not simply stretch parts. Return JSON with customParts only.',
+    style: 'Japanese voxel diorama, readable chunky blocks, small trim details, original-size voxels where possible',
+    stamp: record.stamp,
+    desiredScale: scale,
+    allowedPartSchema: {
+      id: 'string',
+      kind: 'box | cylinder | cone',
+      material: Object.keys(mats),
+      size: ['x width', 'y height', 'z length'],
+      pos: ['x', 'y', 'z'],
+      scale: ['x', 'y', 'z']
+    },
+    sourceParts: compactPartsForAi(serializeCustomParts(record)),
+    imageAttached: Boolean(state.imageDataUrl)
+  };
+}
+function buildAiApiPayload(record) {
+  const request = buildAiReinterpretRequest(record);
+  return {
+    model: request.model,
+    reasoningEffort: request.reasoningEffort,
+    reasoningSummary: request.reasoningSummary,
+    textVerbosity: request.textVerbosity,
+    maxOutputTokens: request.maxOutputTokens,
+    allowedMaterials: Object.keys(mats).filter((name) => name !== 'ghost' && name !== 'shadow'),
+    selectedObject: {
+      id: record.id,
+      stamp: record.stamp,
+      label: stampDefs[record.stamp]?.label || record.stamp,
+      position: [record.x, record.y, record.z],
+      rotation: record.rotation || 0,
+      scale: record.scale || [1, 1, 1]
+    },
+    desiredScale: record.scale || [1, 1, 1],
+    style: request.style,
+    sourceParts: request.sourceParts,
+    imageDataUrl: state.imageDataUrl
+  };
+}
+async function postAiReinterpret(payload) {
+  const endpoints = [
+    '/api/reinterpret-stamp',
+    'http://localhost:3002/api/reinterpret-stamp',
+    'http://127.0.0.1:3002/api/reinterpret-stamp'
+  ];
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    ui.status.textContent = `Sending ${payload.selectedObject.label} to ${payload.model}...`;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const raw = await response.text();
+      let result;
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch (error) {
+        result = { ok: false, error: raw || `Server returned non-JSON response ${response.status}` };
+      }
+      if (response.ok && result.ok) return result;
+      lastError = new Error(result.error || `AI request failed with ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('AI request failed');
+}
+async function runAiReinterpret() {
+  const record = state.selectedObject;
+  if (!record) return;
+  const payload = buildAiApiPayload(record);
+  const displayPayload = { ...payload, imageDataUrl: payload.imageDataUrl ? `[attached image ${payload.imageDataUrl.length} chars]` : null };
+  ui.aiBox.value = JSON.stringify({ progress: 'Preparing AI reinterpretation request...', request: displayPayload }, null, 2);
+  ui.status.textContent = `Sending ${payload.selectedObject.label} to ${payload.model}...`;
+  ui.runAiButton.disabled = true;
+  ui.upscaleButton.disabled = true;
+  try {
+    const result = await postAiReinterpret(payload);
+    ui.aiBox.value = JSON.stringify(result, null, 2);
+    ui.status.textContent = 'AI returned parts. Rebuilding object...';
+    applyAiPartsPayload();
+    ui.status.textContent = 'AI enhancement applied.';
+  } catch (error) {
+    const displayPayload = { ...payload, imageDataUrl: payload.imageDataUrl ? `[attached image ${payload.imageDataUrl.length} chars]` : null };
+    ui.aiBox.value = JSON.stringify({ ok: false, error: error.message, request: displayPayload }, null, 2);
+    ui.status.textContent = `AI enhancement failed: ${error.message}`;
+  } finally {
+    ui.runAiButton.disabled = !state.selectedObject;
+    ui.upscaleButton.disabled = !state.selectedObject;
+  }
+}
+function addDetailBox(record, id, size, pos, material = 'stone') {
+  return box(record.group, id, size, pos, mats[material] || mats.stone);
+}
+function applySemanticDetails(record) {
+  const existing = new Set();
+  record.group.traverse((child) => {
+    if (child.isMesh && child.userData.part) existing.add(child.userData.part.id);
+  });
+  const add = (id, size, pos, material) => {
+    if (!existing.has(id)) addDetailBox(record, id, size, pos, material);
+  };
+  if (record.stamp === 'house') {
+    for (let i = 0; i < 5; i++) add(`ai-roof-rib-${i}`, [2.45, 0.06, 0.08], [0, 2.0, -0.72 + i * 0.36], 'roofEdge');
+    add('ai-porch-step-a', [0.8, 0.14, 0.34], [0, 0.18, -1.05], 'stone');
+    add('ai-porch-step-b', [0.62, 0.12, 0.28], [0, 0.34, -0.93], 'stoneDark');
+    for (const x of [-0.92, 0.92]) add(`ai-front-post-${x}`, [0.12, 0.82, 0.12], [x, 0.82, -0.84], 'woodDark');
+  } else if (record.stamp === 'pagoda') {
+    for (let level = 0; level < 3; level++) {
+      const y = 1.08 + level * 0.9;
+      const w = 2.1 - level * 0.26;
+      add(`ai-railing-front-${level}`, [w, 0.08, 0.08], [0, y, -w * 0.5], 'woodDark');
+      add(`ai-railing-back-${level}`, [w, 0.08, 0.08], [0, y, w * 0.5], 'woodDark');
+      add(`ai-roof-line-${level}`, [w + 0.72, 0.06, 0.06], [0, y + 0.11, -w * 0.5 - 0.28], 'roofEdge');
+    }
+  } else if (record.stamp === 'tower') {
+    for (const y of [0.9, 1.4, 1.9]) add(`ai-window-${y}`, [0.28, 0.24, 0.08], [0, y, -0.66], 'white');
+    for (const x of [-0.58, 0.58]) add(`ai-balcony-post-${x}`, [0.12, 0.62, 0.12], [x, 2.72, -0.58], 'woodDark');
+  } else if (record.stamp === 'cherry') {
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8;
+      const r = 0.38 + (i % 3) * 0.18;
+      add(`ai-petal-${i}`, [0.22, 0.16, 0.22], [Math.cos(a) * r, 1.12 + (i % 4) * 0.14, Math.sin(a) * r], 'pink');
+    }
+  } else if (record.stamp === 'bridge') {
+    for (let i = 0; i < 5; i++) add(`ai-deck-slat-${i}`, [0.14, 0.08, 0.82], [-0.8 + i * 0.4, 0.78, 0], 'wood');
+    for (const x of [-0.55, 0, 0.55]) add(`ai-crossbrace-${x}`, [0.1, 0.46, 0.1], [x, 0.76, -0.45], 'woodDark');
+  } else if (record.stamp === 'bamboo') {
+    for (let i = 0; i < 8; i++) {
+      const x = -0.58 + i * 0.16;
+      add(`ai-bamboo-node-${i}`, [0.16, 0.06, 0.16], [x, 0.75 + (i % 4) * 0.28, Math.sin(i) * 0.22], 'grass2');
+    }
+  } else if (record.stamp === 'crop') {
+    for (let x = 0; x < 5; x++) {
+      for (let z = 0; z < 4; z++) add(`ai-sprout-${x}-${z}`, [0.12, 0.18 + ((x + z) % 2) * 0.1, 0.12], [-0.68 + x * 0.34, 0.45, -0.48 + z * 0.32], 'crop');
+    }
+  } else {
+    add('ai-detail-trim-front', [1.2, 0.08, 0.08], [0, 0.62, -0.7], 'woodDark');
+    add('ai-detail-trim-back', [1.2, 0.08, 0.08], [0, 0.62, 0.7], 'woodDark');
+  }
+  ui.status.textContent = 'AI reinterpretation applied locally. The AI contract JSON is in the right panel.';
+}
+function applyAiPartsPayload() {
+  const record = state.selectedObject;
+  if (!record) return;
+  let payload;
+  try {
+    payload = JSON.parse(ui.aiBox.value);
+  } catch (error) {
+    ui.status.textContent = 'AI JSON did not parse.';
+    return;
+  }
+  const parts = payload.customParts || payload.response?.customParts || payload.parts;
+  if (!Array.isArray(parts)) {
+    ui.status.textContent = 'AI JSON needs a customParts array.';
+    return;
+  }
+  while (record.group.children.length) record.group.remove(record.group.children[0]);
+  objectRoot.remove(record.group);
+  record.scale = [1, 1, 1];
+  record.customParts = parts.map((part, index) => ({
+    id: part.id || `ai-part-${index}`,
+    kind: part.kind || 'box',
+    material: part.material || 'stone',
+    size: part.size || [0.25, 0.25, 0.25],
+    pos: part.pos || [0, 0, 0],
+    scale: part.scale || [1, 1, 1]
+  }));
+  buildCustomObject(record);
+  state.selectedPart = null;
+  refreshEditor();
+  updateJson();
+}
+function applyPartInputs() {
+  const part = state.selectedPart;
+  if (!part || !part.userData.part) return;
+  const data = part.userData.part;
+  const sx = Math.max(0.05, parseFloat(ui.partSizeX.value) || data.size[0]);
+  const sy = Math.max(0.05, parseFloat(ui.partSizeY.value) || data.size[1]);
+  const sz = Math.max(0.05, parseFloat(ui.partSizeZ.value) || data.size[2]);
+  part.scale.set(sx / data.size[0], sy / data.size[1], sz / data.size[2]);
+  part.position.set(
+    parseFloat(ui.partPosX.value) || 0,
+    parseFloat(ui.partPosY.value) || 0,
+    parseFloat(ui.partPosZ.value) || 0
+  );
+  captureParts(state.selectedObject);
+  if (state.selectedObject.customParts) state.selectedObject.customParts = serializeCustomParts(state.selectedObject);
+  updateSelectionBoxes();
+  updateJson();
+}
+function resetPart() {
+  const part = state.selectedPart;
+  if (!part || !part.userData.part) return;
+  const data = part.userData.part;
+  part.scale.copy(data.baseScale);
+  part.position.copy(data.basePosition);
+  captureParts(state.selectedObject);
+  if (state.selectedObject.customParts) state.selectedObject.customParts = serializeCustomParts(state.selectedObject);
+  refreshEditor();
+  updateJson();
+}
+
+function updateJson() {
+  const data = {
+    board,
+    lighting: state.lighting,
+    terrain: Array.from(state.terrain.entries()).map(([key, value]) => ({ key, ...value })),
+    voxels: Array.from(state.voxels.values()).map((voxel) => ({
+      x: voxel.x,
+      y: voxel.y,
+      z: voxel.z,
+      size: voxel.size,
+      dims: [voxel.sx, voxel.sy, voxel.sz],
+      offset: [voxel.ox, voxel.oy, voxel.oz],
+      material: voxel.material
+    })),
+    objects: state.objects.map((record) => {
+      captureParts(record);
+      return {
+        id: record.id,
+        stamp: record.stamp,
+        x: record.x,
+        y: record.y,
+        z: record.z,
+        scale: record.scale || [1, 1, 1],
+        rotation: record.rotation,
+        customParts: record.customParts || null,
+        parts: record.parts
+      };
+    })
+  };
+  ui.jsonBox.value = JSON.stringify(data, null, 2);
+}
+function applyLighting() {
+  state.lighting.ambient = parseFloat(ui.ambientLight.value);
+  state.lighting.sun = parseFloat(ui.sunLight.value);
+  state.lighting.exposure = parseFloat(ui.exposure.value);
+  hemi.intensity = state.lighting.ambient;
+  sun.intensity = state.lighting.sun;
+  renderer.toneMappingExposure = state.lighting.exposure;
+  ui.ambientValue.textContent = state.lighting.ambient.toFixed(2);
+  ui.sunValue.textContent = state.lighting.sun.toFixed(2);
+  ui.exposureValue.textContent = state.lighting.exposure.toFixed(2);
+}
+function resetView() {
+  view.target.set(0, 0, 0);
+  view.yaw = Math.PI / 4;
+  view.pitch = 0.76;
+  view.distance = view.mode === 'perspective' ? 34 : view.mode === 'soft' ? 58 : 42;
+  view.zoom = 1;
+  updateCamera();
+}
+function setCameraMode(mode) {
+  view.mode = mode;
+  camera = mode === 'perspective' ? perspectiveCamera : mode === 'soft' ? softCamera : orthoCamera;
+  view.distance = mode === 'perspective' ? 34 : mode === 'soft' ? 58 : 42;
+  refreshCameraButtons();
+  updateCamera();
+}
+function loadJson() {
+  let data;
+  try {
+    data = JSON.parse(ui.jsonBox.value);
+  } catch (error) {
+    ui.status.textContent = 'JSON did not parse.';
+    return;
+  }
+  state.terrain.clear();
+  if (data.lighting) {
+    state.lighting = {
+      ambient: Number.isFinite(data.lighting.ambient) ? data.lighting.ambient : state.lighting.ambient,
+      sun: Number.isFinite(data.lighting.sun) ? data.lighting.sun : state.lighting.sun,
+      exposure: Number.isFinite(data.lighting.exposure) ? data.lighting.exposure : state.lighting.exposure
+    };
+    ui.ambientLight.value = state.lighting.ambient;
+    ui.sunLight.value = state.lighting.sun;
+    ui.exposure.value = state.lighting.exposure;
+    applyLighting();
+  }
+  (data.terrain || []).forEach((cell) => {
+    state.terrain.set(cell.key, { type: cell.type, h: cell.h });
+  });
+  while (objectRoot.children.length) objectRoot.remove(objectRoot.children[0]);
+  clearVoxels();
+  state.objects = [];
+  state.nextId = 1;
+  (data.voxels || []).forEach((voxel) => {
+    addVoxelRaw(voxel.x, voxel.y || 1, voxel.z, voxel.material || 'stone', voxel.size || 1, voxel.offset || [0, 0, 0], voxel.dims || null);
+  });
+  (data.objects || []).forEach((item) => {
+    if (!stampDefs[item.stamp]) return;
+    const record = { ...item, scale: item.scale || [1, 1, 1], customParts: item.customParts || null, parts: item.parts || [] };
+    state.nextId = Math.max(state.nextId, record.id + 1);
+    state.objects.push(record);
+    if (record.customParts) {
+      buildCustomObject(record);
+    } else {
+      stampDefs[record.stamp].build(record);
+      applySavedParts(record);
+    }
+  });
+  rebuildTerrain();
+  selectObject(null);
+  updateJson();
+}
+
+function rebuildGhost() {
+  while (ghostRoot.children.length) ghostRoot.remove(ghostRoot.children[0]);
+  const record = { id: -1, stamp: state.activeStamp, x: 0, y: 0, z: 0, rotation: state.stampRotation };
+  const originalRoot = objectRoot;
+  stampDefs[state.activeStamp].build(record);
+  const ghost = record.group;
+  objectRoot.remove(ghost);
+  ghost.traverse((child) => {
+    if (child.isMesh) child.material = mats.ghost;
+  });
+  ghost.visible = false;
+  ghostRoot.add(ghost);
+  state.ghost = ghost;
+}
+function updateGhost(cell) {
+  if (!state.ghost) rebuildGhost();
+  if (state.mode !== 'stamp' || !cell) {
+    if (state.ghost) state.ghost.visible = false;
+    return;
+  }
+  state.ghost.visible = true;
+  state.ghost.position.set(worldX(cell.x), groundYForCell(cell), worldZ(cell.z));
+  state.ghost.rotation.y = state.stampRotation;
+}
+
+function clearScene() {
+  state.objects = [];
+  while (objectRoot.children.length) objectRoot.remove(objectRoot.children[0]);
+  clearVoxels();
+  state.terrain.clear();
+  seedTerrain();
+  selectObject(null);
+  updateJson();
+}
+function splitSelectedVoxel() {
+  const entry = state.voxels.get(state.selectedVoxelKey);
+  if (!entry) return;
+  const childSize = entry.size * 0.5;
+  if (childSize < 0.125) {
+    ui.status.textContent = 'That voxel is already at the smallest split size.';
+    return;
+  }
+  const material = entry.material;
+  const parent = { ...entry };
+  removeVoxelEntry(entry);
+  const childDims = [parent.sx * 0.5, parent.sy * 0.5, parent.sz * 0.5];
+  const delta = [childDims[0] * 0.5, childDims[1] * 0.5, childDims[2] * 0.5];
+  const children = [];
+  for (const dx of [-delta[0], delta[0]]) {
+    for (const dy of [-delta[1], delta[1]]) {
+      for (const dz of [-delta[2], delta[2]]) {
+        const target = normalizeVoxelTarget(
+          parent.x + parent.ox + dx,
+          parent.y + parent.oy + dy,
+          parent.z + parent.oz + dz,
+          childSize
+        );
+        addVoxelRaw(target.x, target.y, target.z, material, childSize, target.offset, childDims);
+        children.push(voxelKey(target.x, target.y, target.z, childSize, ...target.offset, ...childDims));
+      }
+    }
+  }
+  selectVoxel(state.voxels.get(children[0]) || null);
+  ui.status.textContent = `Split voxel into ${children.length} smaller voxels.`;
+  updateJson();
+}
+function mergeSelectedVoxels() {
+  const entries = Array.from(state.selectedVoxelKeys)
+    .map((key) => state.voxels.get(key))
+    .filter(Boolean);
+  if (entries.length < 2) return;
+  const bounds = entries.reduce((box, entry) => {
+    const cx = entry.x + entry.ox;
+    const cy = entry.y + entry.oy;
+    const cz = entry.z + entry.oz;
+    return {
+      minX: Math.min(box.minX, cx - entry.sx * 0.5),
+      maxX: Math.max(box.maxX, cx + entry.sx * 0.5),
+      minY: Math.min(box.minY, cy - entry.sy * 0.5),
+      maxY: Math.max(box.maxY, cy + entry.sy * 0.5),
+      minZ: Math.min(box.minZ, cz - entry.sz * 0.5),
+      maxZ: Math.max(box.maxZ, cz + entry.sz * 0.5)
+    };
+  }, { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity });
+  const dims = [
+    snapVoxelValue(bounds.maxX - bounds.minX),
+    snapVoxelValue(bounds.maxY - bounds.minY),
+    snapVoxelValue(bounds.maxZ - bounds.minZ)
+  ];
+  const center = [
+    snapVoxelValue((bounds.minX + bounds.maxX) * 0.5),
+    snapVoxelValue((bounds.minY + bounds.maxY) * 0.5),
+    snapVoxelValue((bounds.minZ + bounds.maxZ) * 0.5)
+  ];
+  const targetSize = Math.min(dims[0], dims[1], dims[2]);
+  const material = entries[0].material;
+  entries.forEach((entry) => removeVoxelEntry(entry));
+  const target = normalizeVoxelTarget(center[0], center[1], center[2], targetSize);
+  addVoxelRaw(target.x, target.y, target.z, material, targetSize, target.offset, dims);
+  selectVoxel(state.voxels.get(voxelKey(target.x, target.y, target.z, targetSize, ...target.offset, ...dims)) || null);
+  ui.status.textContent = `Merged ${entries.length} voxels.`;
+  updateJson();
+}
+
+let drag = null;
+let paintStroke = null;
+function readout(text) {
+  if (!text) {
+    ui.dragReadout.classList.remove('show');
+    return;
+  }
+  ui.dragReadout.textContent = text;
+  ui.dragReadout.classList.add('show');
+}
+function brushModeForEvent(event) {
+  if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return null;
+  if (state.editParts || state.mode === 'select') return null;
+  return ['terrain', 'stamp', 'voxel', 'erase'].includes(state.mode) ? state.mode : null;
+}
+function brushCellKey(cell) {
+  return cell ? `${cell.x},${cell.z}` : '';
+}
+function removeObjectRecord(record) {
+  if (!record) return;
+  objectRoot.remove(record.group);
+  state.objects = state.objects.filter((item) => item !== record);
+  if (state.selectedObject === record) selectObject(null);
+}
+function applyTerrainBrush(cell) {
+  if (!cell) return false;
+  if (state.activeTerrain === 'raise') {
+    setCell(cell.x, cell.z, { h: cellAt(cell.x, cell.z).h + 1 });
+  } else if (state.activeTerrain === 'lower') {
+    setCell(cell.x, cell.z, { h: cellAt(cell.x, cell.z).h - 1 });
+  } else {
+    const def = terrainDefs[state.activeTerrain];
+    setCell(cell.x, cell.z, { type: state.activeTerrain, h: def.height });
+  }
+  return true;
+}
+function applyVoxelColumn(target) {
+  if (!paintStroke || !target) return false;
+  if (!Number.isFinite(paintStroke.layer)) paintStroke.layer = target.y || state.activeLayer;
+  const layer = paintStroke.layer;
+  let changed = false;
+  for (let i = 0; i <= paintStroke.height; i++) {
+    const y = layer + i;
+    const offset = target.offset || [0, 0, 0];
+    const key = voxelKey(target.x, y, target.z, target.size || state.activeVoxelSize, offset[0], offset[1], offset[2]);
+    if (addVoxelRaw(target.x, y, target.z, state.activeVoxelMaterial, target.size || state.activeVoxelSize, offset)) {
+      paintStroke.created.add(key);
+      selectVoxel(state.voxels.get(key));
+      changed = true;
+    }
+  }
+  return changed;
+}
+function replayVoxelStroke() {
+  if (!paintStroke || paintStroke.mode !== 'voxel') return;
+  paintStroke.created.forEach((key) => removeVoxelEntry(key));
+  paintStroke.created.clear();
+  paintStroke.targets.forEach((target) => applyVoxelColumn(target));
+  readout(`Voxel wall Y ${paintStroke.layer}-${paintStroke.layer + paintStroke.height}`);
+  updateJson();
+}
+function applyPaintStroke(event) {
+  if (!paintStroke) return false;
+  const cell = cellFromHit(event);
+  if (paintStroke.mode === 'erase') {
+    const voxel = voxelHit(event);
+    if (voxel) {
+      const key = voxelKey(voxel.voxel.x, voxel.voxel.y, voxel.voxel.z);
+      if (!paintStroke.voxels.has(key)) {
+        paintStroke.voxels.add(key);
+        removeVoxelEntry(voxel.voxel);
+        readout(`Erased ${paintStroke.voxels.size} voxel${paintStroke.voxels.size === 1 ? '' : 's'}`);
+        return true;
+      }
+    }
+    const hit = objectHit(event);
+    if (hit && !paintStroke.objects.has(hit.record.id)) {
+      paintStroke.objects.add(hit.record.id);
+      removeObjectRecord(hit.record);
+      readout(`Erased ${paintStroke.objects.size} object${paintStroke.objects.size === 1 ? '' : 's'}`);
+      return true;
+    }
+    const key = brushCellKey(cell);
+    if (cell && !paintStroke.cells.has(key)) {
+      paintStroke.cells.add(key);
+      setCell(cell.x, cell.z, { type: 'grass', h: 1 });
+      readout(`Erased ${paintStroke.cells.size} tile${paintStroke.cells.size === 1 ? '' : 's'}`);
+      return true;
+    }
+    return false;
+  }
+  if (paintStroke.mode === 'voxel') {
+    const target = voxelTargetFromEvent(event);
+    if (!target) return false;
+    if (!paintStroke.targets.size) paintStroke.layer = target.y;
+    const key = voxelKey(target.x, target.y, target.z, target.size || state.activeVoxelSize, ...(target.offset || [0, 0, 0]));
+    if (paintStroke.targets.has(key)) return false;
+    paintStroke.targets.set(key, target);
+    const changed = applyVoxelColumn(target);
+    readout(`${state.activeVoxelMaterial} voxel x${paintStroke.targets.size} | wall ${paintStroke.height + 1} high`);
+    return changed;
+  }
+  const key = brushCellKey(cell);
+  if (!cell || paintStroke.cells.has(key)) return false;
+  paintStroke.cells.add(key);
+  if (paintStroke.mode === 'stamp') {
+    placeActiveStamp(cell);
+    readout(`${stampDefs[state.activeStamp].label} x${paintStroke.cells.size}`);
+    return true;
+  }
+  const changed = applyTerrainBrush(cell);
+  if (changed) readout(`${terrainDefs[state.activeTerrain].label} x${paintStroke.cells.size}`);
+  return changed;
+}
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  const brushMode = brushModeForEvent(event);
+  if (brushMode) {
+    paintStroke = {
+      mode: brushMode,
+      cells: new Set(),
+      objects: new Set(),
+      voxels: new Set(),
+      targets: new Map(),
+      created: new Set(),
+      height: 0,
+      layer: state.activeLayer
+    };
+    renderer.domElement.setPointerCapture(event.pointerId);
+    applyPaintStroke(event);
+    updateJson();
+    return;
+  }
+  const navMode = event.button === 1 || event.shiftKey ? 'pan' : 'orbit';
+  drag = {
+    x: event.clientX,
+    y: event.clientY,
+    mode: navMode,
+    yaw: view.yaw,
+    pitch: view.pitch,
+    target: view.target.clone()
+  };
+  renderer.domElement.setPointerCapture(event.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (paintStroke && event.buttons) {
+    if (applyPaintStroke(event)) updateJson();
+    updateGhost(state.mode === 'stamp' ? cellFromHit(event) : null);
+    return;
+  }
+  if (drag && event.buttons) {
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (drag.mode === 'orbit') {
+      view.yaw = drag.yaw - dx * 0.008;
+      view.pitch = Math.max(0.22, Math.min(1.32, drag.pitch + dy * 0.006));
+    } else {
+      const right = new THREE.Vector3();
+      const up = new THREE.Vector3();
+      camera.matrix.extractBasis(right, up, new THREE.Vector3());
+      const scale = 0.025 / view.zoom;
+      view.target.copy(drag.target)
+        .addScaledVector(right, -dx * scale)
+        .addScaledVector(up, dy * scale);
+    }
+    updateCamera();
+    return;
+  }
+  updateGhost(state.mode === 'stamp' ? cellFromHit(event) : null);
+});
+renderer.domElement.addEventListener('pointerup', (event) => {
+  if (paintStroke) {
+    paintStroke = null;
+    updateJson();
+    setTimeout(() => readout(''), 350);
+    return;
+  }
+  const moved = drag ? Math.hypot(event.clientX - drag.x, event.clientY - drag.y) : 0;
+  drag = null;
+  if (moved > 5) return;
+  if (event.shiftKey) {
+    const voxel = voxelHit(event);
+    if (voxel) {
+      toggleVoxelSelection(voxel.voxel);
+      return;
+    }
+  }
+  if (state.editParts && state.selectedObject) {
+    const hit = objectHit(event);
+    if (hit && hit.record === state.selectedObject) selectPart(hit.part);
+    return;
+  }
+  const hit = objectHit(event);
+  if (state.mode === 'select') {
+    if (hit) {
+      selectVoxel(null);
+      selectObject(hit.record);
+      return;
+    }
+    const voxel = voxelHit(event);
+    selectObject(null);
+    selectVoxel(voxel ? voxel.voxel : null);
+    return;
+  }
+  if (state.mode === 'erase') {
+    if (hit) {
+      removeObjectRecord(hit.record);
+      updateJson();
+      return;
+    }
+    const cell = cellFromHit(event);
+    if (cell) setCell(cell.x, cell.z, { type: 'grass', h: 1 });
+    updateJson();
+    return;
+  }
+  const cell = cellFromHit(event);
+  if (!cell) return;
+  if (state.mode === 'stamp') {
+    placeActiveStamp(cell);
+  } else if (state.mode === 'terrain') {
+    applyTerrainBrush(cell);
+    updateJson();
+  }
+});
+renderer.domElement.addEventListener('pointercancel', () => {
+  paintStroke = null;
+  drag = null;
+  readout('');
+});
+renderer.domElement.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const zoom = event.deltaY > 0 ? 1.08 : 0.92;
+  view.zoom = Math.max(0.45, Math.min(3.2, view.zoom / zoom));
+  updateCamera();
+}, { passive: false });
+renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault());
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (paintStroke && paintStroke.mode === 'voxel') {
+      paintStroke.height = Math.min(23, paintStroke.height + 1);
+      replayVoxelStroke();
+    } else if (state.mode === 'voxel') {
+      setActiveLayer(state.activeLayer + 1);
+      readout(`Drawing plane Y ${state.activeLayer}`);
+      setTimeout(() => readout(''), 350);
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    if (paintStroke && paintStroke.mode === 'voxel') {
+      paintStroke.height = Math.max(0, paintStroke.height - 1);
+      replayVoxelStroke();
+    } else if (state.mode === 'voxel') {
+      setActiveLayer(state.activeLayer - 1);
+      readout(`Drawing plane Y ${state.activeLayer}`);
+      setTimeout(() => readout(''), 350);
+    }
+    return;
+  }
+  if (event.key.toLowerCase() === 'q') state.stampRotation += Math.PI / 2;
+  if (event.key.toLowerCase() === 'e') state.stampRotation -= Math.PI / 2;
+  if (event.key.toLowerCase() === 'v') {
+    state.mode = 'voxel';
+    refreshModeButtons();
+    makeActiveButtons();
+    updateGhost(null);
+  }
+  if (event.key.toLowerCase() === 'c' && state.selectedObject) {
+    state.copied = state.selectedObject.stamp;
+  }
+  rebuildGhost();
+});
+
+ui.modeButtons.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-mode]');
+  if (!button) return;
+  state.mode = button.dataset.mode;
+  state.editParts = false;
+  state.selectedPart = null;
+  refreshModeButtons();
+  makeActiveButtons();
+  updateGhost(null);
+  refreshEditor();
+});
+ui.cameraButtons.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-camera]');
+  if (!button) return;
+  setCameraMode(button.dataset.camera);
+});
+ui.planeUpButton.addEventListener('click', () => {
+  state.mode = 'voxel';
+  setActiveLayer(state.activeLayer + 1);
+  refreshModeButtons();
+  makeActiveButtons();
+  readout(`Drawing plane Y ${state.activeLayer}`);
+  setTimeout(() => readout(''), 350);
+});
+ui.planeDownButton.addEventListener('click', () => {
+  state.mode = 'voxel';
+  setActiveLayer(state.activeLayer - 1);
+  refreshModeButtons();
+  makeActiveButtons();
+  readout(`Drawing plane Y ${state.activeLayer}`);
+  setTimeout(() => readout(''), 350);
+});
+ui.voxelSizePalette.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-size]');
+  if (!button) return;
+  state.activeVoxelSize = Number(button.dataset.size) || 1;
+  state.mode = 'voxel';
+  refreshModeButtons();
+  makeActiveButtons();
+  readout(`Voxel size ${button.textContent}`);
+  setTimeout(() => readout(''), 350);
+});
+ui.splitVoxelButton.addEventListener('click', splitSelectedVoxel);
+ui.mergeVoxelButton.addEventListener('click', mergeSelectedVoxels);
+ui.editButton.addEventListener('click', () => {
+  if (!state.selectedObject) return;
+  state.editParts = !state.editParts;
+  state.mode = 'select';
+  state.selectedPart = null;
+  refreshModeButtons();
+  refreshEditor();
+});
+ui.copyButton.addEventListener('click', () => {
+  if (!state.selectedObject) return;
+  state.activeStamp = state.selectedObject.stamp;
+  state.mode = 'stamp';
+  refreshModeButtons();
+  makeActiveButtons();
+  rebuildGhost();
+});
+ui.deleteButton.addEventListener('click', () => {
+  if (!state.selectedObject) return;
+  objectRoot.remove(state.selectedObject.group);
+  state.objects = state.objects.filter((item) => item !== state.selectedObject);
+  selectObject(null);
+  updateJson();
+});
+ui.resetPartButton.addEventListener('click', resetPart);
+ui.upscaleButton.addEventListener('click', upscaleSelectedObject);
+ui.runAiButton.addEventListener('click', runAiReinterpret);
+ui.applyAiButton.addEventListener('click', applyAiPartsPayload);
+[ui.aiModel, ui.aiReasoning, ui.aiVerbosity, ui.aiSummary].forEach((input) => {
+  input.addEventListener('change', refreshAiRequestPreview);
+});
+ui.aiMaxOutput.addEventListener('input', refreshAiRequestPreview);
+ui.imageInput.addEventListener('change', () => {
+  const file = ui.imageInput.files && ui.imageInput.files[0];
+  if (!file) {
+    state.imageDataUrl = null;
+    ui.imageName.textContent = 'No image';
+    ui.imagePreview.removeAttribute('src');
+    ui.imagePreview.style.display = 'none';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.imageDataUrl = String(reader.result || '');
+    ui.imageName.textContent = file.name;
+    ui.imagePreview.src = state.imageDataUrl;
+    ui.imagePreview.style.display = 'block';
+    ui.status.textContent = `Image attached: ${file.name}`;
+    refreshAiRequestPreview();
+  };
+  reader.onerror = () => {
+    state.imageDataUrl = null;
+    ui.imageName.textContent = 'No image';
+    ui.imagePreview.removeAttribute('src');
+    ui.imagePreview.style.display = 'none';
+    ui.status.textContent = 'Could not read image file.';
+  };
+  reader.readAsDataURL(file);
+});
+ui.scaleDownButton.addEventListener('click', () => scaleSelectedObject(0.9));
+ui.scaleUpButton.addEventListener('click', () => scaleSelectedObject(1.1));
+objectInputs.forEach((input) => input.addEventListener('input', applyObjectInputs));
+partInputs.forEach((input) => input.addEventListener('input', applyPartInputs));
+ui.saveButton.addEventListener('click', updateJson);
+ui.loadButton.addEventListener('click', loadJson);
+ui.clearButton.addEventListener('click', clearScene);
+ui.resetViewButton.addEventListener('click', resetView);
+[ui.ambientLight, ui.sunLight, ui.exposure].forEach((input) => input.addEventListener('input', () => {
+  applyLighting();
+  updateJson();
+}));
+
+function resize() {
+  const aspect = window.innerWidth / window.innerHeight;
+  orthoCamera.left = -18 * aspect;
+  orthoCamera.right = 18 * aspect;
+  orthoCamera.top = 18;
+  orthoCamera.bottom = -18;
+  softCamera.aspect = aspect;
+  perspectiveCamera.aspect = aspect;
+  updateCamera();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', resize);
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+makePalette();
+seedTerrain();
+rebuildTerrain();
+createRecord('pagoda', worldX(7), groundYForCell({ x: 7, z: 5 }), worldZ(5), 0);
+createRecord('house', worldX(5), groundYForCell({ x: 5, z: 12 }), worldZ(12), 0);
+createRecord('tower', worldX(17), groundYForCell({ x: 17, z: 8 }), worldZ(8), 0);
+createRecord('torii', worldX(8), groundYForCell({ x: 8, z: 14 }), worldZ(14), 0);
+createRecord('bridge', worldX(10), groundYForCell({ x: 10, z: 8 }), worldZ(8), Math.PI / 2);
+createRecord('cherry', worldX(2), groundYForCell({ x: 2, z: 4 }), worldZ(4), 0);
+createRecord('cherry', worldX(20), groundYForCell({ x: 20, z: 5 }), worldZ(5), 0);
+createRecord('bamboo', worldX(18), groundYForCell({ x: 18, z: 13 }), worldZ(13), 0);
+createRecord('crop', worldX(15), groundYForCell({ x: 15, z: 15 }), worldZ(15), 0);
+selectObject(null);
+rebuildGhost();
+refreshModeButtons();
+refreshCameraButtons();
+applyLighting();
+resize();
+updateJson();
+animate();
+</script>
+</body>
+</html>

@@ -201,6 +201,10 @@
     -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
 
+  .xr-panel[hidden] {
+    display: none !important;
+  }
+
   .xr-panel .xr-btn {
     width: 32px;
     height: 32px;
@@ -1083,6 +1087,10 @@
     gap: 8px;
     padding: 8px;
   }
+  .agent-input.has-target {
+    grid-template-columns: 34px minmax(86px, auto) minmax(120px, 1fr) 40px;
+    width: min(520px, calc(100vw - 48px));
+  }
   .agent-input.dragging { opacity: 0.92; }
 
   /* Pulse border when the agent is thinking / generating */
@@ -1237,6 +1245,33 @@
   }
   .agent-grip { cursor: grab; color: #8a7a58; }
   .agent-input.dragging .agent-grip { cursor: grabbing; }
+  .agent-target-chip {
+    border: 1px solid rgba(176, 148, 74, 0.32);
+    background: rgba(255, 246, 196, 0.62);
+    color: #4a3b1f;
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 800;
+    min-width: 0;
+    max-width: 190px;
+    height: 30px;
+    padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.86) inset,
+      0 1px 2px rgba(60, 45, 12, 0.06);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+  }
+  .agent-target-chip:hover {
+    background: rgba(255, 248, 210, 0.86);
+    border-color: rgba(176, 148, 74, 0.48);
+  }
+  .agent-target-chip[hidden] { display: none; }
   .agent-input input {
     border: none;
     background: transparent;
@@ -1545,6 +1580,14 @@
   }
   @media (max-width: 700px) {
     .agent-input { bottom: 114px; width: min(360px, calc(100vw - 28px)); }
+    .agent-input.has-target {
+      grid-template-columns: 34px minmax(80px, 112px) minmax(80px, 1fr) 40px;
+      width: min(420px, calc(100vw - 28px));
+    }
+    .agent-target-chip {
+      max-width: 112px;
+      padding: 0 8px;
+    }
     .agent-panel { width: min(360px, calc(100vw - 28px)); }
   }
 
@@ -2030,6 +2073,48 @@
     font-size: 10.5px;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+  }
+  .minimap-autoexpand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px solid rgba(255, 255, 255, 0.44);
+    font-size: 10.5px;
+    color: var(--ink);
+    cursor: pointer;
+    user-select: none;
+  }
+  .minimap-autoexpand input {
+    appearance: none;
+    width: 30px;
+    height: 17px;
+    border-radius: 999px;
+    background: rgba(42, 39, 34, 0.22);
+    border: 1px solid rgba(42, 39, 34, 0.16);
+    position: relative;
+    transition: background 0.16s ease, border-color 0.16s ease;
+  }
+  .minimap-autoexpand input::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 2px rgba(42, 39, 34, 0.22);
+    transition: transform 0.16s ease;
+  }
+  .minimap-autoexpand input:checked {
+    background: rgba(128, 174, 82, 0.82);
+    border-color: rgba(88, 130, 42, 0.35);
+  }
+  .minimap-autoexpand input:checked::after {
+    transform: translateX(13px);
   }
   /* --- Topbar popups (view / time / weather) --- */
   .topbar-popup {
@@ -3289,6 +3374,10 @@
         <span id="minimap-size">8×8</span>
         <span id="minimap-fps" data-tooltip="Frames per second">60 fps</span>
       </div>
+      <label class="minimap-autoexpand" for="minimap-autoexpand">
+        <span>Autoexpand</span>
+        <input id="minimap-autoexpand" type="checkbox" />
+      </label>
     </div>
   </div>
 
@@ -4046,6 +4135,7 @@
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="xai">xAI / Grok</option>
+                <option value="gemini">Gemini</option>
               </select>
             </label>
             <label>Model
@@ -4074,6 +4164,14 @@
         <button class="modal-close" id="stamp-builder-close" title="Close">×</button>
       </div>
       <p class="modal-copy">Preview, select, and refresh voxel stamp builds. Building enhancement will plug into this workshop.</p>
+      <input id="voxel-build-import-file" type="file" accept=".json,application/json" hidden />
+      <div class="modal-tools" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;">
+        <button class="btn" id="voxel-build-import" type="button">Import build JSON</button>
+        <button class="btn" id="voxel-build-upscale" type="button">Reinterpret 2x</button>
+        <button class="btn" id="voxel-build-enhance" type="button">AI enhance</button>
+        <button class="btn" id="voxel-build-use-selected" type="button">Use selected object</button>
+        <button class="btn" id="voxel-build-enhance-selected" type="button">Enhance selected</button>
+      </div>
       <div class="stamp-builder-grid" id="stamp-builder-grid"></div>
       <div class="modal-foot">
         <span id="stamp-builder-status"></span>
@@ -4107,6 +4205,7 @@
 
   <form id="agent-input" class="agent-input" data-ai-interface autocomplete="off">
     <button type="button" class="agent-grip" id="agent-grip" title="Drag agent input" aria-label="Drag agent input">⋮⋮</button>
+    <button type="button" class="agent-target-chip" id="agent-target-chip" title="Selected object target" aria-label="Clear selected object target" hidden></button>
     <input id="agent-prompt" type="text" placeholder="Ask the agent to change this world…" aria-label="Ask the agent" />
     <button type="submit" class="agent-send" id="agent-send" aria-label="Send to agent">↑</button>
     <div id="agent-suggestions" class="agent-suggestions" role="listbox" aria-label="Suggested prompts" hidden></div>
@@ -4298,6 +4397,7 @@
     floorOpacity: 'tinyworld:render:floorOpacity',
     objectOpacity: 'tinyworld:render:objectOpacity',
     voxelGap: 'tinyworld:render:voxelGap',
+    autoExpand: 'tinyworld:render:autoExpand',
     pixelSize: 'tinyworld:render:pixelSize',
     pixelDepthEdge: 'tinyworld:render:pixelDepthEdge',
     pixelNormalEdge: 'tinyworld:render:pixelNormalEdge',
@@ -4340,6 +4440,7 @@
     floorOpacity: '1',
     objectOpacity: '1',
     voxelGap: '0',
+    autoExpand: '0',
     pixelSize: '1',
     // Keep the old-school mode as chunky colour pixels by default. The
     // depth/normal edge layers are optional because they outline real tile
@@ -4453,11 +4554,13 @@
     return previewSettingsForGrid(GRID, true).visibleSize;
   }
   function expandVisibleSizeOnFirstMove() {
-    if (hasUserPanned) return;
+    if (!renderAutoExpand) return false;
+    if (hasUserPanned) return false;
     hasUserPanned = true;
     renderVisibleSize = visibleSizeForExplorer();
     try { localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize)); } catch (_) {}
     if (typeof updateGhostRenderBubble === 'function') updateGhostRenderBubble();
+    return true;
   }
   let renderCloudAmount = storedNumber(RENDER_LS.clouds, 0.61, 0, 1);
   let renderCloudSpeed = storedNumber(RENDER_LS.cloudSpeed, 0.35, 0, 1);
@@ -4478,6 +4581,8 @@
   let renderFloorOpacity = storedNumber(RENDER_LS.floorOpacity, 1, 0.10, 1);
   let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
   let renderVoxelGap = storedNumber(RENDER_LS.voxelGap, 0, 0, 0.14);
+  let renderAutoExpand = localStorage.getItem(RENDER_LS.autoExpand) === '1';
+  if (!renderAutoExpand) renderVisibleSize = GRID;
   function applyBackdropSettings() {
     document.documentElement.style.setProperty('--backdrop-strength', renderBackdrop.toFixed(2));
   }
@@ -4532,7 +4637,19 @@
   }
 
   function ghostBoardsEnabledForGrid() {
-    return renderBudgetForGrid(GRID).ghostRadius > 0;
+    return !!renderAutoExpand && renderBudgetForGrid(GRID).ghostRadius > 0;
+  }
+
+  function clearGhostBoardsOnly() {
+    for (const [, board] of ghostBoards) {
+      worldGroup.remove(board);
+      disposeGroup(board);
+    }
+    ghostBoards.clear();
+    ghostBoardCells.clear();
+    clearCheapGhostTerrain();
+    clearPendingGhostBoards();
+    setUnsavedBannerVisible(false);
   }
 
   function syncGhostRenderBudget() {
@@ -4546,7 +4663,7 @@
     renderVisibleDistance = Math.max(0, Math.min(maxRenderVisibleDistanceForGrid(GRID), Math.round(value)));
     syncGhostRenderBudget();
     invalidateHomeFade();
-    if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+    if (renderAutoExpand && typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
   }
 
   function setRenderVisibleSize(value) {
@@ -4555,11 +4672,12 @@
     if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
     // When the user zooms the preview window, some ghost boards may need to
     // switch between full-quality and cheap representations.
-    reevaluateGhostDetailLevels();
+    if (renderAutoExpand) reevaluateGhostDetailLevels();
   }
 
   function applyAutoPreviewSettingsForGrid(opts = {}) {
-    const settings = previewSettingsForGrid(GRID, opts.explored !== undefined ? opts.explored : hasUserPanned);
+    const explored = renderAutoExpand && (opts.explored !== undefined ? opts.explored : hasUserPanned);
+    const settings = previewSettingsForGrid(GRID, explored);
     if (opts.deferEnsure) {
       renderVisibleDistance = settings.distance;
       renderVisibleSize = settings.visibleSize;
@@ -4915,6 +5033,16 @@
     if (typeof updateSunFollow === 'function') updateSunFollow();
     applyDistanceMistSettings();
   }
+  function clampTargetToHomeBoard() {
+    if (renderAutoExpand) return false;
+    const min = -GRID / 2 + 0.5;
+    const max = GRID / 2 - 0.5;
+    const beforeX = target.x;
+    const beforeZ = target.z;
+    target.x = Math.max(min, Math.min(max, target.x));
+    target.z = Math.max(min, Math.min(max, target.z));
+    return Math.abs(target.x - beforeX) > 0.0001 || Math.abs(target.z - beforeZ) > 0.0001;
+  }
   function panCameraByPixels(dx, dy) {
     markCameraMoving();
     const scale = (viewSize * 2) / Math.max(1, window.innerHeight);
@@ -4927,8 +5055,9 @@
     target.addScaledVector(panRight, -dx * scale);
     target.addScaledVector(panForward, dy * scale);
     expandVisibleSizeOnFirstMove();
+    clampTargetToHomeBoard();
     updateCamera();
-    ensureGhostBoardsAroundTarget();
+    if (renderAutoExpand) ensureGhostBoardsAroundTarget();
     if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
   }
   function panCameraByCells(dx, dz) {
@@ -4936,8 +5065,9 @@
     target.x += dx;
     target.z += dz;
     expandVisibleSizeOnFirstMove();
+    clampTargetToHomeBoard();
     updateCamera();
-    ensureGhostBoardsAroundTarget();
+    if (renderAutoExpand) ensureGhostBoardsAroundTarget();
     if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
   }
   updateCamera();
@@ -5304,9 +5434,27 @@
     if (!value || typeof value !== 'object') return null;
     const bodyColor = normalizeHexColor(value.bodyColor || value.body || value.wallColor || value.walls);
     const topColor = normalizeHexColor(value.topColor || value.top || value.roofColor || value.roof);
+    const rawVoxelBuildId = value.voxelBuildId || value.voxelBuild || value.stampId || value.stamp;
+    const voxelBuildId = (typeof rawVoxelBuildId === 'string' && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(rawVoxelBuildId))
+      ? rawVoxelBuildId
+      : null;
+    const rawScale = Array.isArray(value.objectScale) || Array.isArray(value.scale)
+      ? null
+      : (value.objectScale !== undefined ? value.objectScale : value.scale);
+    const objectScaleNumber = rawScale === null ? NaN : Number(rawScale);
+    const objectScale = Number.isFinite(objectScaleNumber)
+      ? Math.max(0.25, Math.min(4, objectScaleNumber))
+      : null;
+    const rawObjectStyle = String(value.objectStyle || value.style || '').toLowerCase();
+    const objectStyle = rawObjectStyle === 'normal' || rawObjectStyle === 'voxel'
+      ? rawObjectStyle
+      : null;
     const out = {};
     if (bodyColor) out.bodyColor = bodyColor;
     if (topColor) out.topColor = topColor;
+    if (voxelBuildId) out.voxelBuildId = voxelBuildId;
+    if (objectScale !== null && Math.abs(objectScale - 1) > 0.001) out.objectScale = +objectScale.toFixed(3);
+    if (objectStyle) out.objectStyle = objectStyle;
     return Object.keys(out).length ? out : null;
   }
   function sameAppearance(a, b) {
@@ -5587,8 +5735,9 @@
       // One whole logical tile panel: no artificial gaps inside a cell. The
       // voxel resolution belongs to objects/stamps; terrain/path cells must
       // still read as full panels aligned to the board grid.
-      const top = new THREE.Mesh(getBoxGeometry(topSize, TOP_H, topSize), topMat);
-      top.position.y = rise + TOP_H * 0.5;
+      const seamOverlap = 0.006;
+      const top = new THREE.Mesh(getBoxGeometry(topSize, TOP_H + seamOverlap, topSize), topMat);
+      top.position.y = rise + TOP_H * 0.5 - seamOverlap * 0.5;
       g.add(top);
 
       // Add a tiny bevel-like highlight only on the exposed outer cap edges.
@@ -7689,8 +7838,496 @@
   // The main builder still owns intent, placement, repeat-click levels, save/load
   // and animations. This layer replaces the visual stamp factories with chunky
   // box-built assets so the board and tools read as one voxel system.
+  const voxelBuildMaterialCache = new Map();
+
+  function makeVoxelBuildStampLibrary() {
+    const C = {
+      ink: '#2C2F32',
+      roof: '#3F494D',
+      roofD: '#283135',
+      roofEdge: '#536166',
+      wood: '#7B5A35',
+      woodD: '#473320',
+      wall: '#ECE4D2',
+      wallD: '#D6CFBE',
+      stone: '#B9B6A6',
+      stoneD: '#8D8A7E',
+      paper: '#F6F1E2',
+      gold: '#C7A858',
+      red: '#A04030',
+      green: '#8FAE5D',
+      greenD: '#6E8848',
+      bamboo: '#789C65',
+      bambooD: '#5D7448',
+      pink: '#DDB8BE',
+      pinkD: '#C99EA7',
+      water: '#8DB8C5',
+      dirt: '#8B6F4A',
+    };
+    function vox(x, y, z, color) { return { x, y, z, color }; }
+    function fill(out, x1, x2, y1, y2, z1, z2, color) {
+      for (let x = x1; x <= x2; x++) {
+        for (let y = y1; y <= y2; y++) {
+          for (let z = z1; z <= z2; z++) out.push(vox(x, y, z, color));
+        }
+      }
+    }
+    function slab(out, y, halfX, halfZ, color) {
+      fill(out, -halfX, halfX, y, y, -halfZ, halfZ, color);
+    }
+    function roof(out, y, halfX, halfZ) {
+      slab(out, y, halfX + 1, halfZ + 1, C.roofEdge);
+      slab(out, y + 1, halfX, halfZ, C.roof);
+      slab(out, y + 2, Math.max(0, halfX - 1), Math.max(0, halfZ - 1), C.roof);
+      slab(out, y + 3, Math.max(0, halfX - 2), Math.max(0, halfZ - 2), C.roofD);
+      for (const sx of [-halfX - 1, halfX + 1]) {
+        for (const sz of [-halfZ - 1, halfZ + 1]) out.push(vox(sx, y + 1, sz, C.roofD));
+      }
+    }
+    function pagoda() {
+      const out = [];
+      fill(out, -4, 4, 0, 0, -4, 4, C.stone);
+      fill(out, -3, 3, 1, 1, -3, 3, C.stoneD);
+      for (let tier = 0; tier < 3; tier++) {
+        const y = 2 + tier * 6;
+        const half = 3 - Math.min(tier, 1);
+        for (const x of [-half, half]) fill(out, x, x, y, y + 3, -half, half, C.woodD);
+        for (const z of [-half, half]) fill(out, -half, half, y, y + 3, z, z, C.woodD);
+        fill(out, -half + 1, half - 1, y, y + 2, -half + 1, half - 1, C.paper);
+        fill(out, -half, half, y + 4, y + 4, -half, half, C.wood);
+        roof(out, y + 5, half + 1, half + 1);
+      }
+      fill(out, -1, 1, 20, 20, -1, 1, C.roofD);
+      fill(out, 0, 0, 21, 23, 0, 0, C.gold);
+      out.push(vox(0, 24, 0, C.gold));
+      return out;
+    }
+    function gate() {
+      const out = [];
+      fill(out, -5, 5, 0, 0, -2, 2, C.stone);
+      for (const x of [-3, 3]) {
+        fill(out, x - 1, x + 1, 1, 1, -1, 1, C.stoneD);
+        fill(out, x, x, 2, 7, 0, 0, C.wood);
+        fill(out, x - 1, x + 1, 2, 2, 0, 0, C.woodD);
+      }
+      fill(out, -4, 4, 6, 6, 0, 0, C.wood);
+      fill(out, -5, 5, 7, 7, -1, 1, C.woodD);
+      roof(out, 8, 5, 2);
+      fill(out, -1, 1, 4, 5, 0, 0, C.gold);
+      return out;
+    }
+    function watchtower() {
+      const out = [];
+      fill(out, -2, 2, 0, 0, -2, 2, C.stone);
+      for (const x of [-2, 2]) for (const z of [-2, 2]) fill(out, x, x, 1, 10, z, z, C.woodD);
+      for (let y = 2; y <= 9; y += 3) {
+        fill(out, -2, 2, y, y, -2, -2, C.wood);
+        fill(out, -2, 2, y, y, 2, 2, C.wood);
+        fill(out, -2, -2, y, y, -2, 2, C.wood);
+        fill(out, 2, 2, y, y, -2, 2, C.wood);
+      }
+      fill(out, -2, 2, 11, 12, -2, 2, C.wall);
+      fill(out, -1, 1, 13, 13, -1, 1, C.woodD);
+      fill(out, -3, 3, 14, 14, -3, 3, C.wood);
+      for (const z of [-3, 3]) fill(out, -3, 3, 15, 15, z, z, C.wood);
+      for (const x of [-3, 3]) fill(out, x, x, 15, 15, -3, 3, C.wood);
+      roof(out, 16, 4, 4);
+      fill(out, 0, 0, 22, 24, 0, 0, C.gold);
+      return out;
+    }
+    function machiya() {
+      const out = [];
+      fill(out, -4, 4, 0, 0, -3, 3, C.stone);
+      fill(out, -3, 3, 1, 3, -2, 2, C.wall);
+      fill(out, -3, 3, 1, 1, -2, 2, C.wallD);
+      for (const x of [-3, 3]) fill(out, x, x, 1, 4, -2, 2, C.woodD);
+      for (const z of [-2, 2]) fill(out, -3, 3, 1, 4, z, z, C.woodD);
+      fill(out, -1, 0, 1, 2, 3, 3, C.woodD);
+      for (const x of [-2, 2]) fill(out, x, x, 2, 2, 3, 3, C.paper);
+      roof(out, 4, 4, 3);
+      fill(out, -4, 4, 3, 3, 0, 0, C.wood);
+      return out;
+    }
+    function cherry() {
+      const out = [];
+      fill(out, 0, 0, 0, 4, 0, 0, C.woodD);
+      fill(out, -1, 1, 3, 5, -1, 1, C.pink);
+      fill(out, -2, 2, 5, 7, -2, 2, C.pink);
+      fill(out, -1, 1, 7, 8, -1, 1, C.pinkD);
+      for (const p of [[-3, 0, 0], [3, 0, 0], [0, 0, -3], [0, 0, 3], [-2, 1, -2], [2, 1, 2]]) {
+        out.push(vox(p[0], 5 + p[1], p[2], C.pink));
+      }
+      fill(out, -2, 2, 0, 0, -2, 2, C.dirt);
+      return out;
+    }
+    function garden() {
+      const out = [];
+      fill(out, -4, 4, 0, 0, -4, 4, C.greenD);
+      fill(out, -2, 2, 0, 0, -1, 1, C.water);
+      for (const x of [-4, -2, 0, 2, 4]) {
+        const h = 4 + ((x + 4) % 3);
+        fill(out, x, x, 1, h, 3, 3, C.bamboo);
+        if (h > 4) fill(out, x + 1, x + 1, h - 1, h - 1, 3, 3, C.bambooD);
+      }
+      for (const z of [-4, 4]) {
+        fill(out, -4, 4, 1, 1, z, z, C.wood);
+        for (const x of [-4, -2, 0, 2, 4]) fill(out, x, x, 1, 2, z, z, C.woodD);
+      }
+      return out;
+    }
+    function rockOutcrop() {
+      const out = [];
+      fill(out, -3, 3, 0, 0, -3, 3, C.dirt);
+      fill(out, -2, 1, 1, 2, -1, 1, C.stone);
+      fill(out, 0, 3, 1, 2, -2, 0, C.stoneD);
+      fill(out, -3, -1, 1, 1, 0, 2, C.stone);
+      fill(out, -1, 1, 3, 3, -1, 0, C.stoneD);
+      fill(out, 1, 2, 3, 4, -1, -1, C.stone);
+      fill(out, -2, -2, 2, 3, 1, 1, C.stoneD);
+      for (const p of [[-3, 1, -2], [2, 1, 2], [3, 1, 1], [-1, 4, 0], [0, 2, 2]]) {
+        out.push(vox(p[0], p[1], p[2], p[1] > 2 ? C.stone : C.stoneD));
+      }
+      for (const p of [[-2, 3, -1], [1, 3, 0], [2, 2, -2], [-1, 1, 2]]) {
+        out.push(vox(p[0], p[1], p[2], C.greenD));
+      }
+      return out;
+    }
+    return [
+      { id: 'pagoda-large', name: 'Voxel Pagoda', voxels: pagoda(), footprint: 2.8 },
+      { id: 'temple-gate', name: 'Temple Gate', voxels: gate(), footprint: 2.4 },
+      { id: 'watchtower', name: 'Watchtower', voxels: watchtower(), footprint: 1.9 },
+      { id: 'machiya-house', name: 'Machiya House', voxels: machiya(), footprint: 2.0 },
+      { id: 'cherry-tree-build', name: 'Cherry Build', voxels: cherry(), footprint: 1.45 },
+      { id: 'bamboo-garden', name: 'Bamboo Garden', voxels: garden(), footprint: 1.7 },
+      { id: 'rock-outcrop-build', name: 'Rock Outcrop', voxels: rockOutcrop(), footprint: 1.35 },
+    ];
+  }
+
+  const VOXEL_BUILD_CUSTOM_LS = 'tinyworld:voxel-build-stamps.v1';
+  const VOXEL_BUILD_STAMPS = makeVoxelBuildStampLibrary();
+  const VOXEL_PART_COLORS = {
+    grass: '#8FAE5D',
+    grass2: '#6E8848',
+    dirt: '#8B6F4A',
+    dirtDark: '#5F4630',
+    path: '#CDB98A',
+    pathDark: '#A58E64',
+    water: '#8DB8C5',
+    waterDark: '#5C91A6',
+    stone: '#B9B6A6',
+    stoneDark: '#8D8A7E',
+    wood: '#7B5A35',
+    woodDark: '#473320',
+    woodLight: '#B88B52',
+    cream: '#ECE4D2',
+    white: '#F6F1E2',
+    roof: '#3F494D',
+    roofEdge: '#536166',
+    gold: '#C7A858',
+    red: '#A04030',
+    pink: '#DDB8BE',
+    green: '#8FAE5D',
+    crop: '#E6A440',
+  };
+
+  function normalizeVoxelCustomParts(parts) {
+    if (!Array.isArray(parts)) return [];
+    const out = [];
+    for (let i = 0; i < parts.length && out.length < 220; i++) {
+      const part = parts[i] || {};
+      const kind = ['box', 'cylinder', 'cone'].includes(part.kind) ? part.kind : 'box';
+      const size = Array.isArray(part.size) ? part.size.map(Number) : [0.25, 0.25, 0.25];
+      const pos = Array.isArray(part.pos) ? part.pos.map(Number) : [0, 0, 0];
+      const scale = Array.isArray(part.scale) ? part.scale.map(Number) : [1, 1, 1];
+      if (size.length !== 3 || pos.length !== 3 || scale.length !== 3) continue;
+      if (![...size, ...pos, ...scale].every(Number.isFinite)) continue;
+      const cleanSize = size.map(v => Math.max(0.01, Math.min(8, Math.abs(v))));
+      const cleanScale = scale.map(v => Math.max(0.05, Math.min(8, Math.abs(v))));
+      const material = String(part.material || 'stone').replace(/[^a-zA-Z0-9_-]/g, '') || 'stone';
+      out.push({
+        id: String(part.id || 'part-' + i).slice(0, 80),
+        kind,
+        material,
+        size: cleanSize,
+        pos: pos.map(v => Math.max(-12, Math.min(36, v))),
+        scale: cleanScale,
+        segments: Math.max(4, Math.min(16, Math.round(part.segments || (kind === 'cone' ? 4 : 8)))),
+      });
+    }
+    return out;
+  }
+
+  function isVoxelCustomPartList(parts) {
+    return Array.isArray(parts) && parts.some(part =>
+      part && typeof part === 'object' &&
+      (Array.isArray(part.size) || Array.isArray(part.pos) || ['box', 'cylinder', 'cone'].includes(part.kind))
+    );
+  }
+
+  function normalizeVoxelBuildStamp(value, fallbackName = 'Voxel Build') {
+    if (!value || typeof value !== 'object') return null;
+    const rawCustomParts = value.customParts || (isVoxelCustomPartList(value.parts) ? value.parts : null);
+    const customParts = normalizeVoxelCustomParts(rawCustomParts);
+    const voxels = Array.isArray(value.voxels)
+      ? value.voxels
+      : Array.isArray(value.parts) && !customParts.length
+        ? value.parts
+      : Array.isArray(value) && !customParts.length
+          ? value
+          : null;
+    if ((!voxels || !voxels.length) && !customParts.length) return null;
+    const out = [];
+    const seen = new Set();
+    for (const v of (voxels || [])) {
+      const x = Math.round(Number(v.x));
+      const y = Math.round(Number(v.y));
+      const z = Math.round(Number(v.z));
+      const color = normalizeHexColor(v.color || v.hex || v.materialColor || v.c || '#ffffff');
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z) || !color) continue;
+      const key = x + ',' + y + ',' + z;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ x, y, z, color });
+    }
+    if (!out.length && !customParts.length) return null;
+    const rawName = String(value.name || value.label || fallbackName || 'Voxel Build').trim().slice(0, 48);
+    const baseId = String(value.id || rawName || 'voxel-build').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'voxel-build';
+    let id = baseId;
+    let suffix = 2;
+    while (getVoxelBuildStamp(id)) id = baseId + '-' + suffix++;
+    return {
+      id,
+      name: rawName || 'Voxel Build',
+      voxels: out,
+      customParts,
+      footprint: Number.isFinite(value.footprint) ? Math.max(0.6, Math.min(4, value.footprint)) : undefined,
+      custom: !!value.custom || !getVoxelBuildStamp(baseId),
+    };
+  }
+
+  function loadCustomVoxelBuildStamps() {
+    try {
+      const list = JSON.parse(localStorage.getItem(VOXEL_BUILD_CUSTOM_LS) || '[]');
+      if (!Array.isArray(list)) return;
+      for (const item of list) {
+        const rawId = item && typeof item.id === 'string' ? item.id : null;
+        if (rawId && getVoxelBuildStamp(rawId)) continue;
+        const stamp = normalizeVoxelBuildStamp(Object.assign({}, item, { custom: true }), item && item.name);
+        if (stamp && !getVoxelBuildStamp(stamp.id)) VOXEL_BUILD_STAMPS.push(stamp);
+      }
+    } catch (_) {}
+  }
+
+  function saveCustomVoxelBuildStamps() {
+    try {
+      localStorage.setItem(VOXEL_BUILD_CUSTOM_LS, JSON.stringify(VOXEL_BUILD_STAMPS.filter(s => s.custom).map(s => ({
+        id: s.id,
+        name: s.name,
+        voxels: s.voxels,
+        customParts: s.customParts,
+        footprint: s.footprint,
+        custom: true,
+      }))));
+    } catch (_) {}
+  }
+
+  function importVoxelBuildPayload(payload, fallbackName = 'Imported Build') {
+    const candidates = Array.isArray(payload)
+      ? (payload.length && payload[0] && payload[0].voxels ? payload : [{ name: fallbackName, voxels: payload }])
+      : payload && Array.isArray(payload.stamps)
+        ? payload.stamps
+        : payload && Array.isArray(payload.builds)
+          ? payload.builds
+          : payload && Array.isArray(payload.voxelBuilds)
+            ? payload.voxelBuilds
+            : [payload];
+    const imported = [];
+    for (const item of candidates) {
+      const stamp = normalizeVoxelBuildStamp(Object.assign({}, item, { custom: true }), fallbackName);
+      if (!stamp) continue;
+      VOXEL_BUILD_STAMPS.push(stamp);
+      imported.push(stamp);
+    }
+    if (imported.length) saveCustomVoxelBuildStamps();
+    return imported;
+  }
+
+  loadCustomVoxelBuildStamps();
+
+  function getVoxelBuildStamp(id) {
+    return VOXEL_BUILD_STAMPS.find(s => s.id === id) || null;
+  }
+
+  function voxelBuildMaterial(hex) {
+    const clean = normalizeHexColor(hex) || '#ffffff';
+    if (!voxelBuildMaterialCache.has(clean)) {
+      voxelBuildMaterialCache.set(clean, new THREE.MeshLambertMaterial({ color: clean }));
+    }
+    return voxelBuildMaterialCache.get(clean);
+  }
+
+  function voxelPartMaterial(name) {
+    const key = String(name || '').trim();
+    return voxelBuildMaterial(VOXEL_PART_COLORS[key] || key || '#ffffff');
+  }
+
+  function voxelAppearanceRoleForMaterial(name) {
+    const key = String(name || '').toLowerCase();
+    if (!key) return null;
+    if (/(roofedge|roof_edge|roof-dark|roofdark)/.test(key)) return 'topDark';
+    if (/roof|green|pink|crop|leaf|leaves|foliage|blossom/.test(key)) return 'top';
+    if (/(wooddark|stonedark|dirtdark|pathdark|waterdark|shadow)/.test(key)) return 'bodyDark';
+    if (/wood|stone|cream|white|red|wall|body|trunk|dirt|path|water/.test(key)) return 'body';
+    return null;
+  }
+
+  function voxelAppearanceRoleForColor(hex) {
+    const clean = normalizeHexColor(hex);
+    if (!clean) return null;
+    for (const [name, value] of Object.entries(VOXEL_PART_COLORS)) {
+      if (normalizeHexColor(value) === clean) return voxelAppearanceRoleForMaterial(name);
+    }
+    const n = parseInt(clean.slice(1), 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    if (g > r * 0.9 && g > b * 0.9) return 'top';
+    if (r > 170 && b > 130 && g < 205) return 'top';
+    if (r > 180 && g > 120 && b < 90) return 'top';
+    if (Math.abs(r - g) < 24 && Math.abs(g - b) < 24) return 'body';
+    if (r > g && g > b) return 'body';
+    return null;
+  }
+
+  function voxelAppearanceMaterial(base, role, appearance) {
+    const a = normalizeAppearance(appearance);
+    if (!a || !role) return base;
+    if (role === 'top' && a.topColor) return voxelBuildMaterial(a.topColor);
+    if (role === 'topDark' && a.topColor) return voxelBuildMaterial(shadeHexColor(a.topColor, -48));
+    if (role === 'body' && a.bodyColor) return voxelBuildMaterial(a.bodyColor);
+    if (role === 'bodyDark' && a.bodyColor) return voxelBuildMaterial(shadeHexColor(a.bodyColor, -42));
+    return base;
+  }
+
+  function customPartsBounds(parts) {
+    if (!Array.isArray(parts) || !parts.length) return null;
+    const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    for (const part of parts) {
+      const sx = (part.size[0] || 0) * (part.scale[0] || 1);
+      const sy = (part.size[1] || 0) * (part.scale[1] || 1);
+      const sz = (part.size[2] || 0) * (part.scale[2] || 1);
+      b.minX = Math.min(b.minX, part.pos[0] - sx / 2);
+      b.maxX = Math.max(b.maxX, part.pos[0] + sx / 2);
+      b.minY = Math.min(b.minY, part.pos[1] - sy / 2);
+      b.maxY = Math.max(b.maxY, part.pos[1] + sy / 2);
+      b.minZ = Math.min(b.minZ, part.pos[2] - sz / 2);
+      b.maxZ = Math.max(b.maxZ, part.pos[2] + sz / 2);
+    }
+    return b;
+  }
+
+  function fitCustomPartsToBounds(parts, allowedBounds) {
+    const clean = normalizeVoxelCustomParts(parts);
+    const b = customPartsBounds(clean);
+    if (!b || !allowedBounds) return clean;
+    const allowedSpanX = Math.max(0.01, allowedBounds.maxX - allowedBounds.minX);
+    const allowedSpanY = Math.max(0.01, allowedBounds.maxY - allowedBounds.minY);
+    const allowedSpanZ = Math.max(0.01, allowedBounds.maxZ - allowedBounds.minZ);
+    const spanX = Math.max(0.01, b.maxX - b.minX);
+    const spanY = Math.max(0.01, b.maxY - b.minY);
+    const spanZ = Math.max(0.01, b.maxZ - b.minZ);
+    const scale = Math.min(1, allowedSpanX / spanX, allowedSpanY / spanY, allowedSpanZ / spanZ);
+    const sourceCenter = [
+      (b.minX + b.maxX) * 0.5,
+      b.minY,
+      (b.minZ + b.maxZ) * 0.5,
+    ];
+    const allowedCenter = [
+      (allowedBounds.minX + allowedBounds.maxX) * 0.5,
+      allowedBounds.minY,
+      (allowedBounds.minZ + allowedBounds.maxZ) * 0.5,
+    ];
+    return clean.map(part => {
+      const size = part.size.map(v => v * scale);
+      const pos = [
+        allowedCenter[0] + (part.pos[0] - sourceCenter[0]) * scale,
+        allowedCenter[1] + (part.pos[1] - sourceCenter[1]) * scale,
+        allowedCenter[2] + (part.pos[2] - sourceCenter[2]) * scale,
+      ];
+      return Object.assign({}, part, { size, pos });
+    });
+  }
+
+  function makeCustomPartsStamp(stamp, opts = {}) {
+    const parts = normalizeVoxelCustomParts(stamp.customParts || stamp.parts);
+    if (!parts.length) return null;
+    const b = customPartsBounds(parts);
+    if (!b) return null;
+    const spanX = Math.max(0.01, b.maxX - b.minX);
+    const spanZ = Math.max(0.01, b.maxZ - b.minZ);
+    const footprint = opts.footprint || stamp.footprint || 0.96;
+    const unit = footprint / Math.max(spanX, spanZ);
+    const centerX = (b.minX + b.maxX) / 2;
+    const centerZ = (b.minZ + b.maxZ) / 2;
+    const floorY = Math.min(0, b.minY);
+    const g = new THREE.Group();
+    for (const part of parts) {
+      const role = voxelAppearanceRoleForMaterial(part.material);
+      const mat = voxelAppearanceMaterial(voxelPartMaterial(part.material), role, opts.appearance);
+      const w = part.size[0] * part.scale[0] * unit;
+      const h = part.size[1] * part.scale[1] * unit;
+      const d = part.size[2] * part.scale[2] * unit;
+      const x = (part.pos[0] - centerX) * unit;
+      const y = (part.pos[1] - floorY) * unit;
+      const z = (part.pos[2] - centerZ) * unit;
+      if (part.kind === 'cylinder') {
+        vcylinder(g, Math.max(w, d) / 2, h, x, y, z, mat, part.segments || 8);
+      } else if (part.kind === 'cone') {
+        const mesh = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) / 2, h, part.segments || 4), mat);
+        mesh.position.set(x, y, z);
+        g.add(mesh);
+      } else {
+        vbox(g, w, h, d, x, y, z, mat);
+      }
+    }
+    g.userData = { kind: 'voxel-build', voxelBuildId: stamp.id, name: stamp.name, chimneyTops: [] };
+    castReceive(g);
+    return g;
+  }
+
+  function makeVoxelBuildStamp(idOrStamp, opts = {}) {
+    const stamp = typeof idOrStamp === 'string' ? getVoxelBuildStamp(idOrStamp) : idOrStamp;
+    if (!stamp) return null;
+    if (Array.isArray(stamp.customParts) && stamp.customParts.length) return makeCustomPartsStamp(stamp, opts);
+    if (!Array.isArray(stamp.voxels) || !stamp.voxels.length) return null;
+    const g = new THREE.Group();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const v of stamp.voxels) {
+      minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
+      minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
+      minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z);
+    }
+    const spanX = Math.max(1, maxX - minX + 1);
+    const spanZ = Math.max(1, maxZ - minZ + 1);
+    const footprint = opts.footprint || stamp.footprint || 1.6;
+    const unit = opts.unit || stamp.unit || footprint / Math.max(spanX, spanZ);
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    for (const v of stamp.voxels) {
+      const x = (v.x - centerX) * unit;
+      const y = (v.y - minY) * unit + unit / 2;
+      const z = (v.z - centerZ) * unit;
+      const mat = voxelAppearanceMaterial(voxelBuildMaterial(v.color), voxelAppearanceRoleForColor(v.color), opts.appearance);
+      vbox(g, unit, unit, unit, x, y, z, mat);
+    }
+    g.userData = { kind: 'voxel-build', voxelBuildId: stamp.id, name: stamp.name, chimneyTops: [] };
+    castReceive(g);
+    return g;
+  }
+
   function vbox(parent, w, h, d, x, y, z, mat, opts = {}) {
-    const gap = opts.noGap ? 0 : Math.max(0, Math.min(0.14, renderVoxelGap || 0));
+    const maxGap = Math.max(0, Math.min(w, h, d) * 0.45);
+    const gap = opts.noGap ? 0 : Math.min(maxGap, Math.max(0, Math.min(0.14, renderVoxelGap || 0)));
     const gw = Math.max(0.006, w - gap);
     const gh = Math.max(0.006, h - gap);
     const gd = Math.max(0.006, d - gap);
@@ -7714,27 +8351,27 @@
 
   function voxelWindow(parent, x, y, z, face = 'z', mat = M.windowB) {
     if (face === 'x') {
-      vbox(parent, 0.026, 0.14, 0.13, x, y, z, M.woodTrim);
-      vbox(parent, 0.030, 0.10, 0.09, x + Math.sign(x || 1) * 0.004, y, z, mat, { bevel: 0.006 });
-      vbox(parent, 0.034, 0.012, 0.09, x + Math.sign(x || 1) * 0.008, y, z, M.woodTrim, { bevel: 0.004 });
-      vbox(parent, 0.034, 0.10, 0.010, x + Math.sign(x || 1) * 0.009, y, z, M.woodTrim, { bevel: 0.004 });
+      vbox(parent, 0.034, 0.19, 0.17, x, y, z, M.woodTrim);
+      vbox(parent, 0.038, 0.135, 0.120, x + Math.sign(x || 1) * 0.004, y, z, mat);
+      vbox(parent, 0.042, 0.016, 0.120, x + Math.sign(x || 1) * 0.008, y, z, M.woodTrim);
+      vbox(parent, 0.042, 0.135, 0.014, x + Math.sign(x || 1) * 0.009, y, z, M.woodTrim);
     } else {
-      vbox(parent, 0.13, 0.14, 0.026, x, y, z, M.woodTrim);
-      vbox(parent, 0.09, 0.10, 0.030, x, y, z + Math.sign(z || 1) * 0.004, mat, { bevel: 0.006 });
-      vbox(parent, 0.09, 0.012, 0.034, x, y, z + Math.sign(z || 1) * 0.008, M.woodTrim, { bevel: 0.004 });
-      vbox(parent, 0.010, 0.10, 0.034, x, y, z + Math.sign(z || 1) * 0.009, M.woodTrim, { bevel: 0.004 });
+      vbox(parent, 0.17, 0.19, 0.034, x, y, z, M.woodTrim);
+      vbox(parent, 0.120, 0.135, 0.038, x, y, z + Math.sign(z || 1) * 0.004, mat);
+      vbox(parent, 0.120, 0.016, 0.042, x, y, z + Math.sign(z || 1) * 0.008, M.woodTrim);
+      vbox(parent, 0.014, 0.135, 0.042, x, y, z + Math.sign(z || 1) * 0.009, M.woodTrim);
     }
   }
 
   function voxelDoor(parent, x, z, face = 'z', h = 0.34) {
     const y = h / 2;
     if (face === 'x') {
-      vbox(parent, 0.045, h, 0.18, x, y, z, M.door);
-      vbox(parent, 0.052, 0.04, 0.23, x + Math.sign(x || 1) * 0.006, h + 0.02, z, M.woodTrim);
+      vbox(parent, 0.055, h, 0.21, x, y, z, M.door);
+      vbox(parent, 0.064, 0.04, 0.27, x + Math.sign(x || 1) * 0.006, h + 0.02, z, M.woodTrim);
       vbox(parent, 0.030, 0.030, 0.030, x + Math.sign(x || 1) * 0.028, y, z + 0.055, M.knob);
     } else {
-      vbox(parent, 0.18, h, 0.045, x, y, z, M.door);
-      vbox(parent, 0.23, 0.04, 0.052, x, h + 0.02, z + Math.sign(z || 1) * 0.006, M.woodTrim);
+      vbox(parent, 0.21, h, 0.055, x, y, z, M.door);
+      vbox(parent, 0.27, 0.04, 0.064, x, h + 0.02, z + Math.sign(z || 1) * 0.006, M.woodTrim);
       vbox(parent, 0.030, 0.030, 0.030, x + 0.055, y, z + Math.sign(z || 1) * 0.028, M.knob);
     }
   }
@@ -8152,18 +8789,51 @@
     return g;
   }
 
+  function makeVoxelMicroKind(kind, level = 1, x = 0, z = 0) {
+    const g = new THREE.Group();
+    if (kind === 'chimney') {
+      vbox(g, 0.16, 0.40, 0.16, 0, 0.20, 0, M.chimney);
+      vbox(g, 0.20, 0.07, 0.20, 0, 0.44, 0, M.chimney);
+      vbox(g, 0.11, 0.10, 0.11, 0, 0.53, 0, M.cloudWhite);
+      g.userData = { kind: 'chimney', chimneyTops: [new THREE.Vector3(0, 0.50, 0)] };
+    } else if (kind === 'ripple') {
+      vbox(g, 0.44, 0.018, 0.08, 0, 0.018, 0, M.waterFoam);
+      vbox(g, 0.26, 0.018, 0.06, 0.04, 0.038, 0.16, M.waterFoam);
+      vbox(g, 0.22, 0.018, 0.05, -0.06, 0.038, -0.15, M.waterDk);
+      g.userData = { kind: 'ripple' };
+    } else if (kind === 'shrub') {
+      const bush = makeVoxelCropKind('bush', Math.max(1, level));
+      bush.scale.set(0.72, 0.72, 0.72);
+      return bush;
+    } else if (kind === 'pebble') {
+      const pebble = makeVoxelRock(null, 1, x, z, false);
+      pebble.scale.set(0.55, 0.55, 0.55);
+      return pebble;
+    } else if (kind === 'stone') {
+      return makeVoxelRock(null, Math.max(1, level), x, z, false);
+    } else if (kind === 'bridge-rail') {
+      const rail = makeVoxelFence('center-x', Math.max(1, level), false, false);
+      rail.scale.set(0.80, 0.80, 0.80);
+      return rail;
+    }
+    castReceive(g);
+    return g;
+  }
+
   function makeVoxelRenderForCell(kind, x, z, cell, level) {
     let mesh = null;
     let posX = null;
     let posZ = null;
     let setGridUserData = true;
 
-    if (kind === 'tree') mesh = makeVoxelTree(level);
+    if (kind === 'voxel-build') mesh = makeVoxelBuildStamp(cell.appearance && cell.appearance.voxelBuildId, { appearance: cell.appearance });
+    else if (kind === 'tree') mesh = makeVoxelTree(level);
     else if (kind === 'rock') mesh = makeVoxelRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water');
     else if (kind === 'bridge') mesh = makeVoxelBridge(getBridgeOrientation(x, z), level);
     else if (kind === 'tuft' || kind === 'flower' || kind === 'bush' || kind === 'crop' || kind === 'corn' || kind === 'wheat' || kind === 'carrot' || kind === 'sunflower') mesh = makeVoxelCropKind(kind, level);
     else if (kind === 'pumpkin') mesh = (level >= MAX_FLOORS && isCarriagePumpkin(x, z)) ? makeVoxelPumpkinCarriage() : makeVoxelCropKind('pumpkin', level);
     else if (kind === 'cow' || kind === 'sheep') mesh = makeVoxelAnimal(kind);
+    else if (kind === 'chimney' || kind === 'ripple' || kind === 'shrub' || kind === 'stone' || kind === 'pebble' || kind === 'bridge-rail') mesh = makeVoxelMicroKind(kind, level, x, z);
     else if (kind === 'fence') {
       if (cell.terrain === 'path') {
         const pn = getPathNeighbors(x, z);
@@ -10022,6 +10692,9 @@
     rotate: rotateSelectedCells,
     materialize: materializeSelectedCells,
     worldCoords: selectedSelectionWorldCoords,
+    containsWorldCoord(x, z) {
+      return selectedSelectionWorldCoords().some(c => c.x === x && c.z === z);
+    },
     summary() {
       if (!selectedCells.size) return null;
       const counts = {};
@@ -10842,7 +11515,8 @@
         applyElementOpacity(root, current);
         if (!root.userData.landing) {
           const s = 0.6 + 0.4 * current;
-          if (Math.abs(root.scale.x - s) > 0.001) root.scale.setScalar(s);
+          const baseScale = root.userData.objectScaleBase || 1;
+          if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
         }
         continue;
       }
@@ -10867,7 +11541,8 @@
       if (!root.userData.landing) {
         const t = root.userData.currentOpacity;
         const s = 0.6 + 0.4 * t;
-        if (Math.abs(root.scale.x - s) > 0.001) root.scale.setScalar(s);
+        const baseScale = root.userData.objectScaleBase || 1;
+        if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
       }
 
       // Once the fade has settled and no further work is queued, take the
@@ -10948,6 +11623,7 @@
     else if (cell.kind === 'pumpkin')   mesh = makeVoxelCropKind('pumpkin', level);
     else if (cell.kind === 'carrot')    mesh = makeVoxelCropKind('carrot', level);
     else if (cell.kind === 'sunflower') mesh = makeVoxelCropKind('sunflower', level);
+    else if (cell.kind === 'chimney' || cell.kind === 'ripple' || cell.kind === 'shrub' || cell.kind === 'stone' || cell.kind === 'pebble' || cell.kind === 'bridge-rail') mesh = makeVoxelMicroKind(cell.kind, level, x + 1000, z + 1000);
     else if (cell.kind === 'fence')     mesh = makeVoxelFence(normalizeFenceSide(cell.fenceSide), level);
     else if (cell.kind === 'house') {
       if (cell.buildingType === 'manor') mesh = makeVoxelManor(level);
@@ -11743,7 +12419,7 @@
     if (!ghostBoardsEnabledForGrid()) {
       clearPendingGhostBoards();
       clearCheapGhostTerrain();
-      for (const board of ghostBoards.values()) board.visible = false;
+      clearGhostBoardsOnly();
       updateGhostRenderBubble();
       return;
     }
@@ -12463,13 +13139,16 @@
     const kind = cell.kind;
     if (!kind) return;
     const level = cell.floors || 1;
+    const appearanceForRender = normalizeAppearance(cell.appearance);
+    const renderStyle = appearanceForRender && appearanceForRender.objectStyle;
+    const useVoxelRender = kind === 'voxel-build' || renderStyle !== 'normal';
 
     let mesh = null;
     let posX = null, posZ = null;
     let setGridUserData = true;
 
-    const voxelRender = makeVoxelRenderForCell(kind, x, z, cell, level);
-    if (voxelRender && voxelRender.skip) return;
+    const voxelRender = useVoxelRender ? makeVoxelRenderForCell(kind, x, z, cell, level) : null;
+    if (useVoxelRender && voxelRender && voxelRender.skip) return;
     if (voxelRender) {
       mesh = voxelRender.mesh;
       posX = voxelRender.posX;
@@ -12576,10 +13255,14 @@
       mesh = wrapHouseForUnderpass(mesh, cell.terrain);
     }
     applyAppearanceToObject(mesh, kind, cell.appearance);
+    const appearanceForTransform = appearanceForRender;
+    const userScale = appearanceForTransform && appearanceForTransform.objectScale ? appearanceForTransform.objectScale : 1;
     const userRot     = (cell.rotationY || 0);
     const userOffsetX = (cell.offsetX   || 0);
     const userOffsetZ = (cell.offsetZ   || 0);
     if (userRot) mesh.rotation.y += userRot;
+    if (userScale !== 1) mesh.scale.multiplyScalar(userScale);
+    mesh.userData.objectScaleBase = userScale;
     const objectY = TOP_H + terrainRiseAt(x, z);
     mesh.position.set(posX + userOffsetX, objectY, posZ + userOffsetZ);
     if (setGridUserData) {
@@ -12698,7 +13381,7 @@
     if (nextKind === 'bridge') nextTerrain = 'water';
     else if (CROP_KINDS.has(nextKind)) nextTerrain = 'dirt';
     else if (nextKind === 'house' && (nextTerrain === 'water' || nextTerrain === 'path' || nextTerrain === 'lava')) nextTerrain = 'grass';
-    else if (nextTerrain === 'water' && nextKind !== 'house' && nextKind !== 'rock') nextKind = null;
+    else if (nextTerrain === 'water' && nextKind !== 'house' && nextKind !== 'rock' && nextKind !== 'ripple' && nextKind !== 'bridge' && nextKind !== 'bridge-rail' && nextKind !== 'voxel-build') nextKind = null;
     else if (nextTerrain === 'lava' && nextKind !== 'rock') nextKind = null;
 
     const terrainChanged = prev.terrain !== nextTerrain;
@@ -13067,14 +13750,15 @@
   function ghostToolSignature(tool) {
     if (!tool || tool.erase || tool.auto) return null;
     const v = tool.activeVariant;
-    return tool.id + '|' + (v ? v.id : '') + '|' + (tool.kind || tool.terrain || '');
+    return tool.id + '|' + (v ? v.id : '') + '|' + (tool.kind || tool.terrain || '') + '|' + (tool.voxelBuildId || '');
   }
 
   function buildGhostMesh(tool) {
     if (!tool || tool.erase || tool.auto) return null;
     const kind = tool.kind;
     let mesh = null;
-    if      (kind === 'tree')      mesh = makeTree();
+    if      (kind === 'voxel-build') mesh = makeVoxelBuildStamp(tool.voxelBuildId);
+    else if (kind === 'tree')      mesh = makeTree();
     else if (kind === 'rock')      mesh = makeRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
     else if (kind === 'tuft')      mesh = makeTuft();
     else if (kind === 'flower')    mesh = makeFlower();
@@ -13550,12 +14234,12 @@
 
   async function refreshXRSupportUI() {
     const xrPanel = document.getElementById('xr-panel');
+    if (xrPanel) xrPanel.hidden = true;
 
     const hasXR = !!(navigator.xr && navigator.xr.isSessionSupported);
     if (!hasXR) {
       setXRStatus('WebXR unavailable: open over HTTPS in a compatible headset browser.');
       setXRButtonsDisabled(true);
-      if (xrPanel) xrPanel.hidden = true;
       return;
     }
 
@@ -13683,6 +14367,7 @@
   function makeThumbObject(tool) {
     const k = tool.kind;
     if (!k) return null;
+    if (k === 'voxel-build') return makeVoxelBuildStamp(tool.voxelBuildId);
     if (k === 'tree')      return makeVoxelTree();
     if (k === 'rock')      return makeVoxelRock({ n: false, s: false, e: false, w: false }, 1, 0, 0);
     if (k === 'bridge')    return makeVoxelBridge('x');
@@ -13863,6 +14548,7 @@
   }
 
   let voxelStampRefreshTimer = 0;
+  let selectedVoxelBuildId = VOXEL_BUILD_STAMPS[0] && VOXEL_BUILD_STAMPS[0].id;
   function rebuildVoxelStampRender() {
     for (const key in cellMeshes) {
       const parts = key.split(',');
@@ -13904,6 +14590,15 @@
         tools.push(tool);
       }
     }
+    for (const stamp of VOXEL_BUILD_STAMPS) {
+      tools.push({
+        id: 'voxel-build:' + stamp.id,
+        label: stamp.name,
+        kind: 'voxel-build',
+        voxelBuildId: stamp.id,
+        isVoxelBuild: true,
+      });
+    }
     return tools;
   }
 
@@ -13923,9 +14618,14 @@
       scene.add(obj);
     }
     scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-    const cam = new THREE.OrthographicCamera(-1.45, 1.45, 1.85, -0.95, 0.1, 30);
-    cam.position.set(Math.cos(THUMB_BASE_ANGLE) * 3.4, 2.9, Math.sin(THUMB_BASE_ANGLE) * 3.4);
-    cam.lookAt(0, 0.55, 0);
+    const stamp = tool.voxelBuildId && getVoxelBuildStamp(tool.voxelBuildId);
+    const top = stamp ? 3.2 : 1.85;
+    const bottom = stamp ? -1.05 : -0.95;
+    const side = stamp ? 2.25 : 1.45;
+    const lookY = stamp ? 1.15 : 0.55;
+    const cam = new THREE.OrthographicCamera(-side, side, top, bottom, 0.1, 30);
+    cam.position.set(Math.cos(THUMB_BASE_ANGLE) * 4.4, 3.3 + lookY, Math.sin(THUMB_BASE_ANGLE) * 4.4);
+    cam.lookAt(0, lookY, 0);
     thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
     thumbRenderer.render(scene, cam);
     const dpr = thumbRenderer.getPixelRatio();
@@ -13957,6 +14657,7 @@
         const realTool = tool.baseTool || tool;
         if (tool.baseTool && tool.activeVariant) realTool.activeVariant = tool.activeVariant;
         selectTool(realTool);
+        if (tool.voxelBuildId) selectedVoxelBuildId = tool.voxelBuildId;
         const status = document.getElementById('stamp-builder-status');
         if (status) status.textContent = 'Selected ' + tool.label;
       });
@@ -14359,24 +15060,21 @@
     // --- Bulk apply to active selection (Shift+select + tool) ---
     const sel = window.__tinyworldSelection;
     if (sel && sel.cells.size > 0) {
-      const key = x + ',' + z;
-      if (sel.cells.has(key)) {
+      const selectedCoords = sel.worldCoords ? sel.worldCoords() : [];
+      if (selectedCoords.some(c => c.x === x && c.z === z)) {
         // Apply current tool to every selected cell
         if (selectedTool.terrain) {
-          sel.cells.forEach(selKey => {
-            const [sx, sz] = selKey.split(',').map(Number);
+          selectedCoords.forEach(({ x: sx, z: sz }) => {
             setCell(sx, sz, { terrain: selectedTool.terrain });
           });
         } else if (selectedTool.kind) {
-          sel.cells.forEach(selKey => {
-            const [sx, sz] = selKey.split(',').map(Number);
+          selectedCoords.forEach(({ x: sx, z: sz }) => {
             const current = getWorldCell(sx, sz);
             const terrainForKind = selectedTool.terrainOverride || current.terrain || 'grass';
             setCell(sx, sz, { kind: selectedTool.kind, terrain: terrainForKind });
           });
         } else if (selectedTool.erase) {
-          sel.cells.forEach(selKey => {
-            const [sx, sz] = selKey.split(',').map(Number);
+          selectedCoords.forEach(({ x: sx, z: sz }) => {
             const current = getWorldCell(sx, sz);
             setCell(sx, sz, { terrain: current.terrain, kind: null });
           });
@@ -14419,6 +15117,24 @@
       const terrainForHouse = cell.terrain || 'grass';
       const gt = consumeGhostTransform();
       setCell(x, z, { terrain: terrainForHouse, terrainFloors: terrainLevelForCell(cell), kind: 'house', buildingType: bType, rotationY: gt.rotationY, offsetX: gt.offsetX, offsetZ: gt.offsetZ });
+      return;
+    }
+    if (selectedTool.kind === 'voxel-build') {
+      const stampId = selectedTool.voxelBuildId;
+      if (!getVoxelBuildStamp(stampId)) return;
+      const gt = consumeGhostTransform();
+      let newTerrain = cell.terrain || 'grass';
+      if (newTerrain === 'water' || newTerrain === 'lava') newTerrain = 'grass';
+      setCell(x, z, {
+        terrain: newTerrain,
+        terrainFloors: terrainLevelForCell(cell),
+        kind: 'voxel-build',
+        floors: 1,
+        rotationY: gt.rotationY,
+        offsetX: gt.offsetX,
+        offsetZ: gt.offsetZ,
+        appearance: { voxelBuildId: stampId },
+      });
       return;
     }
     if (selectedTool.kind === 'fence') {
@@ -15456,7 +16172,7 @@
     azimuth  = start.az + (end.az - start.az) * u;
     polar    = start.po + (end.po - start.po) * u;
     onResize();
-    if (typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
+    if (renderAutoExpand && typeof ensureGhostBoardsAroundTarget === 'function') ensureGhostBoardsAroundTarget();
     if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
     if (homeTween.t >= 1) homeTween = null;
   }
@@ -15728,6 +16444,7 @@
       localStorage.setItem(RENDER_LS.floorOpacity, renderFloorOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.objectOpacity, renderObjectOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.voxelGap, renderVoxelGap.toFixed(2));
+      localStorage.setItem(RENDER_LS.autoExpand, renderAutoExpand ? '1' : '0');
     }
 
     function applyFromControls() {
@@ -15843,6 +16560,9 @@
       renderFloorOpacity = 1;
       renderObjectOpacity = 1;
       renderVoxelGap = 0;
+      renderAutoExpand = false;
+      const autoExpandEl = document.getElementById('minimap-autoexpand');
+      if (autoExpandEl) autoExpandEl.checked = false;
       scheduleVoxelStampRefresh();
       updateGhostRenderBubble();
       applyColorFilterFallback();
@@ -15853,11 +16573,777 @@
     applyColorFilterFallback();
   })();
 
+  function selectedBoardObjectTarget() {
+    const sel = window.__tinyworldSelection;
+    if (!sel || !sel.worldCoords) return null;
+    const coords = sel.worldCoords();
+    const byKey = new Map();
+    coords.forEach(({ x, z }) => {
+      const cell = getWorldCell(x, z);
+      if (!cell || !cell.kind) return;
+      let tx = x, tz = z, targetCell = cell;
+      if (cell.kind === 'house' && !cell.buildingType) {
+        try {
+          const cluster = findHouseCluster(x, z);
+          if (cluster && Number.isInteger(cluster.anchorX) && Number.isInteger(cluster.anchorZ)) {
+            tx = cluster.anchorX;
+            tz = cluster.anchorZ;
+            targetCell = getWorldCell(tx, tz);
+          }
+        } catch (_) {}
+      }
+      byKey.set(tx + ',' + tz, { x: tx, z: tz, cell: targetCell || cell });
+    });
+    const objects = Array.from(byKey.values());
+    return objects.length === 1 ? objects[0] : null;
+  }
+
+  function selectedBoardObjectLabel(target) {
+    if (!target || !target.cell) return 'selected object';
+    const cell = target.cell;
+    if (cell.kind === 'voxel-build') {
+      const stamp = getVoxelBuildStamp(cell.appearance && cell.appearance.voxelBuildId);
+      return stamp ? stamp.name : 'Voxel build';
+    }
+    if (cell.kind === 'house') {
+      const bt = cell.buildingType || 'cottage';
+      return bt.charAt(0).toUpperCase() + bt.slice(1) + ' house';
+    }
+    return cell.kind.charAt(0).toUpperCase() + cell.kind.slice(1);
+  }
+
+  function updateSelectedBoardObject(target, patch) {
+    if (!target || !target.cell) return false;
+    const cell = getWorldCell(target.x, target.z);
+    if (!cell || !cell.kind) return false;
+    setCell(target.x, target.z, Object.assign({}, cell, patch || {}, {
+      animate: false,
+      impactDust: false,
+    }));
+    if (window.__tinyworldSelection) window.__tinyworldSelection.materialize();
+    notifySelectionChanged();
+    return true;
+  }
+
+  function scaleSelectedBoardObject(amount) {
+    const target = selectedBoardObjectTarget();
+    if (!target) return false;
+    const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+    const current = appearance.objectScale || 1;
+    appearance.objectScale = Math.max(0.25, Math.min(4, current * amount));
+    if (Math.abs(appearance.objectScale - 1) < 0.001) delete appearance.objectScale;
+    return updateSelectedBoardObject(target, { appearance });
+  }
+
+  function moveSelectedBoardObject(dx, dz) {
+    const target = selectedBoardObjectTarget();
+    if (!target) return false;
+    const nextX = Math.max(-0.48, Math.min(0.48, (target.cell.offsetX || 0) + dx));
+    const nextZ = Math.max(-0.48, Math.min(0.48, (target.cell.offsetZ || 0) + dz));
+    return updateSelectedBoardObject(target, { offsetX: nextX, offsetZ: nextZ });
+  }
+
+  function seedVoxelBuildForSelectedObject(target) {
+    if (!target || !target.cell || !target.cell.kind) return null;
+    const cell = target.cell;
+    if (cell.kind === 'voxel-build') {
+      const existing = getVoxelBuildStamp(cell.appearance && cell.appearance.voxelBuildId);
+      if (existing) {
+        return Object.assign({}, existing, {
+          sourceCell: cloneCellIntent(cell),
+          sourceCoord: { x: target.x, z: target.z },
+        });
+      }
+    }
+    if (cell.kind === 'house') {
+      const seed = builderStylePartsForSelectedObject(target);
+      const stamp = seed && normalizeVoxelBuildStamp({
+        id: 'selected-' + seed.stamp + '-' + Date.now().toString(36),
+        name: selectedBoardObjectLabel(target),
+        customParts: seed.customParts,
+        footprint: selectedBuildingRenderFootprint(seed.stamp),
+        custom: true,
+      }, selectedBoardObjectLabel(target));
+      if (stamp) {
+        return Object.assign({}, stamp, {
+          sourceCell: cloneCellIntent(cell),
+          sourceCoord: { x: target.x, z: target.z },
+        });
+      }
+    }
+    let seedId = 'machiya-house';
+    if (cell.kind === 'house') {
+      if (cell.buildingType === 'tower' || cell.buildingType === 'skyscraper') seedId = 'watchtower';
+      else if (cell.buildingType === 'turret') seedId = 'watchtower';
+      else seedId = 'machiya-house';
+    } else if (cell.kind === 'tree' || cell.kind === 'flower' || cell.kind === 'bush') {
+      seedId = 'cherry-tree-build';
+    } else if (cell.kind === 'rock') {
+      seedId = 'rock-outcrop-build';
+    } else if (cell.kind === 'fence' || cell.kind === 'bridge') {
+      seedId = 'temple-gate';
+    } else if (CROP_KINDS.has(cell.kind) || cell.kind === 'tuft') {
+      seedId = 'bamboo-garden';
+    }
+    const base = getVoxelBuildStamp(seedId) || getVoxelBuildStamp('machiya-house');
+    if (!base) return null;
+    return Object.assign({}, base, {
+      id: 'selected-' + cell.kind + '-' + Date.now().toString(36),
+      name: selectedBoardObjectLabel(target),
+      sourceCell: cloneCellIntent(cell),
+      sourceCoord: { x: target.x, z: target.z },
+    });
+  }
+
+  function selectedBuildingStampId(cell) {
+    if (!cell || cell.kind !== 'house') return null;
+    if (cell.buildingType === 'tower' || cell.buildingType === 'skyscraper') return 'tower';
+    if (cell.buildingType === 'manor') return 'manor';
+    if (cell.buildingType === 'turret') return 'tower';
+    return 'house';
+  }
+
+  function selectedBuildingRenderFootprint(stamp) {
+    if (stamp === 'manor') return 2.05;
+    if (stamp === 'pagoda') return 2.15;
+    if (stamp === 'tower') return 1.55;
+    return 1.72;
+  }
+
+  function part(id, kind, material, size, pos, scale = [1, 1, 1], segments) {
+    const out = { id, kind, material, size, pos, scale };
+    if (segments) out.segments = segments;
+    return out;
+  }
+
+  function builderStylePartsForSelectedObject(target) {
+    if (!target || !target.cell || target.cell.kind !== 'house') return null;
+    const stamp = selectedBuildingStampId(target.cell);
+    const parts = [];
+    if (stamp === 'tower') {
+      parts.push(
+        part('base', 'box', 'stone', [1.45, 0.34, 1.45], [0, 0.17, 0]),
+        part('shaft', 'box', 'cream', [1.05, 2.2, 1.05], [0, 1.42, 0]),
+        part('frame-front', 'box', 'woodDark', [1.12, 1.9, 0.12], [0, 1.36, -0.59]),
+        part('window', 'box', 'white', [0.34, 0.34, 0.08], [0, 1.55, -0.66]),
+        part('balcony', 'box', 'wood', [1.6, 0.18, 1.6], [0, 2.62, 0]),
+        part('roof', 'box', 'roof', [1.5, 0.34, 1.5], [0, 2.98, 0]),
+        part('roof-top', 'box', 'roofEdge', [0.9, 0.24, 0.9], [0, 3.34, 0]),
+        part('finial', 'box', 'gold', [0.32, 0.32, 0.32], [0, 3.68, 0]),
+      );
+    } else if (stamp === 'manor') {
+      parts.push(
+        part('base', 'box', 'white', [2.4, 0.22, 1.65], [0, 0.11, 0]),
+        part('body', 'box', 'red', [2.0, 1.05, 1.35], [0, 0.74, 0]),
+        part('body-shadow', 'box', 'woodDark', [0.08, 0.95, 1.36], [-1.04, 0.76, 0]),
+        part('body-shadow-right', 'box', 'woodDark', [0.08, 0.95, 1.36], [1.04, 0.76, 0]),
+        part('cornice', 'box', 'white', [2.12, 0.12, 1.44], [0, 1.32, 0]),
+        part('roof-slab', 'box', 'roof', [2.25, 0.28, 1.55], [0, 1.55, 0]),
+        part('roof-cap', 'box', 'roofEdge', [1.75, 0.18, 1.1], [0, 1.78, 0]),
+        part('roof-ridge', 'box', 'roofEdge', [1.25, 0.12, 0.14], [0, 1.95, 0]),
+        part('front-step', 'box', 'white', [0.9, 0.12, 0.35], [0, 0.12, -0.96]),
+        part('portico-top', 'box', 'white', [0.95, 0.16, 0.22], [0, 0.92, -0.78]),
+        part('portico-left', 'cylinder', 'white', [0.11, 0.82, 0.11], [-0.34, 0.52, -0.78], [1, 1, 1], 8),
+        part('portico-mid', 'cylinder', 'white', [0.11, 0.82, 0.11], [0, 0.52, -0.78], [1, 1, 1], 8),
+        part('portico-right', 'cylinder', 'white', [0.11, 0.82, 0.11], [0.34, 0.52, -0.78], [1, 1, 1], 8),
+        part('door', 'box', 'woodDark', [0.34, 0.58, 0.08], [0, 0.52, -0.71]),
+        part('door-knob', 'box', 'gold', [0.05, 0.05, 0.04], [0.1, 0.52, -0.77]),
+      );
+      for (const x of [-0.72, 0.72]) {
+        for (const y of [0.56, 0.98]) {
+          parts.push(
+            part(`front-window-${x}-${y}`, 'box', 'white', [0.28, 0.24, 0.07], [x, y, -0.72]),
+            part(`front-window-glass-${x}-${y}`, 'box', 'waterDark', [0.18, 0.16, 0.08], [x, y, -0.77]),
+          );
+        }
+      }
+    } else if (stamp === 'pagoda') {
+      parts.push(part('stone-base', 'box', 'stone', [2.25, 0.4, 2.0], [0, 0.2, 0]));
+      for (let i = 0; i < 3; i++) {
+        const y = 0.65 + i * 0.9;
+        const w = 1.6 - i * 0.26;
+        parts.push(
+          part(`floor-${i}`, 'box', i % 2 ? 'cream' : 'red', [w, 0.55, w], [0, y, 0]),
+          part(`roof-${i}`, 'box', 'roof', [w + 0.6, 0.22, w + 0.6], [0, y + 0.42, 0]),
+          part(`roof-cap-${i}`, 'box', 'roofEdge', [w + 0.25, 0.14, w + 0.25], [0, y + 0.63, 0]),
+        );
+        for (const sx of [-1, 1]) {
+          for (const sz of [-1, 1]) {
+            parts.push(part(`gold-${i}-${sx}-${sz}`, 'box', 'gold', [0.16, 0.16, 0.16], [sx * (w * 0.5 + 0.22), y + 0.62, sz * (w * 0.5 + 0.22)]));
+          }
+        }
+      }
+      parts.push(part('spire', 'cylinder', 'gold', [0.16, 0.75, 0.16], [0, 3.75, 0], [1, 1, 1], 6));
+    } else {
+      parts.push(
+        part('base', 'box', 'stone', [2.2, 0.35, 1.8], [0, 0.18, 0]),
+        part('body', 'box', 'cream', [1.8, 1.1, 1.35], [0, 0.9, 0]),
+        part('front-beam', 'box', 'woodDark', [1.95, 0.15, 0.12], [0, 1.25, -0.74]),
+        part('door', 'box', 'wood', [0.42, 0.72, 0.08], [0, 0.72, -0.72]),
+        part('window-left', 'box', 'white', [0.28, 0.28, 0.08], [-0.55, 0.9, -0.72]),
+        part('window-right', 'box', 'white', [0.28, 0.28, 0.08], [0.55, 0.9, -0.72]),
+        part('roof-slab', 'box', 'roof', [2.35, 0.28, 1.85], [0, 1.55, 0]),
+        part('roof-cap', 'box', 'roofEdge', [2.0, 0.2, 1.5], [0, 1.82, 0]),
+        part('lantern-left', 'box', 'gold', [0.18, 0.24, 0.1], [-0.82, 0.74, -0.78]),
+        part('lantern-right', 'box', 'gold', [0.18, 0.24, 0.1], [0.82, 0.74, -0.78]),
+      );
+    }
+    return {
+      stamp,
+      label: selectedBoardObjectLabel(target),
+      customParts: normalizeVoxelCustomParts(parts),
+    };
+  }
+
+  function compactPartsForAi(parts) {
+    const buckets = new Map();
+    normalizeVoxelCustomParts(parts).forEach(part => {
+      const baseId = String(part.id || 'part').replace(/-v-\d+-\d+-\d+$/, '').replace(/-\d+$/, '');
+      const key = `${baseId}|${part.kind}|${part.material}`;
+      const bucket = buckets.get(key) || {
+        id: baseId,
+        kind: part.kind,
+        material: part.material,
+        count: 0,
+        min: [Infinity, Infinity, Infinity],
+        max: [-Infinity, -Infinity, -Infinity],
+        sampleSize: part.size,
+      };
+      bucket.count += 1;
+      for (let axis = 0; axis < 3; axis++) {
+        const half = (part.size[axis] || 0) * (part.scale[axis] || 1) * 0.5;
+        bucket.min[axis] = Math.min(bucket.min[axis], (part.pos[axis] || 0) - half);
+        bucket.max[axis] = Math.max(bucket.max[axis], (part.pos[axis] || 0) + half);
+      }
+      buckets.set(key, bucket);
+    });
+    return Array.from(buckets.values()).slice(0, 120).map(bucket => ({
+      id: bucket.id,
+      kind: bucket.kind,
+      material: bucket.material,
+      count: bucket.count,
+      size: bucket.max.map((value, axis) => Number((value - bucket.min[axis]).toFixed(3))),
+      pos: bucket.max.map((value, axis) => Number(((value + bucket.min[axis]) * 0.5).toFixed(3))),
+      sampleSize: bucket.sampleSize,
+    }));
+  }
+
+  function shouldEnhanceSelectedObjectPrompt(text) {
+    return /\b(ai\s*)?(enhance|reinterpret|upscale|detail|detailed|refine|upgrade|rebuild|voxel|stamp|make it|turn it|change it|convert it)\b/i.test(String(text || ''));
+  }
+
+  function voxelBuildBounds(voxels) {
+    if (!Array.isArray(voxels) || !voxels.length) return null;
+    const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    for (const v of voxels) {
+      b.minX = Math.min(b.minX, v.x); b.maxX = Math.max(b.maxX, v.x);
+      b.minY = Math.min(b.minY, v.y); b.maxY = Math.max(b.maxY, v.y);
+      b.minZ = Math.min(b.minZ, v.z); b.maxZ = Math.max(b.maxZ, v.z);
+    }
+    return b;
+  }
+
+  function allowedVoxelBuildBounds(stamp, profile) {
+    const b = voxelBuildBounds(stamp && stamp.voxels);
+    if (!b) return null;
+    const kind = profile && profile.selectedKind;
+    const margin = kind === 'tree' ? 3 : kind === 'rock' ? 1 : 2;
+    return {
+      minX: b.minX - margin,
+      maxX: b.maxX + margin,
+      minY: 0,
+      maxY: b.maxY + (kind === 'tree' ? 8 : 5),
+      minZ: b.minZ - margin,
+      maxZ: b.maxZ + margin,
+    };
+  }
+
+  function filterVoxelsToBounds(voxels, bounds) {
+    if (!bounds || !Array.isArray(voxels)) return Array.isArray(voxels) ? voxels : [];
+    return voxels.filter(v =>
+      v.x >= bounds.minX && v.x <= bounds.maxX &&
+      v.y >= bounds.minY && v.y <= bounds.maxY &&
+      v.z >= bounds.minZ && v.z <= bounds.maxZ
+    );
+  }
+
+  function enhancedFootprintForStamp(stamp, profile) {
+    const kind = profile && profile.selectedKind;
+    if (kind === 'rock') return 0.86;
+    if (kind === 'tree' || kind === 'bush' || kind === 'flower') return 1.0;
+    if (kind === 'house' || kind === 'voxel-build') return 0.96;
+    return Math.min(stamp.footprint || 1, 1);
+  }
+
+  function customPartsEnhanceSchema(allowedMaterials) {
+    return {
+      type: 'object',
+      additionalProperties: false,
+      required: ['notes', 'customParts'],
+      properties: {
+        notes: { type: 'string' },
+        customParts: {
+          type: 'array',
+          maxItems: 180,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'kind', 'material', 'size', 'pos', 'scale'],
+            properties: {
+              id: { type: 'string' },
+              kind: { type: 'string', enum: ['box', 'cylinder', 'cone'] },
+              material: { type: 'string', enum: allowedMaterials },
+              size: {
+                type: 'array',
+                minItems: 3,
+                maxItems: 3,
+                items: { type: 'number' },
+              },
+              pos: {
+                type: 'array',
+                minItems: 3,
+                maxItems: 3,
+                items: { type: 'number' },
+              },
+              scale: {
+                type: 'array',
+                minItems: 3,
+                maxItems: 3,
+                items: { type: 'number' },
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  function postAiDebugLog(entry) {
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname)) return;
+    fetch('/api/ai-debug-log', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(entry),
+    }).catch(() => {});
+  }
+
+  function selectedVoxelEnhanceProfile(stamp, userInstruction) {
+    const sourceCell = stamp && stamp.sourceCell;
+    const kind = sourceCell && sourceCell.kind ? sourceCell.kind : 'voxel-build';
+    const text = String(userInstruction || '').toLowerCase();
+    const explicitJapanese = /\b(japanese|japan|pagoda|shrine|temple|torii|sakura|zen)\b/i.test(text);
+    const base = {
+      selectedKind: kind,
+      selectedLabel: stamp && stamp.name ? stamp.name : 'selected object',
+      style: 'Tiny World low-poly voxel diorama, readable chunky blocks, preserve the selected object category',
+      requirements: [
+        'Use the source voxels and selected object intent as the contract for what this is.',
+        'Preserve the selected object category, footprint, scale, and silhouette language unless the user explicitly asks to change them.',
+        'Do not introduce a Japanese garden, shrine, temple, pagoda, or sakura influence unless the selected object or user instruction explicitly asks for it.',
+        'Use many small voxels and visible silhouette breaks instead of a few broad slabs.',
+        'Keep every returned voxel inside allowedBounds and centered on the selected tile.',
+        'Do not create floating orbit rings, detached columns, detached symbols, or unsupported chunks.',
+        'Avoid filling the bounding box solid. Omit hidden interior voxels when they do not affect the visible silhouette.',
+      ],
+    };
+    if (kind === 'rock') {
+      base.seedId = 'rock-outcrop-build';
+      base.style = 'Natural low-poly voxel rock outcrop, irregular stone chunks, moss and highlights only where useful';
+      base.requirements.push(
+        'This is a rock or boulder. Keep it geological, irregular, grounded, and compact.',
+        'Add fractured stone facets, stepped ledges, small pebbles, cracks, moss patches, and highlight stones.',
+        'Do not add roofs, windows, doors, lanterns, fences, garden gates, petals, trees, or building trim.',
+      );
+    } else if (kind === 'tree' || kind === 'bush' || kind === 'flower') {
+      base.seedId = 'cherry-tree-build';
+      base.style = 'Organic low-poly voxel foliage prop, clustered leaves, branch structure, readable chunky blocks';
+      base.requirements.push(
+        'This is foliage. Keep the clustered leaf canopy and trunk/branch relationship.',
+        'Add layered leaf clumps, branch forks, roots, small ground details, and varied leaf tones.',
+        'Do not convert it into a building, gate, shrine, or decorative garden structure.',
+      );
+    } else if (kind === 'house' || kind === 'voxel-build') {
+      base.seedId = stamp && stamp.id ? stamp.id : 'building';
+      base.style = explicitJapanese
+        ? 'Japanese-influenced low-poly voxel building, crisp stepped roof, trim, windows, base details'
+        : 'Tiny World low-poly voxel building, crisp stepped roof, trim, windows, door, base details';
+      base.requirements.push(
+        'This is a building. Keep roof, walls, windows, door, base, and trim visually distinct.',
+        explicitJapanese
+          ? 'Japanese architectural influence is allowed because the prompt asks for it.'
+          : 'Use the existing building language; do not force Japanese architecture.',
+        'Add higher-resolution eaves, roof ridges, window frames, door detail, steps, and foundation blocks.',
+      );
+    } else if (kind === 'fence' || kind === 'bridge') {
+      base.style = 'Tiny World low-poly constructed prop, rails, posts, crossbeams, plank or stone details';
+      base.requirements.push(
+        'This is a constructed prop. Keep posts, rails, planks, supports, and crossings readable.',
+        'Do not turn it into a building or landscape scene.',
+      );
+    } else if (CROP_KINDS.has(kind) || kind === 'tuft') {
+      base.style = 'Tiny World low-poly farm or ground-detail prop, small plant voxels, rows, stems, leaves';
+      base.requirements.push(
+        'This is a farm or ground-detail prop. Keep plants, stems, rows, and soil/base detail readable.',
+        'Do not turn it into a garden building, gate, or tree unless requested.',
+      );
+    }
+    return base;
+  }
+
+  async function enhanceSelectedBuildingPartsObject(target, userInstruction) {
+    const seed = builderStylePartsForSelectedObject(target);
+    if (!seed) return null;
+    const ai = getAIProviderState();
+    const provider = ai.provider || 'openai';
+    const def = AI_DEFAULTS[provider] || AI_DEFAULTS.openai;
+    const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+    const allowedMaterials = Object.keys(VOXEL_PART_COLORS);
+    const sourceParts = compactPartsForAi(seed.customParts);
+    const sourceBounds = customPartsBounds(seed.customParts);
+    const model = textModelForGeneration(provider, ai.model);
+    const instruction = String(userInstruction || '').trim() || 'Enhance this selected building as a richer low-poly voxel model.';
+    const buildingStyle = seed.stamp === 'manor'
+      ? 'Tiny World Georgian manor house, red brick walls, slate roof, white trim, portico columns, sash windows, large readable manor render with small detail parts'
+      : seed.stamp === 'tower'
+        ? 'Tiny World stone tower, readable vertical render with small crenellation, window, roof cap, and door parts'
+        : seed.stamp === 'pagoda'
+          ? 'Tiny World pagoda building, tiered roof, readable render with small trim parts'
+          : 'Tiny World low-poly house, readable roof, walls, windows, door, trim, larger render with small detail parts';
+    const renderFootprint = selectedBuildingRenderFootprint(seed.stamp);
+    const payload = {
+      model,
+      reasoningEffort: 'low',
+      reasoningSummary: 'off',
+      textVerbosity: 'low',
+      maxOutputTokens: 12000,
+      allowedMaterials,
+      selectedObject: {
+        id: target.cell.kind + '-' + target.x + '-' + target.z,
+        stamp: seed.stamp,
+        label: seed.label,
+        position: [target.x, 0, target.z],
+        rotation: target.cell.rotationY || 0,
+        scale: [1, 1, 1],
+      },
+      desiredScale: [1, 1, 1],
+      style: buildingStyle,
+      instruction,
+      renderFootprint,
+      sourceParts,
+      sourceCustomParts: seed.customParts,
+      sourceBounds,
+      allowedBounds: sourceBounds ? {
+        minX: sourceBounds.minX - 0.15,
+        maxX: sourceBounds.maxX + 0.15,
+        minY: 0,
+        maxY: sourceBounds.maxY + 0.75,
+        minZ: sourceBounds.minZ - 0.15,
+        maxZ: sourceBounds.maxZ + 0.15,
+      } : null,
+      imageDataUrl: null,
+    };
+    postAiDebugLog({
+      kind: 'selected-building-parts-before',
+      instruction,
+      target: { x: target.x, z: target.z, label: seed.label },
+      beforeCell: cloneCellIntent(target.cell),
+      payload,
+    });
+    let result = null;
+    const useLocalEndpoint = isLocalHost && (provider === 'openai' || !ai.key);
+    if (useLocalEndpoint) {
+      const r = await fetch('/api/reinterpret-stamp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(Object.assign({}, payload, {
+          model: provider === 'openai' ? model : AI_DEFAULTS.openai.model,
+        })),
+      });
+      const text = await r.text();
+      try { result = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok || !result || !result.ok) throw new Error((result && result.error) || text.slice(0, 180) || 'AI reinterpret failed');
+    } else {
+      if (!ai.key) throw new Error('AI key missing');
+      const schema = customPartsEnhanceSchema(allowedMaterials);
+      const system = [
+        'You generate geometry for a Three.js voxel stamp builder.',
+        'Return ONLY valid JSON, no markdown.',
+        'The JSON shape must be {"customParts":[...], "notes":"short optional note"}.',
+        'Use customParts with box/cylinder/cone, material, size [x,y,z], pos [x,y,z], scale [1,1,1].',
+        'Preserve the selected building type and keep it compact in the original tile footprint.',
+        'Do not introduce Japanese, pagoda, temple, shrine, torii, sakura, or garden styling unless the selected object or user instruction explicitly asks for it.',
+        'Do not add detached floating rings, detached columns, orbiting blocks, or broad terrain patches.',
+        'Keep all returned parts inside allowedBounds when provided.',
+        'Enhance roof, walls, windows, door, posts, trim, steps, and base as connected parts.',
+        'Do not simply stretch parts. Rebuild semantically with richer low-poly detail.',
+        '',
+        'Schema:',
+        JSON.stringify(schema),
+      ].join('\n');
+      const user = JSON.stringify(payload);
+      const raw = provider === 'anthropic'
+        ? await callAnthropic(def.endpoint, ai.key, model, system, user, { name: 'emit_custom_parts', schema })
+        : provider === 'gemini'
+          ? await callGemini(def.endpoint, ai.key, model, system, user)
+          : await callOpenAI(def.endpoint, ai.key, model, system, user);
+      result = extractJSON(raw);
+      if (!result) throw new Error('AI returned non-JSON');
+    }
+    const customParts = fitCustomPartsToBounds(result.customParts || result.parts || result.response?.customParts, payload.allowedBounds);
+    if (!customParts.length) throw new Error('AI returned no customParts');
+    return normalizeVoxelBuildStamp({
+      id: 'enhanced-' + seed.stamp + '-' + Date.now().toString(36),
+      name: seed.label + ' enhanced',
+      customParts,
+      footprint: renderFootprint,
+      custom: true,
+    }, seed.label + ' enhanced');
+  }
+
+  async function enhanceSelectedBoardObject(userInstruction) {
+    const target = selectedBoardObjectTarget();
+    if (!target) throw new Error('Shift-select exactly one object first.');
+    const beforeCell = cloneCellIntent(target.cell);
+    if (target.cell && target.cell.kind === 'house') {
+      const stamp = await enhanceSelectedBuildingPartsObject(target, userInstruction);
+      if (!stamp) throw new Error('No enhanced building returned');
+      VOXEL_BUILD_STAMPS.push(stamp);
+      saveCustomVoxelBuildStamps();
+      selectedVoxelBuildId = stamp.id;
+      const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+      appearance.voxelBuildId = stamp.id;
+      updateSelectedBoardObject(target, {
+        kind: 'voxel-build',
+        floors: 1,
+        buildingType: null,
+        fenceSide: null,
+        appearance,
+      });
+      const afterCell = cloneCellIntent(getWorldCell(target.x, target.z));
+      postAiDebugLog({
+        kind: 'selected-building-parts-after',
+        instruction: userInstruction || '',
+        target: { x: target.x, z: target.z, label: selectedBoardObjectLabel(target) },
+        beforeCell,
+        enhancedStamp: {
+          id: stamp.id,
+          name: stamp.name,
+          footprint: stamp.footprint,
+          customPartCount: stamp.customParts.length,
+          bounds: customPartsBounds(stamp.customParts),
+        },
+        afterCell,
+      });
+      renderStampBuilderCards();
+      selectTool({ id: 'voxel-build:' + stamp.id, label: stamp.name, kind: 'voxel-build', voxelBuildId: stamp.id, isVoxelBuild: true });
+      return stamp;
+    }
+    const seed = seedVoxelBuildForSelectedObject(target);
+    if (!seed) throw new Error('That selected object cannot be converted yet.');
+    const highResolutionSeed = upscaleVoxelBuildStampResolution(seed, 2, false) || seed;
+    const stamp = await enhanceVoxelBuildStamp(highResolutionSeed, userInstruction || '');
+    if (!stamp) throw new Error('No enhanced build returned');
+    VOXEL_BUILD_STAMPS.push(stamp);
+    saveCustomVoxelBuildStamps();
+    selectedVoxelBuildId = stamp.id;
+    const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+    appearance.voxelBuildId = stamp.id;
+    updateSelectedBoardObject(target, {
+      kind: 'voxel-build',
+      floors: 1,
+      buildingType: null,
+      fenceSide: null,
+      appearance,
+    });
+    const afterCell = cloneCellIntent(getWorldCell(target.x, target.z));
+    postAiDebugLog({
+      kind: 'selected-object-after',
+      instruction: userInstruction || '',
+      target: { x: target.x, z: target.z, label: selectedBoardObjectLabel(target) },
+      beforeCell,
+      seed: {
+        id: seed.id,
+        name: seed.name,
+        footprint: seed.footprint,
+        voxelCount: seed.voxels.length,
+      },
+      highResolutionSeed: {
+        footprint: highResolutionSeed.footprint,
+        voxelCount: highResolutionSeed.voxels.length,
+        bounds: voxelBuildBounds(highResolutionSeed.voxels),
+      },
+      enhancedStamp: {
+        id: stamp.id,
+        name: stamp.name,
+        footprint: stamp.footprint,
+        voxelCount: stamp.voxels.length,
+        bounds: voxelBuildBounds(stamp.voxels),
+      },
+      afterCell,
+    });
+    renderStampBuilderCards();
+    selectTool({ id: 'voxel-build:' + stamp.id, label: stamp.name, kind: 'voxel-build', voxelBuildId: stamp.id, isVoxelBuild: true });
+    return stamp;
+  }
+
+  function upscaleVoxelBuildStamp(stamp) {
+    if (!stamp || !Array.isArray(stamp.voxels)) return null;
+    return upscaleVoxelBuildStampResolution(stamp, 2, true);
+  }
+
+  function upscaleVoxelBuildStampResolution(stamp, factor, makeCustom) {
+    factor = Math.max(2, Math.min(4, Math.round(factor || 2)));
+    if (!stamp || !Array.isArray(stamp.voxels)) return null;
+    const out = [];
+    for (const v of stamp.voxels) {
+      const bx = v.x * factor;
+      const by = v.y * factor;
+      const bz = v.z * factor;
+      for (let dx = 0; dx < factor; dx++) {
+        for (let dy = 0; dy < factor; dy++) {
+          for (let dz = 0; dz < factor; dz++) {
+            out.push({ x: bx + dx, y: by + dy, z: bz + dz, color: v.color });
+          }
+        }
+      }
+    }
+    const raw = {
+      name: stamp.name + ' ' + factor + 'x',
+      id: stamp.id + '-' + factor + 'x',
+      voxels: out,
+      footprint: stamp.footprint,
+      custom: !!makeCustom,
+      sourceCell: stamp.sourceCell || null,
+      sourceCoord: stamp.sourceCoord || null,
+    };
+    if (!makeCustom) return raw;
+    return normalizeVoxelBuildStamp(raw, stamp.name + ' ' + factor + 'x');
+  }
+
+  function voxelBuildEnhanceSchema() {
+    return {
+      type: 'object',
+      additionalProperties: false,
+      required: ['name', 'voxels'],
+      properties: {
+        name: { type: 'string' },
+        voxels: {
+          type: 'array',
+          minItems: 80,
+          maxItems: 1800,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['x', 'y', 'z', 'color'],
+            properties: {
+              x: { type: 'integer' },
+              y: { type: 'integer' },
+              z: { type: 'integer' },
+              color: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  async function enhanceVoxelBuildStamp(stamp, userInstruction) {
+    const ai = getAIProviderState();
+    const def = AI_DEFAULTS[ai.provider] || AI_DEFAULTS.openai;
+    const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+    const canUseLocalOpenAI = isLocalHost && (ai.provider === 'openai' || !ai.key);
+    const model = canUseLocalOpenAI
+      ? textModelForGeneration('openai', ai.provider === 'openai' ? ai.model : AI_DEFAULTS.openai.model)
+      : textModelForGeneration(ai.provider, ai.model);
+    const schema = voxelBuildEnhanceSchema();
+    const profile = selectedVoxelEnhanceProfile(stamp, userInstruction);
+    const sourceBounds = voxelBuildBounds(stamp.voxels);
+    const allowedBounds = allowedVoxelBuildBounds(stamp, profile);
+    const userPayload = {
+      name: stamp.name,
+      selectedKind: profile.selectedKind,
+      selectedLabel: profile.selectedLabel,
+      seedId: profile.seedId || stamp.id || null,
+      style: profile.style,
+      instruction: String(userInstruction || '').trim() || 'Enhance this voxel object while keeping its role recognisable.',
+      sourceCell: stamp.sourceCell || null,
+      sourceCoord: stamp.sourceCoord || null,
+      sourceBounds,
+      allowedBounds,
+      renderFootprint: enhancedFootprintForStamp(stamp, profile),
+      desiredScale: (stamp.sourceCell && stamp.sourceCell.appearance && stamp.sourceCell.appearance.objectScale) || 1,
+      sourceVoxelCount: stamp.voxels.length,
+      targetVoxelCount: Math.min(1800, Math.max(180, Math.round(stamp.voxels.length * 1.25))),
+      requirements: profile.requirements,
+      voxels: stamp.voxels,
+    };
+    if (canUseLocalOpenAI) {
+      const r = await fetch('/api/enhance-voxel-build', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          instruction: userPayload.instruction,
+          stamp: userPayload,
+          schema,
+        }),
+      });
+      const text = await r.text();
+      let j = null;
+      try { j = text ? JSON.parse(text) : null; } catch (_) {}
+      if (!r.ok || !j || !j.ok) {
+        throw new Error((j && j.error) || text.slice(0, 180) || 'AI enhance failed');
+      }
+      const filtered = filterVoxelsToBounds(j.voxels, allowedBounds);
+      return normalizeVoxelBuildStamp({
+        name: (j.name || stamp.name) + ' enhanced',
+        voxels: filtered.length >= 24 ? filtered : j.voxels,
+        footprint: enhancedFootprintForStamp(stamp, profile),
+        custom: true,
+      }, stamp.name + ' enhanced');
+    }
+    if (!ai.key) throw new Error('AI key missing');
+    const system = [
+      'You enhance selected voxel stamps for Tiny World Builder.',
+      'Input voxels are integer x/y/z cubes with hex colors.',
+      'Return JSON only. Keep the selected object category recognisable, preserve its rough footprint, and add higher-resolution voxel detail.',
+      'Follow selectedKind, sourceCell, style, and requirements over generic visual assumptions.',
+      'Use many small voxels on the supplied coordinate grid. Do not collapse the object into a few broad blocks or fill a solid rectangular mass.',
+      'Keep all returned voxels inside allowedBounds when it is present. Do not create detached floating decoration.',
+      'Only add details that fit the selected object type. Rocks stay rocks, trees stay trees, buildings stay buildings.',
+      'Do not return prose. Do not include markdown.',
+      '',
+      'Schema:',
+      JSON.stringify(schema),
+    ].join('\n');
+    const user = JSON.stringify(userPayload);
+    const raw = ai.provider === 'anthropic'
+      ? await callAnthropic(def.endpoint, ai.key, model, system, user, { name: 'emit_voxel_build', schema })
+      : ai.provider === 'gemini'
+        ? await callGemini(def.endpoint, ai.key, model, system, user)
+        : await callOpenAI(def.endpoint, ai.key, model, system, user);
+    const parsed = extractJSON(raw);
+    if (!parsed) throw new Error('AI returned non-JSON');
+    const filtered = filterVoxelsToBounds(parsed.voxels, allowedBounds);
+    return normalizeVoxelBuildStamp({
+      name: (parsed.name || stamp.name) + ' enhanced',
+      voxels: filtered.length >= 24 ? filtered : parsed.voxels,
+      footprint: enhancedFootprintForStamp(stamp, profile),
+      custom: true,
+    }, stamp.name + ' enhanced');
+  }
+
   (function setupStampBuilder() {
     const modal = document.getElementById('stamp-builder-modal');
     const openBtn = document.getElementById('stamp-builder');
     const closeBtn = document.getElementById('stamp-builder-close');
     const rebuildBtn = document.getElementById('stamp-builder-rebuild');
+    const importBtn = document.getElementById('voxel-build-import');
+    const importFile = document.getElementById('voxel-build-import-file');
+    const upscaleBtn = document.getElementById('voxel-build-upscale');
+    const enhanceBtn = document.getElementById('voxel-build-enhance');
+    const useSelectedBtn = document.getElementById('voxel-build-use-selected');
+    const enhanceSelectedBtn = document.getElementById('voxel-build-enhance-selected');
     const status = document.getElementById('stamp-builder-status');
     if (!modal || !openBtn || !closeBtn) return;
     function open() {
@@ -15873,6 +17359,103 @@
       rebuildBtn.addEventListener('click', () => {
         rebuildVoxelStampRender();
         if (status) status.textContent = 'Stamps refreshed';
+      });
+    }
+    if (importBtn && importFile) {
+      importBtn.addEventListener('click', () => importFile.click());
+      importFile.addEventListener('change', async () => {
+        const file = importFile.files && importFile.files[0];
+        importFile.value = '';
+        if (!file) return;
+        try {
+          const payload = JSON.parse(await file.text());
+          const imported = importVoxelBuildPayload(payload, file.name.replace(/\.json$/i, ''));
+          renderStampBuilderCards();
+          if (imported[0]) {
+            selectedVoxelBuildId = imported[0].id;
+            selectTool({ id: 'voxel-build:' + imported[0].id, label: imported[0].name, kind: 'voxel-build', voxelBuildId: imported[0].id, isVoxelBuild: true });
+          }
+          if (status) status.textContent = imported.length ? 'Imported ' + imported.length + ' build' + (imported.length === 1 ? '' : 's') : 'No voxel builds found';
+        } catch (err) {
+          if (status) status.textContent = 'Import failed: ' + String(err.message || err).slice(0, 80);
+        }
+      });
+    }
+    if (upscaleBtn) {
+      upscaleBtn.addEventListener('click', () => {
+        const source = getVoxelBuildStamp(selectedVoxelBuildId);
+        const stamp = upscaleVoxelBuildStamp(source);
+        if (!stamp) {
+          if (status) status.textContent = 'Select a voxel build first';
+          return;
+        }
+        VOXEL_BUILD_STAMPS.push(stamp);
+        saveCustomVoxelBuildStamps();
+        selectedVoxelBuildId = stamp.id;
+        renderStampBuilderCards();
+        selectTool({ id: 'voxel-build:' + stamp.id, label: stamp.name, kind: 'voxel-build', voxelBuildId: stamp.id, isVoxelBuild: true });
+        if (status) status.textContent = 'Reinterpreted ' + source.name + ' at 2x voxel resolution';
+      });
+    }
+    if (enhanceBtn) {
+      enhanceBtn.addEventListener('click', async () => {
+        const source = getVoxelBuildStamp(selectedVoxelBuildId);
+        if (!source) {
+          if (status) status.textContent = 'Select a voxel build first';
+          return;
+        }
+        enhanceBtn.disabled = true;
+        if (status) status.textContent = 'Enhancing ' + source.name + '...';
+        try {
+          const stamp = await enhanceVoxelBuildStamp(source);
+          if (!stamp) throw new Error('No enhanced build returned');
+          VOXEL_BUILD_STAMPS.push(stamp);
+          saveCustomVoxelBuildStamps();
+          selectedVoxelBuildId = stamp.id;
+          renderStampBuilderCards();
+          selectTool({ id: 'voxel-build:' + stamp.id, label: stamp.name, kind: 'voxel-build', voxelBuildId: stamp.id, isVoxelBuild: true });
+          if (status) status.textContent = 'AI enhanced ' + source.name;
+        } catch (err) {
+          if (status) status.textContent = 'Enhance failed: ' + String(err.message || err).slice(0, 120);
+        } finally {
+          enhanceBtn.disabled = false;
+        }
+      });
+    }
+    if (useSelectedBtn) {
+      useSelectedBtn.addEventListener('click', () => {
+        const target = selectedBoardObjectTarget();
+        const seed = seedVoxelBuildForSelectedObject(target);
+        if (!target || !seed) {
+          if (status) status.textContent = 'Shift-select one object on the board first';
+          return;
+        }
+        let stamp = seed;
+        if (!getVoxelBuildStamp(seed.id)) {
+          stamp = normalizeVoxelBuildStamp(Object.assign({}, seed, {
+            id: seed.id,
+            custom: true,
+          }), seed.name);
+          VOXEL_BUILD_STAMPS.push(stamp);
+          saveCustomVoxelBuildStamps();
+        }
+        selectedVoxelBuildId = stamp.id;
+        renderStampBuilderCards();
+        if (status) status.textContent = 'Selected ' + selectedBoardObjectLabel(target) + ' as AI target';
+      });
+    }
+    if (enhanceSelectedBtn) {
+      enhanceSelectedBtn.addEventListener('click', async () => {
+        enhanceSelectedBtn.disabled = true;
+        if (status) status.textContent = 'Enhancing selected object...';
+        try {
+          const stamp = await enhanceSelectedBoardObject('Enhance the selected object as a richer detailed voxel build.');
+          if (status) status.textContent = 'AI enhanced selected object into ' + stamp.name;
+        } catch (err) {
+          if (status) status.textContent = 'Enhance selected failed: ' + String(err.message || err).slice(0, 120);
+        } finally {
+          enhanceSelectedBtn.disabled = false;
+        }
       });
     }
   })();
@@ -17512,355 +19095,372 @@
     "type": "object",
     "additionalProperties": false,
     "required": [
-        "v",
-        "cells"
+      "v",
+      "cells"
     ],
     "properties": {
-        "v": {
-            "type": "integer",
-            "enum": [
-                4
-            ],
-            "description": "Schema version. Must be 4."
-        },
-        "gridSize": {
-            "type": "integer",
-            "enum": [
-                8,
-                12,
-                16,
-                20,
-                32,
-                48
-            ],
-            "description": "Optional home board edge length. Defaults to the current app grid when omitted."
-        },
-        "cells": {
-            "type": "array",
-            "description": "Sparse list of non-default cells. The app exports compact tuple cells but also accepts object cells for AI/tooling convenience. Coordinates may include user-edited ghost-board cells outside the home grid.",
-            "items": {
-                "$ref": "#/$defs/cell"
-            }
-        },
-        "cameraMode": {
-            "type": "string",
-            "enum": [
-                "ortho",
-                "topdown",
-                "soft",
-                "perspective",
-                "fp"
-            ],
-            "description": "Optional preferred camera. Saved worlds usually use ortho, soft, perspective, or fp; topdown is accepted for imports."
-        },
-        "toolId": {
-            "type": "string",
-            "description": "Optional tool to leave selected after load. Ignored if unknown."
+      "v": {
+        "type": "integer",
+        "enum": [
+          4
+        ],
+        "description": "Schema version. Must be 4."
+      },
+      "gridSize": {
+        "type": "integer",
+        "enum": [
+          8,
+          12,
+          16,
+          20,
+          32,
+          48
+        ],
+        "description": "Optional home board edge length. Defaults to the current app grid when omitted."
+      },
+      "cells": {
+        "type": "array",
+        "description": "Sparse list of non-default cells. The app exports compact tuple cells but also accepts object cells for AI/tooling convenience. Coordinates may include user-edited ghost-board cells outside the home grid.",
+        "items": {
+          "$ref": "#/$defs/cell"
         }
+      },
+      "cameraMode": {
+        "type": "string",
+        "enum": [
+          "ortho",
+          "topdown",
+          "soft",
+          "perspective",
+          "fp"
+        ],
+        "description": "Optional preferred camera. Saved worlds usually use ortho, soft, perspective, or fp; topdown is accepted for imports."
+      },
+      "toolId": {
+        "type": "string",
+        "description": "Optional tool to leave selected after load. Ignored if unknown."
+      }
     },
     "$defs": {
-        "coord": {
-            "type": "integer",
-            "minimum": -1024,
-            "maximum": 1024
-        },
-        "terrain": {
+      "coord": {
+        "type": "integer",
+        "minimum": -1024,
+        "maximum": 1024
+      },
+      "terrain": {
+        "type": "string",
+        "enum": [
+          "grass",
+          "path",
+          "dirt",
+          "water",
+          "stone",
+          "lava",
+          "sand",
+          "snow"
+        ],
+        "description": "Tile material. Water and lava normally clear hosted kinds except bridge/rock handling in the renderer. Dirt is auto-applied under crops. Stone/snow read as mountain caps; sand as a water-edge beach."
+      },
+      "kind": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          null,
+          "house",
+          "tree",
+          "fence",
+          "rock",
+          "bridge",
+          "crop",
+          "corn",
+          "wheat",
+          "pumpkin",
+          "carrot",
+          "sunflower",
+          "tuft",
+          "flower",
+          "bush",
+          "cow",
+          "sheep",
+          "voxel-build"
+        ]
+      },
+      "buildingType": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          null,
+          "cottage",
+          "manor",
+          "tower",
+          "turret",
+          "skyscraper"
+        ]
+      },
+      "fenceSide": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          null,
+          "n",
+          "s",
+          "e",
+          "w",
+          "center-x",
+          "center-z"
+        ]
+      },
+      "extra": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
             "type": "string",
             "enum": [
-                "grass",
-                "path",
-                "dirt",
-                "water",
-                "stone",
-                "lava",
-                "sand",
-                "snow"
-            ],
-            "description": "Tile material. Water and lava normally clear hosted kinds except bridge/rock handling in the renderer. Dirt is auto-applied under crops. Stone/snow read as mountain caps; sand as a water-edge beach."
-        },
-        "kind": {
-            "type": [
-                "string",
-                "null"
-            ],
+              "fence",
+              "tuft"
+            ]
+          },
+          "k": {
+            "type": "string",
             "enum": [
-                null,
-                "house",
-                "tree",
-                "fence",
-                "rock",
-                "bridge",
-                "crop",
-                "corn",
-                "wheat",
-                "pumpkin",
-                "carrot",
-                "sunflower",
-                "tuft",
-                "flower",
-                "bush",
-                "cow",
-                "sheep"
+              "fence",
+              "tuft"
             ]
+          },
+          "fenceSide": {
+            "$ref": "#/$defs/fenceSide"
+          },
+          "s": {
+            "$ref": "#/$defs/fenceSide"
+          },
+          "floors": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "f": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8
+          }
         },
-        "buildingType": {
-            "type": [
-                "string",
-                "null"
-            ],
-            "enum": [
-                null,
-                "cottage",
-                "manor",
-                "tower",
-                "turret",
-                "skyscraper"
-            ]
-        },
-        "fenceSide": {
-            "type": [
-                "string",
-                "null"
-            ],
-            "enum": [
-                null,
-                "n",
-                "s",
-                "e",
-                "w",
-                "center-x",
-                "center-z"
-            ]
-        },
-        "extra": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "kind": {
-                    "type": "string",
-                    "enum": [
-                        "fence",
-                        "tuft"
-                    ]
-                },
-                "k": {
-                    "type": "string",
-                    "enum": [
-                        "fence",
-                        "tuft"
-                    ]
-                },
-                "fenceSide": {
-                    "$ref": "#/$defs/fenceSide"
-                },
-                "s": {
-                    "$ref": "#/$defs/fenceSide"
-                },
-                "floors": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8
-                },
-                "f": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8
-                }
-            },
-            "anyOf": [
-                {
-                    "required": [
-                        "kind"
-                    ]
-                },
-                {
-                    "required": [
-                        "k"
-                    ]
-                }
-            ]
-        },
-        "extras": {
-            "type": [
-                "array",
-                "null"
-            ],
-            "items": {
-                "$ref": "#/$defs/extra"
-            }
-        },
-        "appearance": {
-            "type": [
-                "object",
-                "null"
-            ],
-            "additionalProperties": false,
-            "properties": {
-                "bodyColor": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-fA-F]{6}$"
-                },
-                "topColor": {
-                    "type": "string",
-                    "pattern": "^#[0-9a-fA-F]{6}$"
-                }
-            }
-        },
-        "transform": {
-            "oneOf": [
-                {
-                    "type": "array",
-                    "minItems": 3,
-                    "maxItems": 3,
-                    "prefixItems": [
-                        {
-                            "type": "number",
-                            "description": "rotationY in radians"
-                        },
-                        {
-                            "type": "number",
-                            "description": "offsetX in tile units"
-                        },
-                        {
-                            "type": "number",
-                            "description": "offsetZ in tile units"
-                        }
-                    ],
-                    "items": false
-                },
-                {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "rotationY": {
-                            "type": "number"
-                        },
-                        "offsetX": {
-                            "type": "number"
-                        },
-                        "offsetZ": {
-                            "type": "number"
-                        }
-                    }
-                }
-            ]
-        },
-        "cellObject": {
-            "type": "object",
-            "additionalProperties": false,
+        "anyOf": [
+          {
             "required": [
-                "x",
-                "z",
-                "terrain",
-                "kind",
-                "floors",
-                "terrainFloors",
-                "buildingType",
-                "fenceSide"
-            ],
-            "properties": {
-                "x": {
-                    "$ref": "#/$defs/coord"
-                },
-                "z": {
-                    "$ref": "#/$defs/coord"
-                },
-                "terrain": {
-                    "$ref": "#/$defs/terrain"
-                },
-                "kind": {
-                    "$ref": "#/$defs/kind"
-                },
-                "floors": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8,
-                    "description": "Object stack/intensity count. For houses it means floors; for non-house props/crops it is enhancement density from repeat taps. It must not be used to raise the ground."
-                },
-                "terrainFloors": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8,
-                    "description": "Ground height stack for the terrain layer only. Terrain repeat taps raise this value. Object repeat taps raise floors instead."
-                },
-                "buildingType": {
-                    "$ref": "#/$defs/buildingType"
-                },
-                "fenceSide": {
-                    "$ref": "#/$defs/fenceSide"
-                },
-                "extras": {
-                    "$ref": "#/$defs/extras"
-                },
-                "transform": {
-                    "$ref": "#/$defs/transform"
-                },
-                "appearance": {
-                    "$ref": "#/$defs/appearance"
-                }
-            }
-        },
-        "cellTuple": {
+              "kind"
+            ]
+          },
+          {
+            "required": [
+              "k"
+            ]
+          }
+        ]
+      },
+      "extras": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "$ref": "#/$defs/extra"
+        }
+      },
+      "appearance": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "bodyColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "topColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "voxelBuildId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+          },
+          "objectScale": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 4
+          },
+          "objectStyle": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "voxel"
+            ]
+          }
+        }
+      },
+      "transform": {
+        "oneOf": [
+          {
             "type": "array",
-            "minItems": 4,
-            "maxItems": 11,
+            "minItems": 3,
+            "maxItems": 3,
             "prefixItems": [
-                {
-                    "$ref": "#/$defs/coord",
-                    "description": "x"
-                },
-                {
-                    "$ref": "#/$defs/coord",
-                    "description": "z"
-                },
-                {
-                    "$ref": "#/$defs/terrain"
-                },
-                {
-                    "$ref": "#/$defs/kind"
-                },
-                {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8,
-                    "description": "floors"
-                },
-                {
-                    "$ref": "#/$defs/buildingType"
-                },
-                {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 8,
-                    "description": "terrainFloors"
-                },
-                {
-                    "$ref": "#/$defs/fenceSide"
-                },
-                {
-                    "$ref": "#/$defs/extras"
-                },
-                {
-                    "$ref": "#/$defs/transform"
-                },
-                {
-                    "$ref": "#/$defs/appearance"
-                }
+              {
+                "type": "number",
+                "description": "rotationY in radians"
+              },
+              {
+                "type": "number",
+                "description": "offsetX in tile units"
+              },
+              {
+                "type": "number",
+                "description": "offsetZ in tile units"
+              }
             ],
             "items": false
-        },
-        "cell": {
-            "oneOf": [
-                {
-                    "$ref": "#/$defs/cellObject"
-                },
-                {
-                    "$ref": "#/$defs/cellTuple"
-                }
-            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rotationY": {
+                "type": "number"
+              },
+              "offsetX": {
+                "type": "number"
+              },
+              "offsetZ": {
+                "type": "number"
+              }
+            }
+          }
+        ]
+      },
+      "cellObject": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "x",
+          "z",
+          "terrain",
+          "kind",
+          "floors",
+          "terrainFloors",
+          "buildingType",
+          "fenceSide"
+        ],
+        "properties": {
+          "x": {
+            "$ref": "#/$defs/coord"
+          },
+          "z": {
+            "$ref": "#/$defs/coord"
+          },
+          "terrain": {
+            "$ref": "#/$defs/terrain"
+          },
+          "kind": {
+            "$ref": "#/$defs/kind"
+          },
+          "floors": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Object stack/intensity count. For houses it means floors; for non-house props/crops it is enhancement density from repeat taps. It must not be used to raise the ground."
+          },
+          "terrainFloors": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "Ground height stack for the terrain layer only. Terrain repeat taps raise this value. Object repeat taps raise floors instead."
+          },
+          "buildingType": {
+            "$ref": "#/$defs/buildingType"
+          },
+          "fenceSide": {
+            "$ref": "#/$defs/fenceSide"
+          },
+          "extras": {
+            "$ref": "#/$defs/extras"
+          },
+          "transform": {
+            "$ref": "#/$defs/transform"
+          },
+          "appearance": {
+            "$ref": "#/$defs/appearance"
+          }
         }
+      },
+      "cellTuple": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 11,
+        "prefixItems": [
+          {
+            "$ref": "#/$defs/coord",
+            "description": "x"
+          },
+          {
+            "$ref": "#/$defs/coord",
+            "description": "z"
+          },
+          {
+            "$ref": "#/$defs/terrain"
+          },
+          {
+            "$ref": "#/$defs/kind"
+          },
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "floors"
+          },
+          {
+            "$ref": "#/$defs/buildingType"
+          },
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "terrainFloors"
+          },
+          {
+            "$ref": "#/$defs/fenceSide"
+          },
+          {
+            "$ref": "#/$defs/extras"
+          },
+          {
+            "$ref": "#/$defs/transform"
+          },
+          {
+            "$ref": "#/$defs/appearance"
+          }
+        ],
+        "items": false
+      },
+      "cell": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/cellObject"
+          },
+          {
+            "$ref": "#/$defs/cellTuple"
+          }
+        ]
+      }
     }
-};
+  };
 
   // -------- AI generation --------
   // Prompts an LLM for a world description matching WORLD_SCHEMA, validates
@@ -17894,6 +19494,14 @@
       models: [
         'grok-4.3-latest', 'grok-4.3',
         'grok-4.20-reasoning', 'grok-4.20',
+      ],
+    },
+    gemini: {
+      model: 'gemini-3.1-pro',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
+      models: [
+        'gemini-3.1-pro',
+        'gemini-3.1-flash',
       ],
     },
   };
@@ -18161,7 +19769,7 @@
     if (data.cameraMode !== undefined && !okCameraMode.has(data.cameraMode)) return 'cameraMode invalid: ' + data.cameraMode;
     if (data.gridSize !== undefined && !isValidGridSize(data.gridSize)) return 'gridSize invalid: ' + data.gridSize;
     const okTerrain = new Set(['grass','path','dirt','water','stone','lava','sand','snow']);
-    const okKind = new Set([null,'house','tree','fence','rock','bridge','crop','corn','wheat','pumpkin','carrot','sunflower','tuft','flower','bush','cow','sheep']);
+    const okKind = new Set([null,'house','tree','fence','rock','bridge','crop','corn','wheat','pumpkin','carrot','sunflower','tuft','flower','bush','cow','sheep','chimney','ripple','shrub','stone','pebble','bridge-rail','voxel-build']);
     const okBT = new Set([null,'cottage','manor','tower','turret','skyscraper']);
     const okFenceSide = new Set([null,'n','s','e','w','center-x','center-z']);
     const seen = new Set();
@@ -18189,7 +19797,7 @@
       if (!Number.isInteger(f) || f < 1 || f > 8) return 'cells[' + i + '].floors out of range';
       const tf = terrainFloors === undefined ? 1 : terrainFloors;
       if (!Number.isInteger(tf) || tf < 1 || tf > 8) return 'cells[' + i + '].terrainFloors out of range';
-      const bt = buildingType === undefined ? null : buildingType;
+      const bt = k === 'house' ? (buildingType === undefined ? null : buildingType) : null;
       if (!okBT.has(bt)) return 'cells[' + i + '].buildingType invalid: ' + buildingType;
       const fs = fenceSide === undefined ? null : fenceSide;
       if (!okFenceSide.has(fs)) return 'cells[' + i + '].fenceSide invalid: ' + fenceSide;
@@ -18275,6 +19883,32 @@
     const block = (j.content || []).find(b => b.type === 'tool_use');
     if (!block) throw new Error('no tool_use block in response');
     return JSON.stringify(block.input);
+  }
+
+  async function callGemini(endpoint, key, model, system, user) {
+    const safeModel = encodeURIComponent(model || AI_DEFAULTS.gemini.model);
+    const url = `${endpoint}/${safeModel}:generateContent?key=${encodeURIComponent(key)}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: system }],
+        },
+        contents: [{
+          role: 'user',
+          parts: [{ text: user }],
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          maxOutputTokens: 8000,
+        },
+      }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
+    const j = await r.json();
+    const parts = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts;
+    return (parts || []).map(part => part.text || '').join('\n');
   }
 
   // Item 4 — procedural map generator (offline, deterministic). Emits a
@@ -18587,6 +20221,8 @@
     let raw;
     if (provider === 'anthropic') {
       raw = await callAnthropic(def.endpoint, key, model || def.model, system, userPrompt);
+    } else if (provider === 'gemini') {
+      raw = await callGemini(def.endpoint, key, model || def.model, system, userPrompt);
     } else {
       // OpenAI + xAI share the chat-completions shape.
       raw = await callOpenAI(def.endpoint, key, model || def.model, system, userPrompt);
@@ -18680,6 +20316,8 @@
         description: 'Choose a ranked batch of Tiny World tile actions for the Auto palette tool.',
         schema: AUTO_SUGGESTIONS_SCHEMA,
       });
+    } else if (cfg.provider === 'gemini') {
+      raw = await callGemini(def.endpoint, cfg.key, cfg.model, system, user);
     } else {
       raw = await callOpenAI(def.endpoint, cfg.key, cfg.model, system, user);
     }
@@ -19141,13 +20779,8 @@
 
     goBtn.addEventListener('click', async () => {
       const promptRaw = promptEl.value.trim();
-      const provider = 'openai';
-      const model = 'gpt-5.5';
-      if (providerEl.value !== provider) {
-        providerEl.value = provider;
-        loadProviderState();
-      }
-      modelEl.value = model;
+      const provider = AI_DEFAULTS[providerEl.value] ? providerEl.value : 'openai';
+      const model = modelEl.value.trim() || AI_DEFAULTS[provider].model;
       const key = keyEl.value.trim() || localStorage.getItem(AI_LS.key(provider)) || '';
       const seed = (seedEl && seedEl.value.trim()) || '';
       const gridSize = selectedGenGridSize();
@@ -19290,6 +20923,7 @@
   (function wireFloatingAgent() {
     const form = document.getElementById('agent-input');
     const grip = document.getElementById('agent-grip');
+    const targetChip = document.getElementById('agent-target-chip');
     const input = document.getElementById('agent-prompt');
     const send = document.getElementById('agent-send');
     const panel = document.getElementById('agent-panel');
@@ -19399,6 +21033,27 @@
       return div;
     }
 
+    function syncAgentTargetChip(target, summary) {
+      if (!targetChip) return;
+      if (target) {
+        const text = 'Selected: ' + selectedBoardObjectLabel(target);
+        targetChip.textContent = text;
+        targetChip.title = text + ' - click to clear';
+        targetChip.hidden = false;
+        form.classList.add('has-target');
+      } else if (summary && summary.cellCount > 0) {
+        targetChip.textContent = 'Selected: ' + summary.cellCount + (summary.cellCount === 1 ? ' tile' : ' tiles');
+        targetChip.title = targetChip.textContent + ' - click to clear';
+        targetChip.hidden = false;
+        form.classList.add('has-target');
+      } else {
+        targetChip.textContent = '';
+        targetChip.title = 'Selected object target';
+        targetChip.hidden = true;
+        form.classList.remove('has-target');
+      }
+    }
+
     function fireToast() {
       // After a result, briefly show the open panel then slide it fully off-screen
       // to the right. No shrinking "collapsed" pill. The right-edge grip handle
@@ -19465,11 +21120,12 @@
       } catch (_) {}
     }
 
-    // X button in the panel header: fully slide the panel off-screen to the right.
-    // No collapsing pill. The separate right-edge grip handle appears *only* if
-    // there is real conversation history.
+    // X button in the panel header: clear the active selection and slide the
+    // panel off-screen.
     toggle.addEventListener('click', e => {
+      e.preventDefault();
       e.stopPropagation();
+      if (window.__tinyworldSelection) window.__tinyworldSelection.clear();
       panel.classList.add('hidden');
       panel.classList.remove('collapsed');
       pinnedOpen = false;
@@ -19509,9 +21165,6 @@
     }
 
     // -- drag-to-position the whole panel --
-    // Bottom-right anchored, so we store offsets from those edges. That
-    // keeps the "expand grows upward" behavior intact wherever the user
-    // parks it.
     const PANEL_POS_KEY = 'tinyworld:agent:panel-pos';
     let panelDrag = null;
 
@@ -19520,10 +21173,21 @@
         const raw = localStorage.getItem(PANEL_POS_KEY);
         if (raw) {
           const p = JSON.parse(raw);
+          if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+            panel.style.left = Math.max(8, Math.min(window.innerWidth - 80, p.x)) + 'px';
+            panel.style.top = Math.max(8, Math.min(window.innerHeight - 80, p.y)) + 'px';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            panel.style.transform = 'none';
+            return;
+          }
           if (Number.isFinite(p.right) && Number.isFinite(p.bottom)) {
-            panel.style.right = p.right + 'px';
-            panel.style.bottom = p.bottom + 'px';
-            panel.style.top = 'auto';
+            const left = window.innerWidth - p.right - panel.offsetWidth;
+            const top = window.innerHeight - p.bottom - panel.offsetHeight;
+            panel.style.left = Math.max(8, Math.min(window.innerWidth - 80, left)) + 'px';
+            panel.style.top = Math.max(8, Math.min(window.innerHeight - 80, top)) + 'px';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
             panel.style.transform = 'none';
             return;
           }
@@ -19531,6 +21195,7 @@
       } catch (_) {}
 
       // Default to right-middle as requested
+      panel.style.left = 'auto';
       panel.style.right = '20px';
       panel.style.top = '50%';
       panel.style.transform = 'translateY(-50%)';
@@ -19539,16 +21204,14 @@
 
     panel.addEventListener('pointerdown', e => {
       // Don't steal pointer events from interactive children.
-      if (e.target.closest('button, input, textarea, a, .agent-messages')) {
-        // Header text + outer pill area: allow drag.
-        if (!e.target.closest('.agent-panel-head, .agent-panel.collapsed')) return;
-      }
+      if (e.target.closest('button, input, textarea, a, .agent-messages, .agent-selection-properties')) return;
+      if (!e.target.closest('.agent-panel-head, .agent-panel.collapsed')) return;
       const r = panel.getBoundingClientRect();
       panelDrag = {
         startX: e.clientX,
         startY: e.clientY,
-        rightAtStart: window.innerWidth - r.right,
-        bottomAtStart: window.innerHeight - r.bottom,
+        leftAtStart: r.left,
+        topAtStart: r.top,
         moved: false,
       };
       try { panel.setPointerCapture(e.pointerId); } catch (_) {}
@@ -19563,10 +21226,13 @@
       panel.classList.add('dragging');
       const w = panel.offsetWidth;
       const h = panel.offsetHeight;
-      const right = Math.max(8, Math.min(window.innerWidth - w - 8, panelDrag.rightAtStart - dx));
-      const bottom = Math.max(8, Math.min(window.innerHeight - h - 8, panelDrag.bottomAtStart - dy));
-      panel.style.right = right + 'px';
-      panel.style.bottom = bottom + 'px';
+      const left = Math.max(8, Math.min(window.innerWidth - w - 8, panelDrag.leftAtStart + dx));
+      const top = Math.max(8, Math.min(window.innerHeight - h - 8, panelDrag.topAtStart + dy));
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      panel.style.transform = 'none';
     });
 
     function endPanelDrag(e) {
@@ -19579,8 +21245,8 @@
         const r = panel.getBoundingClientRect();
         try {
           localStorage.setItem(PANEL_POS_KEY, JSON.stringify({
-            right: Math.round(window.innerWidth - r.right),
-            bottom: Math.round(window.innerHeight - r.bottom),
+            x: Math.round(r.left),
+            y: Math.round(r.top),
           }));
         } catch (_) {}
       }
@@ -19603,6 +21269,14 @@
         setPanelCollapsed(false, { pin: true });
       }
     });
+    if (targetChip) {
+      targetChip.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.__tinyworldSelection) window.__tinyworldSelection.clear();
+        input.focus();
+      });
+    }
 
     // -- selection preview wiring --
     // When the canvas tells us the selection changed, refresh the preview
@@ -19625,6 +21299,32 @@
         if (sel && sel.rotate) sel.rotate(value === 'left' ? -Math.PI / 2 : Math.PI / 2);
         return;
       }
+      if (rowKey === 'objectScale') {
+        scaleSelectedBoardObject(value === 'down' ? 0.85 : 1.18);
+        return;
+      }
+      if (rowKey === 'objectMove') {
+        const step = 0.08;
+        if (value === 'x-') moveSelectedBoardObject(-step, 0);
+        else if (value === 'x+') moveSelectedBoardObject(step, 0);
+        else if (value === 'z-') moveSelectedBoardObject(0, -step);
+        else if (value === 'z+') moveSelectedBoardObject(0, step);
+        return;
+      }
+      if (rowKey === 'objectStyle') {
+        const target = selectedBoardObjectTarget();
+        if (!target || !target.cell || target.cell.kind === 'voxel-build') return;
+        const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+        appearance.objectStyle = value === 'normal' ? 'normal' : 'voxel';
+        updateSelectedBoardObject(target, { appearance });
+        return;
+      }
+      if (rowKey === 'objectEnhance') {
+        input.value = 'enhance the selected object with more voxel detail';
+        input.focus();
+        renderSuggestions();
+        return;
+      }
       const selForMaterialize = window.__tinyworldSelection;
       if (selForMaterialize && selForMaterialize.materialize) selForMaterialize.materialize();
       const coords = selectedWorldCoords();
@@ -19633,7 +21333,7 @@
         const cell = getWorldCell(x, z);
         if (!cell) return;
         if (rowKey === 'bodyColor' || rowKey === 'topColor') {
-          if (cell.kind !== 'house' && cell.kind !== 'tree') return;
+          if (cell.kind !== 'house' && cell.kind !== 'tree' && cell.kind !== 'voxel-build') return;
           const appearance = Object.assign({}, normalizeAppearance(cell.appearance) || {});
           appearance[rowKey] = value;
           setCell(x, z, { ...cell, appearance, animate: false, impactDust: false });
@@ -19666,10 +21366,34 @@
       const primary = entries[0][0];
       const rows = [];
       rows.push({ key: 'rotate', label: 'Rotate', options: [
-        { label: '↺ Left', value: 'left' },
-        { label: 'Right ↻', value: 'right' },
+        { label: 'Left', value: 'left' },
+        { label: 'Right', value: 'right' },
       ] });
-      if (primary === 'house') {
+      const selectedTarget = selectedBoardObjectTarget();
+      if (selectedTarget) {
+        rows.push(
+          { key: 'objectScale', label: 'Scale', options: [
+            { label: 'Down', value: 'down' },
+            { label: 'Up', value: 'up' },
+          ] },
+          { key: 'objectMove', label: 'Move', options: [
+            { label: 'X-', value: 'x-' },
+            { label: 'X+', value: 'x+' },
+            { label: 'Z-', value: 'z-' },
+            { label: 'Z+', value: 'z+' },
+          ] },
+          { key: 'objectEnhance', label: 'AI', options: [
+            { label: 'Enhance', value: 'enhance' },
+          ] },
+        );
+        if (selectedTarget.cell && selectedTarget.cell.kind !== 'voxel-build') {
+          rows.push({ key: 'objectStyle', label: 'Style', options: [
+            { label: 'Normal', value: 'normal' },
+            { label: 'Voxel', value: 'voxel' },
+          ] });
+        }
+      }
+      if (primary === 'house' || primary === 'voxel-build') {
         rows.push(
           { key: 'topColor', label: 'Top', color: true, options: [
             { label: 'Purple', value: '#6c55c7', color: '#6c55c7' },
@@ -19684,6 +21408,9 @@
             { label: 'Brick', value: '#a84a3a', color: '#a84a3a' },
             { label: 'Dark', value: '#77716a', color: '#77716a' },
           ] },
+        );
+        if (primary === 'house') {
+          rows.push(
           { key: 'buildingType', label: 'Shape', options: [
             { label: 'Cottage', value: 'cottage' },
             { label: 'Manor', value: 'manor' },
@@ -19691,7 +21418,8 @@
             { label: 'Castle', value: 'turret' },
             { label: 'High-rise', value: 'skyscraper' },
           ] },
-        );
+          );
+        }
       } else if (primary === 'tree') {
         rows.push(
           { key: 'topColor', label: 'Leaves', color: true, options: [
@@ -19752,6 +21480,7 @@
       if (!summary) {
         panel.classList.remove('has-selection');
         previewBox.hidden = true;
+        syncAgentTargetChip(null, null);
         if (previewProps) {
           previewProps.innerHTML = '';
           previewProps.hidden = true;
@@ -19762,7 +21491,11 @@
       markAgentActivity();
       panel.classList.add('has-selection');
       previewBox.hidden = false;
-      previewCount.textContent = summary.cellCount + (summary.cellCount === 1 ? ' tile selected' : ' tiles selected');
+      const selectedObject = selectedBoardObjectTarget();
+      syncAgentTargetChip(selectedObject, summary);
+      previewCount.textContent = selectedObject
+        ? 'Selected: ' + selectedBoardObjectLabel(selectedObject)
+        : summary.cellCount + (summary.cellCount === 1 ? ' tile selected' : ' tiles selected');
       previewList.innerHTML = '';
       const entries = Object.entries(summary.kinds).sort((a, b) => b[1] - a[1]);
       for (const [k, n] of entries) {
@@ -19882,22 +21615,24 @@
       const summary = sel && sel.summary();
       let selectionBounds = null;
       let prompt = intent.prompt || userText;
+      let selectedObjectTarget = null;
 
       if (summary) {
-        const cellsArray = Array.from(sel.cells).map(k => {
-          const [x, z] = k.split(',').map(Number);
-          return { x, z };
-        });
+        const cellsArray = sel.worldCoords ? sel.worldCoords() : [];
         const minX = Math.min(...cellsArray.map(c => c.x));
         const maxX = Math.max(...cellsArray.map(c => c.x));
         const minZ = Math.min(...cellsArray.map(c => c.z));
         const maxZ = Math.max(...cellsArray.map(c => c.z));
 
         selectionBounds = { minX, maxX, minZ, maxZ };
+        selectedObjectTarget = selectedBoardObjectTarget();
 
         prompt =
           `You are ONLY allowed to modify the rectangular region from x=${minX} to x=${maxX}, z=${minZ} to z=${maxZ}. ` +
           `Do not output any changes outside this exact area. The user wants you to customize this specific region.\n\n` +
+          (selectedObjectTarget
+            ? `Selected object chip: ${selectedBoardObjectLabel(selectedObjectTarget)} at x=${selectedObjectTarget.x}, z=${selectedObjectTarget.z}. Current cell intent: ${JSON.stringify(cloneCellIntent(selectedObjectTarget.cell))}\n\n`
+            : '') +
           userText;
       }
       setPanelCollapsed(false, { pin: true });
@@ -19911,14 +21646,28 @@
       setInputProgress('Working on it…');
       send.disabled = true;
       form.classList.add('busy');
+      let submitSucceeded = false;
       try {
         if (intent.clearFirst && !intent.prompt) {
           doClear();
           thinking.textContent = 'World cleared.';
           window.__tinyworldAgent && window.__tinyworldAgent.done && window.__tinyworldAgent.done('World cleared.');
+          submitSucceeded = true;
           return;
         }
         const cfg = getAIProviderState();
+        const localOpenAIEnhance =
+          /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname) &&
+          (cfg.provider === 'openai' || !cfg.key);
+        if (selectedObjectTarget && (shouldEnhanceSelectedObjectPrompt(userText) || (!cfg.key && localOpenAIEnhance))) {
+          if (!cfg.key && !localOpenAIEnhance) throw new Error('Add an API key in Settings → AI first.');
+          const stamp = await enhanceSelectedBoardObject(userText);
+          const doneText = 'Enhanced selected object into ' + stamp.name + '.';
+          thinking.textContent = doneText;
+          window.__tinyworldAgent && window.__tinyworldAgent.done && window.__tinyworldAgent.done(doneText);
+          submitSucceeded = true;
+          return;
+        }
         if (!cfg.key) throw new Error('Add an API key in Settings → AI first.');
         if (intent.clearFirst) doClear();
         const requestPrompt = intent.mode === 'add' ? buildFloatingAdditionPrompt(prompt) : prompt;
@@ -19947,6 +21696,7 @@
         const doneText = intent.mode === 'add' ? 'Added to world.' : 'Building completed.';
         thinking.textContent = doneText;
         window.__tinyworldAgent && window.__tinyworldAgent.done && window.__tinyworldAgent.done(doneText);
+        submitSucceeded = true;
       } catch (err) {
         const msg = String(err.message || err).slice(0, 180);
         thinking.className = 'agent-msg error';
@@ -19955,10 +21705,10 @@
       } finally {
         send.disabled = false;
         form.classList.remove('busy');
-        // Once the prompt has been consumed (whether success or error)
-        // drop the active selection — its scope was a one-shot for this
-        // submission, not a persistent filter.
-        if (window.__tinyworldSelection) window.__tinyworldSelection.clear();
+        // Drop the active selection only after a successful submission. On
+        // errors, keep the chip/target so the user can fix the prompt or
+        // retry without reselecting the object.
+        if (submitSucceeded && window.__tinyworldSelection) window.__tinyworldSelection.clear();
       }
     });
 
@@ -20145,6 +21895,7 @@
       const FLAT_REQUIRED = new Set([
         'house','fence','bridge','tree','tuft','flower','bush','cow','sheep',
         'crop','corn','wheat','pumpkin','carrot','sunflower',
+        'chimney','shrub','stone','pebble','bridge-rail','voxel-build',
       ]);
       if (normalizedKind === 'house' && (terrain === 'water' || terrain === 'path' || terrain === 'lava')) {
         terrain = 'grass';
@@ -20344,7 +22095,8 @@
       for (const key of settle) {
         const [x, z] = key.split(',').map(Number);
         renderCellTile(x, z, { animate: false });
-        if (world[x][z].kind === 'bridge') renderCellObject(x, z, { animate: false });
+        const c = world[x] && world[x][z];
+        if (c && c.kind === 'bridge') renderCellObject(x, z, { animate: false });
       }
 
       // Replay out-of-home overrides — ghost board cells the user has
@@ -21572,6 +23324,7 @@
     const canvas = document.getElementById('minimap-canvas');
     const sizeEl = document.getElementById('minimap-size');
     const fpsEl = document.getElementById('minimap-fps');
+    const autoExpandEl = document.getElementById('minimap-autoexpand');
     if (!wrap) return;
     function paintSize() {
       if (!sizeEl) return;
@@ -21579,6 +23332,28 @@
       sizeEl.textContent = n + '×' + n + ' map';
     }
     paintSize();
+    function syncAutoExpandControl() {
+      if (autoExpandEl) autoExpandEl.checked = !!renderAutoExpand;
+    }
+    syncAutoExpandControl();
+    if (autoExpandEl) {
+      autoExpandEl.addEventListener('change', () => {
+        renderAutoExpand = !!autoExpandEl.checked;
+        try { localStorage.setItem(RENDER_LS.autoExpand, renderAutoExpand ? '1' : '0'); } catch (_) {}
+        if (renderAutoExpand) {
+          expandVisibleSizeOnFirstMove();
+          ensureGhostBoardsAroundTarget();
+        } else {
+          hasUserPanned = false;
+          renderVisibleSize = GRID;
+          try { localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize)); } catch (_) {}
+          clampTargetToHomeBoard();
+          updateCamera();
+          clearGhostBoardsOnly();
+        }
+        requestMinimapRepaint();
+      });
+    }
     // Restore collapsed state.
     try {
       if (localStorage.getItem('tinyworld:minimap.collapsed') === '1') wrap.classList.add('collapsed');
@@ -21680,8 +23455,9 @@
       target.x = worldPoint.x;
       target.z = worldPoint.z;
       expandVisibleSizeOnFirstMove();
+      clampTargetToHomeBoard();
       updateCamera();
-      ensureGhostBoardsAroundTarget();
+      if (renderAutoExpand) ensureGhostBoardsAroundTarget();
       requestMinimapRepaint();
     }
     if (canvas) {

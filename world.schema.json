@@ -41,7 +41,7 @@
     },
     "kind": {
       "type": ["string", "null"],
-      "enum": [null, "house", "tree", "fence", "rock", "bridge", "crop", "corn", "wheat", "pumpkin", "carrot", "sunflower", "tuft", "flower", "bush", "cow", "sheep"]
+      "enum": [null, "house", "tree", "fence", "rock", "bridge", "crop", "corn", "wheat", "pumpkin", "carrot", "sunflower", "tuft", "flower", "bush", "cow", "sheep", "voxel-build"]
     },
     "buildingType": {
       "type": ["string", "null"],
@@ -76,7 +76,10 @@
       "additionalProperties": false,
       "properties": {
         "bodyColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-        "topColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+        "topColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "voxelBuildId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
+        "objectScale": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "objectStyle": { "type": "string", "enum": ["normal", "voxel"] }
       }
     },
     "transform": {
