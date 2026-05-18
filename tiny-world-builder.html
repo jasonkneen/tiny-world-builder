@@ -1065,6 +1065,7 @@
 
   /* -------- floating agent -------- */
   .agent-input {
+    --agent-pulse-rgb: 214, 169, 59;
     position: fixed;
     left: 50%;
     bottom: 138px;
@@ -1096,30 +1097,30 @@
 
   /* Pulse border when the agent is thinking / generating */
   .agent-input.busy {
-    border-color: rgba(214, 169, 59, 0.92);
+    border-color: rgba(var(--agent-pulse-rgb), 0.92);
     animation: agent-input-pulse 1.15s ease-in-out infinite;
   }
 
   @keyframes agent-input-pulse {
     0%, 100% {
       box-shadow:
-        0 0 0 2px rgba(214, 169, 59, 0.54),
+        0 0 0 2px rgba(var(--agent-pulse-rgb), 0.54),
         0 1px 0 rgba(255, 255, 255, 0.85) inset,
         0 -1px 0 rgba(120, 130, 150, 0.10) inset,
         0 1px 2px rgba(20, 30, 50, 0.06),
         0 14px 38px -12px rgba(40, 50, 80, 0.24),
-        0 0 0 0 rgba(214, 169, 59, 0.52),
-        0 0 34px rgba(214, 169, 59, 0.18);
+        0 0 0 0 rgba(var(--agent-pulse-rgb), 0.52),
+        0 0 34px rgba(var(--agent-pulse-rgb), 0.18);
     }
     50% {
       box-shadow:
-        0 0 0 2px rgba(214, 169, 59, 0.78),
+        0 0 0 2px rgba(var(--agent-pulse-rgb), 0.78),
         0 1px 0 rgba(255, 255, 255, 0.85) inset,
         0 -1px 0 rgba(120, 130, 150, 0.10) inset,
         0 1px 2px rgba(20, 30, 50, 0.06),
         0 18px 44px -12px rgba(40, 50, 80, 0.28),
-        0 0 0 15px rgba(214, 169, 59, 0),
-        0 0 48px rgba(214, 169, 59, 0.32);
+        0 0 0 15px rgba(var(--agent-pulse-rgb), 0),
+        0 0 48px rgba(var(--agent-pulse-rgb), 0.32);
     }
   }
   body.tool-flyout-open .agent-input {
@@ -4047,6 +4048,11 @@
               <input id="render-voxel-gap" type="range" min="0" max="14" step="1" />
               <output id="render-voxel-gap-value"></output>
             </div>
+            <div class="range-row">
+              <span>Voxel bevel</span>
+              <input id="render-voxel-bevel" type="range" min="0" max="0.06" step="0.001" />
+              <output id="render-voxel-bevel-value"></output>
+            </div>
             <label class="gen-check">
               <input type="checkbox" id="render-voxel-terrain" />
               <span>Voxel terrain <em class="gen-hint">flat shaded panels and path edging</em></span>
@@ -4410,6 +4416,7 @@
     floorOpacity: 'tinyworld:render:floorOpacity',
     objectOpacity: 'tinyworld:render:objectOpacity',
     voxelGap: 'tinyworld:render:voxelGap',
+    voxelBevel: 'tinyworld:render:voxelBevel',
     voxelTerrain: 'tinyworld:render:voxelTerrain',
     terrainVoxelResolution: 'tinyworld:render:terrainVoxelResolution',
     autoExpand: 'tinyworld:render:autoExpand',
@@ -4455,6 +4462,7 @@
     floorOpacity: '1',
     objectOpacity: '1',
     voxelGap: '0',
+    voxelBevel: '0.018',
     voxelTerrain: '1',
     terrainVoxelResolution: 'mixed',
     autoExpand: '0',
@@ -4598,6 +4606,7 @@
   let renderFloorOpacity = storedNumber(RENDER_LS.floorOpacity, 1, 0.10, 1);
   let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
   let renderVoxelGap = storedNumber(RENDER_LS.voxelGap, 0, 0, 0.14);
+  let renderVoxelBevel = storedNumber(RENDER_LS.voxelBevel, parseFloat(RENDER_DEFAULTS.voxelBevel), 0, 0.06);
   let renderVoxelTerrain = localStorage.getItem(RENDER_LS.voxelTerrain) !== '0';
   let renderTerrainVoxelResolution = localStorage.getItem(RENDER_LS.terrainVoxelResolution) || 'mixed';
   if (!['mixed', '4', '6', '8', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
@@ -5227,6 +5236,23 @@
     return g;
   }
 
+  function getVoxelBoxGeometry(w, h, d, bevel = 0) {
+    const qw = Math.round(w * 100) / 100;
+    const qh = Math.round(h * 100) / 100;
+    const qd = Math.round(d * 100) / 100;
+    const r = Math.round(Math.max(0, Math.min(bevel, Math.min(qw, qh, qd) * 0.22)) * 1000) / 1000;
+    if (r < 0.001) return getBoxGeometry(qw, qh, qd);
+    const key = 'voxelbox|' + qw + '|' + qh + '|' + qd + '|' + r;
+    const hit = geomCache.get(key);
+    if (hit) return hit;
+    const g = roundedBox(qw, qh, qd, r).clone();
+    // roundedBox is bottom-origin after extrusion; vbox positions from centre.
+    g.translate(0, -qh / 2, 0);
+    g.userData.cached = true;
+    geomCache.set(key, g);
+    return g;
+  }
+
   // Variant of getBoxGeometry that omits selected faces from the index. Use
   // for risers, terrain caps, voxel terrain panels, and tile decals so we
   // don't render geometry the camera can't see. Cached the same way; never
@@ -5671,6 +5697,17 @@
     return customMaterial(base, shaded) || base;
   }
 
+  function voxelTreeLeafMaterials() {
+    return [
+      M.leaves,
+      M.leavesDk,
+      terrainShadeMaterial(M.leaves, 14),
+      terrainShadeMaterial(M.leaves, -10),
+      terrainShadeMaterial(M.leavesDk, 10),
+      terrainShadeMaterial(M.leavesDk, -14),
+    ];
+  }
+
   function terrainVoxelMaterials(terrain) {
     if (terrain === 'path') {
       return {
@@ -5744,12 +5781,45 @@
     };
   }
 
-  function addVoxelTerrainTop(g, terrain, x, z, rise, topSize, topHeight, pathN, terrainN, hiddenSides) {
-    const mats = terrainVoxelMaterials(terrain);
+  function terrainRiserMaterial(terrain) {
+    if (terrain === 'path') return M.pathTrim;
+    if (terrain === 'water') return M.waterDk;
+    if (terrain === 'dirt') return M.dirtRich;
+    if (terrain === 'stone') return M.stone;
+    if (terrain === 'lava') return M.lava;
+    if (terrain === 'sand') return M.sand;
+    if (terrain === 'snow') return M.snow;
+    return M.dirt;
+  }
+
+  function terrainRiserMaterials(terrain) {
+    const base = terrainRiserMaterial(terrain);
+    if (terrain === 'grass') {
+      return {
+        base,
+        hi: terrainShadeMaterial(base, 10),
+        low: terrainShadeMaterial(base, -12),
+        edge: terrainShadeMaterial(M.grassEdge, -8),
+      };
+    }
+    return {
+      base,
+      hi: terrainShadeMaterial(base, 10),
+      low: terrainShadeMaterial(base, -12),
+      edge: terrainShadeMaterial(base, -18),
+    };
+  }
+
+  function terrainVoxelCellCount(terrain) {
     const explicitCells = parseInt(renderTerrainVoxelResolution, 10);
-    const cells = Number.isFinite(explicitCells)
+    return Number.isFinite(explicitCells)
       ? explicitCells
       : ((terrain === 'path' || terrain === 'water' || terrain === 'dirt') ? 8 : 6);
+  }
+
+  function addVoxelTerrainTop(g, terrain, x, z, rise, topSize, topHeight, pathN, terrainN, hiddenSides) {
+    const mats = terrainVoxelMaterials(terrain);
+    const cells = terrainVoxelCellCount(terrain);
     const cellSize = topSize / cells;
     const panelOverlap = Math.min(0.014, Math.max(0.006, cellSize * 0.06));
     const panelSize = cellSize + panelOverlap;
@@ -5813,6 +5883,70 @@
       const mesh = new THREE.InstancedMesh(bucket.geo, bucket.mat, count);
       for (let i = 0; i < count; i++) {
         dummy.position.set(bucket.positions[i * 2], y, bucket.positions[i * 2 + 1]);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      g.add(mesh);
+    }
+  }
+
+  function addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, riserHeight, hiddenSides) {
+    const mats = terrainRiserMaterials(terrain);
+    const cells = terrainVoxelCellCount(terrain);
+    const cellSize = riserSize / cells;
+    const verticalCells = Math.max(2, Math.min(8, Math.ceil(riserHeight / cellSize)));
+    const panelW = cellSize + Math.min(0.012, cellSize * 0.05);
+    const panelH = riserHeight / verticalCells + Math.min(0.008, (riserHeight / verticalCells) * 0.04);
+    const sideDepth = Math.min(0.028, Math.max(0.016, cellSize * 0.12));
+    const half = riserSize * 0.5;
+    const buckets = new Map();
+    function pickMat(ix, iy, dir) {
+      const r = cellRand(x * cells + ix, z * verticalCells + iy, 180 + dir.charCodeAt(0));
+      if (iy === verticalCells - 1 && terrain === 'grass' && r > 0.28) return mats.edge;
+      if (r > 0.82) return mats.hi;
+      if (r < 0.20) return mats.low;
+      return mats.base;
+    }
+    function queuePanel(geo, mat, px, py, pz) {
+      const key = (geo.id || geo.uuid) + ':' + (mat.id || mat.uuid);
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { geo, mat, positions: [] };
+        buckets.set(key, bucket);
+      }
+      bucket.positions.push(px, py, pz);
+    }
+    function sideGeo(dir) {
+      const alongX = dir === 'n' || dir === 's';
+      return alongX
+        ? getOpenBoxGeometry(panelW, panelH, sideDepth, true, true, false, false, false, false)
+        : getOpenBoxGeometry(sideDepth, panelH, panelW, true, true, false, false, false, false);
+    }
+    function addSide(dir) {
+      const geo = sideGeo(dir);
+      const alongX = dir === 'n' || dir === 's';
+      for (let i = 0; i < cells; i++) {
+        for (let j = 0; j < verticalCells; j++) {
+          const px = alongX ? -half + cellSize * (i + 0.5) : (dir === 'w' ? -half : half);
+          const pz = alongX ? (dir === 'n' ? -half : half) : -half + cellSize * (i + 0.5);
+          const py = -DIRT_H + panelH * 0.5 + (riserHeight / verticalCells) * j;
+          queuePanel(geo, pickMat(i, j, dir), px, py, pz);
+        }
+      }
+    }
+    if (!(hiddenSides && hiddenSides.n)) addSide('n');
+    if (!(hiddenSides && hiddenSides.s)) addSide('s');
+    if (!(hiddenSides && hiddenSides.w)) addSide('w');
+    if (!(hiddenSides && hiddenSides.e)) addSide('e');
+    const dummy = addVoxelTerrainRiser._dummy || (addVoxelTerrainRiser._dummy = new THREE.Object3D());
+    for (const bucket of buckets.values()) {
+      const count = bucket.positions.length / 3;
+      const mesh = new THREE.InstancedMesh(bucket.geo, bucket.mat, count);
+      for (let i = 0; i < count; i++) {
+        dummy.position.set(bucket.positions[i * 3], bucket.positions[i * 3 + 1], bucket.positions[i * 3 + 2]);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
@@ -5897,25 +6031,19 @@
         topBevel   = 0.04;
       }
 
-      if (terrain === 'grass') {
-        const dirtGeo = getOpenBoxGeometry(riserSize, DIRT_H + rise, riserSize, true, true, skipE, skipW, skipS, skipN);
-        const riser = new THREE.Mesh(dirtGeo, M.dirt);
-        riser.position.y = -DIRT_H + (DIRT_H + rise) * 0.5;
-        g.add(riser);
-        const bottom = new THREE.Mesh(getOpenBoxGeometry(riserSize, 0.012, riserSize, false, true, true, true, true, true), M.dirt);
+      const riserMat = terrainRiserMaterial(terrain);
+      if (renderVoxelTerrain) {
+        addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, DIRT_H + rise, {
+          e: skipE,
+          w: skipW,
+          s: skipS,
+          n: skipN,
+        });
+        const bottom = new THREE.Mesh(getOpenBoxGeometry(riserSize, 0.012, riserSize, false, true, true, true, true, true), riserMat);
         bottom.position.y = -DIRT_H - 0.006;
         bottom.userData.noShadow = true;
         g.add(bottom);
       } else {
-        let riserMat = M.dirt;
-        if (terrain === 'path')  riserMat = M.pathTrim;
-        if (terrain === 'water') riserMat = M.waterDk;
-        if (terrain === 'dirt')  riserMat = M.dirtRich;
-        if (terrain === 'stone') riserMat = M.stone;
-        if (terrain === 'lava')  riserMat = M.lava;
-        if (terrain === 'sand')  riserMat = M.sand;
-        if (terrain === 'snow')  riserMat = M.snow;
-
         const riserGeo = getOpenBoxGeometry(riserSize, DIRT_H + rise, riserSize, true, true, skipE, skipW, skipS, skipN);
         const riser = new THREE.Mesh(riserGeo, riserMat);
         riser.position.y = -DIRT_H + (DIRT_H + rise) * 0.5;
@@ -8545,7 +8673,8 @@
     const gw = Math.max(0.006, w - gap);
     const gh = Math.max(0.006, h - gap);
     const gd = Math.max(0.006, d - gap);
-    const geo = getBoxGeometry(gw, gh, gd);
+    const bevel = opts.noBevel ? 0 : (renderVoxelBevel || 0);
+    const geo = getVoxelBoxGeometry(gw, gh, gd, bevel);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x || 0, y || h / 2, z || 0);
     if (opts.ry) mesh.rotation.y = opts.ry;
@@ -8825,12 +8954,22 @@
     const trunkW = 0.15 + (L - 1) * 0.014;
     vbox(g, trunkW, trunkH, trunkW, 0, trunkH / 2, 0, M.trunk);
     const y = trunkH;
-    vbox(g, 0.62 + L * 0.04, 0.26 + L * 0.02, 0.62 + L * 0.04, 0, y + 0.12, 0, M.leaves);
-    vbox(g, 0.48 + L * 0.035, 0.24 + L * 0.018, 0.48 + L * 0.035, 0, y + 0.32, 0, M.leavesDk);
-    vbox(g, 0.30 + L * 0.025, 0.20, 0.30 + L * 0.025, 0, y + 0.50, 0, M.leaves);
+    const leafMats = voxelTreeLeafMaterials();
+    vbox(g, 0.62 + L * 0.04, 0.26 + L * 0.02, 0.62 + L * 0.04, 0, y + 0.12, 0, leafMats[0]);
+    vbox(g, 0.48 + L * 0.035, 0.24 + L * 0.018, 0.48 + L * 0.035, 0, y + 0.32, 0, leafMats[1]);
+    vbox(g, 0.30 + L * 0.025, 0.20, 0.30 + L * 0.025, 0, y + 0.50, 0, leafMats[2]);
+    const accents = [
+      [0.28, y + 0.20, -0.22, 0.18, leafMats[3]],
+      [-0.26, y + 0.18, 0.24, 0.16, leafMats[4]],
+      [0.20, y + 0.38, 0.22, 0.14, leafMats[5]],
+      [-0.18, y + 0.40, -0.22, 0.13, leafMats[2]],
+    ];
+    accents.forEach(([x, ay, z, s, mat]) => {
+      vbox(g, s, Math.max(0.11, s * 0.82), s, x, ay, z, mat);
+    });
     if (L >= 4) {
-      vbox(g, 0.22, 0.18, 0.22, 0.30, y + 0.20, -0.24, M.leavesDk);
-      vbox(g, 0.20, 0.16, 0.20, -0.28, y + 0.18, 0.24, M.leaves);
+      vbox(g, 0.22, 0.18, 0.22, 0.30, y + 0.20, -0.24, leafMats[5]);
+      vbox(g, 0.20, 0.16, 0.20, -0.28, y + 0.18, 0.24, leafMats[3]);
     }
     g.userData = { kind: 'tree', swayPhase: Math.random() * Math.PI * 2 };
     castReceive(g);
@@ -16557,6 +16696,7 @@
     const floorOpacityEl = document.getElementById('render-floor-opacity');
     const objectOpacityEl = document.getElementById('render-object-opacity');
     const voxelGapEl = document.getElementById('render-voxel-gap');
+    const voxelBevelEl = document.getElementById('render-voxel-bevel');
     const voxelTerrainEl = document.getElementById('render-voxel-terrain');
     const terrainVoxelResolutionEl = document.getElementById('render-terrain-voxel-resolution');
     const resolutionValue = document.getElementById('render-resolution-value');
@@ -16582,6 +16722,7 @@
     const floorOpacityValue = document.getElementById('render-floor-opacity-value');
     const objectOpacityValue = document.getElementById('render-object-opacity-value');
     const voxelGapValue = document.getElementById('render-voxel-gap-value');
+    const voxelBevelValue = document.getElementById('render-voxel-bevel-value');
     const settingsTabs = Array.from(modal.querySelectorAll('[data-settings-tab]'));
     const settingsPanels = Array.from(modal.querySelectorAll('[data-settings-panel]'));
 
@@ -16621,6 +16762,7 @@
       floorOpacityEl.value = String(Math.round(renderFloorOpacity * 100));
       objectOpacityEl.value = String(Math.round(renderObjectOpacity * 100));
       voxelGapEl.value = String(Math.round(renderVoxelGap * 100));
+      voxelBevelEl.value = renderVoxelBevel.toFixed(3);
       if (voxelTerrainEl) voxelTerrainEl.checked = !!renderVoxelTerrain;
       if (terrainVoxelResolutionEl) terrainVoxelResolutionEl.value = renderTerrainVoxelResolution;
       resolutionValue.textContent = resolutionEl.value + '%';
@@ -16646,6 +16788,7 @@
       floorOpacityValue.textContent = floorOpacityEl.value + '%';
       objectOpacityValue.textContent = objectOpacityEl.value + '%';
       voxelGapValue.textContent = (parseInt(voxelGapEl.value, 10) / 100).toFixed(2);
+      voxelBevelValue.textContent = parseFloat(voxelBevelEl.value).toFixed(3);
       status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · preview ' + renderVisibleDistance + ' / ' + renderVisibleSize + 'x' + renderVisibleSize + ' · atmosphere ' + distanceMistEl.value + '%';
     }
 
@@ -16674,6 +16817,7 @@
       localStorage.setItem(RENDER_LS.floorOpacity, renderFloorOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.objectOpacity, renderObjectOpacity.toFixed(2));
       localStorage.setItem(RENDER_LS.voxelGap, renderVoxelGap.toFixed(2));
+      localStorage.setItem(RENDER_LS.voxelBevel, renderVoxelBevel.toFixed(3));
       localStorage.setItem(RENDER_LS.voxelTerrain, renderVoxelTerrain ? '1' : '0');
       localStorage.setItem(RENDER_LS.terrainVoxelResolution, renderTerrainVoxelResolution);
       localStorage.setItem(RENDER_LS.autoExpand, renderAutoExpand ? '1' : '0');
@@ -16681,6 +16825,7 @@
 
     function applyFromControls() {
       const oldVoxelGap = renderVoxelGap;
+      const oldVoxelBevel = renderVoxelBevel;
       const oldVoxelTerrain = renderVoxelTerrain;
       const oldTerrainVoxelResolution = renderTerrainVoxelResolution;
       setShadowQuality(shadowEl.value);
@@ -16714,9 +16859,10 @@
       renderFloorOpacity = parseInt(floorOpacityEl.value, 10) / 100;
       renderObjectOpacity = parseInt(objectOpacityEl.value, 10) / 100;
       renderVoxelGap = parseInt(voxelGapEl.value, 10) / 100;
+      renderVoxelBevel = Math.max(0, Math.min(0.06, parseFloat(voxelBevelEl.value) || 0));
       if (voxelTerrainEl) renderVoxelTerrain = !!voxelTerrainEl.checked;
       if (terrainVoxelResolutionEl) renderTerrainVoxelResolution = terrainVoxelResolutionEl.value;
-      if (Math.abs(oldVoxelGap - renderVoxelGap) > 0.001) scheduleVoxelStampRefresh();
+      if (Math.abs(oldVoxelGap - renderVoxelGap) > 0.001 || Math.abs(oldVoxelBevel - renderVoxelBevel) > 0.001) scheduleVoxelStampRefresh();
       if (oldVoxelTerrain !== renderVoxelTerrain || oldTerrainVoxelResolution !== renderTerrainVoxelResolution) rebuildTerrainRender();
       updateGhostRenderBubble();
       applyColorFilterFallback();
@@ -16754,7 +16900,7 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelTerrainEl, terrainVoxelResolutionEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, terrainVoxelResolutionEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
@@ -16797,6 +16943,7 @@
       renderFloorOpacity = 1;
       renderObjectOpacity = 1;
       renderVoxelGap = 0;
+      renderVoxelBevel = parseFloat(RENDER_DEFAULTS.voxelBevel);
       renderVoxelTerrain = true;
       renderTerrainVoxelResolution = 'mixed';
       renderAutoExpand = false;
@@ -21272,8 +21419,39 @@
       return div;
     }
 
+    function pulseRgbFromHex(hex) {
+      const clean = normalizeHexColor(hex);
+      if (!clean) return '214, 169, 59';
+      const n = parseInt(clean.slice(1), 16);
+      return ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255);
+    }
+
+    function agentPulseHexForTarget(target, summary) {
+      if (target && target.cell) {
+        const cell = target.cell;
+        const appearance = normalizeAppearance(cell.appearance);
+        if (appearance && appearance.topColor) return appearance.topColor;
+        if (appearance && appearance.bodyColor) return appearance.bodyColor;
+        if (cell.kind === 'tree') return materialHex(M.leaves) || '#86d139';
+        if (cell.kind === 'rock') return materialHex(M.rock) || '#9b9a8f';
+        if (cell.kind === 'house') {
+          if (cell.buildingType === 'manor') return materialHex(M.manorRoof) || '#403b3d';
+          if (cell.buildingType === 'tower') return materialHex(M.towerRoof) || '#7563c9';
+          if (cell.buildingType === 'castle') return materialHex(M.castleRoof) || '#6d5bc7';
+          if (cell.buildingType === 'skyhouse') return materialHex(M.skyRoof) || '#70a8df';
+          return materialHex(M.roofBlue) || '#2f8fe6';
+        }
+        if (cell.kind === 'voxel-build') return '#86d139';
+        if (cell.kind === 'crop' || cell.kind === 'carrot' || cell.kind === 'pumpkin') return materialHex(M.cropLeaf) || '#96d943';
+        if (cell.kind === 'sunflower' || cell.kind === 'corn' || cell.kind === 'wheat') return materialHex(M.sunflowerPetal) || '#f2c849';
+      }
+      if (summary && summary.cellCount > 0) return '#7fb03d';
+      return '#d6a93b';
+    }
+
     function syncAgentTargetChip(target, summary) {
       if (!targetChip) return;
+      form.style.setProperty('--agent-pulse-rgb', pulseRgbFromHex(agentPulseHexForTarget(target, summary)));
       if (target) {
         const text = 'Selected: ' + selectedBoardObjectLabel(target);
         targetChip.textContent = text;
