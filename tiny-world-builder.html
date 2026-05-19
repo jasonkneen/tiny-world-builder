@@ -86,8 +86,8 @@
     position: fixed;
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    width: 1440px;
-    height: 860px;
+    width: 100vw;
+    height: 100vh;
     z-index: 2;
     overflow: hidden;
   }
@@ -339,6 +339,80 @@
     backdrop-filter: blur(22px) saturate(180%);
     -webkit-backdrop-filter: blur(22px) saturate(180%);
   }
+  .crowd-panel {
+    position: fixed;
+    top: 96px;
+    right: 14px;
+    z-index: 42;
+    width: 248px;
+    max-height: calc(100vh - 190px);
+    overflow: auto;
+    background: rgba(255, 255, 255, 0.76);
+    border: 1px solid rgba(80, 70, 54, 0.22);
+    border-radius: 16px;
+    box-shadow:
+      0 1px 2px rgba(20, 30, 50, 0.08),
+      0 18px 44px -16px rgba(40, 50, 80, 0.30);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .crowd-panel h3 {
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+  }
+  .crowd-panel .crowd-row {
+    display: grid;
+    grid-template-columns: 82px 1fr 44px;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .crowd-panel .crowd-row input[type="range"] { width: 100%; }
+  .crowd-panel output {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--ink);
+  }
+  .crowd-panel select {
+    grid-column: 2 / 4;
+    min-width: 0;
+    border: 1px solid rgba(120, 130, 150, 0.24);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--ink);
+    font: inherit;
+    padding: 4px 6px;
+  }
+  .crowd-panel .crowd-check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--ink);
+  }
+  .crowd-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .crowd-actions .btn { flex: 1; padding: 7px 8px; font-size: 11px; }
+  @media (max-width: 900px) {
+    .crowd-panel {
+      top: auto;
+      bottom: 220px;
+      right: 8px;
+      width: 210px;
+      max-height: 42vh;
+    }
+  }
+
   @media (max-width: 800px) {
     .audio-panel {
       bottom: 160px;
@@ -3514,6 +3588,41 @@
     </div>
   </div>
 
+  <div class="crowd-panel" id="crowd-panel">
+    <h3>Crowd controls</h3>
+    <label class="crowd-row">Mode
+      <select id="crowd-mode">
+        <option value="wander">Wander path</option>
+        <option value="cross">Cross map</option>
+        <option value="circle">Circle plaza</option>
+        <option value="static">Static idle</option>
+      </select>
+    </label>
+    <label class="crowd-row">People
+      <input id="crowd-count-live" type="range" min="0" max="80" step="1" />
+      <output id="crowd-count-live-value"></output>
+    </label>
+    <label class="crowd-row">Height
+      <input id="crowd-scale-live" type="range" min="25" max="160" step="1" />
+      <output id="crowd-scale-live-value"></output>
+    </label>
+    <label class="crowd-row">Speed
+      <input id="crowd-speed-live" type="range" min="0" max="100" step="1" />
+      <output id="crowd-speed-live-value"></output>
+    </label>
+    <label class="crowd-row">Zone
+      <input id="crowd-zone-radius-live" type="range" min="8" max="80" step="1" />
+      <output id="crowd-zone-radius-live-value"></output>
+    </label>
+    <label class="crowd-check"><input id="crowd-show-zones-live" type="checkbox" /> Show rings</label>
+    <label class="crowd-check"><input id="crowd-show-arrows-live" type="checkbox" /> Show direction arrows</label>
+    <label class="crowd-check"><input id="crowd-paused-live" type="checkbox" /> Pause</label>
+    <div class="crowd-actions">
+      <button class="btn" id="crowd-reseed-live" type="button">Reseed</button>
+      <button class="btn" id="crowd-debug-live" type="button">Debug</button>
+    </div>
+  </div>
+
   <div class="brand">
     <div class="title">Tiny World <em>Builder</em></div>
     <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
@@ -4107,6 +4216,7 @@
         <nav class="settings-tabs" aria-label="Settings sections">
           <button type="button" class="settings-tab active" data-settings-tab="screen">Screen</button>
           <button type="button" class="settings-tab" data-settings-tab="world">World</button>
+          <button type="button" class="settings-tab" data-settings-tab="crowd">Crowd</button>
           <button type="button" class="settings-tab" data-settings-tab="sky">Sky</button>
           <button type="button" class="settings-tab" data-settings-tab="ai" data-ai-interface>AI</button>
         </nav>
@@ -4207,6 +4317,58 @@
               <input id="render-contrast" type="range" min="85" max="125" step="1" />
               <output id="render-contrast-value"></output>
             </div>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="crowd">
+            <div class="settings-section-title">Crowd</div>
+            <div class="range-row">
+              <span>People</span>
+              <input id="crowd-count" type="range" min="0" max="80" step="1" />
+              <output id="crowd-count-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Height</span>
+              <input id="crowd-scale" type="range" min="25" max="160" step="1" />
+              <output id="crowd-scale-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Speed</span>
+              <input id="crowd-speed" type="range" min="0" max="100" step="1" />
+              <output id="crowd-speed-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Bob</span>
+              <input id="crowd-bob" type="range" min="0" max="8" step="0.1" />
+              <output id="crowd-bob-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sway</span>
+              <input id="crowd-sway" type="range" min="0" max="8" step="0.1" />
+              <output id="crowd-sway-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Lean</span>
+              <input id="crowd-lean" type="range" min="0" max="0.2" step="0.01" />
+              <output id="crowd-lean-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Zone radius</span>
+              <input id="crowd-zone-radius" type="range" min="4" max="60" step="1" />
+              <output id="crowd-zone-radius-value"></output>
+            </div>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-show-zones" />
+              <span>Show collision zones <em class="gen-hint">rings around each 3D point</em></span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-paused" />
+              <span>Pause crowd animation</span>
+            </label>
+            <label class="gen-check">
+              <input type="checkbox" id="crowd-debug" />
+              <span>Debug animation</span>
+            </label>
+            <button class="btn" id="crowd-reseed" type="button">Reseed crowd</button>
           </section>
 
           <section class="settings-panel" data-settings-panel="sky">
@@ -4406,6 +4568,7 @@
 
   <script src="vendor/three/three.r128.min.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
+  <script src="vendor/tiny-crowd-layer.js"></script>
   <script>
   /* =====================================================================
      Tiny World Builder — single-file Three.js scene + tile editor
@@ -4578,6 +4741,18 @@
     pixelDepthEdge: 'tinyworld:render:pixelDepthEdge',
     pixelNormalEdge: 'tinyworld:render:pixelNormalEdge',
     shaderAntialias: 'tinyworld:render:shaderAntialias',
+    crowdCount: 'tinyworld:crowd:count',
+    crowdScale: 'tinyworld:crowd:scale',
+    crowdSpeed: 'tinyworld:crowd:speed',
+    crowdBob: 'tinyworld:crowd:bob',
+    crowdSway: 'tinyworld:crowd:sway',
+    crowdLean: 'tinyworld:crowd:lean',
+    crowdZoneRadius: 'tinyworld:crowd:zoneRadius',
+    crowdShowZones: 'tinyworld:crowd:showZones',
+    crowdPaused: 'tinyworld:crowd:paused',
+    crowdDebug: 'tinyworld:crowd:debug',
+    crowdMode: 'tinyworld:crowd:mode',
+    crowdShowArrows: 'tinyworld:crowd:showArrows',
     version: 'tinyworld:render:version',
   };
   const RENDER_SETTINGS_VERSION = '20';
@@ -4627,6 +4802,18 @@
     pixelDepthEdge: '0',
     pixelNormalEdge: '0',
     shaderAntialias: '0',
+    crowdCount: '12',
+    crowdScale: '0.75',
+    crowdSpeed: '1',
+    crowdBob: '2.4',
+    crowdSway: '1.4',
+    crowdLean: '0.07',
+    crowdZoneRadius: '0.16',
+    crowdShowZones: '0',
+    crowdPaused: '0',
+    crowdDebug: '1',
+    crowdMode: 'wander',
+    crowdShowArrows: '1',
   };
   const renderSettingsReset = localStorage.getItem(RENDER_LS.version) !== RENDER_SETTINGS_VERSION;
   if (renderSettingsReset) {
@@ -4655,20 +4842,11 @@
   const canvasEl = document.createElement('canvas');
   canvasEl.setAttribute('role', 'img');
   canvasEl.setAttribute('aria-label', 'Interactive 3D tiny world editor. Use toolbar buttons or keyboard shortcuts to choose a tool, click cells to place items, drag to orbit, and press C to clear.');
-  const MIN_STAGE_W = 1440;
-  const MIN_STAGE_H = 860;
-  const STAGE_ASPECT = MIN_STAGE_W / MIN_STAGE_H;
   function stageSize() {
-    const vw = Math.max(1, window.innerWidth);
-    const vh = Math.max(1, window.innerHeight);
-    let w = Math.max(vw, MIN_STAGE_W);
-    let h = w / STAGE_ASPECT;
-    const minH = Math.max(vh, MIN_STAGE_H);
-    if (h < minH) {
-      h = minH;
-      w = h * STAGE_ASPECT;
-    }
-    return { w: Math.round(w), h: Math.round(h) };
+    return {
+      w: Math.max(1, Math.round(window.innerWidth || document.documentElement.clientWidth || 1)),
+      h: Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || 1)),
+    };
   }
 
   function applyStageSize() {
@@ -10962,6 +11140,159 @@
     return new THREE.Vector3(x - GRID / 2 + 0.5, 0, z - GRID / 2 + 0.5);
   }
 
+  // -------- crowd layer --------
+  let crowdLayer = null;
+  let crowdLoadStarted = false;
+  let crowdCount = Math.round(storedNumber(RENDER_LS.crowdCount, 12, 0, 80));
+  let crowdScale = storedNumber(RENDER_LS.crowdScale, 0.75, 0.25, 1.6);
+  let crowdSpeedMul = storedNumber(RENDER_LS.crowdSpeed, 1, 0, 2);
+  let crowdBob = storedNumber(RENDER_LS.crowdBob, 2.4, 0, 8);
+  let crowdSway = storedNumber(RENDER_LS.crowdSway, 1.4, 0, 8);
+  let crowdLean = storedNumber(RENDER_LS.crowdLean, 0.07, 0, 0.2);
+  let crowdZoneRadius = storedNumber(RENDER_LS.crowdZoneRadius, 0.16, 0.04, 0.6);
+  let crowdShowZones = localStorage.getItem(RENDER_LS.crowdShowZones) !== '0';
+  let crowdPaused = localStorage.getItem(RENDER_LS.crowdPaused) === '1';
+  let crowdDebug = localStorage.getItem(RENDER_LS.crowdDebug) !== '0';
+  let crowdMode = localStorage.getItem(RENDER_LS.crowdMode) || 'wander';
+  let crowdShowArrows = localStorage.getItem(RENDER_LS.crowdShowArrows) !== '0';
+
+  function persistCrowdSettings() {
+    localStorage.setItem(RENDER_LS.crowdCount, String(crowdCount));
+    localStorage.setItem(RENDER_LS.crowdScale, crowdScale.toFixed(2));
+    localStorage.setItem(RENDER_LS.crowdSpeed, crowdSpeedMul.toFixed(2));
+    localStorage.setItem(RENDER_LS.crowdBob, crowdBob.toFixed(1));
+    localStorage.setItem(RENDER_LS.crowdSway, crowdSway.toFixed(1));
+    localStorage.setItem(RENDER_LS.crowdLean, crowdLean.toFixed(2));
+    localStorage.setItem(RENDER_LS.crowdZoneRadius, crowdZoneRadius.toFixed(2));
+    localStorage.setItem(RENDER_LS.crowdShowZones, crowdShowZones ? '1' : '0');
+    localStorage.setItem(RENDER_LS.crowdPaused, crowdPaused ? '1' : '0');
+    localStorage.setItem(RENDER_LS.crowdDebug, crowdDebug ? '1' : '0');
+    localStorage.setItem(RENDER_LS.crowdMode, crowdMode);
+    localStorage.setItem(RENDER_LS.crowdShowArrows, crowdShowArrows ? '1' : '0');
+  }
+
+  function crowdConfigOverride() {
+    return {
+      speed: 45 * crowdSpeedMul,
+      bob: crowdBob,
+      sway: crowdSway,
+      lean: crowdLean,
+      debug: crowdDebug,
+      paused: crowdPaused,
+    };
+  }
+
+  function crowdWorldConfigOverride() {
+    return {
+      doorHeight: 0.48,
+      personDoorRatio: 0.86,
+      zoneRadius: crowdZoneRadius,
+      showZones: crowdShowZones,
+      showArrows: crowdShowArrows,
+    };
+  }
+
+  function applyCrowdSettings({ reseed = false } = {}) {
+    persistCrowdSettings();
+    if (!crowdLayer) return;
+    crowdLayer.scale = crowdScale;
+    crowdLayer.configure(crowdConfigOverride(), crowdWorldConfigOverride());
+    if (reseed || crowdLayer.people.size !== crowdCount) seedCrowdPeople();
+  }
+
+  function crowdTerrainHeightAt(x, z) {
+    const cellX = Math.max(0, Math.min(GRID - 1, Math.round(x)));
+    const cellZ = Math.max(0, Math.min(GRID - 1, Math.round(z)));
+    return TOP_H + terrainRiseAt(cellX, cellZ) + 0.025;
+  }
+
+  function isCrowdWalkableCell(x, z) {
+    if (x < 0 || x >= GRID || z < 0 || z >= GRID) return false;
+    const cell = getWorldCell(x, z);
+    if (cell.kind === 'bridge') return true;
+    return cell.terrain === 'path' && !cell.kind;
+  }
+
+  function collectCrowdPathCells() {
+    const cells = [];
+    for (let x = 0; x < GRID; x++) {
+      for (let z = 0; z < GRID; z++) {
+        if (isCrowdWalkableCell(x, z)) cells.push({ x, z });
+      }
+    }
+    return cells;
+  }
+
+  function crowdRouteAround(seed, pathCells, index) {
+    if (crowdMode === 'static') return null;
+    const jitter = cell => ({
+      x: cell.x + (Math.random() - 0.5) * 0.22,
+      z: cell.z + (Math.random() - 0.5) * 0.22,
+    });
+    if (crowdMode === 'cross') {
+      const far = pathCells
+        .map(cell => ({ cell, d: Math.abs(cell.x - seed.x) + Math.abs(cell.z - seed.z) }))
+        .sort((a, b) => b.d - a.d)
+        .slice(0, Math.max(1, Math.floor(pathCells.length * 0.25)));
+      return [jitter(seed), jitter(far[index % far.length].cell)];
+    }
+    if (crowdMode === 'circle') {
+      const cx = (GRID - 1) / 2;
+      const cz = (GRID - 1) / 2;
+      return pathCells
+        .slice()
+        .sort((a, b) => Math.atan2(a.z - cz, a.x - cx) - Math.atan2(b.z - cz, b.x - cx))
+        .filter((_, i) => i % Math.max(1, Math.floor(pathCells.length / 10)) === index % Math.max(1, Math.floor(pathCells.length / 10)))
+        .slice(0, 10)
+        .map(jitter);
+    }
+    const shuffled = pathCells.slice().sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(10, shuffled.length)).map(jitter);
+  }
+
+  function seedCrowdPeople() {
+    if (!crowdLayer || !crowdLayer.loaded) return;
+    crowdLayer.clear();
+    const pathCells = collectCrowdPathCells();
+    const count = Math.min(crowdCount, pathCells.length);
+    if (!count) return;
+    const characters = ['townie', 'little-girl', 'dad', 'grandfather', 'grandmother'];
+    for (let i = 0; i < count; i++) {
+      const seed = pathCells[(i * 3) % pathCells.length];
+      const route = crowdRouteAround(seed, pathCells, i);
+      crowdLayer.addPerson({
+        id: 'ambient-' + i,
+        x: seed.x + (Math.random() - 0.5) * 0.24,
+        z: seed.z + (Math.random() - 0.5) * 0.24,
+        heading: Math.random() * Math.PI * 2,
+        character: characters[i % characters.length],
+        speed: route ? 0.18 + Math.random() * 0.08 : 0,
+        route,
+        radius: crowdZoneRadius,
+        scale: 0.92 + Math.random() * 0.18,
+      });
+    }
+  }
+
+  function initCrowdLayer() {
+    if (crowdLayer || crowdLoadStarted || !window.TinyCrowdLayer) return;
+    crowdLoadStarted = true;
+    crowdLayer = new window.TinyCrowdLayer({
+      THREE,
+      root: worldGroup,
+      camera,
+      textureBasePath: 'crowd/',
+      tileToWorld: tilePos,
+      getTerrainHeight: crowdTerrainHeightAt,
+      scale: crowdScale,
+      config: crowdConfigOverride(),
+      worldConfig: crowdWorldConfigOverride(),
+    });
+    crowdLayer.load().then(seedCrowdPeople).catch(err => {
+      console.warn('[crowd] failed to load sprites', err);
+    });
+  }
+
   // -------- selection (select-tool) --------
   // Track a Set of "x,z" string keys for selected cells. A semi-transparent
   // overlay quad is rendered on top of each selected tile. Listeners are
@@ -14210,6 +14541,7 @@
 
     if (useWindowedHomeRendering()) {
       requestHomeRenderWindowSync({ force: true });
+      seedCrowdPeople();
       saveState();
       return;
     }
@@ -14231,6 +14563,7 @@
         });
       }
     }
+    seedCrowdPeople();
     saveState();
   }
 
@@ -16846,6 +17179,27 @@
     const shaderAntialiasEl = document.getElementById('render-shader-antialias');
     const tiltBlurEl = document.getElementById('render-tilt-blur');
     const tiltFocusEl = document.getElementById('render-tilt-focus');
+    const crowdCountEl = document.getElementById('crowd-count');
+    const crowdScaleEl = document.getElementById('crowd-scale');
+    const crowdSpeedEl = document.getElementById('crowd-speed');
+    const crowdBobEl = document.getElementById('crowd-bob');
+    const crowdSwayEl = document.getElementById('crowd-sway');
+    const crowdLeanEl = document.getElementById('crowd-lean');
+    const crowdZoneRadiusEl = document.getElementById('crowd-zone-radius');
+    const crowdShowZonesEl = document.getElementById('crowd-show-zones');
+    const crowdPausedEl = document.getElementById('crowd-paused');
+    const crowdDebugEl = document.getElementById('crowd-debug');
+    const crowdReseedEl = document.getElementById('crowd-reseed');
+    const crowdModeEl = document.getElementById('crowd-mode');
+    const crowdCountLiveEl = document.getElementById('crowd-count-live');
+    const crowdScaleLiveEl = document.getElementById('crowd-scale-live');
+    const crowdSpeedLiveEl = document.getElementById('crowd-speed-live');
+    const crowdZoneRadiusLiveEl = document.getElementById('crowd-zone-radius-live');
+    const crowdShowZonesLiveEl = document.getElementById('crowd-show-zones-live');
+    const crowdShowArrowsLiveEl = document.getElementById('crowd-show-arrows-live');
+    const crowdPausedLiveEl = document.getElementById('crowd-paused-live');
+    const crowdReseedLiveEl = document.getElementById('crowd-reseed-live');
+    const crowdDebugLiveEl = document.getElementById('crowd-debug-live');
     const ghostOpacityEl = document.getElementById('render-ghost-opacity');
     const floorOpacityEl = document.getElementById('render-floor-opacity');
     const objectOpacityEl = document.getElementById('render-object-opacity');
@@ -16919,6 +17273,24 @@
       voxelBevelEl.value = renderVoxelBevel.toFixed(3);
       if (voxelTerrainEl) voxelTerrainEl.checked = !!renderVoxelTerrain;
       if (terrainVoxelResolutionEl) terrainVoxelResolutionEl.value = renderTerrainVoxelResolution;
+      if (crowdCountEl) crowdCountEl.value = String(crowdCount);
+      if (crowdScaleEl) crowdScaleEl.value = String(Math.round(crowdScale * 100));
+      if (crowdSpeedEl) crowdSpeedEl.value = String(Math.round(crowdSpeedMul * 50));
+      if (crowdBobEl) crowdBobEl.value = String(crowdBob);
+      if (crowdSwayEl) crowdSwayEl.value = String(crowdSway);
+      if (crowdLeanEl) crowdLeanEl.value = crowdLean.toFixed(2);
+      if (crowdZoneRadiusEl) crowdZoneRadiusEl.value = String(Math.round(crowdZoneRadius * 100));
+      if (crowdShowZonesEl) crowdShowZonesEl.checked = !!crowdShowZones;
+      if (crowdPausedEl) crowdPausedEl.checked = !!crowdPaused;
+      if (crowdDebugEl) crowdDebugEl.checked = !!crowdDebug;
+      if (crowdModeEl) crowdModeEl.value = crowdMode;
+      if (crowdCountLiveEl) crowdCountLiveEl.value = String(crowdCount);
+      if (crowdScaleLiveEl) crowdScaleLiveEl.value = String(Math.round(crowdScale * 100));
+      if (crowdSpeedLiveEl) crowdSpeedLiveEl.value = String(Math.round(crowdSpeedMul * 50));
+      if (crowdZoneRadiusLiveEl) crowdZoneRadiusLiveEl.value = String(Math.round(crowdZoneRadius * 100));
+      if (crowdShowZonesLiveEl) crowdShowZonesLiveEl.checked = !!crowdShowZones;
+      if (crowdShowArrowsLiveEl) crowdShowArrowsLiveEl.checked = !!crowdShowArrows;
+      if (crowdPausedLiveEl) crowdPausedLiveEl.checked = !!crowdPaused;
       resolutionValue.textContent = resolutionEl.value + '%';
       distanceValue.textContent = distanceEl.value;
       visibleSizeValue.textContent = visibleSizeEl.value + 'x' + visibleSizeEl.value;
@@ -16943,7 +17315,18 @@
       objectOpacityValue.textContent = objectOpacityEl.value + '%';
       voxelGapValue.textContent = (parseInt(voxelGapEl.value, 10) / 100).toFixed(2);
       voxelBevelValue.textContent = parseFloat(voxelBevelEl.value).toFixed(3);
-      status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · preview ' + renderVisibleDistance + ' / ' + renderVisibleSize + 'x' + renderVisibleSize + ' · atmosphere ' + distanceMistEl.value + '%';
+      if (crowdCountEl) document.getElementById('crowd-count-value').textContent = crowdCount;
+      if (crowdScaleEl) document.getElementById('crowd-scale-value').textContent = Math.round(crowdScale * 100) + '%';
+      if (crowdSpeedEl) document.getElementById('crowd-speed-value').textContent = Math.round(crowdSpeedMul * 100) + '%';
+      if (crowdBobEl) document.getElementById('crowd-bob-value').textContent = crowdBob.toFixed(1);
+      if (crowdSwayEl) document.getElementById('crowd-sway-value').textContent = crowdSway.toFixed(1);
+      if (crowdLeanEl) document.getElementById('crowd-lean-value').textContent = crowdLean.toFixed(2);
+      if (crowdZoneRadiusEl) document.getElementById('crowd-zone-radius-value').textContent = crowdZoneRadius.toFixed(2);
+      if (crowdCountLiveEl) document.getElementById('crowd-count-live-value').textContent = crowdCount;
+      if (crowdScaleLiveEl) document.getElementById('crowd-scale-live-value').textContent = Math.round(crowdScale * 100) + '%';
+      if (crowdSpeedLiveEl) document.getElementById('crowd-speed-live-value').textContent = Math.round(crowdSpeedMul * 100) + '%';
+      if (crowdZoneRadiusLiveEl) document.getElementById('crowd-zone-radius-live-value').textContent = crowdZoneRadius.toFixed(2);
+      status.textContent = 'DPR ' + renderer.getPixelRatio().toFixed(2) + ' · shadow ' + sun.shadow.mapSize.x + ' · preview ' + renderVisibleDistance + ' / ' + renderVisibleSize + 'x' + renderVisibleSize + ' · crowd ' + crowdCount;
     }
 
     function persistSettings() {
@@ -17016,6 +17399,25 @@
       renderVoxelBevel = Math.max(0, Math.min(0.06, parseFloat(voxelBevelEl.value) || 0));
       if (voxelTerrainEl) renderVoxelTerrain = !!voxelTerrainEl.checked;
       if (terrainVoxelResolutionEl) renderTerrainVoxelResolution = terrainVoxelResolutionEl.value;
+      if (crowdCountEl) crowdCount = parseInt(crowdCountEl.value, 10) || 0;
+      if (crowdScaleEl) crowdScale = parseInt(crowdScaleEl.value, 10) / 100;
+      if (crowdSpeedEl) crowdSpeedMul = parseInt(crowdSpeedEl.value, 10) / 50;
+      if (crowdBobEl) crowdBob = parseFloat(crowdBobEl.value) || 0;
+      if (crowdSwayEl) crowdSway = parseFloat(crowdSwayEl.value) || 0;
+      if (crowdLeanEl) crowdLean = parseFloat(crowdLeanEl.value) || 0;
+      if (crowdZoneRadiusEl) crowdZoneRadius = parseInt(crowdZoneRadiusEl.value, 10) / 100;
+      if (crowdShowZonesEl) crowdShowZones = !!crowdShowZonesEl.checked;
+      if (crowdPausedEl) crowdPaused = !!crowdPausedEl.checked;
+      if (crowdModeEl) crowdMode = crowdModeEl.value;
+      if (crowdCountLiveEl) crowdCount = parseInt(crowdCountLiveEl.value, 10) || 0;
+      if (crowdScaleLiveEl) crowdScale = parseInt(crowdScaleLiveEl.value, 10) / 100;
+      if (crowdSpeedLiveEl) crowdSpeedMul = parseInt(crowdSpeedLiveEl.value, 10) / 50;
+      if (crowdZoneRadiusLiveEl) crowdZoneRadius = parseInt(crowdZoneRadiusLiveEl.value, 10) / 100;
+      if (crowdShowZonesLiveEl) crowdShowZones = !!crowdShowZonesLiveEl.checked;
+      if (crowdShowArrowsLiveEl) crowdShowArrows = !!crowdShowArrowsLiveEl.checked;
+      if (crowdPausedLiveEl) crowdPaused = !!crowdPausedLiveEl.checked;
+      if (crowdDebugEl) crowdDebug = !!crowdDebugEl.checked;
+      applyCrowdSettings();
       if (Math.abs(oldVoxelGap - renderVoxelGap) > 0.001 || Math.abs(oldVoxelBevel - renderVoxelBevel) > 0.001) scheduleVoxelStampRefresh();
       if (oldVoxelTerrain !== renderVoxelTerrain || oldTerrainVoxelResolution !== renderTerrainVoxelResolution) rebuildTerrainRender();
       updateGhostRenderBubble();
@@ -17054,7 +17456,7 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, terrainVoxelResolutionEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, terrainVoxelResolutionEl, crowdCountEl, crowdScaleEl, crowdSpeedEl, crowdBobEl, crowdSwayEl, crowdLeanEl, crowdZoneRadiusEl, crowdShowZonesEl, crowdPausedEl, crowdDebugEl, crowdModeEl, crowdCountLiveEl, crowdScaleLiveEl, crowdSpeedLiveEl, crowdZoneRadiusLiveEl, crowdShowZonesLiveEl, crowdShowArrowsLiveEl, crowdPausedLiveEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
@@ -17100,6 +17502,19 @@
       renderVoxelBevel = parseFloat(RENDER_DEFAULTS.voxelBevel);
       renderVoxelTerrain = true;
       renderTerrainVoxelResolution = 'mixed';
+      crowdCount = 12;
+      crowdScale = 0.75;
+      crowdSpeedMul = 1;
+      crowdBob = 2.4;
+      crowdSway = 1.4;
+      crowdLean = 0.07;
+      crowdZoneRadius = 0.16;
+      crowdShowZones = true;
+      crowdPaused = false;
+      crowdDebug = true;
+      crowdMode = 'wander';
+      crowdShowArrows = true;
+      applyCrowdSettings({ reseed: true });
       renderAutoExpand = false;
       const autoExpandEl = document.getElementById('minimap-autoexpand');
       if (autoExpandEl) autoExpandEl.checked = false;
@@ -17110,6 +17525,19 @@
       updateGhostRenderBubble();
       applyColorFilterFallback();
       persistSettings();
+      syncControls();
+    });
+    if (crowdDebugLiveEl) crowdDebugLiveEl.addEventListener('click', () => {
+      crowdDebug = !crowdDebug;
+      applyCrowdSettings();
+      syncControls();
+    });
+    if (crowdReseedLiveEl) crowdReseedLiveEl.addEventListener('click', () => {
+      applyCrowdSettings({ reseed: true });
+      syncControls();
+    });
+    if (crowdReseedEl) crowdReseedEl.addEventListener('click', () => {
+      applyCrowdSettings({ reseed: true });
       syncControls();
     });
     syncControls();
@@ -19758,6 +20186,7 @@
     tickWeather(dt);
     updateClouds(dt);
     tickVehicles(dt);
+    if (crowdLayer) crowdLayer.update(dt, camera);
     updateCropDuster(dt);
     if (useWindowedHomeRendering()) {
       requestHomeRenderWindowSync();
@@ -24056,6 +24485,7 @@
       resetCameraDefaults();
     }
     ensureGhostBoardsAroundTarget();
+    initCrowdLayer();
     onResize();
     renderer.setAnimationLoop(animate);
     const vehicleDemoRequest = getVehicleDemoUrlRequest();

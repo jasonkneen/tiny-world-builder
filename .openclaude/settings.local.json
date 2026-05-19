@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__contex__peer_set_state",
+      "mcp__contex__peer_get_state"
+    ]
+  }
+}

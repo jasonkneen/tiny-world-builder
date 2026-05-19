@@ -87,6 +87,17 @@ if [[ -d sounds ]]; then
   ' sh {} +)
 fi
 
+# Crowd sprites referenced by the TinyCrowdLayer runtime.
+if [[ -d crowd ]]; then
+  mkdir -p "$DIST/crowd"
+  (cd crowd && find . -type f ! -name '.DS_Store' -exec sh -c '
+    for f do
+      mkdir -p "../dist/crowd/$(dirname "$f")"
+      cp "$f" "../dist/crowd/$f"
+    done
+  ' sh {} +)
+fi
+
 # 3D model assets referenced directly by the single-file app.
 if [[ -d models ]]; then
   mkdir -p "$DIST/models"
