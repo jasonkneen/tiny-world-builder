@@ -12839,11 +12839,9 @@
     let g = null;
 
     if (kind === 'tree' || kind === 'bush') {
-      const trunk = new THREE.Mesh(getBoxGeometry(0.18, 0.6 * level, 0.18), M.dirtRich);
       const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.2 * level, 4), M.leaves);
-      leaves.position.y = 0.9 * level;
-      g = new THREE.Group();
-      g.add(trunk, leaves);
+      leaves.position.y = 0.6 * level;
+      g = leaves;
     } else if (kind === 'house' || kind === 'manor' || kind === 'tower' || kind === 'turret' || kind === 'skyscraper') {
       const h = 1.2 * level;
       g = new THREE.Mesh(getBoxGeometry(1.2, h, 1.2), M.dirtRich);
@@ -13134,18 +13132,6 @@
       }
     }
 
-    // Build a fast O(1) lookup for tiles on this ghost board.
-    // This is heavily used by weatherSurfaceAt during rain/snow, which would
-    // otherwise do a linear scan over thousands of children on large visible distance.
-    const tileLookup = new Map();
-    for (const child of board.children) {
-      if (child && child.userData && child.userData.fadeRole === 'tile') {
-        const k = child.userData.gx + ',' + child.userData.gz;
-        tileLookup.set(k, child);
-      }
-    }
-    board.userData.tileLookup = tileLookup;
-
     // Merge same-material ghost terrain into batched meshes.
     // This is the big win for "so many elements" at high preview distance.
     mergeGhostTerrainByMaterial(board);
@@ -13190,66 +13176,109 @@
   // BufferGeometry. This turns "64 meshes per ghost board" into "~number of
   // terrain types" draw calls, making high preview distances practical.
   function mergeGhostTerrainByMaterial(board) {
-    const byMat = new Map();
+    const groups = new Map();
     const toRemove = [];
 
-    for (const child of board.children) {
-      if (!child || !child.isMesh || child.userData.fadeRole !== 'tile') continue;
-      const mat = child.material;
-      if (!byMat.has(mat)) byMat.set(mat, []);
-      byMat.get(mat).push(child);
+    const boardX = board.userData.boardX;
+    const boardZ = board.userData.boardZ;
+    const centerX = boardX * GRID * TILE;
+    const centerZ = boardZ * GRID * TILE;
+
+    const children = [...board.children];
+    for (const child of children) {
+      if (!child) continue;
+
+      const role = child.userData.fadeRole;
+      if (role !== 'tile' && role !== 'object') continue;
+
+      child.updateMatrix();
+
+      child.traverse(m => {
+        if (!m.isMesh || !m.geometry) return;
+        m.updateMatrix();
+
+        let curr = m;
+        const relMatrix = new THREE.Matrix4().identity();
+        while (curr && curr !== board) {
+          curr.updateMatrix();
+          relMatrix.premultiply(curr.matrix);
+          curr = curr.parent;
+        }
+
+        const mat = m.material;
+        const key = mat.uuid + '|' + role;
+        if (!groups.has(key)) {
+          groups.set(key, { mat, role, items: [] });
+        }
+        groups.get(key).items.push({ mesh: m, relMatrix });
+      });
+      toRemove.push(child);
     }
 
-    for (const [mat, meshes] of byMat) {
-      if (meshes.length <= 1) continue;
+    for (const child of toRemove) {
+      board.remove(child);
+    }
+
+    for (const [key, group] of groups) {
+      const { mat, role, items } = group;
+      if (items.length === 0) continue;
 
       let posArr = [];
       let norArr = [];
       let uvArr = [];
 
-      for (const m of meshes) {
-        const g = m.geometry;
-        const pos = g.attributes.position.array;
-        const nor = g.attributes.normal ? g.attributes.normal.array : null;
-        const uv = g.attributes.uv ? g.attributes.uv.array : null;
+      for (const item of items) {
+        const g = item.mesh.geometry;
+        const nonIndexed = g.toNonIndexed ? g.toNonIndexed() : g.clone();
+        nonIndexed.applyMatrix4(item.relMatrix);
 
-        const px = m.position.x;
-        const py = m.position.y;
-        const pz = m.position.z;
+        const pos = nonIndexed.attributes.position.array;
+        const nor = nonIndexed.attributes.normal ? nonIndexed.attributes.normal.array : null;
+        const uv = nonIndexed.attributes.uv ? nonIndexed.attributes.uv.array : null;
 
-        for (let i = 0; i < pos.length; i += 3) {
-          posArr.push(pos[i] + px, pos[i + 1] + py, pos[i + 2] + pz);
-          if (nor) {
-            norArr.push(nor[i], nor[i + 1], nor[i + 2]);
-          }
-          if (uv) {
-            const j = (i / 3) * 2;
-            uvArr.push(uv[j], uv[j + 1]);
+        for (let i = 0; i < pos.length; i++) {
+          posArr.push(pos[i]);
+        }
+        if (nor) {
+          for (let i = 0; i < nor.length; i++) {
+            norArr.push(nor[i]);
           }
         }
-        toRemove.push(m);
+        if (uv) {
+          for (let i = 0; i < uv.length; i++) {
+            uvArr.push(uv[i]);
+          }
+        }
+
+        nonIndexed.dispose();
       }
 
       if (posArr.length === 0) continue;
 
       const newGeo = new THREE.BufferGeometry();
       newGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-      if (norArr.length) newGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norArr), 3));
-      if (uvArr.length) newGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvArr), 2));
+      if (norArr.length && norArr.length === posArr.length) {
+        newGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norArr), 3));
+      }
+      if (uvArr.length && uvArr.length === (posArr.length / 3) * 2) {
+        newGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvArr), 2));
+      }
+
+      newGeo.translate(-centerX, 0, -centerZ);
+
+      newGeo.computeBoundingBox();
       newGeo.computeBoundingSphere();
 
       const mergedMesh = new THREE.Mesh(newGeo, mat);
-      mergedMesh.castShadow = false;
+      mergedMesh.position.set(centerX, 0, centerZ);
+      mergedMesh.userData = { fadeRole: role, ghostMerged: true };
+      prepareFadeable(mergedMesh, { ghost: true, grayscale: true, opacity: opacityAtWorldPosition(centerX, centerZ) });
+
+      mergedMesh.castShadow = (role === 'object');
       mergedMesh.receiveShadow = true;
       mergedMesh.frustumCulled = true;
-      mergedMesh.userData = { fadeRole: 'tile', ghostMerged: true };
-      board.add(mergedMesh);
-    }
 
-    // Remove the original per-tile meshes we merged
-    for (const m of toRemove) {
-      board.remove(m);
-      // Don't dispose — geometries are cached/shared via geomCache
+      board.add(mergedMesh);
     }
   }
 
@@ -15031,6 +15060,57 @@
     return projectedLandscapeHitFromPoint(point);
   }
 
+  function resolveRaycastCell(h) {
+    const localHitPoint = h.point.clone();
+    xrWorldRoot.worldToLocal(localHitPoint);
+
+    let n = h.object;
+    if (n && n.userData && n.userData.ghostMerged) {
+      const board = n.parent;
+      if (board && board.userData && board.userData.ghostBoard) {
+        if (!board.visible) return null;
+        const boardX = board.userData.boardX;
+        const boardZ = board.userData.boardZ;
+        const gx = Math.floor(localHitPoint.x - boardX * GRID + GRID / 2);
+        const gz = Math.floor(localHitPoint.z - boardZ * GRID + GRID / 2);
+        if (gx >= 0 && gx < GRID && gz >= 0 && gz < GRID) {
+          const p = ghostCellPos(boardX, boardZ, gx, gz);
+          return {
+            x: gx,
+            z: gz,
+            boardX,
+            boardZ,
+            worldX: p.x,
+            worldZ: p.z,
+            localX: localHitPoint.x - p.x,
+            localZ: localHitPoint.z - p.z,
+          };
+        }
+      }
+    }
+
+    while (n && n.userData.gx === undefined) n = n.parent;
+    if (n && n.userData.gx !== undefined) {
+      if (!n.visible) return null;
+      const boardX = n.userData.boardX || 0;
+      const boardZ = n.userData.boardZ || 0;
+      const p = (boardX || boardZ)
+        ? ghostCellPos(boardX, boardZ, n.userData.gx, n.userData.gz)
+        : tilePos(n.userData.gx, n.userData.gz);
+      return {
+        x: n.userData.gx,
+        z: n.userData.gz,
+        boardX,
+        boardZ,
+        worldX: p.x,
+        worldZ: p.z,
+        localX: localHitPoint.x - p.x,
+        localZ: localHitPoint.z - p.z,
+      };
+    }
+    return null;
+  }
+
   function pickTile(clientX, clientY) {
     ndc.x = (clientX / window.innerWidth) * 2 - 1;
     ndc.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -15041,29 +15121,8 @@
       if (!landscapeHit && isLandscapeMeshHit(h.object)) {
         landscapeHit = projectedLandscapeHitFromPoint(h.point);
       }
-      let n = h.object;
-      while (n && (n.userData.gx === undefined)) n = n.parent;
-      if (n && n.userData.gx !== undefined) {
-        const boardX = n.userData.boardX || 0;
-        const boardZ = n.userData.boardZ || 0;
-        const p = (boardX || boardZ)
-          ? ghostCellPos(boardX, boardZ, n.userData.gx, n.userData.gz)
-          : tilePos(n.userData.gx, n.userData.gz);
-        // raycaster already skipped hidden meshes; if it's here it's a
-        // legitimate target. The old opacityAtWorldPosition check killed
-        // clicks on revealed ghost cells outside the visible window.
-        if (!n.visible) continue;
-        return {
-          x: n.userData.gx,
-          z: n.userData.gz,
-          boardX,
-          boardZ,
-          worldX: p.x,
-          worldZ: p.z,
-          localX: h.point.x - p.x,
-          localZ: h.point.z - p.z,
-        };
-      }
+      const cellHit = resolveRaycastCell(h);
+      if (cellHit) return cellHit;
     }
     return landscapeHit || pickLandscapeVirtualCell();
   }
@@ -15208,26 +15267,8 @@
       if (!landscapeHit && isLandscapeMeshHit(h.object)) {
         landscapeHit = projectedLandscapeHitFromPoint(h.point);
       }
-      let n = h.object;
-      while (n && n.userData.gx === undefined) n = n.parent;
-      if (!n || n.userData.gx === undefined || !n.visible) continue;
-      const boardX = n.userData.boardX || 0;
-      const boardZ = n.userData.boardZ || 0;
-      const p = (boardX || boardZ)
-        ? ghostCellPos(boardX, boardZ, n.userData.gx, n.userData.gz)
-        : tilePos(n.userData.gx, n.userData.gz);
-      xrLocalPoint.copy(h.point);
-      xrWorldRoot.worldToLocal(xrLocalPoint);
-      return {
-        x: n.userData.gx,
-        z: n.userData.gz,
-        boardX,
-        boardZ,
-        worldX: p.x,
-        worldZ: p.z,
-        localX: xrLocalPoint.x - p.x,
-        localZ: xrLocalPoint.z - p.z,
-      };
+      const cellHit = resolveRaycastCell(h);
+      if (cellHit) return cellHit;
     }
     return landscapeHit;
   }
@@ -16167,17 +16208,7 @@
   // materialised home cellMesh doesn't render on top of the original
   // ghost tile/object at the same world position.
   function removeGhostCellMesh(boardX, boardZ, lx, lz) {
-    const key = ghostBoardKey(boardX, boardZ);
-    const board = ghostBoards.get(key);
-    if (!board) return;
-    const toRemove = [];
-    for (const child of board.children) {
-      if (child.userData.gx === lx && child.userData.gz === lz) toRemove.push(child);
-    }
-    for (const child of toRemove) {
-      board.remove(child);
-      disposeGroup(child);
-    }
+    rebuildGhostBoard(boardX, boardZ);
   }
 
   function applyToolToCell(cell) {
@@ -19862,22 +19893,14 @@
     const lz = gz - bz * GRID;
     if (lx < 0 || lx >= GRID || lz < 0 || lz >= GRID) return null;
 
-    // Fast path using the tileLookup we built when creating the ghost board.
-    const lookup = board.userData && board.userData.tileLookup;
-    if (lookup) {
-      const tile = lookup.get(lx + ',' + lz);
-      if (tile) {
-        return tile.position.y + (tile.userData.weatherSurfaceY || (TOP_H + WEATHER_SURFACE_PAD));
-      }
+    if (landscapeMeshMode) {
+      return landscapeHeightAtCell(gx, gz) + WEATHER_SURFACE_PAD;
+    } else {
+      const cells = makeGhostWorld(bx, bz);
+      const cell = cells[lx][lz];
+      const level = tileLevelForCell(cell);
+      return TOP_H + terrainRiseForLevel(level) + WEATHER_SURFACE_PAD;
     }
-
-    // Fallback (should rarely be needed)
-    for (const child of board.children) {
-      if (child && child.userData && child.userData.fadeRole === 'tile' && child.userData.gx === lx && child.userData.gz === lz) {
-        return child.position.y + (child.userData.weatherSurfaceY || (TOP_H + WEATHER_SURFACE_PAD));
-      }
-    }
-    return TOP_H + WEATHER_SURFACE_PAD;
   }
 
   const WEATHER_TILT_AXIS = new THREE.Vector3(0, 0, 1);
