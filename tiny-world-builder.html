@@ -5068,12 +5068,18 @@
   let landscapeMeshBiome = 'grassland';  // 'grassland', 'desert', or 'snow'
   let landscapeMeshStyle = 'lowpoly';    // 'realistic' or 'lowpoly'
 
+  let renderAutoExpand = localStorage.getItem(RENDER_LS.autoExpand) === '1';
+
   function maxRenderVisibleSizeForGrid(grid) {
     const g = coerceGridSize(grid, GRID);
     if (landscapeMeshMode) {
       return Math.max(48, g * 4);
     }
     const budget = renderBudgetForGrid(g);
+    if (renderAutoExpand) {
+      const maxPreloadRadius = budget.ghostRadius;
+      return Math.max(g, (1 + 2 * maxPreloadRadius) * g);
+    }
     return Math.max(g, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.ceil(g * budget.visibleScale)));
   }
 
@@ -5134,7 +5140,6 @@
   let renderTerrainVoxelResolution = localStorage.getItem(RENDER_LS.terrainVoxelResolution) || 'mixed';
   let showCrowns = localStorage.getItem(RENDER_LS.showCrowns) !== '0';
   if (!['mixed', '4', '6', '8', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
-  let renderAutoExpand = localStorage.getItem(RENDER_LS.autoExpand) === '1';
   if (!renderAutoExpand) renderVisibleSize = GRID;
   function applyBackdropSettings() {
     document.documentElement.style.setProperty('--backdrop-strength', renderBackdrop.toFixed(2));
@@ -6037,6 +6042,177 @@
     hoverErase:new THREE.MeshBasicMaterial({ color: 0xb84838, transparent: true, opacity: 0.28, depthWrite: false }),
   };
 
+  // -------- procedural pixel-art textures --------
+  function createPixelTexture(type, scale = 16) {
+    const canvas = document.createElement('canvas');
+    canvas.width = scale;
+    canvas.height = scale;
+    const ctx = canvas.getContext('2d');
+
+    if (type === 'checkered') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      ctx.fillStyle = '#e2e2e2';
+      const half = scale / 2;
+      ctx.fillRect(0, 0, half, half);
+      ctx.fillRect(half, half, half, half);
+    } else if (type === 'noise') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let x = 0; x < scale; x++) {
+        for (let y = 0; y < scale; y++) {
+          const rand = Math.random();
+          if (rand > 0.75) ctx.fillStyle = '#f2f2f2';
+          else if (rand > 0.45) ctx.fillStyle = '#e5e5e5';
+          else if (rand > 0.15) ctx.fillStyle = '#dcdcdc';
+          else ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    } else if (type === 'brick') {
+      ctx.fillStyle = '#bfbfbf'; // mortar
+      ctx.fillRect(0, 0, scale, scale);
+      const rows = 4;
+      const rowH = scale / rows;
+      for (let r = 0; r < rows; r++) {
+        const offset = (r % 2) * (scale / 4);
+        ctx.fillStyle = (r % 2 === 0) ? '#ffffff' : '#f0f0f0';
+        ctx.fillRect(offset + 0.5, r * rowH + 0.5, scale / 2 - 1, rowH - 1);
+        ctx.fillRect(scale / 2 + offset + 0.5, r * rowH + 0.5, scale / 2 - 1, rowH - 1);
+        if (offset > 0) {
+          ctx.fillRect(-scale / 2 + offset + 0.5, r * rowH + 0.5, scale / 2 - 1, rowH - 1);
+        }
+      }
+    } else if (type === 'shingles') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      ctx.fillStyle = '#d0d0d0';
+      const rows = 4;
+      const rowH = scale / rows;
+      for (let r = 0; r < rows; r++) {
+        ctx.fillRect(0, r * rowH, scale, 1);
+        for (let c = 0; c < 2; c++) {
+          const cx = Math.floor(c * (scale / 2) + (r % 2) * (scale / 4));
+          ctx.fillRect(cx, r * rowH, 1, rowH);
+        }
+      }
+    } else if (type === 'ripples') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(0, 3, scale, 1);
+      ctx.fillRect(0, 11, scale, 1);
+      ctx.fillStyle = '#cccccc';
+      ctx.fillRect(scale / 4, 4, scale / 2, 1);
+      ctx.fillRect(scale * 0.75, 12, scale / 4, 1);
+    } else if (type === 'leaves') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let x = 0; x < scale; x++) {
+        for (let y = 0; y < scale; y++) {
+          if ((x + y) % 2 === 0) {
+            ctx.fillStyle = '#ffffff';
+          } else {
+            const r = Math.random();
+            ctx.fillStyle = r > 0.6 ? '#f2f2f2' : (r > 0.2 ? '#e0e0e0' : '#d0d0d0');
+          }
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    } else if (type === 'wood') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      ctx.fillStyle = '#f0f0f0';
+      for (let x = 0; x < scale; x += 4) {
+        ctx.fillRect(x, 0, 2, scale);
+      }
+      for (let i = 0; i < scale * scale * 0.1; i++) {
+        const px = Math.floor(Math.random() * scale);
+        const py = Math.floor(Math.random() * scale);
+        ctx.fillStyle = Math.random() > 0.5 ? '#e0e0e0' : '#ffffff';
+        ctx.fillRect(px, py, 1, 1);
+      }
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+
+  function applyWorldUVs(material, texture, textureScale = 1.0) {
+    if (!material) return;
+    material.map = texture;
+    material.needsUpdate = true;
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <project_vertex>',
+        `
+        #include <project_vertex>
+        vec4 worldPos = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          worldPos = instanceMatrix * worldPos;
+        #endif
+        worldPos = modelMatrix * worldPos;
+
+        if (abs(normal.y) > 0.5) {
+          vUv = worldPos.xz * ${textureScale.toFixed(4)};
+        } else if (abs(normal.x) > 0.5) {
+          vUv = worldPos.zy * ${textureScale.toFixed(4)};
+        } else {
+          vUv = worldPos.xy * ${textureScale.toFixed(4)};
+        }
+        `
+      );
+    };
+  }
+
+  const texCheckered = createPixelTexture('checkered', 16);
+  const texNoise = createPixelTexture('noise', 16);
+  const texBrick = createPixelTexture('brick', 16);
+  const texShingles = createPixelTexture('shingles', 16);
+  const texRipples = createPixelTexture('ripples', 16);
+
+  applyWorldUVs(M.grass, texCheckered, 1.0);
+  applyWorldUVs(M.grassEdge, texCheckered, 1.0);
+  applyWorldUVs(M.grassHi, texCheckered, 1.0);
+
+  applyWorldUVs(M.path, texNoise, 1.0);
+  applyWorldUVs(M.pathTrim, texNoise, 1.0);
+  applyWorldUVs(M.pathScuff, texNoise, 1.0);
+
+  applyWorldUVs(M.dirt, texNoise, 2.0);
+  applyWorldUVs(M.dirtRich, texNoise, 2.0);
+
+  applyWorldUVs(M.water, texRipples, 1.0);
+  applyWorldUVs(M.waterDk, texRipples, 1.0);
+
+  applyWorldUVs(M.wallCream, texBrick, 4.0);
+  applyWorldUVs(M.wallTrim, texBrick, 4.0);
+  applyWorldUVs(M.roofBlue, texShingles, 2.0);
+  applyWorldUVs(M.roofBlueD, texShingles, 2.0);
+
+  applyWorldUVs(M.castleStone, texBrick, 4.0);
+  applyWorldUVs(M.castleStoneD, texBrick, 4.0);
+  applyWorldUVs(M.stone, texBrick, 4.0);
+  applyWorldUVs(M.stoneDk, texBrick, 4.0);
+
+  applyWorldUVs(M.manorBrick, texBrick, 4.0);
+  applyWorldUVs(M.manorBrickD, texBrick, 4.0);
+  applyWorldUVs(M.manorTrim, texBrick, 4.0);
+  applyWorldUVs(M.manorRoof, texShingles, 2.0);
+  applyWorldUVs(M.manorRoofD, texShingles, 2.0);
+
+  applyWorldUVs(M.towerStone, texBrick, 4.0);
+  applyWorldUVs(M.towerStoneD, texBrick, 4.0);
+  applyWorldUVs(M.towerRoof, texShingles, 2.0);
+  applyWorldUVs(M.towerRoofD, texShingles, 2.0);
+
   const customMaterialCache = new Map();
   function normalizeHexColor(value) {
     if (typeof value !== 'string') return null;
@@ -6060,6 +6236,7 @@
     const key = (base.uuid || base.id || 'mat') + ':' + clean;
     if (!customMaterialCache.has(key)) {
       const mat = base.clone();
+      if (base.onBeforeCompile) mat.onBeforeCompile = base.onBeforeCompile;
       if (mat.color) mat.color.set(clean);
       customMaterialCache.set(key, mat);
     }
@@ -12553,6 +12730,7 @@
     const hit = fadeMatCache.get(key);
     if (hit) return hit;
     const mat = baseMat.clone();
+    if (baseMat.onBeforeCompile) mat.onBeforeCompile = baseMat.onBeforeCompile;
     if (grayscale) desaturateMaterial(mat);
     const baseOp = baseMat.opacity === undefined ? 1 : baseMat.opacity;
     const factor = bucket / FADE_BUCKETS;
@@ -12572,6 +12750,7 @@
     let hit = particleMatCache.get(key);
     if (hit) return hit;
     const mat = baseMat.clone();
+    if (baseMat.onBeforeCompile) mat.onBeforeCompile = baseMat.onBeforeCompile;
     if (colorHex !== undefined) {
       mat.color.setHex(colorHex);
     }
@@ -12607,7 +12786,11 @@
       }
       // Array materials are vanishingly rare in this codebase, but stay safe.
       if (Array.isArray(o.material)) {
-        o.material = o.material.map(m => m.clone());
+        o.material = o.material.map(m => {
+          const clone = m.clone();
+          if (m.onBeforeCompile) clone.onBeforeCompile = m.onBeforeCompile;
+          return clone;
+        });
         const mats = o.material;
         mats.forEach(m => {
           if (grayscale) desaturateMaterial(m);
@@ -14948,7 +15131,17 @@
     // shared M.* instances. Disable shadows to keep the preview cheap.
     mesh.traverse(o => {
       if (!o.isMesh || !o.material) return;
-      o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone();
+      if (Array.isArray(o.material)) {
+        o.material = o.material.map(m => {
+          const clone = m.clone();
+          if (m.onBeforeCompile) clone.onBeforeCompile = m.onBeforeCompile;
+          return clone;
+        });
+      } else {
+        const parentMat = o.material;
+        o.material = o.material.clone();
+        if (parentMat.onBeforeCompile) o.material.onBeforeCompile = parentMat.onBeforeCompile;
+      }
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       mats.forEach(m => {
         m.transparent = true;
@@ -19403,9 +19596,17 @@
     old.traverse(o => {
       if (!o.isMesh || !o.material) return;
       if (o.userData._squashCloned) return;
-      o.material = Array.isArray(o.material)
-        ? o.material.map(m => m.clone())
-        : o.material.clone();
+      if (Array.isArray(o.material)) {
+        o.material = o.material.map(m => {
+          const clone = m.clone();
+          if (m.onBeforeCompile) clone.onBeforeCompile = m.onBeforeCompile;
+          return clone;
+        });
+      } else {
+        const parentMat = o.material;
+        o.material = o.material.clone();
+        if (parentMat.onBeforeCompile) o.material.onBeforeCompile = parentMat.onBeforeCompile;
+      }
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       mats.forEach(m => {
         m.transparent = true;
@@ -20291,7 +20492,11 @@
         const propNames = /prop(eller)?|blade|spinner|rotor|fan/i;
         p.model.traverse(o => {
           if (!o.isMesh || !propNames.test(o.name || '')) return;
-          if (o.material && typeof o.material.clone === 'function') o.material = o.material.clone();
+          if (o.material && typeof o.material.clone === 'function') {
+            const parentMat = o.material;
+            o.material = o.material.clone();
+            if (parentMat.onBeforeCompile) o.material.onBeforeCompile = parentMat.onBeforeCompile;
+          }
           o.userData.__propAxis = 'z';
           p.props.push(o);
 
