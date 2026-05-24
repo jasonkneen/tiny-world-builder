@@ -1,227 +1,150 @@
-HEARTBEAT_OK
+# tinyworld — CodeSurf Generated Memory
 
-### Session: Cron: Tom Doerr Tweet Tracker
-- Source: OpenClaw
-- Provider: openclaw (main)
-- Updated: 2026-05-22T23:00:02.042Z
+_Generated 2026-05-24. Do not edit by hand — overwritten on each dreaming run._
 
-Summary: Checked /Users/jkneen/clawd/memory/tom-doerr-seen.json, found no new unseen tweets from tom_doerr. Previous latest tweet: rt1929127234432876544 (2026-05-22). Current latest: same. No new tweets to report. State file updated with current check timestamp.
-
-### Session: Cron: Nightly Digest
-- Source: OpenClaw
-- Provider: openclaw (main)
-- Updated: 2026-05-22T23:00:06.264Z
-
-Summary: Nightly digest sent successfully.
-
-### Session: Cron: Twitter Tracker
-- Provider: openclaw (main)
-- Updated: 2026-05-22T23:00:08.131Z
-
-Summary: HEARTBEAT_OK
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-22T21:24:00.026Z
-
-**Task**: Trigger word variation for clouds with same type is not working
-
-**Outcome**: Implemented word variation on repeat-click for clouds in the same session and across sessions. Key change: clouds now have their own variation index in `cloudVariants[]`; clicking a placed cloud cycles its variant. No regressions to `userData.landing` or drop-in animation guards.
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-22T21:10:06.052Z
-
-**Task**: Add word variation for all objects
-
-**Outcome**: Full word variation implemented for all objects via repeat-click. `placedVariants` map tracks current variant per cell; each click cycles through the variant array. Variant indices exposed in `world[x][z].variantIndex`. No regressions to adjacency re-rendering or drop-in animations.
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-22T21:08:44.406Z
-
-**Task**: Same as previous session
-
-**Outcome**: (duplicate/overlap with above)
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-22T10:50:00.026Z
-
-**Task**: Fix bugs: snow clouds rendering incorrectly in iso/perspective toggle, and clouds anchored to wrong terrain in LandscapeEngine
-
-**Outcome**: Snow cloud rendering fixed for both iso and perspective modes. Cloud anchor now uses `landscapeHeightAtCell` in LandscapeEngine mode, consistent with hover/selection/crowd height projection. `npm test` passes.
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-21T22:40:00.026Z
-
-**Task**: Improve LandscapeEngine: terraced canyons, biome-aware flora, streaming chunks, water, and visual polish
-
-**Outcome**: LandscapeEngine extracted to `LandscapeEngine.js` and integrated. All LandscapeEngine features implemented: terraced terrain with biome layering, streaming chunks, water layer, flora distribution, soft clipping gradient fade, and correct shadow/fog behavior per visual style (low-poly vs realistic).
-
-### Session: Code Edit
-- Source: CodeSurf
-- Updated: 2026-05-20T09:00:00.026Z
-
-**Task**: Implement ghost world generation subsystem
-
-**Outcome**: Ghost board generation fully implemented. Deterministic seeded RNG (`ghostHash`/`cellRand`). Horizontal paths, vertical paths, rivers, bridges — all cross-board continuous. User overrides write directly to global `world[gx][gz]`. Skill `.codex/skills/tinyworld-ghost-world-gen` created.
-
-
-### .codesurf/DREAMING.md
-# Tinyworld Workspace — Generated Memory
-
-_Last consolidated: 2026-05-22_
+---
 
 ## Overview
 
-Tinyworld is a single-file, Three.js-based 3D world-building app (`tiny-world-builder.html`). It runs entirely in the browser with no bundler and no npm runtime dependencies. The app has grown significantly — the main HTML file is now ~27,355 lines. A second engine file (`LandscapeEngine.js`, ~1,364 lines) has been extracted and integrated as an opt-in terrain mode. Agents collaborate on the canvas via the CodeSurf contex MCP tools.
+**tinyworld** is a single-file browser app (`tiny-world-builder.html`) — a low-poly infinite-canvas 3D world builder built on Three.js r128. No bundler, no npm runtime dependencies. Inline CSS and JS in one file (~16k LoC). Deployed statically via `publish.sh` → `dist/`, served by both Vercel (`vercel.json`) and Netlify (`netlify.toml`).
+
+The workspace runs inside **CodeSurf** canvas with an **OpenClaw** agent infrastructure handling scheduled crons and heartbeat polling.
+
+Working tree is **clean** as of last dreaming run. Branch `main` is 2 commits ahead of `origin/main` (not yet pushed). Last commit: `4d467a2 Refresh workspace memory` — touched only `.codesurf/DREAMING.md` and `.mcp.json`.
+
+---
 
 ## Durable Facts
 
-- **Primary file**: `tiny-world-builder.html` — ~27,355 lines (inline CSS + JS). The ~16k figure in AGENTS.md is stale.
-- **LandscapeEngine**: `LandscapeEngine.js` (~1,364 lines). Standalone procedural terrain engine (terraced canyons, biomes, streaming chunks, water, flora). Activated via "Terrain style = Landscape"; fully opt-in. Low-poly/voxel generation disposes the engine and rebuilds normal tile worlds.
-- **Vendor deps**: `vendor/three/` (Three.js r128 + GLTFLoader); copied to `dist/` by `publish.sh`.
-- **Build**: `npm test` (static checks: `npm run check` + `npm run smoke`), `npm run build` (dist). No bundler, no runtime npm deps. Last known test run: passing.
-- **Deploy**: Vercel (`vercel.json`) and Netlify (`netlify.toml`) both serve from `dist/` (same static output).
-- **Data model**: `world[x][z]` (intent) ↔ `cellMeshes['x,z']` (render). Mutate **only** via `setCell(x, z, opts)`. Never write `world[x][z]` directly outside init.
-- **Cell schema**: `{ terrain, kind, floors, buildingType, fenceSide, extras }` — always include all fields; omitting `extras: []` has caused ghost-board bugs.
-- **Camera**: Three camera objects (`orthoCam`, `softCam`, `persCam`); `camera` ref swapped by `togglePerspective()` / `setCameraMode()`.
-- **Grid**: Default 8×8, configurable up to 48×48. LandscapeEngine auto-expands dynamically (up to 48×48) on first pan, tied to "Preview distance" setting.
-- **Materials**: `M.*` are shared — clone before mutating color. Smoke particles clone material and dispose on death.
-- **Animations**: `userData.landing` guards drop-in queue; never fight it in per-frame loops.
-- **Three.js r128 pinned** — do not bump.
+### App Architecture
 
-## Active Skills (`.codex/skills/`)
+- **Single source of truth**: `tiny-world-builder.html` — all code lives here
+- **Two parallel data structures** (never mix):
+  - `world[x][z]` — intent layer: `{ terrain, terrainFloors, kind, floors }`
+  - `cellMeshes['x,z']` — render layer: `{ tile: Group, object: Group|null }`
+- **Only mutate via `setCell(x, z, opts)`** — direct writes to `world[x][z]` desync intent from rendering
+- Three.js r128 pinned — `vendor/three/` self-hosted; do not bump version
+- Materials in `M.*` are **shared**; never mutate `M.foo.color` in place — clone first
+- `disposeGroup(group)` disposes geometries but **not** shared materials
+- `userData.landing` checks guard drop-in animations — do not remove them
+- Grid range: 8×8 default, up to 48×48 via settings; avoid broad synchronous rebuilds at large sizes
+- Storage key: `tinyworld:v1`, schema version 4
 
-| Skill | Covers |
-|-------|--------|
-| `tinyworld-single-file` | Repo workflow, single-file constraints |
-| `tinyworld-auto-batching` | Palette inference and cache behavior |
-| `tinyworld-opacity-torch` | Ghost boards, panning, opacity torch |
-| `tinyworld-tile-variation` | Repeat-click variation levels; updated with LandscapeEngine mode notes |
-| `tinyworld-visual-qa` | Browser checks and visual QA |
-| `tinyworld-render-performance` | Renderer, shadows, clouds, GPU budget; updated with LandscapeEngine shadow/fog guidance |
-| `tinyworld-webxr` | WebXR AR/VR desk placement, floating boards, headset input |
-| `tinyworld-crowd-layer` | 2.5D people sprites at 3D coordinates |
-| `tinyworld-lowpoly-world-prompt` | Model prompting for coherent low-poly worlds |
-| `tinyworld-lowpoly-stylized-3d` | Low-poly/stylized 3D asset design, imports, materials, scale, animation |
-| `tinyworld-integrations` | API, webhook, SSE, MCP, plugin, automation |
-| `tinyworld-ghost-world-gen` | Ghost board generation, seeded RNG, cross-board path/river/bridge continuity — **not yet in AGENTS.md routing** |
-| `threejs-primitive-reconstructor` | Standalone Three.js primitive scene generation from images (not tinyworld-specific) — **not yet in AGENTS.md routing** |
+### Procedural Material System (committed 2026-05-23)
 
-## LandscapeEngine Subsystem
+- **Seeded RNG**: `makeMulberry32()` replaces `Math.random()` for texture generation — materials are stable across reloads
+- Deterministic procedural pixel textures added for: `planks`, `stone`, `hay`, `dirt`
+- **`voxelBuildMaterial(hex, textureKind)`** — infers and routes procedural texture maps for generated/custom voxel-build colors
+- Trim geometry preferred over global outline passes for imported/custom voxel builds
+- Skill file update for this pattern was **blocked by codex sandbox** (`.codex/skills/` treated as outside project in GPT-5.5 sessions) — durable rule exists only in code, not yet in a skill
 
-New major feature. Key implementation facts:
+### Pre-flight Checklist
 
-- Low-poly uses `sandMatLowPoly` cel shader; Realistic uses Lambert material with native shadows/fog.
-- `landscapeGhostBoardsSuppressed` prevents ghost/preview boards from rendering while active.
-- Free camera target panning enabled in `clampTargetToHomeBoard` when `landscapeMeshMode` is active.
-- `landscapeMeshEngine._clipPlanes` copied to `pixelState.normalMaterial.clippingPlanes` inside `renderScene` (prevents outline ghosts on clipped tiles).
-- Hover/selection/crowd projected onto `landscapeHeightAtCell(...)`.
-- Soft gradient edge fading on all terrain and water materials near clip boundaries.
+- `npm test` passes (`npm run check` + `npm run smoke`)
+- Page loads with no console errors
+- Tool keyboard shortcuts `1`–`9`, `E` work
+- `R`/`F` raise/lower hovered terrain; reset restores preset village; `C` clears to grass
+- Perspective ↔ ortho toggles cleanly
+- Fence placement updates neighbor geometry
+- House clusters render as L/T/+/square where appropriate
+- Smoke spawns from chimneys after landing
 
-## Ghost World Generation Subsystem
+---
 
-- `makeGhostWorld(boardX, boardZ)` deterministic; cached in `ghostBoardCells`.
-- Seeded RNG: `ghostHash` for board-level; `cellRand` with global coords for per-cell.
-- Horizontal path Z = function of `boardZ` only; vertical path X = function of `boardX` only; rivers column-shared; bridges at river × path crossings.
-- User overrides live in `world[gx][gz]` at global coords — no separate override map.
+## Active Subsystem: LandscapeEngine (pending browser visual QA)
 
-## OpenClaw Automation (Active as of 2026-05-22)
+Substantially implemented; `npm test` passes; browser QA not yet fully verified. Persists across multiple dreaming cycles.
 
-- **Lead heartbeat agent**: `localhost:19789` — last run healthy (HEARTBEAT_OK).
-- **MC Gateway agent**: connection refused to `localhost:19789` — multiple failed turns; likely needs restart.
-- **Cron: Urgent Email Alert** — `bash /Users/jkneen/clawd/scripts/email-alert-check.sh`; last run: OK.
-- **Cron: Tom Doerr Tweet Tracker** — state file at `/Users/jkneen/clawd/memory/tom-doerr-seen.json`; last run: no new unseen tweets.
-- **Cron: Nightly Digest** — last run: sent successfully.
-- **Cron: Twitter Tracker** — last run: HEARTBEAT_OK.
+### What was built
+
+- **`LandscapeEngine.js`** — separate module; `landscapeMeshMode` flag gates the feature throughout `tiny-world-builder.html`
+- `landscapeHeightAtCell(x, z)` is the canonical height lookup for objects, overlays, crowd, hover, and picking in landscape mode
+- Clip planes from `landscapeMeshEngine._clipPlanes` copy to `pixelState.normalMaterial.clippingPlanes` in `renderScene` (prevents outline-pass ghosting)
+- Camera panning unlocked in landscape mode; dynamic bounds expand up to 48×48 on first pan, linked to `renderVisibleDistance` setting
+- Switching away from Landscape disposes engine and rebuilds normal tile/object world
+- Soft gradient edge fading applied to all terrain/water materials near clip boundaries
+- Skills updated: `.codex/skills/tinyworld-tile-variation`, `.codex/skills/tinyworld-render-performance`, `.codex/skills/tinyworld-opacity-torch`
+- Additional fixes (commit `1b37fd6`): placement snaps aligned to landscape height; vehicle hill travel; weather collision projection; ghost board restore; `scratch/visual_qa.js` + `chrome_debugger.js` + `chrome_debugger_autoexpand.js` + `test_unit.js` added
+
+### Visual QA still needed (browser)
+
+- Fixed boards: no hidden base/helper outlines
+- Auto-expand while panning: terrain streams, no ghost/base boards
+- Low-poly and voxel styles: legacy generation unaffected
+- Low-poly Landscape: cel-shaded appearance preserved
+- Realistic Landscape: shadows and fog active
+- Pixel outline "Normal": no ghost outlines for clipped tiles/rocks/trees
+- Clip boundaries: soft gradient fade into background sky/fog
+
+---
+
+## Active Investigation: Auto-Generate Panning Regression
+
+Root cause identified; fix not yet applied.
+
+### Root cause in `maxRenderVisibleSizeForGrid` (line 5082)
+
+- When `isLandscapeMeshActive()` is true, returns `Math.max(48, g * 4)` — for grid ≥ 18 this produces 72, hitting the slider's hard `max="72"` ceiling
+- When `renderAutoExpand` is true (non-landscape path), `(1 + 2 * maxPreloadRadius) * g` may also push to 72
+- **Only affects non-realistic/non-landscape terrain modes**
+- Fix not applied — session was read-only and `tiny-world-builder.html` had existing uncommitted texture/material edits to preserve
+
+---
+
+## Adjacent Project Activity
+
+### Hermes Agent / hermes-agent-core-rs (`/Users/jkneen/Documents/GitHub/hermes-agent/agent-core-rs`)
+
+Parity test suite is **passing** as of 2026-05-24:
+- `HERMES_PARITY_RUN_OK` — confirmed multiple times across two batches
+- `HERMES_PARITY_CHAT_OK` — confirmed
+- `HERMES_PARITY_ONESHOT_OK` — confirmed
+- Memory recall probe ("ultraviolet" / "remembered") — confirmed responding correctly
+
+Backend: OpenAI-compatible at `POST 127.0.0.1:8642/v1/chat/completions`. Has local edits. AGENTS.md rules: verify model names from local codebase; no emoji unless explicitly requested.
+
+### SmallHarness / Hermes Migration (`/Users/jkneen/Documents/GitHub/SmallHarness`)
+
+- Rust CLI; TUI uses crossterm raw-mode prompt + JSONL input history + bordered/plain input styles + streaming renderer
+- Key files: `src/input.rs`, `src/renderer.rs`, `src/main.rs`, `src/config.rs` — all have local edits
+- Migration plan (not yet confirmed applied): port TUI to hermes-agent; add `hermes` backend suppressing SmallHarness tool schemas; renderer blank-line fix; schema suppression
+- Hermes parity passing is consistent with migration work having proceeded, but application to SmallHarness not confirmed in session evidence
+
+### ideation-canvas (`/Users/jkneen/Documents/GitHub/ideation-canvas`)
+
+Realtime drawing smoothing: Catmull-Rom cubic SVG curves in `ScribbleNode.tsx`; `scribbleToPath()` shared between live overlay and saved strokes; `npm run build` passes.
+
+### openclicky (`/Users/jkneen/Documents/GitHub/openclicky`)
+
+Keychain-backed secret storage, bridge token gate, proxy feature flags implemented; live build verification still pending.
+
+---
+
+## Active Agent Infrastructure (OpenClaw)
+
+### Healthy
+
+- **Lead agent Ava** (`c3f78d0c-abf3-45d5-898e-27cd1d95c0d1`) — heartbeating `HEARTBEAT_OK` across multiple polls; `AGENT_ID: 9f5f3df9-2ed7-4efe-9d97-2114fe460a35`; no board task work this cycle
+- **Urgent Email Alert cron** — first two attempts each cycle fail (assistant turn failure before content), third attempt recovers with `HEARTBEAT_OK`; functionally operational but flaky on first attempt
+- **VibeClaw Article Generator** — 4+ articles published; recent: "The Invisible Architecture: How Context Windows Are Reshaping AI Reasoning" and "Neural Architecture Search: Teaching AI to Design Itself"
+- **VibeClaw Skills Scout** — ran successfully at both 19:00 UTC and 02:00 UTC
+
+### Degraded / Broken (persistent)
+
+- **MC Gateway** (`894a3d5b-7faa-4c0a-a40f-69fbdee7b78d`) — **persistent across multiple dreaming cycles**: "connection refused" on every poll; target `localhost:19789`; multiple assistant turn failures before content; requires manual process restart investigation — this is unresolved and recurring
+- **Lazar Memory Consolidation cron** — fails every run (6+ attempts); fix known: call `mcp__lazar__lazar_memory` with `{ tool: 'consolidate_memory' }` only — strip `parameters: {}` wrapper entirely; not yet applied at cron config level
+- **Stale Branch Cleanup cron** — same 4 branches deleted locally each run; remote refs not removed; fix: add `git push origin --delete <branch>`; not yet applied
+- **Tom Doerr Tweet Tracker** — no authenticated Chrome profile for X/Twitter; blocked
+
+---
 
 ## Open Threads
 
-- **Visual QA still needed for LandscapeEngine** (per `status.MD` — npm test passes but browser checks not yet done):
-  - No hidden base/helper outlines on fixed boards in Landscape mode.
-  - Auto-expand panning streams real terrain with no ghost boards visible.
-  - Low-poly and voxel modes render normally after Landscape is disposed.
-  - "Outline: Normal" pixel mode shows no ghosts on clipped landscape meshes.
-  - Terrain/water boundary soft gradient fade into sky/fog confirmed.
-- **MC Gateway down**: investigate `localhost:19789` process.
-- **AGENTS.md skill routing stale**: `tinyworld-ghost-world-gen` and `threejs-primitive-reconstructor` not listed there yet.
-- **Backup snapshot**: confirm `tiny-world-builder BACKUP.html` still exists before major edit sessions.
-
-## Recent Session Evidence
-
-### Session: Lead C3f78d0c Abf3 45d5 898e 27cd1d95c0d1 chat
-- Source: OpenClaw
-- Provider: openclaw (lead-c3f78d0c-abf3-45d5-898e-27cd1d95c0d1)
-- Updated: 2026-05-22T23:06:21.107Z
-
-USER: [OpenClaw heartbeat poll]
-
-A: **Pre-flight**: ✓ Gateway OK. Required inputs from TOOLS.md (BOARD_ID: c3f78d0c-abf3-45d5-898e-27cd1d95c0d1).
-
-**No concrete outcome** - no board task work.
-
-**HEARTBEAT_OK**
-
-USER: [OpenClaw heartbeat poll]
-
-A: **Pre-flight**: ✓ Gateway OK. Required inputs confirmed from TOOLS.md.
-
-**No concrete outcome** - no board task work.
-
-**HEARTBEAT_OK**
-
-USER: [OpenClaw heartbeat poll]
-
-A: **Pre-flight**: ✓ Gateway OK. Required inputs confirmed from TOOLS.md:
-- `BASE_URL`: localhost:19789 ✓
-- `AUTH_TOKEN`: configured ✓
-- `BOARD_ID`: c3f78d0c-abf3-45d5-898e-27cd1d95c0d1 ✓
-- `AGENT_NAME`: Ava ✓
-- `AGENT_ID`: 9f5f3df9-2ed7-4efe-9d97-2114fe460a35 ✓
-
-Per HEARTBEAT.md "If nothing needs attention, reply HEARTBEAT_OK": no board task work this cycle.
-
-**HEARTBEAT_OK**
-
-### Session: Mc Gateway 894a3d5b 7faa 4c0a A40f 69fbdee7b78d chat
-- Source: OpenClaw
-- Provider: openclaw (mc-gateway-894a3d5b-7faa-4c0a-a40f-69fbdee7b78d)
-- Updated: 2026-05-22T23:04:04.163Z
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed before producing content]
-
-USER: [OpenClaw heartbeat poll]
-
-A: Heartbeat check-in failed: connection refused. Will retry on next heartbeat.
-
-### Session: Cron: Urgent Email Alert
-- Source: OpenClaw
-- Provider: openclaw (main)
-- Updated: 2026-05-22T23:00:00.142Z
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed before producing content]
-
-A: [assistant turn failed with before producing content]
-
-USER: [cron:4e55bac5-7d0f-4d3a-a023-4b0a1546c6bb Urgent Email Alert] Run the urgent email alert check script and ONLY report back if there were errors running the script itself (not email content). Run: bash /Users/jkneen/clawd/scripts/email-alert-check.sh 2>&1. If the script errors out, reply with the error. If successful, reply: HEARTBEAT_OK
-Current time: Saturday, May 23rd, 2026 - 12:00 AM (Europe/London)
-Reference UTC: 2026-05-22 23:00 UTC
-
-Use the message tool if you need to notify the user dire…
-
-A: HEARTBEAT_OK
-
-Summary: Urgent email alert check ran successfully with no script errors.
+- Browser visual QA for LandscapeEngine — unblocked, needs a human with a browser
+- Auto-generate panning regression fix — root cause known, file edit not yet applied
+- MC Gateway process restart — highest-priority infra issue; has been stuck for multiple cycles
+- Lazar consolidation cron fix — one-line config change, not applied
+- Stale branch cleanup cron fix — one-line addition, not applied
+- SmallHarness migration changes — plan exists, application to SmallHarness not confirmed
+- openclicky live build verification — pending
+- Push `main` to `origin/main` — 2 commits ahead, not yet pushed

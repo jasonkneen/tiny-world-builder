@@ -54,10 +54,6 @@ function maxRenderVisibleSizeForGrid(grid) {
     return Math.max(48, g * 4);
   }
   const budget = renderBudgetForGrid(g);
-  if (renderAutoExpand) {
-    const maxPreloadRadius = budget.ghostRadius;
-    return Math.max(g, (1 + 2 * maxPreloadRadius) * g);
-  }
   return Math.max(g, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.ceil(g * budget.visibleScale)));
 }
 
@@ -107,15 +103,22 @@ function customMaterial(base, hex) {
 // --- RUN TESTS ---
 
 console.log('Testing maxRenderVisibleSizeForGrid...');
-// For GRID = 8, budget.ghostRadius is 4. Under auto-expand, size should be (1 + 2*4)*8 = 72.
+// Autoexpand should keep the preview window close to the board size; neighbour
+// board readiness is controlled by ghostPreloadRadius, not renderVisibleSize.
 let sizeWithAutoExpand = maxRenderVisibleSizeForGrid(8);
-console.log(`With Autoexpand (GRID=8): ${sizeWithAutoExpand} (Expected: 72)`);
-assert.strictEqual(sizeWithAutoExpand, 72);
+console.log(`With Autoexpand (GRID=8): ${sizeWithAutoExpand} (Expected: 9)`);
+assert.strictEqual(sizeWithAutoExpand, 9);
 
 renderAutoExpand = false;
 let sizeWithoutAutoExpand = maxRenderVisibleSizeForGrid(8);
 console.log(`Without Autoexpand (GRID=8): ${sizeWithoutAutoExpand} (Expected: 9)`);
 assert.strictEqual(sizeWithoutAutoExpand, 9);
+
+landscapeMeshMode = true;
+let landscapeSize = maxRenderVisibleSizeForGrid(8);
+console.log(`With landscape mesh active (GRID=8): ${landscapeSize} (Expected: 48)`);
+assert.strictEqual(landscapeSize, 48);
+landscapeMeshMode = false;
 
 console.log('\nTesting pickFadeMaterial copies onBeforeCompile...');
 const dummyShaderCallback = () => {};

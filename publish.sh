@@ -22,6 +22,7 @@ Outputs:
   dist/LICENSE
   dist/assets/*                   Screenshots/assets
   dist/vendor/*                   Self-hosted runtime libraries
+  dist/textures/*                 User-selectable material textures
   dist/sounds/*.mp3               Music + foley used by the app
   dist/.nojekyll                  GitHub Pages compatibility
   dist/VERSION.txt                Build metadata
@@ -84,6 +85,17 @@ if [[ -d sounds ]]; then
     for f do
       mkdir -p "../dist/sounds/$(dirname "$f")"
       cp "$f" "../dist/sounds/$f"
+    done
+  ' sh {} +)
+fi
+
+# User-selectable material textures referenced by Settings → Materials.
+if [[ -d textures ]]; then
+  mkdir -p "$DIST/textures"
+  (cd textures && find . -type f ! -name '.DS_Store' -exec sh -c '
+    for f do
+      mkdir -p "../dist/textures/$(dirname "$f")"
+      cp "$f" "../dist/textures/$f"
     done
   ' sh {} +)
 fi

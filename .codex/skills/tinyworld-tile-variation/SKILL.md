@@ -19,6 +19,8 @@ Expected behavior:
 - Object intensity changes must rebuild the object mesh, not the ground mesh.
 - Object variations should remain the same `kind` unless a schema change is explicitly requested.
 - Same-kind rock neighbours should blend by neighbour strength, not render as identical stamped cells.
+- Terrain surface detail should stay batched/instanced per tile. Add grass blades, pavers, scuffs, pebbles, or flowers through lightweight instanced detail layers, not individual loose meshes per fleck.
+- Heavy terrain such as path and stone can have a render-only kerb drop through `terrainVisualRiseForCell`; water can sit lower and dirt can sit slightly raised through the same `terrainSurfaceOffset` path. Do not store these visual offsets in `terrainFloors` or saved world data.
 
 Fence levels:
 
@@ -60,5 +62,3 @@ The Generate Modal includes a "Terrain style" selector that maps these options t
 When `useLandscapeEngine` is true (the world data is generated from or compatible with the LandscapeEngine seed), the engine can render in two visual modes, toggleable via the "Continuous landscape mesh" setting:
 1. **Continuous Mesh (`landscapeMeshMode = true`)**: The normal tile grid is hidden, and the high-fidelity continuous terrain mesh is rendered. Ray picking, objects, vehicles, and crowd sprites sit on the mesh using `landscapeHeightAtCell(globalX, globalZ)`.
 2. **Chunky/Voxel Tiles (`landscapeMeshMode = false`)**: The terrain is rendered as standard discrete tiles (low-poly panels or voxel columns). To match the continuous mesh, vertical heights are scaled up: `terrainRiseForLevel(level)` returns `(level - 1) * 1.12` units per floor (matching the mesa levels of the LandscapeEngine) instead of the standard `0.20`. Object placement is not flattened (flattening guards are skipped when `useLandscapeEngine` is true), allowing all trees, houses, fences, and roads to render at their correct three-dimensional canyon elevations.
-
-

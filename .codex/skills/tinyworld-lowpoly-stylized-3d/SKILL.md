@@ -20,6 +20,8 @@ Use this together with:
 - Strong silhouettes beat micro-detail.
 - Bright but not washed out: use saturated local color plus darker trim/shadow-side material.
 - Keep texture use rare and intentional. Procedural `THREE.MeshLambertMaterial` colors should remain the default for built-in objects.
+- Custom/generated voxel stamps should not render full bounding-cage trim by default; reserve bounds frames for explicit decorative-outline stamps.
+- If generated voxel stamps include a broad ground/platform part, sink that base into the terrain rather than showing a raised tile under the object.
 - Use flat/Lambert lighting semantics compatible with Three.js r128.
 - Avoid glossy/PBR realism unless an imported asset already depends on it.
 
@@ -39,6 +41,8 @@ Use this together with:
 - For imported texture variants, create explicit material variants and swap them at the model mesh level.
 - For toolbar thumbnails, increase contrast/saturation carefully so icons read against the white toolbar, but keep the in-world material natural.
 - If a model comes with a texture atlas, set `texture.encoding = THREE.sRGBEncoding` and check `flipY` for GLTF compatibility.
+- Wear-and-tear should stay stylized: global grime/desaturation plus small batched chips/scuffs/moss beats realistic noise-heavy shader work.
+- Floating-board depth can reuse existing roof language by inverting a stepped roof form under the board: dark gray shingle-textured slabs, board-footprint width/depth, vertically compressed, and attached below the dirt body.
 
 ## Model import hygiene
 

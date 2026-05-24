@@ -23,10 +23,10 @@
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
   body {
     background:
-      radial-gradient(circle at 18% 20%, rgba(112, 169, 255, calc(var(--backdrop-strength, 0.78) * 0.46)), transparent 34%),
-      radial-gradient(circle at 82% 16%, rgba(255, 183, 106, calc(var(--backdrop-strength, 0.78) * 0.38)), transparent 32%),
-      radial-gradient(circle at 68% 86%, rgba(142, 215, 139, calc(var(--backdrop-strength, 0.78) * 0.34)), transparent 36%),
-      linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--bg) 72%, #8fb8ff 28%) 45%, color-mix(in srgb, var(--bg) 70%, #ffd29a 30%));
+      radial-gradient(circle at 86% 15%, rgba(255, 214, 154, calc(var(--backdrop-strength, 0.78) * 0.58)), transparent 32%),
+      radial-gradient(circle at 18% 18%, rgba(var(--sky-blue-strong-rgb, 26, 103, 210), calc(var(--backdrop-strength, 0.78) * var(--sky-blue-depth, 0.58) * 0.72)), transparent 36%),
+      radial-gradient(circle at 70% 86%, rgba(255, 188, 126, calc(var(--backdrop-strength, 0.78) * 0.22)), transparent 36%),
+      linear-gradient(135deg, rgb(var(--sky-blue-base-rgb, 106, 168, 235)) 0%, rgb(var(--sky-blue-low-rgb, 188, 220, 244)) 48%, #fff0d1 100%);
     color: var(--ink);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -70,16 +70,22 @@
     inset: 0;
     pointer-events: none;
     z-index: 8;
-    opacity: var(--backdrop-strength, 0.78);
+    opacity: 1;
     background:
-      radial-gradient(circle at 14% 18%, rgba(88, 151, 255, 0.28), transparent 28%),
-      radial-gradient(circle at 86% 18%, rgba(255, 168, 94, 0.24), transparent 30%),
-      radial-gradient(circle at 70% 86%, rgba(106, 203, 140, 0.20), transparent 34%),
+      radial-gradient(circle at 14% 18%, rgba(var(--sky-blue-strong-rgb, 28, 99, 205), calc(var(--backdrop-strength, 0.78) * var(--sky-blue-depth, 0.58) * 0.38)), transparent 34%),
+      radial-gradient(circle at 88% 12%, rgba(255, 218, 158, calc(var(--backdrop-strength, 0.78) * 0.46)), transparent 34%),
+      radial-gradient(circle at 72% 88%, rgba(255, 190, 128, calc(var(--backdrop-strength, 0.78) * 0.16)), transparent 36%),
       radial-gradient(
         ellipse at center,
-        rgba(244, 237, 224, 0) 48%,
-        rgba(244, 237, 224, 0.34) 78%,
-        rgba(244, 237, 224, 0.92) 100%
+        rgba(224, 241, 255, 0) 48%,
+        rgba(224, 241, 255, calc(var(--backdrop-strength, 0.78) * 0.24)) 78%,
+        rgba(255, 238, 212, calc(var(--backdrop-strength, 0.78) * 0.58)) 100%
+      ),
+      radial-gradient(
+        ellipse at center,
+        rgba(5, 10, 20, 0) 46%,
+        rgba(5, 10, 20, calc(var(--backdrop-vignette, 0.18) * 0.30)) 76%,
+        rgba(5, 10, 20, calc(var(--backdrop-vignette, 0.18) * 0.72)) 100%
       );
   }
   #app {
@@ -4369,18 +4375,34 @@
         <strong id="render-title">Settings</strong>
         <button class="modal-close" id="render-close" title="Close">×</button>
       </div>
-      <p class="modal-copy">Tune the screen, world preview, sky, and AI defaults for this session.</p>
+      <p class="modal-copy">Tune app defaults, rendering, world preview, materials, environment, crowd, and AI configuration.</p>
       <div class="settings-layout">
         <nav class="settings-tabs" aria-label="Settings sections">
-          <button type="button" class="settings-tab active" data-settings-tab="screen">Screen</button>
+          <button type="button" class="settings-tab active" data-settings-tab="app">App</button>
+          <button type="button" class="settings-tab" data-settings-tab="rendering">Rendering</button>
           <button type="button" class="settings-tab" data-settings-tab="world">World</button>
+          <button type="button" class="settings-tab" data-settings-tab="materials">Materials</button>
+          <button type="button" class="settings-tab" data-settings-tab="environment">Environment</button>
           <button type="button" class="settings-tab" data-settings-tab="crowd">Crowd</button>
-          <button type="button" class="settings-tab" data-settings-tab="sky">Sky</button>
-          <button type="button" class="settings-tab" data-settings-tab="ai" data-ai-interface>AI</button>
+          <button type="button" class="settings-tab" data-settings-tab="ai" data-ai-interface>AI Config</button>
         </nav>
         <div class="settings-panels">
-          <section class="settings-panel active" data-settings-panel="screen">
-            <div class="settings-section-title">Screen</div>
+          <section class="settings-panel active" data-settings-panel="app">
+            <div class="settings-section-title">App</div>
+            <label>Home board size
+              <select id="render-home-grid">
+                <option value="8">8 × 8</option>
+                <option value="12">12 × 12</option>
+                <option value="16">16 × 16</option>
+                <option value="20">20 × 20</option>
+                <option value="32">32 × 32</option>
+                <option value="48">48 × 48</option>
+              </select>
+            </label>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="rendering">
+            <div class="settings-section-title">Rendering</div>
             <label>Shadow quality
               <select id="render-shadow">
                 <option value="low">Low</option>
@@ -4398,10 +4420,75 @@
               <input id="render-lighting" type="range" min="50" max="145" step="1" />
               <output id="render-lighting-value"></output>
             </div>
+            <div class="range-row">
+              <span>Ambient fill</span>
+              <input id="render-ambient-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-ambient-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Front fill</span>
+              <input id="render-front-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-front-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Side fill</span>
+              <input id="render-side-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-side-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Back fill</span>
+              <input id="render-back-fill" type="range" min="0" max="100" step="1" />
+              <output id="render-back-fill-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Brightness</span>
+              <input id="render-brightness" type="range" min="75" max="130" step="1" />
+              <output id="render-brightness-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Saturation</span>
+              <input id="render-saturation" type="range" min="80" max="130" step="1" />
+              <output id="render-saturation-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Contrast</span>
+              <input id="render-contrast" type="range" min="85" max="125" step="1" />
+              <output id="render-contrast-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel size</span>
+              <input id="render-pixel-size" type="range" min="1" max="12" step="1" />
+              <output id="render-pixel-size-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel depth edge</span>
+              <input id="render-pixel-depth-edge" type="range" min="0" max="100" step="1" />
+              <output id="render-pixel-depth-edge-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Pixel normal edge</span>
+              <input id="render-pixel-normal-edge" type="range" min="0" max="100" step="1" />
+              <output id="render-pixel-normal-edge-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Shader antialias</span>
+              <input id="render-shader-antialias" type="range" min="0" max="100" step="1" />
+              <output id="render-shader-antialias-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Tilt blur</span>
+              <input id="render-tilt-blur" type="range" min="0" max="8" step="0.5" />
+              <output id="render-tilt-blur-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Tilt focus</span>
+              <input id="render-tilt-focus" type="range" min="15" max="80" step="1" />
+              <output id="render-tilt-focus-value"></output>
+            </div>
           </section>
 
           <section class="settings-panel" data-settings-panel="world">
-            <div class="settings-section-title">World</div>
+            <div class="settings-section-title">World & preview</div>
             <div class="range-row">
               <span>Preview distance</span>
               <input id="render-distance" type="range" min="1" max="6" step="1" />
@@ -4412,16 +4499,6 @@
               <input id="render-visible-size" type="range" min="8" max="72" step="1" />
               <output id="render-visible-size-value"></output>
             </div>
-            <label>Home board size
-              <select id="render-home-grid">
-                <option value="8">8 × 8</option>
-                <option value="12">12 × 12</option>
-                <option value="16">16 × 16</option>
-                <option value="20">20 × 20</option>
-                <option value="32">32 × 32</option>
-                <option value="48">48 × 48</option>
-              </select>
-            </label>
             <div class="range-row">
               <span>Preview opacity</span>
               <input id="render-ghost-opacity" type="range" min="5" max="100" step="1" />
@@ -4472,20 +4549,111 @@
                 <option value="12">12 × 12</option>
               </select>
             </label>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="materials">
+            <div class="settings-section-title">Finish</div>
             <div class="range-row">
-              <span>Brightness</span>
-              <input id="render-brightness" type="range" min="75" max="130" step="1" />
-              <output id="render-brightness-value"></output>
+              <span>Wear and tear</span>
+              <input id="render-material-wear" type="range" min="0" max="100" step="1" />
+              <output id="render-material-wear-value"></output>
+            </div>
+            <div class="settings-section-title">Terrain materials</div>
+            <label>Terrain color
+              <select id="render-terrain-color-target">
+                <option value="grass">Grass</option>
+                <option value="path">Path</option>
+                <option value="dirt">Dirt</option>
+                <option value="water">Water</option>
+                <option value="stone">Stone</option>
+                <option value="sand">Sand</option>
+                <option value="snow">Snow</option>
+                <option value="lava">Lava</option>
+              </select>
+            </label>
+            <div class="range-row">
+              <span>Tint</span>
+              <input id="render-terrain-tint" type="color" value="#9ec74b" />
+              <button class="btn" id="render-terrain-color-reset" type="button">Reset</button>
+            </div>
+            <label>Terrain texture
+              <select id="render-terrain-texture"></select>
+            </label>
+            <div class="range-row">
+              <span>Light / dark</span>
+              <input id="render-terrain-tone" type="range" min="-50" max="50" step="1" />
+              <output id="render-terrain-tone-value"></output>
+            </div>
+            <div class="settings-section-title">Object & part materials</div>
+            <label>Part group
+              <select id="render-material-target"></select>
+            </label>
+            <div class="range-row">
+              <span>Tint</span>
+              <input id="render-material-tint" type="color" value="#f2dfb0" />
+              <button class="btn" id="render-material-reset" type="button">Reset</button>
+            </div>
+            <label>Texture
+              <select id="render-material-texture"></select>
+            </label>
+            <div class="range-row">
+              <span>Light / dark</span>
+              <input id="render-material-tone" type="range" min="-50" max="50" step="1" />
+              <output id="render-material-tone-value"></output>
+            </div>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="environment">
+            <div class="settings-section-title">Environment</div>
+            <div class="range-row">
+              <span>Clouds</span>
+              <input id="render-clouds" type="range" min="0" max="100" step="1" />
+              <output id="render-clouds-value"></output>
             </div>
             <div class="range-row">
-              <span>Saturation</span>
-              <input id="render-saturation" type="range" min="80" max="130" step="1" />
-              <output id="render-saturation-value"></output>
+              <span>Cloud speed</span>
+              <input id="render-cloud-speed" type="range" min="0" max="100" step="1" />
+              <output id="render-cloud-speed-value"></output>
             </div>
             <div class="range-row">
-              <span>Contrast</span>
-              <input id="render-contrast" type="range" min="85" max="125" step="1" />
-              <output id="render-contrast-value"></output>
+              <span>Cloud height</span>
+              <input id="render-cloud-height" type="range" min="2" max="14" step="0.5" />
+              <output id="render-cloud-height-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Cloud shadow</span>
+              <input id="render-cloud-shadow" type="range" min="0" max="100" step="1" />
+              <output id="render-cloud-shadow-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Undercloud width</span>
+              <input id="render-undercloud-spread" type="range" min="70" max="220" step="1" />
+              <output id="render-undercloud-spread-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sky blue depth</span>
+              <input id="render-sky-blue-depth" type="range" min="0" max="100" step="1" />
+              <output id="render-sky-blue-depth-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Sky blue saturation</span>
+              <input id="render-sky-blue-saturation" type="range" min="25" max="220" step="1" />
+              <output id="render-sky-blue-saturation-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Atmosphere fade</span>
+              <input id="render-distance-mist" type="range" min="0" max="100" step="1" />
+              <output id="render-distance-mist-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Backdrop glow</span>
+              <input id="render-backdrop" type="range" min="0" max="100" step="1" />
+              <output id="render-backdrop-value"></output>
+            </div>
+            <div class="range-row">
+              <span>Backdrop vignette</span>
+              <input id="render-backdrop-vignette" type="range" min="0" max="100" step="1" />
+              <output id="render-backdrop-vignette-value"></output>
             </div>
           </section>
 
@@ -4545,72 +4713,8 @@
             <button class="btn" id="crowd-reseed" type="button">Reseed crowd</button>
           </section>
 
-          <section class="settings-panel" data-settings-panel="sky">
-            <div class="settings-section-title">Sky</div>
-            <div class="range-row">
-              <span>Clouds</span>
-              <input id="render-clouds" type="range" min="0" max="100" step="1" />
-              <output id="render-clouds-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Cloud speed</span>
-              <input id="render-cloud-speed" type="range" min="0" max="100" step="1" />
-              <output id="render-cloud-speed-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Cloud height</span>
-              <input id="render-cloud-height" type="range" min="2" max="14" step="0.5" />
-              <output id="render-cloud-height-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Cloud shadow</span>
-              <input id="render-cloud-shadow" type="range" min="0" max="100" step="1" />
-              <output id="render-cloud-shadow-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Atmosphere fade</span>
-              <input id="render-distance-mist" type="range" min="0" max="100" step="1" />
-              <output id="render-distance-mist-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Backdrop glow</span>
-              <input id="render-backdrop" type="range" min="0" max="100" step="1" />
-              <output id="render-backdrop-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Pixel size</span>
-              <input id="render-pixel-size" type="range" min="1" max="12" step="1" />
-              <output id="render-pixel-size-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Pixel depth edge</span>
-              <input id="render-pixel-depth-edge" type="range" min="0" max="100" step="1" />
-              <output id="render-pixel-depth-edge-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Pixel normal edge</span>
-              <input id="render-pixel-normal-edge" type="range" min="0" max="100" step="1" />
-              <output id="render-pixel-normal-edge-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Shader antialias</span>
-              <input id="render-shader-antialias" type="range" min="0" max="100" step="1" />
-              <output id="render-shader-antialias-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Tilt blur</span>
-              <input id="render-tilt-blur" type="range" min="0" max="8" step="0.5" />
-              <output id="render-tilt-blur-value"></output>
-            </div>
-            <div class="range-row">
-              <span>Tilt focus</span>
-              <input id="render-tilt-focus" type="range" min="15" max="80" step="1" />
-              <output id="render-tilt-focus-value"></output>
-            </div>
-          </section>
-
           <section class="settings-panel" data-settings-panel="ai" data-ai-interface>
-            <div class="settings-section-title">AI generation</div>
+            <div class="settings-section-title">AI configuration</div>
             <label>Provider
               <select id="gen-provider">
                 <option value="openai">OpenAI</option>
@@ -4894,14 +4998,22 @@
     brightness: 'tinyworld:render:brightness',
     shadow: 'tinyworld:render:shadow',
     lighting: 'tinyworld:render:lighting',
+    ambientFill: 'tinyworld:render:ambientFill',
+    frontFill: 'tinyworld:render:frontFill',
+    sideFill: 'tinyworld:render:sideFill',
+    backFill: 'tinyworld:render:backFill',
     visibleDistance: 'tinyworld:render:visibleDistance',
     visibleSize: 'tinyworld:render:visibleSize',
     clouds: 'tinyworld:render:clouds',
     cloudSpeed: 'tinyworld:render:cloudSpeed',
     cloudHeight: 'tinyworld:render:cloudHeight',
     cloudShadow: 'tinyworld:render:cloudShadow',
+    underCloudSpread: 'tinyworld:render:underCloudSpread',
+    skyBlueDepth: 'tinyworld:render:skyBlueDepth',
+    skyBlueSaturation: 'tinyworld:render:skyBlueSaturation',
     distanceMist: 'tinyworld:render:distanceMist',
     backdrop: 'tinyworld:render:backdrop',
+    backdropVignette: 'tinyworld:render:backdropVignette',
     tiltBlur: 'tinyworld:render:tiltBlur',
     tiltFocus: 'tinyworld:render:tiltFocus',
     ghostOpacity: 'tinyworld:render:ghostOpacity',
@@ -4911,6 +5023,11 @@
     voxelBevel: 'tinyworld:render:voxelBevel',
     voxelTerrain: 'tinyworld:render:voxelTerrain',
     texturedGrass: 'tinyworld:render:texturedGrass',
+    terrainColors: 'tinyworld:render:terrainColors',
+    terrainColorTarget: 'tinyworld:render:terrainColorTarget',
+    materialParts: 'tinyworld:render:materialParts',
+    materialTarget: 'tinyworld:render:materialTarget',
+    materialWear: 'tinyworld:render:materialWear',
     landscapeMeshMode: 'tinyworld:render:landscapeMeshMode',
     terrainVoxelResolution: 'tinyworld:render:terrainVoxelResolution',
     showCrowns: 'tinyworld:render:showCrowns',
@@ -4956,14 +5073,22 @@
     brightness: '1',
     shadow: 'balanced',
     lighting: '1.0',
+    ambientFill: '0.58',
+    frontFill: '0.55',
+    sideFill: '0.45',
+    backFill: '0.38',
     visibleDistance: '2',
     visibleSize: '8',
     clouds: '0.4',
     cloudSpeed: '0.35',
     cloudHeight: '6',
     cloudShadow: '0',
+    underCloudSpread: '1.35',
+    skyBlueDepth: '0.58',
+    skyBlueSaturation: '1',
     distanceMist: '0.28',
     backdrop: '0.78',
+    backdropVignette: '0.18',
     tiltBlur: '1.0',
     tiltFocus: '65',
     ghostOpacity: '1',
@@ -4973,6 +5098,11 @@
     voxelBevel: '0.018',
     voxelTerrain: '0',
     texturedGrass: '0',
+    terrainColors: '{}',
+    terrainColorTarget: 'grass',
+    materialParts: '{}',
+    materialTarget: 'walls',
+    materialWear: '0',
     landscapeMeshMode: '1',
     terrainVoxelResolution: 'mixed',
     autoExpand: '0',
@@ -5047,6 +5177,10 @@
   let renderContrast = storedNumber(RENDER_LS.contrast, 1.0, 0.85, 1.25);
   let renderShadowQuality = localStorage.getItem(RENDER_LS.shadow) || 'balanced';
   let renderLighting = storedNumber(RENDER_LS.lighting, 1.0, 0.5, 1.45);
+  let renderAmbientFill = storedNumber(RENDER_LS.ambientFill, 0.58, 0, 1);
+  let renderFrontFill = storedNumber(RENDER_LS.frontFill, 0.55, 0, 1);
+  let renderSideFill = storedNumber(RENDER_LS.sideFill, 0.45, 0, 1);
+  let renderBackFill = storedNumber(RENDER_LS.backFill, 0.38, 0, 1);
   function renderBudgetForGrid(grid) {
     const g = coerceGridSize(grid, GRID);
     // 128+ boards are data-scale boards. Until ghost boards are truly
@@ -5085,10 +5219,9 @@
       return Math.max(48, g * 4);
     }
     const budget = renderBudgetForGrid(g);
-    if (renderAutoExpand) {
-      const maxPreloadRadius = budget.ghostRadius;
-      return Math.max(g, (1 + 2 * maxPreloadRadius) * g);
-    }
+    // Preview window is the reveal bubble, not the full preloaded board
+    // diameter. Autoexpand grows content by moving that small window while
+    // ghostPreloadRadius controls how many neighbour boards are ready nearby.
     return Math.max(g, Math.min(Math.round(HOME_GRID_MAX * 1.5), Math.ceil(g * budget.visibleScale)));
   }
 
@@ -5131,8 +5264,12 @@
   // Cloud shadow strength — controls per-puff alphaTest so only the
   // denser parts of each cloud cast on the world below.
   let renderCloudShadow = storedNumber(RENDER_LS.cloudShadow, 0.5, 0, 1);
+  let renderUnderCloudSpread = storedNumber(RENDER_LS.underCloudSpread, 1.35, 0.7, 2.2);
+  let renderSkyBlueDepth = storedNumber(RENDER_LS.skyBlueDepth, 0.58, 0, 1);
+  let renderSkyBlueSaturation = storedNumber(RENDER_LS.skyBlueSaturation, 1, 0.25, 2.2);
   let renderDistanceMist = storedNumber(RENDER_LS.distanceMist, 0.28, 0, 1);
   let renderBackdrop = storedNumber(RENDER_LS.backdrop, 0.78, 0, 1);
+  let renderBackdropVignette = storedNumber(RENDER_LS.backdropVignette, 0.18, 0, 1);
   // Pixelation post-process. pixelSize 1 = bypass (no post pass). 2-12 chunkier.
   let renderPixelSize = Math.round(storedNumber(RENDER_LS.pixelSize, 1, 1, 12));
   let renderPixelDepthEdge = storedNumber(RENDER_LS.pixelDepthEdge, 0, 0, 1);
@@ -5152,7 +5289,22 @@
   if (!['mixed', '4', '6', '8', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
   if (!renderAutoExpand) renderVisibleSize = GRID;
   function applyBackdropSettings() {
+    const d = Math.max(0, Math.min(1, renderSkyBlueDepth || 0));
+    const satMul = Math.max(0.25, Math.min(2.2, renderSkyBlueSaturation || 1));
+    const strong = new THREE.Color().setHSL(0.585, Math.min(1, (0.54 + d * 0.30) * satMul), 0.48 - d * 0.08);
+    const base = new THREE.Color().setHSL(0.585, Math.min(1, (0.44 + d * 0.18) * satMul), 0.66 - d * 0.08);
+    const low = new THREE.Color().setHSL(0.565, Math.min(1, (0.34 + d * 0.14) * satMul), 0.86 - d * 0.10);
+    const cssRgb = color => [
+      Math.round(color.r * 255),
+      Math.round(color.g * 255),
+      Math.round(color.b * 255),
+    ].join(', ');
     document.documentElement.style.setProperty('--backdrop-strength', renderBackdrop.toFixed(2));
+    document.documentElement.style.setProperty('--backdrop-vignette', renderBackdropVignette.toFixed(2));
+    document.documentElement.style.setProperty('--sky-blue-depth', renderSkyBlueDepth.toFixed(2));
+    document.documentElement.style.setProperty('--sky-blue-strong-rgb', cssRgb(strong));
+    document.documentElement.style.setProperty('--sky-blue-base-rgb', cssRgb(base));
+    document.documentElement.style.setProperty('--sky-blue-low-rgb', cssRgb(low));
   }
   applyBackdropSettings();
   const renderer = new THREE.WebGLRenderer({
@@ -5172,12 +5324,76 @@
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf4ede0);
-  const defaultSceneBackground = scene.background.clone();
+  scene.background = new THREE.Color(0xb9dcf4);
+  let defaultSceneBackground = scene.background.clone();
   const xrWorldRoot = new THREE.Group();
   xrWorldRoot.name = 'xr-world-root';
   scene.add(xrWorldRoot);
   const cloudLayer = document.getElementById('cloud-layer');
+
+  const skyBubble = new THREE.Mesh(
+    new THREE.SphereGeometry(120, 32, 16),
+    new THREE.ShaderMaterial({
+      uniforms: {
+        blueTop: { value: new THREE.Color(0x5fa8f2) },
+        blueLow: { value: new THREE.Color(0xc7e6fb) },
+        warmLight: { value: new THREE.Color(0xffddaa) },
+        haze: { value: new THREE.Color(0xf7efe0) },
+      },
+      vertexShader: [
+        'varying vec3 vDir;',
+        'void main() {',
+        '  vDir = normalize(position);',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vDir;',
+        'uniform vec3 blueTop;',
+        'uniform vec3 blueLow;',
+        'uniform vec3 warmLight;',
+        'uniform vec3 haze;',
+        'void main() {',
+        '  float heightMix = smoothstep(-0.32, 0.82, vDir.y);',
+        '  vec3 col = mix(blueLow, blueTop, heightMix);',
+        '  float warmCorner = pow(max(dot(normalize(vDir), normalize(vec3(0.70, 0.52, -0.44))), 0.0), 2.4);',
+        '  float lowerGlow = smoothstep(-0.75, -0.12, -vDir.y) * 0.42;',
+        '  col = mix(col, warmLight, warmCorner * 0.72);',
+        '  col = mix(col, haze, lowerGlow);',
+        '  gl_FragColor = vec4(col, 1.0);',
+        '}',
+      ].join('\n'),
+      side: THREE.BackSide,
+      depthWrite: false,
+      depthTest: false,
+      fog: false,
+    })
+  );
+  skyBubble.name = 'sky-gradient-bubble';
+  skyBubble.renderOrder = -1000;
+  skyBubble.frustumCulled = false;
+  scene.add(skyBubble);
+
+  function updateSkyBubble() {
+    if (!skyBubble || !camera) return;
+    const xrPresenting = renderer.xr && renderer.xr.isPresenting;
+    skyBubble.visible = !!scene.background && !xrPresenting;
+    if (skyBubble.visible) skyBubble.position.copy(camera.position);
+  }
+
+  function applySkyBubbleSettings() {
+    const d = Math.max(0, Math.min(1, renderSkyBlueDepth || 0));
+    const satMul = Math.max(0.25, Math.min(2.2, renderSkyBlueSaturation || 1));
+    const topSat = Math.min(1, (0.50 + d * 0.32) * satMul);
+    const lowSat = Math.min(1, (0.38 + d * 0.18) * satMul);
+    const uniforms = skyBubble.material && skyBubble.material.uniforms;
+    if (!uniforms) return;
+    uniforms.blueTop.value.setHSL(0.585, topSat, 0.80 - d * 0.24);
+    uniforms.blueLow.value.setHSL(0.565, lowSat, 0.88 - d * 0.12);
+    scene.background = new THREE.Color().setHSL(0.565, lowSat, 0.88 - d * 0.12);
+    defaultSceneBackground = scene.background.clone();
+  }
+  applySkyBubbleSettings();
 
   function applyDistanceMistSettings(colorHex) {
     const amount = Math.max(0, Math.min(1, renderDistanceMist || 0));
@@ -5382,18 +5598,25 @@
           'float readDepth(vec2 uv) { return texture2D(tDepth, uv).r; }',
           'vec3 readNormal(vec2 uv) { return normalize(texture2D(tNormal, uv).xyz * 2.0 - 1.0); }',
           'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
-          'vec3 antialiasColor(vec2 uv, vec2 texel, vec3 center) {',
+          'vec3 antialiasColor(vec2 uv, vec2 texel, vec3 center, float edgeHint) {',
           '  if (antialiasStrength <= 0.001) return center;',
           '  vec3 cL = texture2D(tColor, uv - vec2(texel.x, 0.0)).rgb;',
           '  vec3 cR = texture2D(tColor, uv + vec2(texel.x, 0.0)).rgb;',
           '  vec3 cU = texture2D(tColor, uv - vec2(0.0, texel.y)).rgb;',
           '  vec3 cD = texture2D(tColor, uv + vec2(0.0, texel.y)).rgb;',
+          '  vec3 cUL = texture2D(tColor, uv + vec2(-texel.x, -texel.y)).rgb;',
+          '  vec3 cUR = texture2D(tColor, uv + vec2( texel.x, -texel.y)).rgb;',
+          '  vec3 cDL = texture2D(tColor, uv + vec2(-texel.x,  texel.y)).rgb;',
+          '  vec3 cDR = texture2D(tColor, uv + vec2( texel.x,  texel.y)).rgb;',
           '  float lC = luma(center);',
           '  float lo = min(lC, min(min(luma(cL), luma(cR)), min(luma(cU), luma(cD))));',
           '  float hi = max(lC, max(max(luma(cL), luma(cR)), max(luma(cU), luma(cD))));',
-          '  float edgeMask = smoothstep(0.025, 0.18, hi - lo) * antialiasStrength;',
-          '  vec3 avg = (center * 4.0 + cL + cR + cU + cD) * 0.125;',
-          '  return mix(center, avg, edgeMask);',
+          '  float colorMask = smoothstep(0.035, 0.22, hi - lo);',
+          '  float edgeMask = clamp(max(edgeHint, colorMask * 0.45) * antialiasStrength, 0.0, 0.86);',
+          '  vec3 crossAvg = (center * 4.0 + cL + cR + cU + cD) * 0.125;',
+          '  vec3 diagAvg = (cUL + cUR + cDL + cDR) * 0.25;',
+          '  vec3 avg = mix(crossAvg, diagAvg, 0.18);',
+          '  return mix(center, avg, edgeMask * 0.72);',
           '}',
           'float depthEdge(vec2 uv, vec2 texel) {',
           '  float d = readDepth(uv);',
@@ -5420,12 +5643,17 @@
           'void main() {',
           '  vec2 texel = 1.0 / resolution;',
           '  vec3 col = texture2D(tColor, vUv).rgb;',
-          '  col = antialiasColor(vUv, texel, col);',
-          '  float de = depthEdge(vUv, texel) * depthEdgeStrength;',
-          '  float ne = useNormals > 0.5 ? normalEdge(vUv, texel) * normalEdgeStrength : 0.0;',
+          '  float deRaw = depthEdge(vUv, texel);',
+          '  float neRaw = useNormals > 0.5 ? normalEdge(vUv, texel) : 0.0;',
+          '  float edgeHint = clamp(max(deRaw, neRaw), 0.0, 1.0);',
+          '  col = antialiasColor(vUv, texel, col, edgeHint);',
+          '  float de = deRaw * depthEdgeStrength;',
+          '  float ne = neRaw * normalEdgeStrength;',
           '  float edge = clamp(max(de, ne), 0.0, 1.0);',
-          '  col = mix(col, col * 0.35, edge);',
+          '  float edgeShade = mix(0.82, 0.62, clamp(max(depthEdgeStrength, normalEdgeStrength), 0.0, 1.0));',
+          '  col = mix(col, col * edgeShade, edge * 0.72);',
           '  gl_FragColor = vec4(col, 1.0);',
+          '  #include <encodings_fragment>',
           '}',
         ].join('\n'),
         depthTest: false,
@@ -5444,45 +5672,9 @@
 
   function renderScene() {
     renderer.info.reset();
-    if (typeof ghostBoards !== 'undefined' && ghostBoards.size > 0 && camera) {
-      const frustum = new THREE.Frustum();
-      const projScreenMatrix = new THREE.Matrix4();
-      projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-      frustum.setFromProjectionMatrix(projScreenMatrix);
-
-      const boardBox = new THREE.Box3();
-      const boardMin = new THREE.Vector3();
-      const boardMax = new THREE.Vector3();
-      const cx = boardFromTargetCoord(target.x);
-      const cz = boardFromTargetCoord(target.z);
-
-      for (const board of ghostBoards.values()) {
-        const bx = board.userData.boardX;
-        const bz = board.userData.boardZ;
-        const boardDist = Math.max(Math.abs(bx - cx), Math.abs(bz - cz));
-        
-        let visible = boardDist <= ghostPreloadRadius;
-        if (visible) {
-          const halfSize = (GRID / 2) * TILE;
-          const centerX = bx * GRID * TILE;
-          const centerZ = bz * GRID * TILE;
-          const pad = GRID * TILE * 0.5;
-          boardMin.set(centerX - halfSize - pad, -DIRT_H, centerZ - halfSize - pad);
-          boardMax.set(centerX + halfSize + pad, 25, centerZ + halfSize + pad);
-          boardBox.set(boardMin, boardMax);
-          
-          if (!frustum.intersectsBox(boardBox)) {
-            visible = false;
-          }
-        }
-        board.visible = visible;
-      }
-    }
     const xrPresenting = renderer.xr && renderer.xr.isPresenting;
     const usePixelation = renderPixelSize > 1 && !xrPresenting;
-    // Shader AA smears pixelated low-res samples and reveals diagonal terrain
-    // artifacts. Pixel mode must be nearest-only, regardless of AA slider.
-    const useShaderAA = renderShaderAntialias > 0.001 && !xrPresenting && !usePixelation;
+    const useShaderAA = renderShaderAntialias > 0.001 && !xrPresenting;
     const usePost = usePixelation || useShaderAA;
     if (!usePost) {
       renderer.render(scene, camera);
@@ -5490,7 +5682,7 @@
       return;
     }
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const wantNormals = usePixelation && renderPixelNormalEdge > 0.001;
+    const wantNormals = usePixelation && (renderPixelNormalEdge > 0.001 || renderShaderAntialias > 0.001);
     const postPixelSize = usePixelation ? renderPixelSize : 1;
     ensurePixelResources(size.x, size.y, postPixelSize, wantNormals);
     const prevTarget = renderer.getRenderTarget();
@@ -5501,6 +5693,7 @@
       const prevOverride = scene.overrideMaterial;
       const prevBackground = scene.background;
       const prevFog = scene.fog;
+      const prevSkyBubbleVisible = skyBubble ? skyBubble.visible : false;
       if (landscapeMeshEngine && landscapeMeshEngine._clipEnabled && landscapeMeshEngine._clipPlanes) {
         pixelState.normalMaterial.clippingPlanes = landscapeMeshEngine._clipPlanes;
       } else {
@@ -5509,12 +5702,14 @@
       scene.overrideMaterial = pixelState.normalMaterial;
       scene.background = null;
       scene.fog = null;
+      if (skyBubble) skyBubble.visible = false;
       renderer.setRenderTarget(pixelState.normalTarget);
       renderer.clear();
       renderer.render(scene, camera);
       scene.overrideMaterial = prevOverride;
       scene.background = prevBackground;
       scene.fog = prevFog;
+      if (skyBubble) skyBubble.visible = prevSkyBubbleVisible;
       pixelState.normalMaterial.clippingPlanes = null;
     }
     const uniforms = pixelState.quadMaterial.uniforms;
@@ -5650,6 +5845,7 @@
     }
     camera.lookAt(target);
     if (typeof updateSunFollow === 'function') updateSunFollow();
+    if (typeof updateSkyBubble === 'function') updateSkyBubble();
     applyDistanceMistSettings();
   }
   function clampTargetToHomeBoard() {
@@ -5710,6 +5906,25 @@
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb39879, 0.30);
   scene.add(hemi);
 
+  const fillTarget = new THREE.Object3D();
+  scene.add(fillTarget);
+  function makeFillLight(offset) {
+    const light = new THREE.DirectionalLight(0xffffff, 0);
+    light.position.copy(target).add(offset);
+    light.target = fillTarget;
+    light.castShadow = false;
+    scene.add(light);
+    return light;
+  }
+  const FRONT_FILL_OFFSET = new THREE.Vector3(-6, 5, 8);
+  const SIDE_FILL_OFFSET_A = new THREE.Vector3(-9, 4, -1);
+  const SIDE_FILL_OFFSET_B = new THREE.Vector3(9, 4, 1);
+  const BACK_FILL_OFFSET = new THREE.Vector3(4, 5, -9);
+  const frontFill = makeFillLight(FRONT_FILL_OFFSET);
+  const sideFillA = makeFillLight(SIDE_FILL_OFFSET_A);
+  const sideFillB = makeFillLight(SIDE_FILL_OFFSET_B);
+  const backFill = makeFillLight(BACK_FILL_OFFSET);
+
   // Fixed sun direction relative to the camera target — same angle of
   // attack everywhere on the map.
   // Lower y → flatter sun angle → longer, more visible shadows.
@@ -5758,18 +5973,26 @@
     );
     sun.target.position.set(target.x, target.y, target.z);
     sun.target.updateMatrixWorld();
+    fillTarget.position.set(target.x, target.y, target.z);
+    fillTarget.updateMatrixWorld();
+    frontFill.position.copy(target).add(FRONT_FILL_OFFSET);
+    sideFillA.position.copy(target).add(SIDE_FILL_OFFSET_A);
+    sideFillB.position.copy(target).add(SIDE_FILL_OFFSET_B);
+    backFill.position.copy(target).add(BACK_FILL_OFFSET);
     sun.shadow.camera.updateProjectionMatrix();
   };
 
   function applyLightingSettings() {
-    // Keep the default flatter and less blown-out now that the post pass is
-    // gone. The lighting slider still reaches bright values, but neutral 100%
-    // should preserve colour and shadow detail.
-    hemi.intensity = 0.05 + renderLighting * 0.10;
-    sun.intensity = 0.70 + renderLighting * 0.42;
-    // Keep ambient minimal so cast shadows stay visible at every lighting
-    // setting. Shadowed sides still get fill from hemi.
-    ambient.intensity = 0.025 + renderLighting * 0.035;
+    // Sun controls shadow direction and contrast. Fill lights are non-shadowing
+    // so dark faces can be lifted without flattening the diorama into CSS
+    // brightness.
+    sun.intensity = 0.55 + renderLighting * 0.48;
+    hemi.intensity = 0.07 + renderAmbientFill * 0.22;
+    ambient.intensity = 0.035 + renderAmbientFill * 0.13;
+    frontFill.intensity = renderFrontFill * 0.34;
+    sideFillA.intensity = renderSideFill * 0.16;
+    sideFillB.intensity = renderSideFill * 0.16;
+    backFill.intensity = renderBackFill * 0.26;
   }
 
   function setShadowQuality(value) {
@@ -5962,14 +6185,21 @@
     grass:     new THREE.MeshLambertMaterial({ color: 0xb0d949, side: THREE.FrontSide }),
     grassEdge: new THREE.MeshLambertMaterial({ color: 0x95c138, side: THREE.FrontSide }),
     grassHi:   new THREE.MeshLambertMaterial({ color: 0xc6ee68, side: THREE.FrontSide }),
+    grassFlower: new THREE.MeshLambertMaterial({ color: 0xf2c849, side: THREE.FrontSide }),
     dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
     dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
     path:      new THREE.MeshLambertMaterial({ color: 0xf2d29c, side: THREE.FrontSide }),
     pathTrim:  new THREE.MeshLambertMaterial({ color: 0xd9b780, side: THREE.FrontSide }),
     pathScuff: new THREE.MeshLambertMaterial({ color: 0xc9aa70, side: THREE.FrontSide }),
+    wearGrime: new THREE.MeshLambertMaterial({ color: 0x5d533b, side: THREE.FrontSide }),
+    wearChip:  new THREE.MeshLambertMaterial({ color: 0xd8d1bc, side: THREE.FrontSide }),
+    wearMoss:  new THREE.MeshLambertMaterial({ color: 0x6f8732, side: THREE.FrontSide }),
     water:     new THREE.MeshLambertMaterial({ color: 0x3a8fcc, side: THREE.FrontSide }),
     waterDk:   new THREE.MeshLambertMaterial({ color: 0x2f77ad, side: THREE.FrontSide }),
     waterFoam: new THREE.MeshLambertMaterial({ color: 0xbbe9ff, transparent: true, opacity: 0.74, side: THREE.FrontSide }),
+    waterfall: new THREE.MeshBasicMaterial({ color: 0x78c9f4, transparent: true, opacity: 0.60, depthWrite: false, side: THREE.DoubleSide }),
+    waterfallHi: new THREE.MeshBasicMaterial({ color: 0xd8f6ff, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide }),
+    waterfallFoamPuff: new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.58, depthWrite: false }),
     shore:     new THREE.MeshLambertMaterial({ color: 0xd8c18a, side: THREE.FrontSide }),
 
     rock:      new THREE.MeshLambertMaterial({ color: 0x9b9a8f, side: THREE.FrontSide }),
@@ -5997,6 +6227,8 @@
     wallTrim:  new THREE.MeshLambertMaterial({ color: 0xe5cf99 }),
     roofBlue:  new THREE.MeshLambertMaterial({ color: 0x2a6dd1 }),
     roofBlueD: new THREE.MeshLambertMaterial({ color: 0x1d4d9c }),
+    islandUnder:  new THREE.MeshLambertMaterial({ color: 0x34373b, side: THREE.FrontSide }),
+    islandUnderD: new THREE.MeshLambertMaterial({ color: 0x202327, side: THREE.FrontSide }),
     door:      new THREE.MeshLambertMaterial({ color: 0x7a4a2e }),
     woodTrim:  new THREE.MeshLambertMaterial({ color: 0x5c3818 }),
     windowB:   new THREE.MeshLambertMaterial({ color: 0x2a6dd1 }),
@@ -6060,6 +6292,7 @@
     canvas.width = scale;
     canvas.height = scale;
     const ctx = canvas.getContext('2d');
+    const rand = makeMulberry32('pixel-texture:' + type + ':' + scale);
 
     if (type === 'checkered') {
       ctx.fillStyle = '#ffffff';
@@ -6073,10 +6306,10 @@
       ctx.fillRect(0, 0, scale, scale);
       for (let x = 0; x < scale; x++) {
         for (let y = 0; y < scale; y++) {
-          const rand = Math.random();
-          if (rand > 0.75) ctx.fillStyle = '#f2f2f2';
-          else if (rand > 0.45) ctx.fillStyle = '#e5e5e5';
-          else if (rand > 0.15) ctx.fillStyle = '#dcdcdc';
+          const r = rand();
+          if (r > 0.75) ctx.fillStyle = '#f2f2f2';
+          else if (r > 0.45) ctx.fillStyle = '#e5e5e5';
+          else if (r > 0.15) ctx.fillStyle = '#dcdcdc';
           else ctx.fillStyle = '#ffffff';
           ctx.fillRect(x, y, 1, 1);
         }
@@ -6108,6 +6341,55 @@
           ctx.fillRect(cx, r * rowH, 1, rowH);
         }
       }
+    } else if (type === 'planks') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      const plankH = 4;
+      for (let y = 0; y < scale; y += plankH) {
+        ctx.fillStyle = '#b8b8b8';
+        ctx.fillRect(0, y, scale, 1);
+        ctx.fillStyle = '#f8f8f8';
+        ctx.fillRect(0, y + 1, scale, 1);
+        const offset = (y / plankH) % 2 === 0 ? 0 : scale / 2;
+        ctx.fillStyle = '#d0d0d0';
+        ctx.fillRect(offset, y, 1, plankH);
+        ctx.fillRect((offset + scale / 2) % scale, y, 1, plankH);
+        for (let i = 0; i < 2; i++) {
+          ctx.fillStyle = rand() > 0.45 ? '#e5e5e5' : '#f4f4f4';
+          ctx.fillRect(Math.floor(rand() * scale), y + 1 + Math.floor(rand() * Math.max(1, plankH - 1)), 1, 1);
+        }
+      }
+    } else if (type === 'stone') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let i = 0; i < scale * 1.8; i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        const w = 1 + Math.floor(rand() * 2);
+        const h = 1 + Math.floor(rand() * 2);
+        ctx.fillStyle = rand() > 0.45 ? '#d8d8d8' : '#f1f1f1';
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.fillStyle = '#c8c8c8';
+      ctx.fillRect(0, 0, scale, 1);
+      ctx.fillRect(0, scale - 1, scale, 1);
+      ctx.fillRect(0, 0, 1, scale);
+      ctx.fillRect(scale - 1, 0, 1, scale);
+    } else if (type === 'hay') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let i = 0; i < 15; i++) {
+        const x = rand() * scale;
+        const y = rand() * scale;
+        const len = 3 + rand() * 5;
+        const a = rand() * Math.PI;
+        ctx.strokeStyle = rand() > 0.4 ? '#d8d8d8' : '#efefef';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+        ctx.stroke();
+      }
     } else if (type === 'ripples') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, scale, scale);
@@ -6125,7 +6407,7 @@
           if ((x + y) % 2 === 0) {
             ctx.fillStyle = '#ffffff';
           } else {
-            const r = Math.random();
+            const r = rand();
             ctx.fillStyle = r > 0.6 ? '#f2f2f2' : (r > 0.2 ? '#e0e0e0' : '#d0d0d0');
           }
           ctx.fillRect(x, y, 1, 1);
@@ -6139,17 +6421,26 @@
         ctx.fillRect(x, 0, 2, scale);
       }
       for (let i = 0; i < scale * scale * 0.1; i++) {
-        const px = Math.floor(Math.random() * scale);
-        const py = Math.floor(Math.random() * scale);
-        ctx.fillStyle = Math.random() > 0.5 ? '#e0e0e0' : '#ffffff';
+        const px = Math.floor(rand() * scale);
+        const py = Math.floor(rand() * scale);
+        ctx.fillStyle = rand() > 0.5 ? '#e0e0e0' : '#ffffff';
         ctx.fillRect(px, py, 1, 1);
+      }
+    } else if (type === 'dirt') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let i = 0; i < 28; i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        ctx.fillStyle = rand() > 0.65 ? '#d2d2d2' : (rand() > 0.35 ? '#e5e5e5' : '#f4f4f4');
+        ctx.fillRect(x, y, 1 + Math.floor(rand() * 2), 1 + Math.floor(rand() * 2));
       }
     } else if (type === 'grass') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, scale, scale);
       for (let x = 0; x < scale; x++) {
         for (let y = 0; y < scale; y++) {
-          const r = Math.random();
+          const r = rand();
           if (r > 0.88) {
             ctx.fillStyle = '#f7f7f7';
             ctx.fillRect(x, y, 1, 1);
@@ -6162,10 +6453,10 @@
       ctx.fillStyle = '#e2e2e2';
       const numBlades = Math.floor(scale * scale * 0.08);
       for (let i = 0; i < numBlades; i++) {
-        const bx = Math.floor(Math.random() * scale);
-        const by = Math.floor(Math.random() * (scale - 1));
+        const bx = Math.floor(rand() * scale);
+        const by = Math.floor(rand() * (scale - 1));
         ctx.fillRect(bx, by, 1, 2);
-        if (Math.random() > 0.6 && bx < scale - 1) {
+        if (rand() > 0.6 && bx < scale - 1) {
           ctx.fillRect(bx + 1, by + 1, 1, 1);
         }
       }
@@ -6179,6 +6470,7 @@
     tex.minFilter = THREE.NearestFilter;
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
+    tex.encoding = THREE.sRGBEncoding;
     return tex;
   }
 
@@ -6223,6 +6515,78 @@
   const texLeaves = createPixelTexture('leaves', 16);
   const texWood = createPixelTexture('wood', 16);
   const texGrass = createPixelTexture('grass', 16);
+  const texPlanks = createPixelTexture('planks', 16);
+  const texStone = createPixelTexture('stone', 16);
+  const texHay = createPixelTexture('hay', 16);
+  const texDirt = createPixelTexture('dirt', 16);
+
+  function createMaterialImageTexture(src) {
+    const tex = new THREE.TextureLoader().load(src, () => {
+      if (typeof renderScene === 'function') renderScene();
+    });
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter || THREE.LinearFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
+  const texAtlasNatureWood = createMaterialImageTexture('textures/HJCliEibkAAmqIj.jpeg');
+  const texAtlasTileSet = createMaterialImageTexture('textures/HJCliEjbEAA9Ah2.jpeg');
+  const texAtlasRoofStrips = createMaterialImageTexture('textures/HJCliEqagAAE8e4.jpeg');
+  const texAtlasReference = createMaterialImageTexture('textures/reference.jpeg');
+  const proceduralPixelTextures = {
+    checkered: texCheckered,
+    noise: texNoise,
+    brick: texBrick,
+    shingles: texShingles,
+    ripples: texRipples,
+    leaves: texLeaves,
+    wood: texWood,
+    grass: texGrass,
+    planks: texPlanks,
+    stone: texStone,
+    hay: texHay,
+    dirt: texDirt,
+  };
+
+  const MATERIAL_TEXTURE_OPTIONS = [
+    { key: 'default', label: 'Default' },
+    { key: 'checkered', label: 'Checker' },
+    { key: 'noise', label: 'Soft noise' },
+    { key: 'brick', label: 'Brick' },
+    { key: 'shingles', label: 'Shingles' },
+    { key: 'planks', label: 'Planks' },
+    { key: 'stone', label: 'Stone chips' },
+    { key: 'leaves', label: 'Leaves' },
+    { key: 'wood', label: 'Wood grain' },
+    { key: 'grass', label: 'Grass blades' },
+    { key: 'hay', label: 'Hay / straw' },
+    { key: 'dirt', label: 'Dirt specks' },
+    { key: 'ripples', label: 'Water ripples' },
+    { key: 'atlas-nature-wood', label: 'Texture folder: nature + wood' },
+    { key: 'atlas-tiles', label: 'Texture folder: tile set' },
+    { key: 'atlas-roofs', label: 'Texture folder: roof strips' },
+    { key: 'atlas-reference', label: 'Texture folder: reference board' },
+  ];
+
+  const materialTextureMap = Object.assign({}, proceduralPixelTextures, {
+    'atlas-nature-wood': texAtlasNatureWood,
+    'atlas-tiles': texAtlasTileSet,
+    'atlas-roofs': texAtlasRoofStrips,
+    'atlas-reference': texAtlasReference,
+  });
+
+  function normalizeMaterialTextureKey(value) {
+    const key = String(value || 'default').toLowerCase();
+    if (key === 'none' || key === 'default') return 'default';
+    return materialTextureMap[key] ? key : 'default';
+  }
+
+  function materialTextureForKey(key) {
+    return materialTextureMap[normalizeMaterialTextureKey(key)] || null;
+  }
 
   const initialGrassTex = renderTexturedGrass ? texGrass : texCheckered;
   applyWorldUVs(M.grass, initialGrassTex, 1.0);
@@ -6233,8 +6597,8 @@
   applyWorldUVs(M.pathTrim, texNoise, 1.0);
   applyWorldUVs(M.pathScuff, texNoise, 1.0);
 
-  applyWorldUVs(M.dirt, texNoise, 2.0);
-  applyWorldUVs(M.dirtRich, texNoise, 2.0);
+  applyWorldUVs(M.dirt, texDirt, 2.0);
+  applyWorldUVs(M.dirtRich, texDirt, 2.0);
 
   applyWorldUVs(M.water, texRipples, 1.0);
   applyWorldUVs(M.waterDk, texRipples, 1.0);
@@ -6243,15 +6607,20 @@
   applyWorldUVs(M.wallTrim, texBrick, 4.0);
   applyWorldUVs(M.roofBlue, texShingles, 2.0);
   applyWorldUVs(M.roofBlueD, texShingles, 2.0);
+  applyWorldUVs(M.islandUnder, texShingles, 2.0);
+  applyWorldUVs(M.islandUnderD, texShingles, 2.0);
 
   applyWorldUVs(M.castleStone, texBrick, 4.0);
   applyWorldUVs(M.castleStoneD, texBrick, 4.0);
-  applyWorldUVs(M.stone, texBrick, 4.0);
-  applyWorldUVs(M.stoneDk, texBrick, 4.0);
+  applyWorldUVs(M.stone, texStone, 4.0);
+  applyWorldUVs(M.stoneDk, texStone, 4.0);
+  applyWorldUVs(M.rock, texStone, 4.0);
+  applyWorldUVs(M.rockDk, texStone, 4.0);
+  applyWorldUVs(M.rockHi, texStone, 4.0);
 
   applyWorldUVs(M.manorBrick, texBrick, 4.0);
   applyWorldUVs(M.manorBrickD, texBrick, 4.0);
-  applyWorldUVs(M.manorTrim, texBrick, 4.0);
+  applyWorldUVs(M.manorTrim, texNoise, 1.6);
   applyWorldUVs(M.manorRoof, texShingles, 2.0);
   applyWorldUVs(M.manorRoofD, texShingles, 2.0);
 
@@ -6263,6 +6632,9 @@
   applyWorldUVs(M.leaves, texLeaves, 4.0);
   applyWorldUVs(M.leavesDk, texLeaves, 4.0);
   applyWorldUVs(M.trunk, texWood, 4.0);
+  applyWorldUVs(M.bridgeWood, texPlanks, 3.0);
+  applyWorldUVs(M.bridgeWoodD, texPlanks, 3.0);
+  applyWorldUVs(M.fence, texWood, 4.0);
 
   const customMaterialCache = new Map();
   function normalizeHexColor(value) {
@@ -6281,14 +6653,329 @@
     const b = Math.max(0, Math.min(255, (n & 255) + amount));
     return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
   }
+  function normalizeProceduralTextureKind(kind) {
+    const key = String(kind || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!key) return null;
+    if (key === 'leaf' || key === 'leaves' || key === 'foliage') return 'leaves';
+    if (key === 'shingle' || key === 'roof' || key === 'roofing') return 'shingles';
+    if (key === 'plank' || key === 'planks' || key === 'board' || key === 'boards') return 'planks';
+    if (key === 'stone' || key === 'rock' || key === 'masonry') return 'stone';
+    if (key === 'wood' || key === 'trunk' || key === 'timber') return 'wood';
+    if (key === 'hay' || key === 'straw' || key === 'wheat') return 'hay';
+    if (key === 'dirt' || key === 'soil' || key === 'mud') return 'dirt';
+    if (proceduralPixelTextures[key]) return key;
+    return null;
+  }
+  function proceduralTextureKindForMaterialName(name) {
+    const key = String(name || '').toLowerCase();
+    if (!key) return null;
+    if (/roof|shingle/.test(key)) return 'shingles';
+    if (/plank|board|crate|bridge/.test(key)) return 'planks';
+    if (/wood|trunk|fence|post|rail|door/.test(key)) return 'wood';
+    if (/stone|rock|slate|masonry|grey|gray/.test(key)) return 'stone';
+    if (/leaf|leaves|foliage|crop|green|bush|grass|blossom/.test(key)) return 'leaves';
+    if (/hay|straw|wheat|yellow/.test(key)) return 'hay';
+    if (/dirt|soil|mud|path/.test(key)) return 'dirt';
+    return null;
+  }
+  function inferProceduralTextureKind(hex, hint) {
+    const named = normalizeProceduralTextureKind(hint) || proceduralTextureKindForMaterialName(hint);
+    if (named) return named;
+    const clean = normalizeHexColor(hex);
+    if (!clean) return 'noise';
+    const n = parseInt(clean.slice(1), 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max > 0 ? (max - min) / max : 0;
+    const val = max / 255;
+    let h = 0;
+    if (max !== min) {
+      if (max === r) h = 60 * (((g - b) / (max - min)) % 6);
+      else if (max === g) h = 60 * ((b - r) / (max - min) + 2);
+      else h = 60 * ((r - g) / (max - min) + 4);
+      if (h < 0) h += 360;
+    }
+    if (sat < 0.14 && val < 0.86) return 'stone';
+    if (h >= 15 && h <= 45 && val < 0.74 && sat > 0.20) return 'wood';
+    if (h >= 38 && h <= 64 && val > 0.52 && sat > 0.32) return 'hay';
+    if (h >= 65 && h <= 165 && sat > 0.18) return 'leaves';
+    if (h >= 8 && h <= 38 && val < 0.56) return 'dirt';
+    return 'noise';
+  }
+  function proceduralTextureScaleForKind(kind) {
+    if (kind === 'shingles' || kind === 'planks' || kind === 'wood') return 3.0;
+    if (kind === 'brick' || kind === 'stone' || kind === 'leaves') return 4.0;
+    if (kind === 'dirt' || kind === 'hay') return 2.0;
+    return 1.6;
+  }
+
+  const TERRAIN_COLOR_KEYS = ['grass', 'path', 'dirt', 'water', 'stone', 'sand', 'snow', 'lava'];
+  const TERRAIN_COLOR_MATERIALS = {
+    grass: ['grass', 'grassEdge', 'grassHi'],
+    path: ['path', 'pathTrim', 'pathScuff'],
+    dirt: ['dirt', 'dirtRich'],
+    water: ['water', 'waterDk'],
+    stone: ['stone', 'stoneDk'],
+    sand: ['sand', 'sandDk'],
+    snow: ['snow', 'snowDk'],
+    lava: ['lava', 'lavaCrust'],
+  };
+  const terrainMaterialBaseColors = new Map();
+  const terrainMaterialBaseMaps = new Map();
+  const PART_MATERIAL_GROUPS = {
+    walls: { label: 'Walls', materials: ['wallCream', 'wallTrim', 'manorBrick', 'manorBrickD', 'towerStone', 'towerStoneD', 'castleStone', 'castleStoneD', 'skyBody'] },
+    roofs: { label: 'Roofs', materials: ['roofBlue', 'roofBlueD', 'manorRoof', 'manorRoofD', 'towerRoof', 'towerRoofD', 'skyRoof'] },
+    trim: { label: 'Trim / frames / columns', materials: ['woodTrim', 'manorTrim', 'skyFrame', 'step', 'chimney'] },
+    windows: { label: 'Windows / glass', materials: ['windowB', 'windowLit', 'manorWindow', 'skyGlass', 'castleSlit'] },
+    wood: { label: 'Wood / doors / fences', materials: ['door', 'bridgeWood', 'bridgeWoodD', 'fence'] },
+    foliage: { label: 'Trees / foliage', materials: ['leaves', 'leavesDk', 'rockMoss'] },
+    crops: { label: 'Crops / flowers', materials: ['cropLeaf', 'cropStem', 'cornStalk', 'cornCob', 'cornLeaf', 'wheatStalk', 'wheatHead', 'pumpkin', 'pumpkinDk', 'pumpkinStem', 'carrotBody', 'sunflowerStalk', 'sunflowerPetal', 'sunflowerCenter'] },
+    rocks: { label: 'Rocks / stone props', materials: ['rock', 'rockDk', 'rockHi', 'stone', 'stoneDk'] },
+    metal: { label: 'Metal / accents', materials: ['fenceWire', 'fenceSteel', 'knob', 'flagRed'] },
+  };
+  const partMaterialBaseColors = new Map();
+  const partMaterialBaseMaps = new Map();
+
+  function loadTerrainMaterialAdjustments() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(RENDER_LS.terrainColors) || '{}'); } catch (_) { raw = {}; }
+    const out = {};
+    for (const key of TERRAIN_COLOR_KEYS) {
+      const src = raw && raw[key];
+      if (!src || typeof src !== 'object') continue;
+      const tint = normalizeHexColor(src.tint);
+      const tone = Math.max(-0.5, Math.min(0.5, parseFloat(src.tone) || 0));
+      const texture = normalizeMaterialTextureKey(src.texture);
+      if (tint || Math.abs(tone) > 0.001 || texture !== 'default') out[key] = { tint, tone, texture };
+    }
+    return out;
+  }
+
+  function loadPartMaterialAdjustments() {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(RENDER_LS.materialParts) || '{}'); } catch (_) { raw = {}; }
+    const out = {};
+    for (const key of Object.keys(PART_MATERIAL_GROUPS)) {
+      const src = raw && raw[key];
+      if (!src || typeof src !== 'object') continue;
+      const tint = normalizeHexColor(src.tint);
+      const tone = Math.max(-0.5, Math.min(0.5, parseFloat(src.tone) || 0));
+      const texture = normalizeMaterialTextureKey(src.texture);
+      if (tint || Math.abs(tone) > 0.001 || texture !== 'default') out[key] = { tint, tone, texture };
+    }
+    return out;
+  }
+
+  let renderTerrainColorTarget = localStorage.getItem(RENDER_LS.terrainColorTarget) || 'grass';
+  if (!TERRAIN_COLOR_KEYS.includes(renderTerrainColorTarget)) renderTerrainColorTarget = 'grass';
+  let renderTerrainMaterialAdjustments = loadTerrainMaterialAdjustments();
+  let renderMaterialTarget = localStorage.getItem(RENDER_LS.materialTarget) || 'walls';
+  if (!PART_MATERIAL_GROUPS[renderMaterialTarget]) renderMaterialTarget = 'walls';
+  let renderPartMaterialAdjustments = loadPartMaterialAdjustments();
+  let renderMaterialWear = storedNumber(RENDER_LS.materialWear, 0, 0, 1);
+
+  function captureTerrainMaterialBaseColors() {
+    terrainMaterialBaseColors.clear();
+    terrainMaterialBaseMaps.clear();
+    for (const names of Object.values(TERRAIN_COLOR_MATERIALS)) {
+      for (const name of names) {
+        const mat = M[name];
+        if (!mat) continue;
+        if (mat.color) terrainMaterialBaseColors.set(name, mat.color.getHex());
+        terrainMaterialBaseMaps.set(name, mat.map || null);
+      }
+    }
+  }
+
+  function restoreTerrainMaterialBaseColors() {
+    for (const [name, hex] of terrainMaterialBaseColors.entries()) {
+      const mat = M[name];
+      if (mat && mat.color) mat.color.setHex(hex);
+    }
+    for (const [name, map] of terrainMaterialBaseMaps.entries()) {
+      const mat = M[name];
+      if (mat) {
+        mat.map = map || null;
+        mat.needsUpdate = true;
+      }
+    }
+  }
+
+  function terrainBaseColorForTarget(target) {
+    const names = TERRAIN_COLOR_MATERIALS[target] || TERRAIN_COLOR_MATERIALS.grass;
+    const matName = names && names[0];
+    const mat = matName && M[matName];
+    const baseHex = matName && terrainMaterialBaseColors.has(matName)
+      ? terrainMaterialBaseColors.get(matName)
+      : (mat && mat.color ? mat.color.getHex() : 0xffffff);
+    return '#' + (baseHex & 0xffffff).toString(16).padStart(6, '0');
+  }
+
+  function applyToneToColor(color, tone) {
+    const t = Math.max(-0.5, Math.min(0.5, tone || 0));
+    if (t > 0) color.lerp(new THREE.Color(0xffffff), t);
+    else if (t < 0) color.lerp(new THREE.Color(0x000000), -t);
+    return color;
+  }
+
+  function applyWearToMaterialColor(color, name, wear) {
+    const w = Math.max(0, Math.min(1, wear || 0));
+    if (w <= 0.001 || !color) return color;
+    const key = String(name || '').toLowerCase();
+    let grime = new THREE.Color(0x5f5138);
+    let amount = 0.10 + w * 0.16;
+    let darken = -8 * w;
+    if (/grass|leaf|leaves|foliage|crop|moss|pumpkin|carrot|sunflower|wheat|corn/.test(key)) {
+      grime = new THREE.Color(0x71843b);
+      amount = 0.07 + w * 0.13;
+      darken = -5 * w;
+    } else if (/water|glass|window/.test(key)) {
+      grime = new THREE.Color(0x8fa0a1);
+      amount = 0.04 + w * 0.08;
+      darken = -3 * w;
+    } else if (/roof|stone|rock|wall|trim|step|chimney|metal|steel|wire/.test(key)) {
+      grime = new THREE.Color(0x6d6759);
+      amount = 0.08 + w * 0.15;
+      darken = -7 * w;
+    } else if (/wood|door|fence|trunk|bridge|plank/.test(key)) {
+      grime = new THREE.Color(0x4f3a24);
+      amount = 0.09 + w * 0.16;
+      darken = -9 * w;
+    }
+    color.lerp(grime, amount);
+    return applyToneToColor(color, darken / 100);
+  }
+
+  function applyMaterialWearToMaterial(name, mat) {
+    if (!mat || !mat.color || renderMaterialWear <= 0.001) return;
+    applyWearToMaterialColor(mat.color, name, renderMaterialWear);
+  }
+
+  function applyTerrainMaterialAdjustments() {
+    if (!terrainMaterialBaseColors.size) captureTerrainMaterialBaseColors();
+    restoreTerrainMaterialBaseColors();
+    for (const [terrain, adjustment] of Object.entries(renderTerrainMaterialAdjustments || {})) {
+      const names = TERRAIN_COLOR_MATERIALS[terrain];
+      if (!names) continue;
+      const tint = normalizeHexColor(adjustment && adjustment.tint);
+      const tone = Math.max(-0.5, Math.min(0.5, parseFloat(adjustment && adjustment.tone) || 0));
+      const texture = normalizeMaterialTextureKey(adjustment && adjustment.texture);
+      for (const name of names) {
+        const mat = M[name];
+        if (!mat || !mat.color) continue;
+        const c = new THREE.Color(mat.color.getHex());
+        if (tint) c.lerp(new THREE.Color(tint), 0.55);
+        applyToneToColor(c, tone);
+        mat.color.copy(c);
+        if (texture !== 'default') {
+          mat.map = materialTextureForKey(texture);
+          mat.needsUpdate = true;
+        }
+      }
+    }
+    for (const names of Object.values(TERRAIN_COLOR_MATERIALS)) {
+      for (const name of names) applyMaterialWearToMaterial(name, M[name]);
+    }
+    if (typeof customMaterialCache !== 'undefined') customMaterialCache.clear();
+    if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+  }
+
+  function capturePartMaterialBaseState() {
+    partMaterialBaseColors.clear();
+    partMaterialBaseMaps.clear();
+    for (const group of Object.values(PART_MATERIAL_GROUPS)) {
+      for (const name of group.materials) {
+        const mat = M[name];
+        if (!mat) continue;
+        if (mat.color) partMaterialBaseColors.set(name, mat.color.getHex());
+        partMaterialBaseMaps.set(name, mat.map || null);
+      }
+    }
+  }
+
+  function restorePartMaterialBaseState() {
+    for (const [name, hex] of partMaterialBaseColors.entries()) {
+      const mat = M[name];
+      if (mat && mat.color) mat.color.setHex(hex);
+    }
+    for (const [name, map] of partMaterialBaseMaps.entries()) {
+      const mat = M[name];
+      if (mat) {
+        mat.map = map || null;
+        mat.needsUpdate = true;
+      }
+    }
+  }
+
+  function partBaseColorForTarget(target) {
+    const group = PART_MATERIAL_GROUPS[target] || PART_MATERIAL_GROUPS.walls;
+    const matName = group.materials[0];
+    const mat = M[matName];
+    const baseHex = partMaterialBaseColors.has(matName)
+      ? partMaterialBaseColors.get(matName)
+      : (mat && mat.color ? mat.color.getHex() : 0xffffff);
+    return '#' + (baseHex & 0xffffff).toString(16).padStart(6, '0');
+  }
+
+  function applyPartMaterialAdjustments() {
+    if (!partMaterialBaseColors.size) capturePartMaterialBaseState();
+    restorePartMaterialBaseState();
+    for (const [groupKey, adjustment] of Object.entries(renderPartMaterialAdjustments || {})) {
+      const group = PART_MATERIAL_GROUPS[groupKey];
+      if (!group) continue;
+      const tint = normalizeHexColor(adjustment && adjustment.tint);
+      const tone = Math.max(-0.5, Math.min(0.5, parseFloat(adjustment && adjustment.tone) || 0));
+      const texture = normalizeMaterialTextureKey(adjustment && adjustment.texture);
+      for (const name of group.materials) {
+        const mat = M[name];
+        if (!mat) continue;
+        if (mat.color) {
+          const c = new THREE.Color(mat.color.getHex());
+          if (tint) c.lerp(new THREE.Color(tint), 0.55);
+          applyToneToColor(c, tone);
+          mat.color.copy(c);
+        }
+        if (texture !== 'default') {
+          mat.map = materialTextureForKey(texture);
+          mat.needsUpdate = true;
+        }
+      }
+    }
+    for (const group of Object.values(PART_MATERIAL_GROUPS)) {
+      for (const name of group.materials) applyMaterialWearToMaterial(name, M[name]);
+    }
+    if (typeof customMaterialCache !== 'undefined') customMaterialCache.clear();
+    if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+  }
+
+  function commitTerrainMaterialAdjustments() {
+    applyTerrainMaterialAdjustments();
+    applyPartMaterialAdjustments();
+    recaptureWeatherMaterialBase();
+    applyWeatherMaterialTint();
+  }
+
+  function commitPartMaterialAdjustments() {
+    applyTerrainMaterialAdjustments();
+    applyPartMaterialAdjustments();
+    recaptureWeatherMaterialBase();
+    applyWeatherMaterialTint();
+  }
+
   function customMaterial(base, hex) {
     const clean = normalizeHexColor(hex);
     if (!base || !base.clone || !clean) return base;
-    const key = (base.uuid || base.id || 'mat') + ':' + clean;
+    const key = (base.uuid || base.id || 'mat') + ':' + clean + ':' + renderMaterialWear.toFixed(2);
     if (!customMaterialCache.has(key)) {
       const mat = base.clone();
       if (base.onBeforeCompile) mat.onBeforeCompile = base.onBeforeCompile;
-      if (mat.color) mat.color.set(clean);
+      if (mat.color) {
+        mat.color.set(clean);
+        applyWearToMaterialColor(mat.color, 'custom', renderMaterialWear);
+      }
       customMaterialCache.set(key, mat);
     }
     return customMaterialCache.get(key);
@@ -6425,6 +7112,10 @@
       const mat = M[name];
       if (mat && mat.color) mat.color.setHex(hex);
     }
+    captureTerrainMaterialBaseColors();
+    applyTerrainMaterialAdjustments();
+    capturePartMaterialBaseState();
+    applyPartMaterialAdjustments();
     recaptureWeatherMaterialBase();
     applyWeatherMaterialTint();
   }
@@ -6480,6 +7171,19 @@
     return Math.max(0, (Math.min(MAX_FLOORS, level || 1) - 1) * step);
   }
 
+  const HEAVY_TERRAIN_KERB_DROP = 0.048;
+
+  function isHeavyKerbTerrain(terrain) {
+    return terrain === 'path' || terrain === 'stone';
+  }
+
+  function terrainSurfaceOffset(terrain) {
+    if (isHeavyKerbTerrain(terrain)) return -HEAVY_TERRAIN_KERB_DROP;
+    if (terrain === 'water') return -0.070;
+    if (terrain === 'dirt') return 0.034;
+    return 0;
+  }
+
   function terrainLevelForCell(cell) {
     if (!cell) return 1;
     if (cell.terrainFloors !== undefined) return cell.terrainFloors || 1;
@@ -6490,8 +7194,13 @@
     return terrainLevelForCell(cell);
   }
 
+  function terrainVisualRiseForCell(cell) {
+    if (!cell) return 0;
+    return terrainRiseForLevel(tileLevelForCell(cell)) + terrainSurfaceOffset(cell.terrain);
+  }
+
   function terrainRiseAt(x, z) {
-    return terrainRiseForLevel(tileLevelForCell(getWorldCell(x, z)));
+    return terrainVisualRiseForCell(getWorldCell(x, z));
   }
 
   function materialHex(mat) {
@@ -6625,6 +7334,8 @@
       : ((terrain === 'path' || terrain === 'water' || terrain === 'dirt') ? 8 : 6);
   }
 
+  const waterfallEffectMeshes = new Set();
+
   function addVoxelTerrainTop(g, terrain, x, z, rise, topSize, topHeight, pathN, terrainN, hiddenSides) {
     const mats = terrainVoxelMaterials(terrain);
     const cells = terrainVoxelCellCount(terrain);
@@ -6699,6 +7410,133 @@
       mesh.instanceMatrix.needsUpdate = true;
       g.add(mesh);
     }
+    addVoxelTerrainSurfaceDetails(g, terrain, x, z, topSize, rise + topHeight + 0.012);
+  }
+
+  function addVoxelTerrainSurfaceDetails(g, terrain, x, z, topSize, y) {
+    if (terrain === 'water' || terrain === 'lava' || terrain === 'snow') return;
+    const half = topSize * 0.5;
+    const wear = Math.max(0, Math.min(1, renderMaterialWear || 0));
+    const dummy = addVoxelTerrainSurfaceDetails._dummy || (addVoxelTerrainSurfaceDetails._dummy = new THREE.Object3D());
+    const buckets = [];
+    function addBucket(mat, geo, count, place) {
+      const mesh = new THREE.InstancedMesh(geo, mat, count);
+      for (let i = 0; i < count; i++) {
+        place(i, dummy);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.userData.noShadow = true;
+      g.add(mesh);
+      buckets.push(mesh);
+    }
+    const dotGeo = getBoxGeometry(0.045, 0.010, 0.045);
+    const bladeGeo = getBoxGeometry(0.028, 0.052, 0.028);
+    const paverGeo = getBoxGeometry(0.18, 0.012, 0.055);
+    const pebbleGeo = getBoxGeometry(0.055, 0.018, 0.040);
+    const grimeGeo = getBoxGeometry(0.080, 0.006, 0.055);
+    function scatter(i, seed, inset = 0.12) {
+      const rx = cellRand(x * 13 + i, z * 17 - i, seed);
+      const rz = cellRand(x * 19 - i, z * 11 + i, seed + 9);
+      return [
+        -half + inset + rx * (topSize - inset * 2),
+        -half + inset + rz * (topSize - inset * 2),
+      ];
+    }
+    if (terrain === 'grass') {
+      addBucket(M.grassHi, bladeGeo, 5, (i, d) => {
+        const [px, pz] = scatter(i, 410, 0.14);
+        d.position.set(px, y + 0.020, pz);
+        d.rotation.set(0, cellRand(x + i, z - i, 430) * Math.PI, 0);
+        const s = 0.75 + cellRand(x - i, z + i, 440) * 0.75;
+        d.scale.set(s, 0.75 + s * 0.35, s);
+      });
+      addBucket(M.leavesDk, dotGeo, 4, (i, d) => {
+        const [px, pz] = scatter(i, 450, 0.10);
+        d.position.set(px, y + 0.006, pz);
+        d.rotation.set(0, cellRand(x + i, z + i, 460) * Math.PI, 0);
+        const s = 0.70 + cellRand(x - i, z - i, 470) * 0.85;
+        d.scale.set(s, 1, s * 0.75);
+      });
+      if (cellRand(x, z, 480) > 0.72) {
+        addBucket(M.grassFlower, dotGeo, 1, (_, d) => {
+          const [px, pz] = scatter(1, 490, 0.18);
+          d.position.set(px, y + 0.018, pz);
+          d.rotation.set(0, 0, 0);
+          d.scale.set(0.65, 1, 0.65);
+        });
+      }
+      if (wear > 0.02) {
+        addBucket(M.wearGrime, grimeGeo, Math.max(1, Math.round(wear * 4)), (i, d) => {
+          const [px, pz] = scatter(i, 610, 0.07);
+          d.position.set(px, y + 0.004, pz);
+          d.rotation.set(0, cellRand(x + i, z - i, 620) * Math.PI, 0);
+          const s = 0.65 + cellRand(x - i, z + i, 630) * 0.95;
+          d.scale.set(s, 1, 0.7 + s * 0.25);
+        });
+      }
+    } else if (terrain === 'path') {
+      addBucket(M.pathTrim, paverGeo, 4, (i, d) => {
+        const [px, pz] = scatter(i, 510, 0.08);
+        d.position.set(px, y + 0.004, pz);
+        d.rotation.set(0, (cellRand(x + i, z, 520) > 0.5 ? Math.PI / 2 : 0), 0);
+        d.scale.set(0.75 + cellRand(x, z + i, 530) * 0.45, 1, 0.85);
+      });
+      addBucket(M.pathScuff, pebbleGeo, 4, (i, d) => {
+        const [px, pz] = scatter(i, 540, 0.10);
+        d.position.set(px, y + 0.008, pz);
+        d.rotation.set(0, cellRand(x - i, z, 550) * Math.PI, 0);
+        d.scale.set(0.80, 1, 0.80);
+      });
+      if (wear > 0.02) {
+        addBucket(M.wearChip, grimeGeo, Math.max(1, Math.round(wear * 5)), (i, d) => {
+          const [px, pz] = scatter(i, 640, 0.06);
+          d.position.set(px, y + 0.010, pz);
+          d.rotation.set(0, cellRand(x + i, z + i, 650) * Math.PI, 0);
+          const s = 0.55 + cellRand(x - i, z, 660) * 0.70;
+          d.scale.set(s, 1, 0.55 + s * 0.25);
+        });
+        addBucket(M.wearGrime, pebbleGeo, Math.max(1, Math.round(wear * 3)), (i, d) => {
+          const [px, pz] = scatter(i, 670, 0.08);
+          d.position.set(px, y + 0.009, pz);
+          d.rotation.set(0, cellRand(x, z - i, 680) * Math.PI, 0);
+          d.scale.set(0.85, 1, 0.70);
+        });
+      }
+    } else if (terrain === 'dirt') {
+      addBucket(M.dirt, pebbleGeo, 6, (i, d) => {
+        const [px, pz] = scatter(i, 560, 0.08);
+        d.position.set(px, y + 0.006, pz);
+        d.rotation.set(0, cellRand(x, z + i, 570) * Math.PI, 0);
+        const s = 0.70 + cellRand(x + i, z, 580) * 0.80;
+        d.scale.set(s, 1, s);
+      });
+      if (wear > 0.02) {
+        addBucket(M.wearMoss, dotGeo, Math.max(1, Math.round(wear * 3)), (i, d) => {
+          const [px, pz] = scatter(i, 690, 0.09);
+          d.position.set(px, y + 0.008, pz);
+          d.rotation.set(0, cellRand(x + i, z, 700) * Math.PI, 0);
+          d.scale.set(1.10, 1, 0.80);
+        });
+      }
+    } else if (terrain === 'stone' || terrain === 'sand') {
+      addBucket(terrain === 'stone' ? M.stoneDk : M.sandDk, pebbleGeo, 4, (i, d) => {
+        const [px, pz] = scatter(i, 590, 0.10);
+        d.position.set(px, y + 0.006, pz);
+        d.rotation.set(0, cellRand(x, z - i, 600) * Math.PI, 0);
+        d.scale.set(1.1, 1, 0.9);
+      });
+      if (wear > 0.02) {
+        addBucket(terrain === 'stone' ? M.wearMoss : M.wearGrime, grimeGeo, Math.max(1, Math.round(wear * 4)), (i, d) => {
+          const [px, pz] = scatter(i, 710, 0.07);
+          d.position.set(px, y + 0.006, pz);
+          d.rotation.set(0, cellRand(x - i, z + i, 720) * Math.PI, 0);
+          d.scale.set(0.90, 1, 0.70);
+        });
+      }
+    }
+    return buckets;
   }
 
   function addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, riserHeight, hiddenSides) {
@@ -6765,6 +7603,246 @@
     }
   }
 
+  function addVoxelTerrainRiserBacking(g, terrain, riserSize, riserHeight, hiddenSides) {
+    const solidSize = Math.max(0.05, riserSize);
+    const geo = getOpenBoxGeometry(
+      solidSize,
+      riserHeight,
+      solidSize,
+      true,
+      true,
+      hiddenSides && hiddenSides.e,
+      hiddenSides && hiddenSides.w,
+      hiddenSides && hiddenSides.s,
+      hiddenSides && hiddenSides.n
+    );
+    const mesh = new THREE.Mesh(geo, terrainRiserMaterial(terrain));
+    mesh.position.y = -DIRT_H + riserHeight * 0.5;
+    g.add(mesh);
+  }
+
+  function heavyTerrainKerbMaterials(terrain) {
+    if (terrain === 'stone') {
+      return [
+        terrainShadeMaterial(M.stoneDk, -18),
+        terrainShadeMaterial(M.stone, -24),
+        terrainShadeMaterial(M.stoneDk, -6),
+        terrainShadeMaterial(M.rockHi, -22),
+      ];
+    }
+    return [
+      terrainShadeMaterial(M.pathTrim, -18),
+      terrainShadeMaterial(M.pathScuff, -14),
+      terrainShadeMaterial(M.pathTrim, -28),
+      terrainShadeMaterial(M.path, -20),
+    ];
+  }
+
+  function addHeavyTerrainKerbStrips(g, terrain, x, z, terrainN, topSize, visualTopY) {
+    if (!isHeavyKerbTerrain(terrain)) return;
+    const drop = Math.abs(Math.min(0, terrainSurfaceOffset(terrain)));
+    if (!drop) return;
+    const mats = heavyTerrainKerbMaterials(terrain);
+    const brickH = drop + 0.018;
+    const brickD = 0.043;
+    const brickY = visualTopY + brickH * 0.5 - 0.004;
+    const off = topSize * 0.5 - brickD * 0.5;
+    const segments = 6;
+    const usable = Math.max(0.30, topSize - 0.13);
+    const step = usable / segments;
+    const buckets = new Map();
+
+    function shouldEdge(dir) {
+      return terrainN[dir] !== terrain;
+    }
+
+    function queue(geo, mat, px, py, pz) {
+      const key = (geo.id || geo.uuid) + ':' + (mat.id || mat.uuid);
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = { geo, mat, positions: [] };
+        buckets.set(key, bucket);
+      }
+      bucket.positions.push(px, py, pz);
+    }
+
+    function pickMat(dir, i) {
+      const r = cellRand(x * 23 + i, z * 29 - i, 780 + dir.charCodeAt(0));
+      return mats[Math.min(mats.length - 1, Math.floor(r * mats.length))];
+    }
+
+    function addSide(dir) {
+      if (!shouldEdge(dir)) return;
+      const alongX = dir === 'n' || dir === 's';
+      for (let i = 0; i < segments; i++) {
+        const r = cellRand(x * 31 + i, z * 37 - i, 800 + dir.charCodeAt(0));
+        const len = step * (0.74 + r * 0.16);
+        const shift = (r - 0.5) * step * 0.12;
+        const across = -usable * 0.5 + step * (i + 0.5) + shift;
+        const py = brickY + (cellRand(x - i, z + i, 820 + dir.charCodeAt(0)) - 0.5) * 0.004;
+        if (alongX) {
+          const geo = getBoxGeometry(len, brickH, brickD);
+          queue(geo, pickMat(dir, i), across, py, dir === 'n' ? -off : off);
+        } else {
+          const geo = getBoxGeometry(brickD, brickH, len);
+          queue(geo, pickMat(dir, i), dir === 'w' ? -off : off, py, across);
+        }
+      }
+    }
+
+    addSide('n');
+    addSide('s');
+    addSide('w');
+    addSide('e');
+
+    const dummy = addHeavyTerrainKerbStrips._dummy || (addHeavyTerrainKerbStrips._dummy = new THREE.Object3D());
+    for (const bucket of buckets.values()) {
+      const count = bucket.positions.length / 3;
+      const mesh = new THREE.InstancedMesh(bucket.geo, bucket.mat, count);
+      for (let i = 0; i < count; i++) {
+        dummy.position.set(bucket.positions[i * 3], bucket.positions[i * 3 + 1], bucket.positions[i * 3 + 2]);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      g.add(mesh);
+    }
+  }
+
+  function getWaterfallPlaneGeometry() {
+    if (!getWaterfallPlaneGeometry.geo) {
+      getWaterfallPlaneGeometry.geo = new THREE.PlaneGeometry(1, 1);
+      getWaterfallPlaneGeometry.geo.userData.cached = true;
+    }
+    return getWaterfallPlaneGeometry.geo;
+  }
+
+  function getWaterfallFoamGeometry() {
+    if (!getWaterfallFoamGeometry.geo) {
+      getWaterfallFoamGeometry.geo = new THREE.DodecahedronGeometry(1, 0);
+      getWaterfallFoamGeometry.geo.userData.cached = true;
+    }
+    return getWaterfallFoamGeometry.geo;
+  }
+
+  function addWaterfallRiserEffects(g, x, z, riserSize, topY, sides) {
+    if (!sides || !(sides.n || sides.s || sides.e || sides.w)) return;
+    const bottomY = -DIRT_H + 0.045;
+    const height = Math.max(0.12, topY - bottomY);
+    const half = riserSize * 0.5 + 0.018;
+    const sideSpan = riserSize * 0.86;
+    const geo = getWaterfallPlaneGeometry();
+
+    function placePlane(dir, across, y, width, h, mat) {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.scale.set(width, h, 1);
+      mesh.userData.noShadow = true;
+      mesh.userData.waterfall = {
+        baseY: y,
+        baseScaleY: h,
+        phase: cellRand(x + across * 31, z + y * 17, 360),
+        speed: 0.75 + cellRand(x - across * 23, z - y * 11, 380) * 0.55,
+        drift: mat === M.waterfallHi ? 0.026 : 0.045,
+      };
+      mesh.renderOrder = 6;
+      if (dir === 'n') {
+        mesh.position.set(across, y, -half);
+        mesh.rotation.y = Math.PI;
+      } else if (dir === 's') {
+        mesh.position.set(across, y, half);
+      } else if (dir === 'e') {
+        mesh.position.set(half, y, across);
+        mesh.rotation.y = Math.PI / 2;
+      } else {
+        mesh.position.set(-half, y, across);
+        mesh.rotation.y = -Math.PI / 2;
+      }
+      waterfallEffectMeshes.add(mesh);
+      g.add(mesh);
+    }
+
+    function placeFoamPuff(dir, across, y, radius, mat, salt) {
+      const mesh = new THREE.Mesh(getWaterfallFoamGeometry(), mat);
+      const baseScale = radius * (0.82 + cellRand(x + salt, z - salt, 430) * 0.35);
+      mesh.scale.set(baseScale * 1.20, baseScale * 0.62, baseScale);
+      mesh.userData.noShadow = true;
+      mesh.userData.waterfall = {
+        kind: 'foam',
+        baseY: y,
+        baseScale: baseScale,
+        phase: cellRand(x * 7 + salt, z * 9 - salt, 450),
+        speed: 3.3 + cellRand(x - salt, z + salt, 470) * 2.4,
+        drift: 0.030 + cellRand(x + salt, z + salt, 490) * 0.020,
+      };
+      mesh.renderOrder = 7;
+      if (dir === 'n') mesh.position.set(across, y, -half - 0.006);
+      else if (dir === 's') mesh.position.set(across, y, half + 0.006);
+      else if (dir === 'e') mesh.position.set(half + 0.006, y, across);
+      else mesh.position.set(-half - 0.006, y, across);
+      waterfallEffectMeshes.add(mesh);
+      g.add(mesh);
+    }
+
+    function addSide(dir) {
+      const seed = dir.charCodeAt(0);
+      for (let i = 0; i < 5; i++) {
+        const r = cellRand(x * 17 + i, z * 19 + i, 240 + seed);
+        const across = (-0.38 + i * 0.19 + (r - 0.5) * 0.07) * sideSpan;
+        const width = sideSpan * (0.11 + cellRand(x + i, z - i, 260 + seed) * 0.08);
+        const h = height * (0.72 + cellRand(x - i, z + i, 280 + seed) * 0.25);
+        const y = topY - h * 0.5 - cellRand(x + i * 3, z + i * 5, 300 + seed) * height * 0.10;
+        placePlane(dir, across, y, width, h, i % 2 === 0 ? M.waterfallHi : M.waterfall);
+      }
+      for (let i = 0; i < 4; i++) {
+        const r = cellRand(x * 11 + i, z * 13 - i, 320 + seed);
+        const across = (-0.34 + i * 0.23 + (r - 0.5) * 0.08) * sideSpan;
+        const width = sideSpan * (0.13 + cellRand(x - i, z + i, 340 + seed) * 0.10);
+        placePlane(dir, across, topY - 0.035 - i * 0.008, width, 0.028, M.waterfallHi);
+        if (i < 3) placePlane(dir, across + sideSpan * 0.06, bottomY + 0.035 + i * 0.010, width * 0.85, 0.024, M.waterfallHi);
+      }
+      for (let i = 0; i < 7; i++) {
+        const r = cellRand(x * 41 + i, z * 43 - i, 520 + seed);
+        const across = (-0.40 + i * 0.13 + (r - 0.5) * 0.09) * sideSpan;
+        const atLip = i % 3 === 0;
+        const y = atLip
+          ? topY - 0.012 - cellRand(x + i, z - i, 540 + seed) * 0.020
+          : bottomY + 0.035 + cellRand(x - i, z + i, 560 + seed) * 0.060;
+        const radius = atLip ? 0.055 : 0.070;
+        placeFoamPuff(dir, across, y, radius, M.waterfallFoamPuff, seed + i * 17);
+      }
+    }
+
+    if (sides.n) addSide('n');
+    if (sides.s) addSide('s');
+    if (sides.w) addSide('w');
+    if (sides.e) addSide('e');
+  }
+
+  function updateWaterfallEffects(t) {
+    if (!waterfallEffectMeshes.size) return;
+    for (const mesh of Array.from(waterfallEffectMeshes)) {
+      if (!mesh || !mesh.parent) {
+        waterfallEffectMeshes.delete(mesh);
+        continue;
+      }
+      const cfg = mesh.userData && mesh.userData.waterfall;
+      if (!cfg) continue;
+      const flow = (t * cfg.speed + cfg.phase) % 1;
+      if (cfg.kind === 'foam') {
+        const pulse = Math.sin((flow + cfg.phase) * Math.PI * 2);
+        const side = Math.cos((flow + cfg.phase * 0.7) * Math.PI * 2);
+        mesh.position.y = cfg.baseY + pulse * cfg.drift;
+        const s = cfg.baseScale * (0.82 + (pulse + 1) * 0.16);
+        mesh.scale.set(s * (1.14 + side * 0.18), s * (0.54 + pulse * 0.10), s * (0.92 - side * 0.12));
+        continue;
+      }
+      mesh.position.y = cfg.baseY - (flow - 0.5) * cfg.drift;
+      mesh.scale.y = cfg.baseScaleY * (0.96 + Math.sin((flow + cfg.phase) * Math.PI * 2) * 0.035);
+    }
+  }
+
   function serializeCell(x, z, c) {
     const f = c.floors || 1;
     const tf = terrainLevelForCell(c);
@@ -6811,7 +7889,10 @@
     const skipS = hideSide(levelN.s, 's');
     const skipN = hideSide(levelN.n, 'n');
     const rise = terrainRiseForLevel(level);
-    const topY = rise + TOP_H;
+    const terrainOffset = terrainSurfaceOffset(terrain);
+    const kerbDrop = Math.abs(Math.min(0, terrainOffset));
+    const visualRise = rise + terrainOffset;
+    const topY = visualRise + TOP_H;
     // Weather impact decals sit above the rounded/beveled slab, not at the
     // mathematical tile height, otherwise rain ripples and snow buildup hide
     // inside the top face at grazing camera angles.
@@ -6835,7 +7916,7 @@
       let riserBevel = 0.04;
       let topBevel   = 0.06;
 
-      if (terrain === 'grass' || terrain === 'path' || terrain === 'water') {
+      if (terrain === 'grass' || terrain === 'path' || terrain === 'stone' || terrain === 'water') {
         // Restore the physical tile look: the cap overhangs the body, so grass
         // edges read as green first with dirt underneath.
         riserSize  = TILE * 1.04;
@@ -6848,7 +7929,7 @@
       if (hasVisibleRiser) {
         const riserMat = terrainRiserMaterial(terrain);
         if (renderVoxelTerrain) {
-          addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, DIRT_H + rise, {
+          addVoxelTerrainRiserBacking(g, terrain, riserSize, DIRT_H + rise, {
             e: skipE,
             w: skipW,
             s: skipS,
@@ -6885,7 +7966,7 @@
       const seamOverlap = 0.006;
       const topHeight = TOP_H + seamOverlap;
       if (renderVoxelTerrain) {
-        addVoxelTerrainTop(g, terrain, x, z, rise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN, {
+        addVoxelTerrainTop(g, terrain, x, z, visualRise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN, {
           e: skipE,
           w: skipW,
           s: skipS,
@@ -6894,7 +7975,7 @@
       } else {
         const topGeo = getOpenBoxGeometry(topSize, topHeight, topSize, false, true, skipE, skipW, skipS, skipN);
         const top = new THREE.Mesh(topGeo, topMat);
-        top.position.y = rise + TOP_H * 0.5 - seamOverlap * 0.5;
+        top.position.y = visualRise + TOP_H * 0.5 - seamOverlap * 0.5;
         g.add(top);
 
         // Add a tiny bevel-like highlight only on the exposed outer cap edges.
@@ -6922,14 +8003,25 @@
           c.position.set(xSign * (topSize * 0.5 - bw * 0.5), bevelY, zSign * (topSize * 0.5 - bw * 0.5));
           g.add(c);
         }
-        if (!skipN) addCapBevel('n');
-        if (!skipS) addCapBevel('s');
-        if (!skipW) addCapBevel('w');
-        if (!skipE) addCapBevel('e');
-        if (!skipN && !skipW) addCapCorner(-1, -1);
-        if (!skipN && !skipE) addCapCorner( 1, -1);
-        if (!skipS && !skipW) addCapCorner(-1,  1);
-        if (!skipS && !skipE) addCapCorner( 1,  1);
+        if (!kerbDrop) {
+          if (!skipN) addCapBevel('n');
+          if (!skipS) addCapBevel('s');
+          if (!skipW) addCapBevel('w');
+          if (!skipE) addCapBevel('e');
+          if (!skipN && !skipW) addCapCorner(-1, -1);
+          if (!skipN && !skipE) addCapCorner( 1, -1);
+          if (!skipS && !skipW) addCapCorner(-1,  1);
+          if (!skipS && !skipE) addCapCorner( 1,  1);
+        }
+      }
+      addHeavyTerrainKerbStrips(g, terrain, x, z, terrainN, topSize, topY);
+      if (terrain === 'water') {
+        addWaterfallRiserEffects(g, x, z, riserSize, topY - 0.018, {
+          e: !skipE && (typeof levelN.e !== 'number' || levelN.e < level),
+          w: !skipW && (typeof levelN.w !== 'number' || levelN.w < level),
+          s: !skipS && (typeof levelN.s !== 'number' || levelN.s < level),
+          n: !skipN && (typeof levelN.n !== 'number' || levelN.n < level),
+        });
       }
     }
 
@@ -9318,17 +10410,24 @@
     return VOXEL_BUILD_STAMPS.find(s => s.id === id) || null;
   }
 
-  function voxelBuildMaterial(hex) {
+  function voxelBuildMaterial(hex, textureKind = null) {
     const clean = normalizeHexColor(hex) || '#ffffff';
-    if (!voxelBuildMaterialCache.has(clean)) {
-      voxelBuildMaterialCache.set(clean, new THREE.MeshLambertMaterial({ color: clean }));
+    const kind = inferProceduralTextureKind(clean, textureKind);
+    const key = clean + ':' + kind;
+    if (!voxelBuildMaterialCache.has(key)) {
+      const mat = new THREE.MeshLambertMaterial({ color: clean });
+      const tex = proceduralPixelTextures[kind] || texNoise;
+      applyWorldUVs(mat, tex, proceduralTextureScaleForKind(kind));
+      mat.userData.voxelBuildMaterial = true;
+      mat.userData.proceduralTextureKind = kind;
+      voxelBuildMaterialCache.set(key, mat);
     }
-    return voxelBuildMaterialCache.get(clean);
+    return voxelBuildMaterialCache.get(key);
   }
 
   function voxelPartMaterial(name) {
     const key = String(name || '').trim();
-    return voxelBuildMaterial(VOXEL_PART_COLORS[key] || key || '#ffffff');
+    return voxelBuildMaterial(VOXEL_PART_COLORS[key] || key || '#ffffff', proceduralTextureKindForMaterialName(key));
   }
 
   function voxelAppearanceRoleForMaterial(name) {
@@ -9362,10 +10461,11 @@
   function voxelAppearanceMaterial(base, role, appearance) {
     const a = normalizeAppearance(appearance);
     if (!a || !role) return base;
-    if (role === 'top' && a.topColor) return voxelBuildMaterial(a.topColor);
-    if (role === 'topDark' && a.topColor) return voxelBuildMaterial(shadeHexColor(a.topColor, -48));
-    if (role === 'body' && a.bodyColor) return voxelBuildMaterial(a.bodyColor);
-    if (role === 'bodyDark' && a.bodyColor) return voxelBuildMaterial(shadeHexColor(a.bodyColor, -42));
+    const baseKind = base && base.userData && base.userData.proceduralTextureKind;
+    if (role === 'top' && a.topColor) return voxelBuildMaterial(a.topColor, baseKind);
+    if (role === 'topDark' && a.topColor) return voxelBuildMaterial(shadeHexColor(a.topColor, -48), baseKind);
+    if (role === 'body' && a.bodyColor) return voxelBuildMaterial(a.bodyColor, baseKind);
+    if (role === 'bodyDark' && a.bodyColor) return voxelBuildMaterial(shadeHexColor(a.bodyColor, -42), baseKind);
     return base;
   }
 
@@ -9384,6 +10484,35 @@
       b.maxZ = Math.max(b.maxZ, part.pos[2] + sz / 2);
     }
     return b;
+  }
+
+  function isCustomVoxelGroundPlatformPart(part, bounds) {
+    if (!part || part.kind !== 'box' || !bounds) return false;
+    const sx = (part.size[0] || 0) * (part.scale[0] || 1);
+    const sy = (part.size[1] || 0) * (part.scale[1] || 1);
+    const sz = (part.size[2] || 0) * (part.scale[2] || 1);
+    const spanX = Math.max(0.01, bounds.maxX - bounds.minX);
+    const spanY = Math.max(0.01, bounds.maxY - bounds.minY);
+    const spanZ = Math.max(0.01, bounds.maxZ - bounds.minZ);
+    const bottomY = (part.pos[1] || 0) - sy * 0.5;
+    const materialKey = String(part.material || '').toLowerCase();
+    const idKey = String(part.id || '').toLowerCase();
+    const looksLikeGround = /(grass|green|dirt|path|ground|terrain|moss|base|platform|tile)/.test(materialKey + ' ' + idKey);
+    const broad = (sx / spanX > 0.52 && sz / spanZ > 0.52) || (sx * sz > spanX * spanZ * 0.34);
+    const shallow = sy <= Math.max(0.45, spanY * 0.18);
+    const sitsAtBottom = Math.abs(bottomY - bounds.minY) <= Math.max(0.08, sy * 0.35);
+    return looksLikeGround && broad && shallow && sitsAtBottom;
+  }
+
+  function customVoxelGroundPlatformSink(parts, bounds) {
+    if (!Array.isArray(parts) || !bounds) return 0;
+    let sink = 0;
+    for (const part of parts) {
+      if (!isCustomVoxelGroundPlatformPart(part, bounds)) continue;
+      const sy = (part.size[1] || 0) * (part.scale[1] || 1);
+      sink = Math.max(sink, sy);
+    }
+    return sink;
   }
 
   function fitCustomPartsToBounds(parts, allowedBounds) {
@@ -9418,6 +10547,41 @@
     });
   }
 
+  function voxelTrimMaterial(base, fallbackHex = '#2a2722') {
+    const sourceHex = base && base.color ? ('#' + base.color.getHexString()) : fallbackHex;
+    const kind = base && base.userData && base.userData.proceduralTextureKind;
+    return voxelBuildMaterial(shadeHexColor(sourceHex, -58) || fallbackHex, kind || 'wood');
+  }
+
+  function addVoxelBuildTrimFrame(parent, bounds, mat) {
+    if (!bounds) return;
+    const spanX = Math.max(0.01, bounds.maxX - bounds.minX);
+    const spanY = Math.max(0.01, bounds.maxY - bounds.minY);
+    const spanZ = Math.max(0.01, bounds.maxZ - bounds.minZ);
+    const t = Math.max(0.014, Math.min(0.045, Math.min(spanX, spanY, spanZ) * 0.08));
+    const cx = (bounds.minX + bounds.maxX) * 0.5;
+    const cz = (bounds.minZ + bounds.maxZ) * 0.5;
+    const y0 = Math.max(t * 0.5, bounds.minY + t * 0.5);
+    const y1 = bounds.maxY + t * 0.5;
+    const trimOpts = { noGap: true, noBevel: true, noShadow: true };
+
+    vbox(parent, spanX + t * 2, t, t, cx, y0, bounds.minZ - t * 0.5, mat, trimOpts);
+    vbox(parent, spanX + t * 2, t, t, cx, y0, bounds.maxZ + t * 0.5, mat, trimOpts);
+    vbox(parent, t, t, spanZ + t * 2, bounds.minX - t * 0.5, y0, cz, mat, trimOpts);
+    vbox(parent, t, t, spanZ + t * 2, bounds.maxX + t * 0.5, y0, cz, mat, trimOpts);
+
+    vbox(parent, spanX + t * 2, t, t, cx, y1, bounds.minZ - t * 0.5, mat, trimOpts);
+    vbox(parent, spanX + t * 2, t, t, cx, y1, bounds.maxZ + t * 0.5, mat, trimOpts);
+    vbox(parent, t, t, spanZ + t * 2, bounds.minX - t * 0.5, y1, cz, mat, trimOpts);
+    vbox(parent, t, t, spanZ + t * 2, bounds.maxX + t * 0.5, y1, cz, mat, trimOpts);
+
+    for (const x of [bounds.minX - t * 0.5, bounds.maxX + t * 0.5]) {
+      for (const z of [bounds.minZ - t * 0.5, bounds.maxZ + t * 0.5]) {
+        vbox(parent, t, spanY + t, t, x, bounds.minY + spanY * 0.5, z, mat, trimOpts);
+      }
+    }
+  }
+
   function makeCustomPartsStamp(stamp, opts = {}) {
     const parts = normalizeVoxelCustomParts(stamp.customParts || stamp.parts);
     if (!parts.length) return null;
@@ -9430,7 +10594,10 @@
     const centerX = (b.minX + b.maxX) / 2;
     const centerZ = (b.minZ + b.maxZ) / 2;
     const floorY = Math.min(0, b.minY);
+    const platformSink = customVoxelGroundPlatformSink(parts, b) * unit;
     const g = new THREE.Group();
+    let trimBase = null;
+    const trimBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
     for (const part of parts) {
       const role = voxelAppearanceRoleForMaterial(part.material);
       const mat = voxelAppearanceMaterial(voxelPartMaterial(part.material), role, opts.appearance);
@@ -9438,8 +10605,15 @@
       const h = part.size[1] * part.scale[1] * unit;
       const d = part.size[2] * part.scale[2] * unit;
       const x = (part.pos[0] - centerX) * unit;
-      const y = (part.pos[1] - floorY) * unit;
+      const y = (part.pos[1] - floorY) * unit - platformSink;
       const z = (part.pos[2] - centerZ) * unit;
+      trimBase = trimBase || mat;
+      trimBounds.minX = Math.min(trimBounds.minX, x - w * 0.5);
+      trimBounds.maxX = Math.max(trimBounds.maxX, x + w * 0.5);
+      trimBounds.minY = Math.min(trimBounds.minY, y - h * 0.5);
+      trimBounds.maxY = Math.max(trimBounds.maxY, y + h * 0.5);
+      trimBounds.minZ = Math.min(trimBounds.minZ, z - d * 0.5);
+      trimBounds.maxZ = Math.max(trimBounds.maxZ, z + d * 0.5);
       if (part.kind === 'cylinder') {
         vcylinder(g, Math.max(w, d) / 2, h, x, y, z, mat, part.segments || 8);
       } else if (part.kind === 'cone') {
@@ -9449,6 +10623,9 @@
       } else {
         vbox(g, w, h, d, x, y, z, mat);
       }
+    }
+    if (stamp.decorativeOutline || opts.decorativeOutline) {
+      addVoxelBuildTrimFrame(g, trimBounds, voxelTrimMaterial(trimBase));
     }
     g.userData = { kind: 'voxel-build', voxelBuildId: stamp.id, name: stamp.name, chimneyTops: [] };
     castReceive(g);
@@ -9473,12 +10650,24 @@
     const unit = opts.unit || stamp.unit || footprint / Math.max(spanX, spanZ);
     const centerX = (minX + maxX) / 2;
     const centerZ = (minZ + maxZ) / 2;
+    let trimBase = null;
     for (const v of stamp.voxels) {
       const x = (v.x - centerX) * unit;
       const y = (v.y - minY) * unit + unit / 2;
       const z = (v.z - centerZ) * unit;
       const mat = voxelAppearanceMaterial(voxelBuildMaterial(v.color), voxelAppearanceRoleForColor(v.color), opts.appearance);
+      trimBase = trimBase || mat;
       vbox(g, unit, unit, unit, x, y, z, mat);
+    }
+    if (stamp.decorativeOutline || opts.decorativeOutline) {
+      addVoxelBuildTrimFrame(g, {
+        minX: (minX - centerX) * unit - unit * 0.5,
+        maxX: (maxX - centerX) * unit + unit * 0.5,
+        minY: 0,
+        maxY: (maxY - minY + 1) * unit,
+        minZ: (minZ - centerZ) * unit - unit * 0.5,
+        maxZ: (maxZ - centerZ) * unit + unit * 0.5,
+      }, voxelTrimMaterial(trimBase));
     }
     g.userData = { kind: 'voxel-build', voxelBuildId: stamp.id, name: stamp.name, chimneyTops: [] };
     castReceive(g);
@@ -9498,6 +10687,7 @@
     if (opts.ry) mesh.rotation.y = opts.ry;
     if (opts.rx) mesh.rotation.x = opts.rx;
     if (opts.rz) mesh.rotation.z = opts.rz;
+    if (opts.noShadow) mesh.userData.noShadow = true;
     parent.add(mesh);
     return mesh;
   }
@@ -9551,6 +10741,22 @@
       const d = alongZ ? s.d : s.w;
       vbox(parent, w, s.h, d, 0, y + i * 0.085 + s.h / 2, 0, mat);
     });
+  }
+
+  function voxelInvertedSteppedRoof(parent, width, depth, topY, roofMat = M.islandUnder, trimMat = M.islandUnderD) {
+    const layers = Math.max(7, Math.min(14, Math.round(Math.max(width, depth) * 0.65)));
+    const totalDrop = Math.max(1.85, Math.min(6.2, Math.max(width, depth) * 0.30));
+    const yStep = totalDrop / layers;
+    const layerH = yStep * 1.08;
+    for (let i = 0; i < layers; i++) {
+      const t = i / Math.max(1, layers - 1);
+      const w = Math.max(0.36, width * (1 - t * 0.78));
+      const d = Math.max(0.36, depth * (1 - t * 0.78));
+      const y = topY - i * yStep - layerH * 0.5;
+      const mat = i % 3 === 0 ? trimMat : roofMat;
+      vbox(parent, w, layerH, d, 0, y, 0, mat, { noGap: true, noBevel: true });
+    }
+    vbox(parent, Math.max(0.30, width * 0.10), layerH * 1.1, Math.max(0.30, depth * 0.10), 0, topY - totalDrop - layerH * 0.55, 0, trimMat, { noGap: true, noBevel: true });
   }
 
   function voxelChimney(parent, x, y, z, tops) {
@@ -11908,7 +13114,7 @@
   }
   function terrainSurfaceHeightForCell(bx, bz, x, z, cell) {
     if (isLandscapeMeshActive()) return landscapeHeightAtCell(x + (bx || 0) * GRID, z + (bz || 0) * GRID);
-    if (cell) return TOP_H + terrainRiseForLevel(terrainLevelForCell(cell));
+    if (cell) return TOP_H + terrainVisualRiseForCell(cell);
     return TOP_H + terrainRiseAt(x, z);
   }
 
@@ -12458,11 +13664,15 @@
   // board read as an artifact in pixel mode.
   const homeBorderGroup = new THREE.Group();
   homeBorderGroup.name = 'homeBorder';
+  worldGroup.add(homeBorderGroup);
   function buildHomeBorder() {
     while (homeBorderGroup.children.length) {
       const c = homeBorderGroup.children.pop();
-      if (c.geometry) c.geometry.dispose();
+      safeDisposeGeometry(c.geometry);
     }
+    voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE * 1.035, GRID * TILE * 1.035, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
+    castReceive(homeBorderGroup);
+    if (typeof buildUnderIslandClouds === 'function') buildUnderIslandClouds();
   }
   buildHomeBorder();
 
@@ -13225,7 +14435,8 @@
   // visual layout is still readable when panned far, but element/draw call
   // count stays reasonable even at high preview distance.
   function makeGhostTile(terrain, level, worldX, worldZ) {
-    const rise = terrainRiseForLevel(level);
+    const cell = { terrain, terrainFloors: level };
+    const rise = terrainVisualRiseForCell(cell);
     const topY = rise + TOP_H;
 
     let mat = M.grass;
@@ -13320,7 +14531,7 @@
         obj.position.copy(ghostCellPos(boardX, boardZ, x, z));
         obj.position.y = isLandscapeMeshActive()
           ? landscapeHeightAtCell(gx, gz)
-          : TOP_H + terrainRiseForLevel(tileLevelForCell(cells[x][z]));
+          : TOP_H + terrainVisualRiseForCell(cells[x][z]);
         obj.userData.gx = x;
         obj.userData.gz = z;
         obj.userData.boardX = boardX;
@@ -13375,132 +14586,66 @@
   // BufferGeometry. This turns "64 meshes per ghost board" into "~number of
   // terrain types" draw calls, making high preview distances practical.
   function mergeGhostTerrainByMaterial(board) {
-    const groups = new Map();
+    const byMat = new Map();
     const toRemove = [];
 
-    const boardX = board.userData.boardX;
-    const boardZ = board.userData.boardZ;
-    const centerX = boardX * GRID * TILE;
-    const centerZ = boardZ * GRID * TILE;
-
-    const children = [...board.children];
-    for (const child of children) {
-      if (!child) continue;
-      if (child.userData && child.userData.ghostMerged) continue;
-
-      const role = child.userData.fadeRole;
-      if (role !== 'tile' && role !== 'object') continue;
-
-      child.updateMatrix();
-
-      child.traverse(m => {
-        if (!m.isMesh || !m.geometry) return;
-        m.updateMatrix();
-
-        let curr = m;
-        const relMatrix = new THREE.Matrix4().identity();
-        while (curr && curr !== board) {
-          curr.updateMatrix();
-          relMatrix.premultiply(curr.matrix);
-          curr = curr.parent;
-        }
-
-        const mat = m.material;
-        const key = mat.uuid + '|' + role;
-        if (!groups.has(key)) {
-          groups.set(key, { mat, role, items: [] });
-        }
-
-        if (m.isInstancedMesh) {
-          const tempMatrix = new THREE.Matrix4();
-          for (let i = 0; i < m.count; i++) {
-            m.getMatrixAt(i, tempMatrix);
-            const combinedMatrix = relMatrix.clone().multiply(tempMatrix);
-            groups.get(key).items.push({ mesh: m, relMatrix: combinedMatrix });
-          }
-        } else {
-          groups.get(key).items.push({ mesh: m, relMatrix });
-        }
-      });
-      toRemove.push(child);
+    for (const child of board.children) {
+      if (!child || !child.isMesh || child.userData.fadeRole !== 'tile') continue;
+      const mat = child.material;
+      if (!byMat.has(mat)) byMat.set(mat, []);
+      byMat.get(mat).push(child);
     }
 
-    for (const child of toRemove) {
-      board.remove(child);
-    }
-
-    for (const [key, group] of groups) {
-      const { mat, role, items } = group;
-      if (items.length === 0) continue;
+    for (const [mat, meshes] of byMat) {
+      if (meshes.length <= 1) continue;
 
       let posArr = [];
       let norArr = [];
       let uvArr = [];
 
-      const geometryCache = new Map();
+      for (const m of meshes) {
+        const g = m.geometry;
+        const pos = g.attributes.position.array;
+        const nor = g.attributes.normal ? g.attributes.normal.array : null;
+        const uv = g.attributes.uv ? g.attributes.uv.array : null;
 
-      for (const item of items) {
-        const g = item.mesh.geometry;
-        let baseNonIndexed = geometryCache.get(g);
-        if (!baseNonIndexed) {
-          baseNonIndexed = g.index && g.toNonIndexed ? g.toNonIndexed() : g.clone();
-          geometryCache.set(g, baseNonIndexed);
-        }
+        const px = m.position.x;
+        const py = m.position.y;
+        const pz = m.position.z;
 
-        const nonIndexed = baseNonIndexed.clone();
-        nonIndexed.applyMatrix4(item.relMatrix);
-
-        const pos = nonIndexed.attributes.position.array;
-        const nor = nonIndexed.attributes.normal ? nonIndexed.attributes.normal.array : null;
-        const uv = nonIndexed.attributes.uv ? nonIndexed.attributes.uv.array : null;
-
-        for (let i = 0; i < pos.length; i++) {
-          posArr.push(pos[i]);
-        }
-        if (nor) {
-          for (let i = 0; i < nor.length; i++) {
-            norArr.push(nor[i]);
+        for (let i = 0; i < pos.length; i += 3) {
+          posArr.push(pos[i] + px, pos[i + 1] + py, pos[i + 2] + pz);
+          if (nor) {
+            norArr.push(nor[i], nor[i + 1], nor[i + 2]);
+          }
+          if (uv) {
+            const j = (i / 3) * 2;
+            uvArr.push(uv[j], uv[j + 1]);
           }
         }
-        if (uv) {
-          for (let i = 0; i < uv.length; i++) {
-            uvArr.push(uv[i]);
-          }
-        }
-
-        nonIndexed.dispose();
-      }
-
-      for (const baseNonIndexed of geometryCache.values()) {
-        baseNonIndexed.dispose();
+        toRemove.push(m);
       }
 
       if (posArr.length === 0) continue;
 
       const newGeo = new THREE.BufferGeometry();
       newGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(posArr), 3));
-      if (norArr.length && norArr.length === posArr.length) {
-        newGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norArr), 3));
-      }
-      if (uvArr.length && uvArr.length === (posArr.length / 3) * 2) {
-        newGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvArr), 2));
-      }
-
-      newGeo.translate(-centerX, 0, -centerZ);
-
-      newGeo.computeBoundingBox();
+      if (norArr.length) newGeo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(norArr), 3));
+      if (uvArr.length) newGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvArr), 2));
       newGeo.computeBoundingSphere();
 
       const mergedMesh = new THREE.Mesh(newGeo, mat);
-      mergedMesh.position.set(centerX, 0, centerZ);
-      mergedMesh.userData = { fadeRole: role, ghostMerged: true };
-      prepareFadeable(mergedMesh, { ghost: true, grayscale: true, opacity: opacityAtWorldPosition(centerX, centerZ) });
-
-      mergedMesh.castShadow = (role === 'object');
+      mergedMesh.castShadow = false;
       mergedMesh.receiveShadow = true;
       mergedMesh.frustumCulled = true;
-
+      mergedMesh.userData = { fadeRole: 'tile', ghostMerged: true };
       board.add(mergedMesh);
+    }
+
+    // Remove the original per-tile meshes we merged.
+    for (const m of toRemove) {
+      board.remove(m);
+      // Don't dispose — geometries are cached/shared via geomCache.
     }
   }
 
@@ -13575,7 +14720,7 @@
 
           const cells = makeGhostWorld(boardX, boardZ);
           const cell = cells && cells[x] && cells[x][z];
-          const rise = cell ? terrainRiseForLevel(tileLevelForCell(cell)) : 0;
+          const rise = terrainVisualRiseForCell(cell);
 
           const DUMMY = new THREE.Object3D();
           if (revealed) {
@@ -14945,6 +16090,7 @@
     opacityRoots.delete(group);
     unregisterRuntimeObject(group);
     group.traverse(o => {
+      if (o.userData && o.userData.waterfall) waterfallEffectMeshes.delete(o);
       safeDisposeGeometry(o.geometry);
       // Materials are shared (M.* and the fadeMatCache buckets), so we never
       // dispose them here — same contract as before, just enforced via the
@@ -15354,7 +16500,7 @@
     }
     if (cell.boardX || cell.boardZ) {
       const cells = makeGhostWorld(cell.boardX, cell.boardZ);
-      return TOP_H + terrainRiseForLevel(tileLevelForCell(cells[cell.x][cell.z])) + 0.02;
+      return TOP_H + terrainVisualRiseForCell(cells[cell.x][cell.z]) + 0.02;
     }
     return TOP_H + terrainRiseAt(cell.x, cell.z) + 0.02;
   }
@@ -17305,8 +18451,7 @@
     const gx = Math.round(worldX + GRID / 2 - 0.5);
     const gz = Math.round(worldZ + GRID / 2 - 0.5);
     const cell = (world[gx] && world[gx][gz]) ? world[gx][gz] : null;
-    const tf = cell ? (cell.terrainFloors || 1) : 1;
-    const rise = terrainRiseForLevel(tf);
+    const rise = terrainVisualRiseForCell(cell);
     return rise + TOP_H + FP_EYE_H;
   }
 
@@ -17778,14 +18923,22 @@
     fillGridSizeSelect(homeGridEl);
     const brightnessEl = document.getElementById('render-brightness');
     const lightingEl = document.getElementById('render-lighting');
+    const ambientFillEl = document.getElementById('render-ambient-fill');
+    const frontFillEl = document.getElementById('render-front-fill');
+    const sideFillEl = document.getElementById('render-side-fill');
+    const backFillEl = document.getElementById('render-back-fill');
     const saturationEl = document.getElementById('render-saturation');
     const contrastEl = document.getElementById('render-contrast');
     const cloudsEl = document.getElementById('render-clouds');
     const cloudSpeedEl = document.getElementById('render-cloud-speed');
     const cloudHeightEl = document.getElementById('render-cloud-height');
     const cloudShadowEl = document.getElementById('render-cloud-shadow');
+    const underCloudSpreadEl = document.getElementById('render-undercloud-spread');
+    const skyBlueDepthEl = document.getElementById('render-sky-blue-depth');
+    const skyBlueSaturationEl = document.getElementById('render-sky-blue-saturation');
     const distanceMistEl = document.getElementById('render-distance-mist');
     const backdropEl = document.getElementById('render-backdrop');
+    const backdropVignetteEl = document.getElementById('render-backdrop-vignette');
     const pixelSizeEl = document.getElementById('render-pixel-size');
     const pixelDepthEdgeEl = document.getElementById('render-pixel-depth-edge');
     const pixelNormalEdgeEl = document.getElementById('render-pixel-normal-edge');
@@ -17826,19 +18979,38 @@
     const texturedGrassEl = document.getElementById('render-textured-grass');
     const showCrownsEl = document.getElementById('render-show-crowns');
     const terrainVoxelResolutionEl = document.getElementById('render-terrain-voxel-resolution');
+    const terrainColorTargetEl = document.getElementById('render-terrain-color-target');
+    const terrainTintEl = document.getElementById('render-terrain-tint');
+    const terrainTextureEl = document.getElementById('render-terrain-texture');
+    const terrainToneEl = document.getElementById('render-terrain-tone');
+    const terrainColorResetEl = document.getElementById('render-terrain-color-reset');
+    const materialTargetEl = document.getElementById('render-material-target');
+    const materialTintEl = document.getElementById('render-material-tint');
+    const materialTextureEl = document.getElementById('render-material-texture');
+    const materialToneEl = document.getElementById('render-material-tone');
+    const materialResetEl = document.getElementById('render-material-reset');
+    const materialWearEl = document.getElementById('render-material-wear');
     const resolutionValue = document.getElementById('render-resolution-value');
     const distanceValue = document.getElementById('render-distance-value');
     const visibleSizeValue = document.getElementById('render-visible-size-value');
     const brightnessValue = document.getElementById('render-brightness-value');
     const lightingValue = document.getElementById('render-lighting-value');
+    const ambientFillValue = document.getElementById('render-ambient-fill-value');
+    const frontFillValue = document.getElementById('render-front-fill-value');
+    const sideFillValue = document.getElementById('render-side-fill-value');
+    const backFillValue = document.getElementById('render-back-fill-value');
     const saturationValue = document.getElementById('render-saturation-value');
     const contrastValue = document.getElementById('render-contrast-value');
     const cloudsValue = document.getElementById('render-clouds-value');
     const cloudSpeedValue = document.getElementById('render-cloud-speed-value');
     const cloudHeightValue = document.getElementById('render-cloud-height-value');
     const cloudShadowValue = document.getElementById('render-cloud-shadow-value');
+    const underCloudSpreadValue = document.getElementById('render-undercloud-spread-value');
+    const skyBlueDepthValue = document.getElementById('render-sky-blue-depth-value');
+    const skyBlueSaturationValue = document.getElementById('render-sky-blue-saturation-value');
     const distanceMistValue = document.getElementById('render-distance-mist-value');
     const backdropValue = document.getElementById('render-backdrop-value');
+    const backdropVignetteValue = document.getElementById('render-backdrop-vignette-value');
     const pixelSizeValue = document.getElementById('render-pixel-size-value');
     const pixelDepthEdgeValue = document.getElementById('render-pixel-depth-edge-value');
     const pixelNormalEdgeValue = document.getElementById('render-pixel-normal-edge-value');
@@ -17850,8 +19022,34 @@
     const objectOpacityValue = document.getElementById('render-object-opacity-value');
     const voxelGapValue = document.getElementById('render-voxel-gap-value');
     const voxelBevelValue = document.getElementById('render-voxel-bevel-value');
+    const terrainToneValue = document.getElementById('render-terrain-tone-value');
+    const materialToneValue = document.getElementById('render-material-tone-value');
+    const materialWearValue = document.getElementById('render-material-wear-value');
     const settingsTabs = Array.from(modal.querySelectorAll('[data-settings-tab]'));
     const settingsPanels = Array.from(modal.querySelectorAll('[data-settings-panel]'));
+
+    function fillMaterialTextureSelect(select) {
+      if (!select || select.options.length) return;
+      for (const opt of MATERIAL_TEXTURE_OPTIONS) {
+        const el = document.createElement('option');
+        el.value = opt.key;
+        el.textContent = opt.label;
+        select.appendChild(el);
+      }
+    }
+
+    function fillPartMaterialSelect(select) {
+      if (!select || select.options.length) return;
+      for (const [key, group] of Object.entries(PART_MATERIAL_GROUPS)) {
+        const el = document.createElement('option');
+        el.value = key;
+        el.textContent = group.label;
+        select.appendChild(el);
+      }
+    }
+    fillMaterialTextureSelect(terrainTextureEl);
+    fillMaterialTextureSelect(materialTextureEl);
+    fillPartMaterialSelect(materialTargetEl);
 
     function selectSettingsTab(name) {
       settingsTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.settingsTab === name));
@@ -17871,14 +19069,22 @@
       if (homeGridEl) homeGridEl.value = String(GRID);
       brightnessEl.value = String(Math.round(renderBrightness * 100));
       lightingEl.value = String(Math.round(renderLighting * 100));
+      ambientFillEl.value = String(Math.round(renderAmbientFill * 100));
+      frontFillEl.value = String(Math.round(renderFrontFill * 100));
+      sideFillEl.value = String(Math.round(renderSideFill * 100));
+      backFillEl.value = String(Math.round(renderBackFill * 100));
       saturationEl.value = String(Math.round(renderSaturation * 100));
       contrastEl.value = String(Math.round(renderContrast * 100));
       cloudsEl.value = String(Math.round(renderCloudAmount * 100));
       cloudSpeedEl.value = String(Math.round(renderCloudSpeed * 100));
       cloudHeightEl.value = String(renderCloudHeight);
       cloudShadowEl.value = String(Math.round(renderCloudShadow * 100));
+      if (underCloudSpreadEl) underCloudSpreadEl.value = String(Math.round(renderUnderCloudSpread * 100));
+      if (skyBlueDepthEl) skyBlueDepthEl.value = String(Math.round(renderSkyBlueDepth * 100));
+      if (skyBlueSaturationEl) skyBlueSaturationEl.value = String(Math.round(renderSkyBlueSaturation * 100));
       distanceMistEl.value = String(Math.round(renderDistanceMist * 100));
       backdropEl.value = String(Math.round(renderBackdrop * 100));
+      backdropVignetteEl.value = String(Math.round(renderBackdropVignette * 100));
       pixelSizeEl.value = String(renderPixelSize);
       pixelDepthEdgeEl.value = String(Math.round(renderPixelDepthEdge * 100));
       pixelNormalEdgeEl.value = String(Math.round(renderPixelNormalEdge * 100));
@@ -17900,6 +19106,17 @@
       if (texturedGrassEl) texturedGrassEl.checked = !!renderTexturedGrass;
       if (showCrownsEl) showCrownsEl.checked = !!showCrowns;
       if (terrainVoxelResolutionEl) terrainVoxelResolutionEl.value = renderTerrainVoxelResolution;
+      if (terrainColorTargetEl) terrainColorTargetEl.value = renderTerrainColorTarget;
+      const terrainAdjustment = renderTerrainMaterialAdjustments[renderTerrainColorTarget] || {};
+      if (terrainTintEl) terrainTintEl.value = terrainAdjustment.tint || terrainBaseColorForTarget(renderTerrainColorTarget);
+      if (terrainToneEl) terrainToneEl.value = String(Math.round((terrainAdjustment.tone || 0) * 100));
+      if (terrainTextureEl) terrainTextureEl.value = normalizeMaterialTextureKey(terrainAdjustment.texture);
+      if (materialTargetEl) materialTargetEl.value = renderMaterialTarget;
+      const materialAdjustment = renderPartMaterialAdjustments[renderMaterialTarget] || {};
+      if (materialTintEl) materialTintEl.value = materialAdjustment.tint || partBaseColorForTarget(renderMaterialTarget);
+      if (materialToneEl) materialToneEl.value = String(Math.round((materialAdjustment.tone || 0) * 100));
+      if (materialTextureEl) materialTextureEl.value = normalizeMaterialTextureKey(materialAdjustment.texture);
+      if (materialWearEl) materialWearEl.value = String(Math.round(renderMaterialWear * 100));
       if (crowdCountEl) crowdCountEl.value = String(crowdCount);
       if (crowdScaleEl) crowdScaleEl.value = String(Math.round(crowdScale * 100));
       if (crowdSpeedEl) crowdSpeedEl.value = String(Math.round(crowdSpeedMul * 50));
@@ -17925,14 +19142,22 @@
       visibleSizeValue.textContent = visibleSizeEl.value + 'x' + visibleSizeEl.value;
       brightnessValue.textContent = brightnessEl.value + '%';
       lightingValue.textContent = lightingEl.value + '%';
+      ambientFillValue.textContent = ambientFillEl.value + '%';
+      frontFillValue.textContent = frontFillEl.value + '%';
+      sideFillValue.textContent = sideFillEl.value + '%';
+      backFillValue.textContent = backFillEl.value + '%';
       saturationValue.textContent = saturationEl.value + '%';
       contrastValue.textContent = contrastEl.value + '%';
       cloudsValue.textContent = cloudsEl.value + '%';
       cloudSpeedValue.textContent = cloudSpeedEl.value + '%';
       cloudHeightValue.textContent = cloudHeightEl.value;
       cloudShadowValue.textContent = cloudShadowEl.value + '%';
+      if (underCloudSpreadValue && underCloudSpreadEl) underCloudSpreadValue.textContent = underCloudSpreadEl.value + '%';
+      if (skyBlueDepthValue && skyBlueDepthEl) skyBlueDepthValue.textContent = skyBlueDepthEl.value + '%';
+      if (skyBlueSaturationValue && skyBlueSaturationEl) skyBlueSaturationValue.textContent = skyBlueSaturationEl.value + '%';
       distanceMistValue.textContent = distanceMistEl.value + '%';
       backdropValue.textContent = backdropEl.value + '%';
+      backdropVignetteValue.textContent = backdropVignetteEl.value + '%';
       pixelSizeValue.textContent = pixelSizeEl.value + (pixelSizeEl.value === '1' ? ' (off)' : 'x');
       pixelDepthEdgeValue.textContent = pixelDepthEdgeEl.value + '%';
       pixelNormalEdgeValue.textContent = pixelNormalEdgeEl.value + '%';
@@ -17944,6 +19169,15 @@
       objectOpacityValue.textContent = objectOpacityEl.value + '%';
       voxelGapValue.textContent = (parseInt(voxelGapEl.value, 10) / 100).toFixed(2);
       voxelBevelValue.textContent = parseFloat(voxelBevelEl.value).toFixed(3);
+      if (terrainToneValue && terrainToneEl) {
+        const tone = parseInt(terrainToneEl.value, 10) || 0;
+        terrainToneValue.textContent = tone === 0 ? 'neutral' : (tone > 0 ? '+' : '') + tone + '%';
+      }
+      if (materialToneValue && materialToneEl) {
+        const tone = parseInt(materialToneEl.value, 10) || 0;
+        materialToneValue.textContent = tone === 0 ? 'neutral' : (tone > 0 ? '+' : '') + tone + '%';
+      }
+      if (materialWearValue && materialWearEl) materialWearValue.textContent = materialWearEl.value + '%';
       if (crowdCountEl) document.getElementById('crowd-count-value').textContent = crowdCount;
       if (crowdScaleEl) document.getElementById('crowd-scale-value').textContent = Math.round(crowdScale * 100) + '%';
       if (crowdSpeedEl) document.getElementById('crowd-speed-value').textContent = Math.round(crowdSpeedMul * 100) + '%';
@@ -17964,6 +19198,10 @@
       localStorage.setItem(RENDER_LS.visibleSize, String(renderVisibleSize));
       localStorage.setItem(RENDER_LS.brightness, renderBrightness.toFixed(2));
       localStorage.setItem(RENDER_LS.lighting, renderLighting.toFixed(2));
+      localStorage.setItem(RENDER_LS.ambientFill, renderAmbientFill.toFixed(2));
+      localStorage.setItem(RENDER_LS.frontFill, renderFrontFill.toFixed(2));
+      localStorage.setItem(RENDER_LS.sideFill, renderSideFill.toFixed(2));
+      localStorage.setItem(RENDER_LS.backFill, renderBackFill.toFixed(2));
       localStorage.setItem(RENDER_LS.saturation, renderSaturation.toFixed(2));
       localStorage.setItem(RENDER_LS.contrast, renderContrast.toFixed(2));
       localStorage.setItem(RENDER_LS.shadow, renderShadowQuality);
@@ -17971,8 +19209,12 @@
       localStorage.setItem(RENDER_LS.cloudSpeed, renderCloudSpeed.toFixed(2));
       localStorage.setItem(RENDER_LS.cloudHeight, renderCloudHeight.toFixed(1));
       localStorage.setItem(RENDER_LS.cloudShadow, renderCloudShadow.toFixed(2));
+      localStorage.setItem(RENDER_LS.underCloudSpread, renderUnderCloudSpread.toFixed(2));
+      localStorage.setItem(RENDER_LS.skyBlueDepth, renderSkyBlueDepth.toFixed(2));
+      localStorage.setItem(RENDER_LS.skyBlueSaturation, renderSkyBlueSaturation.toFixed(2));
       localStorage.setItem(RENDER_LS.distanceMist, renderDistanceMist.toFixed(2));
       localStorage.setItem(RENDER_LS.backdrop, renderBackdrop.toFixed(2));
+      localStorage.setItem(RENDER_LS.backdropVignette, renderBackdropVignette.toFixed(2));
       localStorage.setItem(RENDER_LS.pixelSize, String(renderPixelSize));
       localStorage.setItem(RENDER_LS.pixelDepthEdge, renderPixelDepthEdge.toFixed(2));
       localStorage.setItem(RENDER_LS.pixelNormalEdge, renderPixelNormalEdge.toFixed(2));
@@ -17986,6 +19228,11 @@
       localStorage.setItem(RENDER_LS.voxelBevel, renderVoxelBevel.toFixed(3));
       localStorage.setItem(RENDER_LS.voxelTerrain, renderVoxelTerrain ? '1' : '0');
       localStorage.setItem(RENDER_LS.texturedGrass, renderTexturedGrass ? '1' : '0');
+      localStorage.setItem(RENDER_LS.terrainColors, JSON.stringify(renderTerrainMaterialAdjustments || {}));
+      localStorage.setItem(RENDER_LS.terrainColorTarget, renderTerrainColorTarget);
+      localStorage.setItem(RENDER_LS.materialParts, JSON.stringify(renderPartMaterialAdjustments || {}));
+      localStorage.setItem(RENDER_LS.materialTarget, renderMaterialTarget);
+      localStorage.setItem(RENDER_LS.materialWear, renderMaterialWear.toFixed(2));
       localStorage.setItem(RENDER_LS.landscapeMeshMode, landscapeMeshMode ? '1' : '0');
       localStorage.setItem(RENDER_LS.showCrowns, showCrowns ? '1' : '0');
       localStorage.setItem(RENDER_LS.terrainVoxelResolution, renderTerrainVoxelResolution);
@@ -18002,12 +19249,20 @@
       const oldTerrainVoxelResolution = renderTerrainVoxelResolution;
       const oldShowCrowns = showCrowns;
       const oldCrowdEnabled = crowdEnabled;
+      const oldTerrainColors = JSON.stringify(renderTerrainMaterialAdjustments || {});
+      const oldPartMaterials = JSON.stringify(renderPartMaterialAdjustments || {});
+      const oldMaterialWear = renderMaterialWear;
+      const oldUnderCloudSpread = renderUnderCloudSpread;
       setShadowQuality(shadowEl.value);
       setRenderResolutionScale(parseInt(resolutionEl.value, 10) / 100);
       setRenderVisibleDistance(parseInt(distanceEl.value, 10));
       setRenderVisibleSize(parseInt(visibleSizeEl.value, 10));
       renderBrightness = parseInt(brightnessEl.value, 10) / 100;
       renderLighting = parseInt(lightingEl.value, 10) / 100;
+      renderAmbientFill = parseInt(ambientFillEl.value, 10) / 100;
+      renderFrontFill = parseInt(frontFillEl.value, 10) / 100;
+      renderSideFill = parseInt(sideFillEl.value, 10) / 100;
+      renderBackFill = parseInt(backFillEl.value, 10) / 100;
       applyLightingSettings();
       renderSaturation = parseInt(saturationEl.value, 10) / 100;
       renderContrast = parseInt(contrastEl.value, 10) / 100;
@@ -18015,13 +19270,19 @@
       renderCloudSpeed = parseInt(cloudSpeedEl.value, 10) / 100;
       renderCloudHeight = parseFloat(cloudHeightEl.value);
       renderCloudShadow = parseInt(cloudShadowEl.value, 10) / 100;
+      renderUnderCloudSpread = underCloudSpreadEl ? parseInt(underCloudSpreadEl.value, 10) / 100 : renderUnderCloudSpread;
+      renderSkyBlueDepth = skyBlueDepthEl ? parseInt(skyBlueDepthEl.value, 10) / 100 : renderSkyBlueDepth;
+      renderSkyBlueSaturation = skyBlueSaturationEl ? parseInt(skyBlueSaturationEl.value, 10) / 100 : renderSkyBlueSaturation;
       if (typeof applyCloudShadowSetting === 'function') applyCloudShadowSetting();
       applyCloudSettings();
       if (typeof applyCloudHeight === 'function') applyCloudHeight();
+      if (Math.abs(renderUnderCloudSpread - oldUnderCloudSpread) > 0.001 && typeof buildUnderIslandClouds === 'function') buildUnderIslandClouds();
       renderDistanceMist = parseInt(distanceMistEl.value, 10) / 100;
-      applyDistanceMistSettings();
       renderBackdrop = parseInt(backdropEl.value, 10) / 100;
+      renderBackdropVignette = parseInt(backdropVignetteEl.value, 10) / 100;
       applyBackdropSettings();
+      if (typeof applySkyBubbleSettings === 'function') applySkyBubbleSettings();
+      applyDistanceMistSettings();
       renderPixelSize = Math.max(1, Math.min(12, parseInt(pixelSizeEl.value, 10) || 1));
       renderPixelDepthEdge = parseInt(pixelDepthEdgeEl.value, 10) / 100;
       renderPixelNormalEdge = parseInt(pixelNormalEdgeEl.value, 10) / 100;
@@ -18063,6 +19324,35 @@
       }
       if (showCrownsEl) showCrowns = !!showCrownsEl.checked;
       if (terrainVoxelResolutionEl) renderTerrainVoxelResolution = terrainVoxelResolutionEl.value;
+      if (terrainColorTargetEl && TERRAIN_COLOR_KEYS.includes(terrainColorTargetEl.value)) {
+        renderTerrainColorTarget = terrainColorTargetEl.value;
+      }
+      if (terrainTintEl && terrainToneEl) {
+        const tint = normalizeHexColor(terrainTintEl.value) || terrainBaseColorForTarget(renderTerrainColorTarget);
+        const tone = Math.max(-0.5, Math.min(0.5, (parseInt(terrainToneEl.value, 10) || 0) / 100));
+        const texture = normalizeMaterialTextureKey(terrainTextureEl && terrainTextureEl.value);
+        const baseTint = terrainBaseColorForTarget(renderTerrainColorTarget).toLowerCase();
+        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default') {
+          renderTerrainMaterialAdjustments[renderTerrainColorTarget] = { tint, tone, texture };
+        } else {
+          delete renderTerrainMaterialAdjustments[renderTerrainColorTarget];
+        }
+      }
+      if (materialTargetEl && PART_MATERIAL_GROUPS[materialTargetEl.value]) {
+        renderMaterialTarget = materialTargetEl.value;
+      }
+      if (materialTintEl && materialToneEl) {
+        const tint = normalizeHexColor(materialTintEl.value) || partBaseColorForTarget(renderMaterialTarget);
+        const tone = Math.max(-0.5, Math.min(0.5, (parseInt(materialToneEl.value, 10) || 0) / 100));
+        const texture = normalizeMaterialTextureKey(materialTextureEl && materialTextureEl.value);
+        const baseTint = partBaseColorForTarget(renderMaterialTarget).toLowerCase();
+        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default') {
+          renderPartMaterialAdjustments[renderMaterialTarget] = { tint, tone, texture };
+        } else {
+          delete renderPartMaterialAdjustments[renderMaterialTarget];
+        }
+      }
+      if (materialWearEl) renderMaterialWear = Math.max(0, Math.min(1, parseInt(materialWearEl.value, 10) / 100));
       if (crowdCountEl) crowdCount = parseInt(crowdCountEl.value, 10) || 0;
       if (crowdScaleEl) crowdScale = parseInt(crowdScaleEl.value, 10) / 100;
       if (crowdSpeedEl) crowdSpeedMul = parseInt(crowdSpeedEl.value, 10) / 50;
@@ -18091,6 +19381,20 @@
       if (oldVoxelTerrain !== renderVoxelTerrain || oldTerrainVoxelResolution !== renderTerrainVoxelResolution) {
         rebuildTerrainRender();
         if (oldVoxelTerrain !== renderVoxelTerrain) rebuildObjectsRender();
+      }
+      if (oldTerrainColors !== JSON.stringify(renderTerrainMaterialAdjustments || {})) {
+        commitTerrainMaterialAdjustments();
+        rebuildTerrainRender();
+      }
+      if (oldPartMaterials !== JSON.stringify(renderPartMaterialAdjustments || {})) {
+        commitPartMaterialAdjustments();
+        rebuildTerrainRender();
+        rebuildObjectsRender();
+      }
+      if (Math.abs(oldMaterialWear - renderMaterialWear) > 0.001) {
+        commitPartMaterialAdjustments();
+        rebuildTerrainRender();
+        rebuildObjectsRender();
       }
       if (oldShowCrowns !== showCrowns) rebuildObjectsRender();
       updateGhostRenderBubble();
@@ -18129,10 +19433,47 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, distanceMistEl, backdropEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, showCrownsEl, terrainVoxelResolutionEl, crowdCountEl, crowdScaleEl, crowdSpeedEl, crowdBobEl, crowdSwayEl, crowdLeanEl, crowdZoneRadiusEl, crowdShowZonesEl, crowdPausedEl, crowdEnabledEl, crowdDebugEl, crowdModeEl, crowdCountLiveEl, crowdScaleLiveEl, crowdSpeedLiveEl, crowdZoneRadiusLiveEl, crowdShowZonesLiveEl, crowdShowArrowsLiveEl, crowdPausedLiveEl, crowdEnabledLiveEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, ambientFillEl, frontFillEl, sideFillEl, backFillEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, underCloudSpreadEl, skyBlueDepthEl, skyBlueSaturationEl, distanceMistEl, backdropEl, backdropVignetteEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, showCrownsEl, terrainVoxelResolutionEl, terrainTintEl, terrainTextureEl, terrainToneEl, materialTintEl, materialTextureEl, materialToneEl, materialWearEl, crowdCountEl, crowdScaleEl, crowdSpeedEl, crowdBobEl, crowdSwayEl, crowdLeanEl, crowdZoneRadiusEl, crowdShowZonesEl, crowdPausedEl, crowdEnabledEl, crowdDebugEl, crowdModeEl, crowdCountLiveEl, crowdScaleLiveEl, crowdSpeedLiveEl, crowdZoneRadiusLiveEl, crowdShowZonesLiveEl, crowdShowArrowsLiveEl, crowdPausedLiveEl, crowdEnabledLiveEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
+    }
+    if (terrainColorTargetEl) {
+      terrainColorTargetEl.addEventListener('change', () => {
+        if (TERRAIN_COLOR_KEYS.includes(terrainColorTargetEl.value)) {
+          renderTerrainColorTarget = terrainColorTargetEl.value;
+          persistSettings();
+          syncControls();
+        }
+      });
+    }
+    if (materialTargetEl) {
+      materialTargetEl.addEventListener('change', () => {
+        if (PART_MATERIAL_GROUPS[materialTargetEl.value]) {
+          renderMaterialTarget = materialTargetEl.value;
+          persistSettings();
+          syncControls();
+        }
+      });
+    }
+    if (terrainColorResetEl) {
+      terrainColorResetEl.addEventListener('click', () => {
+        delete renderTerrainMaterialAdjustments[renderTerrainColorTarget];
+        commitTerrainMaterialAdjustments();
+        rebuildTerrainRender();
+        persistSettings();
+        syncControls();
+      });
+    }
+    if (materialResetEl) {
+      materialResetEl.addEventListener('click', () => {
+        delete renderPartMaterialAdjustments[renderMaterialTarget];
+        commitPartMaterialAdjustments();
+        rebuildTerrainRender();
+        rebuildObjectsRender();
+        persistSettings();
+        syncControls();
+      });
     }
     // Home grid size — a separate listener because it triggers a full
     // re-render rather than uniforms/material tweaks.
@@ -18148,6 +19489,10 @@
       applyAutoPreviewSettingsForGrid({ explored: hasUserPanned });
       renderBrightness = 1;
       renderLighting = 1.0;
+      renderAmbientFill = 0.58;
+      renderFrontFill = 0.55;
+      renderSideFill = 0.45;
+      renderBackFill = 0.38;
       applyLightingSettings();
       renderSaturation = 1;
       renderContrast = 1;
@@ -18160,6 +19505,7 @@
       renderDistanceMist = 0.28;
       applyDistanceMistSettings();
       renderBackdrop = 0.78;
+      renderBackdropVignette = 0.18;
       applyBackdropSettings();
       renderPixelSize = 1;
       renderPixelDepthEdge = 0;
@@ -18175,11 +19521,18 @@
       renderVoxelBevel = parseFloat(RENDER_DEFAULTS.voxelBevel);
       renderVoxelTerrain = false;
       renderTexturedGrass = false;
+      renderTerrainMaterialAdjustments = {};
+      renderTerrainColorTarget = 'grass';
+      renderPartMaterialAdjustments = {};
+      renderMaterialTarget = 'walls';
+      renderMaterialWear = 0;
       if (typeof texCheckered !== 'undefined') {
         M.grass.map = texCheckered; M.grass.needsUpdate = true;
         M.grassEdge.map = texCheckered; M.grassEdge.needsUpdate = true;
         M.grassHi.map = texCheckered; M.grassHi.needsUpdate = true;
       }
+      commitTerrainMaterialAdjustments();
+      commitPartMaterialAdjustments();
       customMaterialCache.clear();
       renderTerrainVoxelResolution = 'mixed';
       crowdCount = 12;
@@ -19764,6 +21117,19 @@
     mesh.customDepthMaterial = depthMat;
   }
 
+  function disposeCloudRoot(root) {
+    if (!root) return;
+    root.traverse(o => {
+      safeDisposeGeometry(o.geometry);
+      if (o.customDepthMaterial && o.customDepthMaterial.userData && o.customDepthMaterial.userData.cloudShadowDepth) {
+        o.customDepthMaterial.dispose();
+      }
+      if (o.material && o.material.userData && o.material.userData.cloudInstance) {
+        o.material.dispose();
+      }
+    });
+  }
+
   function applyCloudShadowSetting() {
     if (!clouds) return;
     const at = cloudShadowAlphaTest();
@@ -19857,20 +21223,73 @@
     while (clouds.length > target) {
       const c = clouds.pop();
       cloudGroup.remove(c);
-      c.traverse(o => {
-        safeDisposeGeometry(o.geometry);
-        if (o.customDepthMaterial && o.customDepthMaterial.userData && o.customDepthMaterial.userData.cloudShadowDepth) {
-          o.customDepthMaterial.dispose();
-        }
-        if (o.material && o.material.userData && o.material.userData.cloudInstance) {
-          o.material.dispose();
-        }
-      });
+      disposeCloudRoot(c);
     }
     while (clouds.length < target) {
       spawnCloud(true);
     }
   }
+
+  var underIslandCloudGroup = new THREE.Group();
+  underIslandCloudGroup.name = 'under-island-clouds';
+  xrWorldRoot.add(underIslandCloudGroup);
+  var underIslandClouds = [];
+
+  function buildUnderIslandClouds() {
+    if (!underIslandCloudGroup || typeof makeCloud !== 'function') return;
+    while (underIslandClouds.length) {
+      const c = underIslandClouds.pop();
+      underIslandCloudGroup.remove(c);
+      disposeCloudRoot(c);
+    }
+    const span = GRID * TILE;
+    const spread = Math.max(0.7, Math.min(2.2, renderUnderCloudSpread || 1));
+    const count = Math.max(6, Math.min(14, Math.round((GRID * 0.20 + 4) * Math.min(1.35, spread))));
+    const cloudY = -DIRT_H - Math.max(2.3, Math.min(5.8, GRID * 0.13));
+    const ring = span * 0.58 * spread;
+    for (let i = 0; i < count; i++) {
+      const c = makeCloud();
+      const angle = (i / count) * Math.PI * 2 + cellRand(i, GRID, 910) * 0.62;
+      const radius = ring * (0.52 + cellRand(i, GRID, 920) * 0.36);
+      const scale = 0.55 + cellRand(i, GRID, 930) * 0.55;
+      c.scale.set(scale * 1.30, scale * 0.34, scale * 0.82);
+      c.position.set(
+        Math.cos(angle) * radius,
+        cloudY + (cellRand(i, GRID, 940) - 0.5) * 0.78,
+        Math.sin(angle) * radius
+      );
+      c.rotation.y = angle + Math.PI * 0.5;
+      c.userData.orbitAngle = angle;
+      c.userData.orbitRadius = radius;
+      c.userData.orbitSpeed = 0.012 + cellRand(i, GRID, 950) * 0.020;
+      c.userData.baseY = c.position.y;
+      c.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = false;
+        o.receiveShadow = false;
+        if (o.customDepthMaterial && o.customDepthMaterial.userData && o.customDepthMaterial.userData.cloudShadowDepth) {
+          o.customDepthMaterial.dispose();
+          o.customDepthMaterial = null;
+        }
+      });
+      underIslandCloudGroup.add(c);
+      underIslandClouds.push(c);
+    }
+  }
+
+  function updateUnderIslandClouds(dt) {
+    if (!underIslandClouds || !underIslandClouds.length) return;
+    const drift = 0.35 + renderCloudSpeed * 1.2;
+    for (const c of underIslandClouds) {
+      c.userData.orbitAngle += c.userData.orbitSpeed * drift * dt;
+      c.position.x = Math.cos(c.userData.orbitAngle) * c.userData.orbitRadius;
+      c.position.z = Math.sin(c.userData.orbitAngle) * c.userData.orbitRadius;
+      c.position.y = c.userData.baseY + Math.sin(c.userData.orbitAngle * 1.7) * 0.10;
+      c.rotation.y += dt * 0.04;
+    }
+  }
+
+  buildUnderIslandClouds();
 
   // ---------- weather particles (rain + snow) ----------
   // Rain and snow mirror Open World Builder's chunky weather system:
@@ -20153,8 +21572,7 @@
 
     const cells = makeGhostWorld(bx, bz);
     const cell = cells[lx][lz];
-    const level = tileLevelForCell(cell);
-    return TOP_H + terrainRiseForLevel(level) + WEATHER_SURFACE_PAD;
+    return TOP_H + terrainVisualRiseForCell(cell) + WEATHER_SURFACE_PAD;
   }
 
   const WEATHER_TILT_AXIS = new THREE.Vector3(0, 0, 1);
@@ -20280,6 +21698,8 @@
   }
 
   function updateClouds(dt) {
+    if (typeof updateSkyBubble === 'function') updateSkyBubble();
+    updateUnderIslandClouds(dt);
     if (!clouds || !clouds.length) return;
     const baseSpeed = renderCloudSpeed * 2.4; // 0 → 2.4 m/s scalar
     const cx = target.x;
@@ -20934,6 +22354,7 @@
     if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
     tickWeather(dt);
     updateClouds(dt);
+    updateWaterfallEffects(t);
     tickVehicles(dt);
     if (crowdEnabled && crowdLayer) crowdLayer.update(dt, camera);
     updateCropDuster(dt);
@@ -23861,6 +25282,54 @@
       return sel && sel.worldCoords ? sel.worldCoords() : [];
     }
 
+    function makeSelectionPreviewObject(target) {
+      if (!target || !target.cell || !target.cell.kind) return null;
+      const cell = target.cell;
+      const kind = cell.kind;
+      const level = cell.floors || 1;
+      const voxelRender = makeVoxelRenderForCell(kind, target.x || 0, target.z || 0, cell, level);
+      if (voxelRender && !voxelRender.skip && voxelRender.mesh) return voxelRender.mesh;
+      if (kind === 'house') return makeHouse(cell.floors || 2, cell.buildingType || 'cottage');
+      if (kind === 'tree') return makeTree(level);
+      if (kind === 'rock') return makeRock(null, level, target.x || 0, target.z || 0, cell.terrain === 'water');
+      if (kind === 'bridge') return makeBridge('x', level);
+      if (kind === 'fence') return makeFence(normalizeFenceSide(cell.fenceSide), level);
+      if (kind === 'tuft') return makeTuft();
+      if (kind === 'flower') return makeFlower();
+      if (kind === 'bush') return makeBush();
+      if (kind === 'crop') return makeCrop();
+      if (kind === 'corn') return makeCorn();
+      if (kind === 'wheat') return makeWheat();
+      if (kind === 'pumpkin') return makePumpkin();
+      if (kind === 'carrot') return makeCarrot();
+      if (kind === 'sunflower') return makeSunflower();
+      if (kind === 'cow') return makeCow();
+      if (kind === 'sheep') return makeSheep();
+      return null;
+    }
+
+    function frameSelectionPreviewObject(obj) {
+      if (!obj || !previewCamera) return;
+      obj.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(obj);
+      if (!Number.isFinite(box.min.x) || !Number.isFinite(box.max.x)) return;
+      const center = box.getCenter(new THREE.Vector3());
+      obj.position.x -= center.x;
+      obj.position.z -= center.z;
+      obj.position.y -= box.min.y;
+      obj.updateMatrixWorld(true);
+      const fitBox = new THREE.Box3().setFromObject(obj);
+      const size = fitBox.getSize(new THREE.Vector3());
+      const span = Math.max(0.65, size.x, size.y, size.z);
+      const lookY = Math.max(0.24, size.y * 0.46);
+      const r = Math.max(1.8, span * 2.05);
+      previewCamera.near = 0.05;
+      previewCamera.far = Math.max(20, r * 8);
+      previewCamera.position.set(r, r * 0.78, r);
+      previewCamera.lookAt(0, lookY, 0);
+      previewCamera.updateProjectionMatrix();
+    }
+
     function updateSelectionPreview(target) {
       if (!previewCanvas) return;
       if (!target || !target.cell) {
@@ -23896,13 +25365,9 @@
         previewMesh = null;
       }
       // create mesh from kind (reuse factories where possible)
-      const kind = target.cell.kind || target.kind;
       let obj = null;
       try {
-        if (kind === 'house') obj = makeHouse(target.cell.floors || 2, target.cell.buildingType || 'cottage');
-        else if (kind === 'tree') obj = makeTree();
-        else if (kind === 'voxel-build') obj = makeVoxelBuild(target.cell);
-        else if (kind) obj = makeGenericObject(kind);
+        obj = makeSelectionPreviewObject(target);
       } catch (e) { /* fallback */ }
       if (!obj) {
         // simple fallback box
@@ -23910,8 +25375,8 @@
         const mat = new THREE.MeshLambertMaterial({ color: 0x88aaff });
         obj = new THREE.Mesh(geo, mat);
       }
-      obj.scale.setScalar(0.9);
-      obj.position.set(0, 0.3, 0);
+      obj.scale.setScalar(0.95);
+      frameSelectionPreviewObject(obj);
       previewScene.add(obj);
       previewMesh = obj;
       resizePreviewRenderer();
@@ -23945,6 +25410,53 @@
       }
     }
 
+    const SELECTION_BODY_COLOR_OPTIONS = [
+      { label: 'Stone', value: '#a9a39a', color: '#a9a39a' },
+      { label: 'Limestone', value: '#d8d0b8', color: '#d8d0b8' },
+      { label: 'Cream', value: '#f2dfb0', color: '#f2dfb0' },
+      { label: 'Whitewash', value: '#f4eee2', color: '#f4eee2' },
+      { label: 'Brick', value: '#a84a3a', color: '#a84a3a' },
+      { label: 'Terracotta', value: '#c46b3f', color: '#c46b3f' },
+      { label: 'Ochre', value: '#c9a45b', color: '#c9a45b' },
+      { label: 'Sage', value: '#8fa66b', color: '#8fa66b' },
+      { label: 'Bluewash', value: '#8bb3c9', color: '#8bb3c9' },
+      { label: 'Charcoal', value: '#55514d', color: '#55514d' },
+      { label: 'Dark', value: '#77716a', color: '#77716a' },
+    ];
+    const SELECTION_TOP_COLOR_OPTIONS = [
+      { label: 'Purple', value: '#6c55c7', color: '#6c55c7' },
+      { label: 'Blue', value: '#2f74b7', color: '#2f74b7' },
+      { label: 'Sky', value: '#66a6d9', color: '#66a6d9' },
+      { label: 'Red', value: '#b84b38', color: '#b84b38' },
+      { label: 'Terracotta', value: '#c8663d', color: '#c8663d' },
+      { label: 'Green', value: '#4e8a49', color: '#4e8a49' },
+      { label: 'Teal', value: '#3e8f8d', color: '#3e8f8d' },
+      { label: 'Gold', value: '#d6a93b', color: '#d6a93b' },
+      { label: 'Slate', value: '#3a3a40', color: '#3a3a40' },
+      { label: 'Black', value: '#202329', color: '#202329' },
+    ];
+    const SELECTION_LEAF_COLOR_OPTIONS = [
+      { label: 'Pine', value: '#4f8a2c', color: '#4f8a2c' },
+      { label: 'Bright', value: '#86d139', color: '#86d139' },
+      { label: 'Olive', value: '#7f9443', color: '#7f9443' },
+      { label: 'Cypress', value: '#2f6f44', color: '#2f6f44' },
+      { label: 'Autumn', value: '#c07a2f', color: '#c07a2f' },
+      { label: 'Amber', value: '#d6a93b', color: '#d6a93b' },
+      { label: 'Redleaf', value: '#a84a3a', color: '#a84a3a' },
+      { label: 'Blossom', value: '#e9a3bd', color: '#e9a3bd' },
+      { label: 'Lilac', value: '#b79ad8', color: '#b79ad8' },
+      { label: 'Winter', value: '#7ba66d', color: '#7ba66d' },
+    ];
+    const SELECTION_TRUNK_COLOR_OPTIONS = [
+      { label: 'Brown', value: '#5c3818', color: '#5c3818' },
+      { label: 'Oak', value: '#8a5a2f', color: '#8a5a2f' },
+      { label: 'Cedar', value: '#6d4325', color: '#6d4325' },
+      { label: 'Redwood', value: '#8f4a34', color: '#8f4a34' },
+      { label: 'Birch', value: '#d8c8a8', color: '#d8c8a8' },
+      { label: 'Ash', value: '#a99b85', color: '#a99b85' },
+      { label: 'Dark', value: '#3f2a18', color: '#3f2a18' },
+    ];
+
     function populatePreviewActions(target) {
       const container = document.getElementById('selection-preview-actions');
       if (!container) return;
@@ -23952,21 +25464,14 @@
       if (!target || !target.cell) return;
       const kind = target.cell.kind;
       if (kind === 'house' || kind === 'voxel-build') {
-        // Body colors with real swatches
-        const bodyColors = [
-          { label: 'Stone', val: '#a9a39a', color: '#a9a39a' },
-          { label: 'Cream', val: '#f2dfb0', color: '#f2dfb0' },
-          { label: 'Brick', val: '#a84a3a', color: '#a84a3a' },
-          { label: 'Dark', val: '#77716a', color: '#77716a' },
-        ];
         const bodyWrap = document.createElement('div');
         bodyWrap.style.display = 'contents';
-        bodyColors.forEach(c => {
+        SELECTION_BODY_COLOR_OPTIONS.forEach(c => {
           const chip = document.createElement('button');
           chip.className = 'selection-prop-chip color-chip';
           chip.innerHTML = `<span class="selection-prop-swatch" style="background:${c.color}"></span>${c.label}`;
           chip.onclick = () => {
-            applySelectionProperty('bodyColor', c.val);
+            applySelectionProperty('bodyColor', c.value);
             setTimeout(() => {
               const t = selectedBoardObjectTarget();
               if (t) updateSelectionPreview(t);
@@ -23976,21 +25481,14 @@
         });
         container.appendChild(bodyWrap);
 
-        // Top colors
-        const topColors = [
-          { label: 'Purple', val: '#6c55c7', color: '#6c55c7' },
-          { label: 'Blue', val: '#2f74b7', color: '#2f74b7' },
-          { label: 'Red', val: '#b84b38', color: '#b84b38' },
-          { label: 'Slate', val: '#3a3a40', color: '#3a3a40' },
-        ];
         const topWrap = document.createElement('div');
         topWrap.style.display = 'contents';
-        topColors.forEach(c => {
+        SELECTION_TOP_COLOR_OPTIONS.forEach(c => {
           const chip = document.createElement('button');
           chip.className = 'selection-prop-chip color-chip';
           chip.innerHTML = `<span class="selection-prop-swatch" style="background:${c.color}"></span>${c.label}`;
           chip.onclick = () => {
-            applySelectionProperty('topColor', c.val);
+            applySelectionProperty('topColor', c.value);
             setTimeout(() => {
               const t = selectedBoardObjectTarget();
               if (t) updateSelectionPreview(t);
@@ -24142,19 +25640,8 @@
       }
       if (primary === 'house' || primary === 'voxel-build') {
         rows.push(
-          { key: 'topColor', label: 'Top', color: true, options: [
-            { label: 'Purple', value: '#6c55c7', color: '#6c55c7' },
-            { label: 'Blue', value: '#2f74b7', color: '#2f74b7' },
-            { label: 'Red', value: '#b84b38', color: '#b84b38' },
-            { label: 'Slate', value: '#3a3a40', color: '#3a3a40' },
-            { label: 'Gold', value: '#d6a93b', color: '#d6a93b' },
-          ] },
-          { key: 'bodyColor', label: 'Body', color: true, options: [
-            { label: 'Stone', value: '#a9a39a', color: '#a9a39a' },
-            { label: 'Cream', value: '#f2dfb0', color: '#f2dfb0' },
-            { label: 'Brick', value: '#a84a3a', color: '#a84a3a' },
-            { label: 'Dark', value: '#77716a', color: '#77716a' },
-          ] },
+          { key: 'topColor', label: 'Top', color: true, options: SELECTION_TOP_COLOR_OPTIONS },
+          { key: 'bodyColor', label: 'Body', color: true, options: SELECTION_BODY_COLOR_OPTIONS },
         );
         if (primary === 'house') {
           rows.push(
@@ -24169,19 +25656,8 @@
         }
       } else if (primary === 'tree') {
         rows.push(
-          { key: 'topColor', label: 'Leaves', color: true, options: [
-            { label: 'Pine', value: '#4f8a2c', color: '#4f8a2c' },
-            { label: 'Bright', value: '#86d139', color: '#86d139' },
-            { label: 'Autumn', value: '#c07a2f', color: '#c07a2f' },
-            { label: 'Blossom', value: '#e9a3bd', color: '#e9a3bd' },
-            { label: 'Winter', value: '#7ba66d', color: '#7ba66d' },
-          ] },
-          { key: 'bodyColor', label: 'Trunk', color: true, options: [
-            { label: 'Brown', value: '#5c3818', color: '#5c3818' },
-            { label: 'Oak', value: '#8a5a2f', color: '#8a5a2f' },
-            { label: 'Birch', value: '#d8c8a8', color: '#d8c8a8' },
-            { label: 'Dark', value: '#3f2a18', color: '#3f2a18' },
-          ] },
+          { key: 'topColor', label: 'Leaves', color: true, options: SELECTION_LEAF_COLOR_OPTIONS },
+          { key: 'bodyColor', label: 'Trunk', color: true, options: SELECTION_TRUNK_COLOR_OPTIONS },
         );
       }
       rows.push({ key: 'size', label: 'Size', options: [
@@ -27224,10 +28700,13 @@
         } catch (err) { console.warn('[palette] procedural failed:', err); }
       } });
       // Settings tabs (router into the Settings modal)
-      items.push({ group: 'Settings', label: 'Settings — Screen', run: settingsTab('screen') });
-      items.push({ group: 'Settings', label: 'Settings — World',  run: settingsTab('world') });
-      items.push({ group: 'Settings', label: 'Settings — Sky',    run: settingsTab('sky') });
-      items.push({ group: 'Settings', label: 'Settings — AI',     run: settingsTab('ai') });
+      items.push({ group: 'Settings', label: 'Settings — App',          run: settingsTab('app') });
+      items.push({ group: 'Settings', label: 'Settings — Rendering',    run: settingsTab('rendering') });
+      items.push({ group: 'Settings', label: 'Settings — World',        run: settingsTab('world') });
+      items.push({ group: 'Settings', label: 'Settings — Materials',    run: settingsTab('materials') });
+      items.push({ group: 'Settings', label: 'Settings — Environment',  run: settingsTab('environment') });
+      items.push({ group: 'Settings', label: 'Settings — Crowd',        run: settingsTab('crowd') });
+      items.push({ group: 'Settings', label: 'Settings — AI Config',    run: settingsTab('ai') });
       if (window.TinyWorldAuth) {
         items.push({ group: 'Account', label: 'Open account / My Builds', run: topBtnAction('account-btn') });
         items.push({ group: 'Account', label: 'Sign in', run: topBtnAction('auth-login-btn-top') });
