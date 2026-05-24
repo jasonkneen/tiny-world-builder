@@ -5535,6 +5535,18 @@
     pixelSize: 0,
     wantNormals: false,
   };
+  const renderBufferSizeVec = new THREE.Vector2();
+
+  function disposePixelNormalResources() {
+    if (pixelState.normalTarget) {
+      pixelState.normalTarget.dispose();
+      pixelState.normalTarget = null;
+    }
+    if (pixelState.normalMaterial) {
+      pixelState.normalMaterial.dispose();
+      pixelState.normalMaterial = null;
+    }
+  }
 
   function ensurePixelResources(drawW, drawH, pixelSize, wantNormals) {
     const targetW = Math.max(1, Math.floor(drawW / pixelSize));
@@ -5564,6 +5576,8 @@
       } else if (pixelState.normalTarget.width !== targetW || pixelState.normalTarget.height !== targetH) {
         pixelState.normalTarget.setSize(targetW, targetH);
       }
+    } else {
+      disposePixelNormalResources();
     }
     if (!pixelState.quadScene) {
       pixelState.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -5681,8 +5695,8 @@
       if (statsOverlay) sampleStats();
       return;
     }
-    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const wantNormals = usePixelation && (renderPixelNormalEdge > 0.001 || renderShaderAntialias > 0.001);
+    const size = renderer.getDrawingBufferSize(renderBufferSizeVec);
+    const wantNormals = usePixelation && renderPixelNormalEdge > 0.001;
     const postPixelSize = usePixelation ? renderPixelSize : 1;
     ensurePixelResources(size.x, size.y, postPixelSize, wantNormals);
     const prevTarget = renderer.getRenderTarget();
@@ -14029,6 +14043,16 @@
     return mat;
   }
 
+  function setCachedParticleMaterial(mesh, baseMat, opacity, colorHex) {
+    if (!mesh) return;
+    const qOpacity = Math.round(opacity * 16) / 16;
+    const key = baseMat.uuid + '|' + qOpacity + '|' + (colorHex !== undefined ? colorHex : 'default');
+    if (mesh.userData && mesh.userData._particleMatKey === key) return;
+    mesh.material = getCachedParticleMaterial(baseMat, opacity, colorHex);
+    mesh.userData = mesh.userData || {};
+    mesh.userData._particleMatKey = key;
+  }
+
 
   function prepareFadeable(group, opts) {
     const { ghost = false, opacity = 1, grayscale = false } = opts || {};
@@ -20892,6 +20916,7 @@
         vx: (Math.random() - 0.5) * 0.15,
         vz: (Math.random() - 0.5) * 0.15,
       };
+      setCachedParticleMaterial(s, smokeMat, initialOpacity);
       xrWorldRoot.add(s);
       smokeParticles.push(s);
     }
@@ -20907,7 +20932,7 @@
       s.position.z += s.userData.vz * dt;
       const maxOp = s.userData.maxOpacity !== undefined ? s.userData.maxOpacity : 0.65;
       const op = maxOp * (1 - t);
-      s.material = getCachedParticleMaterial(smokeMat, op, s.userData.colorHex);
+      setCachedParticleMaterial(s, smokeMat, op, s.userData.colorHex);
       const sc = 1 + t * 1.4;
       s.scale.set(sc, sc, sc);
       if (t >= 1) {
@@ -20947,6 +20972,7 @@
         vz: Math.sin(a) * (0.85 + Math.random() * 0.5),
         colorHex: colorHex
       };
+      setCachedParticleMaterial(d, smokeMat, initialOpacity, colorHex);
       xrWorldRoot.add(d);
       smokeParticles.push(d);
     }
