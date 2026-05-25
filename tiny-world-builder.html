@@ -4640,6 +4640,10 @@
               <output id="render-material-wear-value"></output>
             </div>
             <div class="settings-section-title">Terrain materials</div>
+            <label class="gen-check">
+              <input type="checkbox" id="render-surface-linked-materials" />
+              <span>Link surface finishes <em class="gen-hint">share stone, sand, dirt, and grass texture choices across matching terrain and model surfaces</em></span>
+            </label>
             <label>Terrain color
               <select id="render-terrain-color-target">
                 <option value="grass">Grass</option>
@@ -4661,6 +4665,11 @@
               <select id="render-terrain-texture"></select>
             </label>
             <div class="range-row">
+              <span>Texture density</span>
+              <input id="render-terrain-texture-scale" type="range" min="50" max="400" step="10" />
+              <output id="render-terrain-texture-scale-value"></output>
+            </div>
+            <div class="range-row">
               <span>Light / dark</span>
               <input id="render-terrain-tone" type="range" min="-50" max="50" step="1" />
               <output id="render-terrain-tone-value"></output>
@@ -4677,6 +4686,11 @@
             <label>Texture
               <select id="render-material-texture"></select>
             </label>
+            <div class="range-row">
+              <span>Texture density</span>
+              <input id="render-material-texture-scale" type="range" min="50" max="400" step="10" />
+              <output id="render-material-texture-scale-value"></output>
+            </div>
             <div class="range-row">
               <span>Light / dark</span>
               <input id="render-material-tone" type="range" min="-50" max="50" step="1" />
@@ -5088,6 +5102,7 @@
     voxelBevel: 'tinyworld:render:voxelBevel',
     voxelTerrain: 'tinyworld:render:voxelTerrain',
     texturedGrass: 'tinyworld:render:texturedGrass',
+    surfaceLinkedMaterials: 'tinyworld:render:surfaceLinkedMaterials',
     terrainColors: 'tinyworld:render:terrainColors',
     terrainColorTarget: 'tinyworld:render:terrainColorTarget',
     materialParts: 'tinyworld:render:materialParts',
@@ -5163,6 +5178,7 @@
     voxelBevel: '0.018',
     voxelTerrain: '0',
     texturedGrass: '1',
+    surfaceLinkedMaterials: '1',
     terrainColors: '{}',
     terrainColorTarget: 'grass',
     materialParts: '{}',
@@ -5349,6 +5365,7 @@
   let renderVoxelBevel = storedNumber(RENDER_LS.voxelBevel, parseFloat(RENDER_DEFAULTS.voxelBevel), 0, 0.06);
   let renderVoxelTerrain = localStorage.getItem(RENDER_LS.voxelTerrain) === '1';
   let renderTexturedGrass = localStorage.getItem(RENDER_LS.texturedGrass) !== '0';
+  let renderSurfaceLinkedMaterials = localStorage.getItem(RENDER_LS.surfaceLinkedMaterials) !== '0';
   let renderTerrainVoxelResolution = localStorage.getItem(RENDER_LS.terrainVoxelResolution) || 'mixed';
   let showCrowns = localStorage.getItem(RENDER_LS.showCrowns) !== '0';
   if (!['mixed', '4', '6', '8', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
@@ -5476,8 +5493,9 @@
       ? camera.position.distanceTo(target)
       : 48;
     const span = Math.max(GRID, renderVisibleSize || GRID, viewSize || GRID, DEFAULT_VIEW_SIZE);
-    const near = camDistance + span * (0.26 + (1 - amount) * 0.72);
-    const far = camDistance + span * (1.04 + (1 - amount) * 1.10);
+    const zoomFade = Math.max(0, Math.min(1, ((viewSize || DEFAULT_VIEW_SIZE) - DEFAULT_VIEW_SIZE * 1.55) / (DEFAULT_VIEW_SIZE * 2.2)));
+    const near = camDistance + span * (0.24 + (1 - amount) * 0.64) - span * zoomFade * (0.72 + amount * 0.58);
+    const far = camDistance + span * (1.08 + (1 - amount) * 1.05) - span * zoomFade * 0.16;
     scene.fog = new THREE.Fog(bgHex, near, Math.max(near + span * 0.45, far));
   }
 
@@ -6278,9 +6296,9 @@
     water:     new THREE.MeshLambertMaterial({ color: 0x3a8fcc, side: THREE.FrontSide }),
     waterDk:   new THREE.MeshLambertMaterial({ color: 0x2f77ad, side: THREE.FrontSide }),
     waterFoam: new THREE.MeshLambertMaterial({ color: 0xbbe9ff, transparent: true, opacity: 0.74, side: THREE.FrontSide }),
-    waterfall: new THREE.MeshBasicMaterial({ color: 0x78c9f4, transparent: true, opacity: 0.60, depthWrite: false, side: THREE.DoubleSide }),
-    waterfallHi: new THREE.MeshBasicMaterial({ color: 0xd8f6ff, transparent: true, opacity: 0.78, depthWrite: false, side: THREE.DoubleSide }),
-    waterfallFoamPuff: new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.58, depthWrite: false }),
+    waterfall: new THREE.MeshBasicMaterial({ color: 0x78c9f4, transparent: true, opacity: 0.46, depthWrite: true, side: THREE.FrontSide }),
+    waterfallHi: new THREE.MeshBasicMaterial({ color: 0xd8f6ff, transparent: true, opacity: 0.62, depthWrite: true, side: THREE.FrontSide }),
+    waterfallFoamPuff: new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.58, depthWrite: true }),
     shore:     new THREE.MeshLambertMaterial({ color: 0xd8c18a, side: THREE.FrontSide }),
 
     rock:      new THREE.MeshLambertMaterial({ color: 0x9b9a8f, side: THREE.FrontSide }),
@@ -6517,6 +6535,38 @@
         ctx.fillStyle = rand() > 0.65 ? '#d2d2d2' : (rand() > 0.35 ? '#e5e5e5' : '#f4f4f4');
         ctx.fillRect(x, y, 1 + Math.floor(rand() * 2), 1 + Math.floor(rand() * 2));
       }
+    } else if (type === 'sand') {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let i = 0; i < scale * scale * 0.22; i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        const r = rand();
+        ctx.fillStyle = r > 0.72 ? '#f6f6f6' : (r > 0.35 ? '#e4e4e4' : '#d7d7d7');
+        ctx.fillRect(x, y, 1, 1);
+      }
+    } else if (type === 'rock-face') {
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, scale, scale);
+      for (let i = 0; i < scale * scale * 0.32; i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        const w = 1 + Math.floor(rand() * 3);
+        const h = 1 + Math.floor(rand() * 3);
+        const r = rand();
+        ctx.fillStyle = r > 0.72 ? '#ffffff' : (r > 0.38 ? '#d8d8d8' : '#c8c8c8');
+        ctx.fillRect(x, y, w, h);
+      }
+      for (let i = 0; i < Math.max(6, scale * 0.45); i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        const len = 3 + Math.floor(rand() * 7);
+        ctx.strokeStyle = rand() > 0.5 ? 'rgba(70,70,70,0.16)' : 'rgba(255,255,255,0.18)';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + len, y + Math.floor(rand() * 3) - 1);
+        ctx.stroke();
+      }
     } else if (type === 'grass') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, scale, scale);
@@ -6661,6 +6711,8 @@
   function applyWorldUVs(material, texture, textureScale = 1.0) {
     if (!material) return;
     material.map = texture;
+    material.userData = material.userData || {};
+    material.userData.worldTextureScale = textureScale;
     material.needsUpdate = true;
     material.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader.replace(
@@ -6693,7 +6745,7 @@
 
   const texCheckered = createPixelTexture('checkered', 16);
   const texNoise = createPixelTexture('noise', 16);
-  const texBrick = createPixelTexture('brick', 16);
+  const texBrick = createPixelTexture('brick', 32);
   const texShingles = createPixelTexture('shingles', 16);
   const texRipples = createPixelTexture('ripples', 16);
   const texLeaves = createPixelTexture('leaves', 16);
@@ -6703,6 +6755,8 @@
   const texStone = createPixelTexture('stone', 16);
   const texHay = createPixelTexture('hay', 16);
   const texDirt = createPixelTexture('dirt', 16);
+  const texSand = createPixelTexture('sand', 16);
+  const texRockFace = createPixelTexture('rock-face', 32);
   const texCottageGrass = createCottageTexture('grass', 128);
   const texCottageWood = createCottageTexture('wood', 128);
   const texCottageGlass = createCottageTexture('glass', 128);
@@ -6738,6 +6792,8 @@
     stone: texStone,
     hay: texHay,
     dirt: texDirt,
+    sand: texSand,
+    'rock-face': texRockFace,
     'cottage-grass': texCottageGrass,
     'cottage-wood': texCottageWood,
     'cottage-glass': texCottageGlass,
@@ -6758,6 +6814,8 @@
     { key: 'grass', label: 'Grass blades' },
     { key: 'hay', label: 'Hay / straw' },
     { key: 'dirt', label: 'Dirt specks' },
+    { key: 'sand', label: 'Sand grain' },
+    { key: 'rock-face', label: 'Rock face' },
     { key: 'ripples', label: 'Water ripples' },
     { key: 'cottage-grass', label: 'Cottage grass' },
     { key: 'cottage-wood', label: 'Cottage wood' },
@@ -6783,6 +6841,12 @@
     return materialTextureMap[key] ? key : 'default';
   }
 
+  function normalizeMaterialTextureScale(value) {
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) return 1;
+    return Math.max(0.5, Math.min(4, n));
+  }
+
   function materialTextureForKey(key) {
     return materialTextureMap[normalizeMaterialTextureKey(key)] || null;
   }
@@ -6801,7 +6865,7 @@
   applyWorldUVs(M.grass, initialGrassTex, 1.0);
   applyWorldUVs(M.grassEdge, initialGrassTex, 1.0);
   applyWorldUVs(M.grassHi, initialGrassTex, 1.0);
-  applyWorldUVs(M.boardSide, texCottageStone, 2.0);
+  applyWorldUVs(M.boardSide, texRockFace, 2.4);
 
   applyWorldUVs(M.path, texNoise, 1.0);
   applyWorldUVs(M.pathTrim, texNoise, 1.0);
@@ -6815,15 +6879,15 @@
   applyWorldUVs(M.water, texRipples, 1.0);
   applyWorldUVs(M.waterDk, texRipples, 1.0);
 
-  applyWorldUVs(M.wallCream, texBrick, 4.0);
-  applyWorldUVs(M.wallTrim, texBrick, 4.0);
-  applyWorldUVs(M.roofBlue, texShingles, 2.0);
-  applyWorldUVs(M.roofBlueD, texShingles, 2.0);
-  applyWorldUVs(M.islandUnder, texShingles, 2.0);
-  applyWorldUVs(M.islandUnderD, texShingles, 2.0);
+  applyWorldUVs(M.wallCream, texCottageStone, 2.0);
+  applyWorldUVs(M.wallTrim, texCottageStone, 2.0);
+  applyWorldUVs(M.roofBlue, texShingles, 3.2);
+  applyWorldUVs(M.roofBlueD, texShingles, 3.2);
+  applyWorldUVs(M.islandUnder, texRockFace, 2.8);
+  applyWorldUVs(M.islandUnderD, texRockFace, 2.8);
 
-  applyWorldUVs(M.castleStone, texBrick, 4.0);
-  applyWorldUVs(M.castleStoneD, texBrick, 4.0);
+  applyWorldUVs(M.castleStone, texBrick, 5.2);
+  applyWorldUVs(M.castleStoneD, texBrick, 5.2);
   M.stone.color.set(0x8b8d88);
   M.stoneDk.color.set(0x5f6668);
   applyWorldUVs(M.stone, texCottageStone, 2.0);
@@ -6832,8 +6896,8 @@
   applyWorldUVs(M.rockDk, texStone, 4.0);
   applyWorldUVs(M.rockHi, texStone, 4.0);
 
-  applyWorldUVs(M.manorBrick, texBrick, 4.0);
-  applyWorldUVs(M.manorBrickD, texBrick, 4.0);
+  applyWorldUVs(M.manorBrick, texCottageStone, 2.0);
+  applyWorldUVs(M.manorBrickD, texCottageStone, 2.0);
   applyWorldUVs(M.manorTrim, texNoise, 1.6);
   applyWorldUVs(M.manorRoof, texShingles, 2.0);
   applyWorldUVs(M.manorRoofD, texShingles, 2.0);
@@ -6849,6 +6913,10 @@
   applyWorldUVs(M.fence, texCottageWood, 3.0);
   applyWorldUVs(M.door, texCottageWood, 3.0);
   applyWorldUVs(M.woodTrim, texCottageWood, 3.0);
+  applyWorldUVs(M.sand, texSand, 1.8);
+  applyWorldUVs(M.sandDk, texSand, 1.8);
+  applyWorldUVs(M.towerStone, texCottageStone, 2.0);
+  applyWorldUVs(M.towerStoneD, texCottageStone, 2.0);
   M.windowB.map = texCottageGlass;
   M.windowB.color.set(0xffffff);
   M.windowB.needsUpdate = true;
@@ -6886,6 +6954,7 @@
     if (key === 'wood' || key === 'trunk' || key === 'timber') return 'wood';
     if (key === 'hay' || key === 'straw' || key === 'wheat') return 'hay';
     if (key === 'dirt' || key === 'soil' || key === 'mud') return 'dirt';
+    if (key === 'sand' || key === 'beach' || key === 'desert') return 'sand';
     if (proceduralPixelTextures[key]) return key;
     return null;
   }
@@ -6899,6 +6968,7 @@
     if (/leaf|leaves|foliage|crop|green|bush|grass|blossom/.test(key)) return 'leaves';
     if (/hay|straw|wheat|yellow/.test(key)) return 'hay';
     if (/dirt|soil|mud|path/.test(key)) return 'dirt';
+    if (/sand|beach|desert/.test(key)) return 'sand';
     return null;
   }
   function inferProceduralTextureKind(hex, hint) {
@@ -6926,12 +6996,13 @@
     if (h >= 38 && h <= 64 && val > 0.52 && sat > 0.32) return 'hay';
     if (h >= 65 && h <= 165 && sat > 0.18) return 'leaves';
     if (h >= 8 && h <= 38 && val < 0.56) return 'dirt';
+    if (h >= 35 && h <= 58 && val >= 0.56 && sat > 0.14) return 'sand';
     return 'noise';
   }
   function proceduralTextureScaleForKind(kind) {
     if (kind === 'shingles' || kind === 'planks' || kind === 'wood') return 3.0;
     if (kind === 'brick' || kind === 'stone' || kind === 'leaves') return 4.0;
-    if (kind === 'dirt' || kind === 'hay') return 2.0;
+    if (kind === 'dirt' || kind === 'hay' || kind === 'sand') return 2.0;
     return 1.6;
   }
 
@@ -6948,6 +7019,7 @@
   };
   const terrainMaterialBaseColors = new Map();
   const terrainMaterialBaseMaps = new Map();
+  const terrainMaterialBaseScales = new Map();
   const PART_MATERIAL_GROUPS = {
     walls: { label: 'Walls', materials: ['wallCream', 'wallTrim', 'manorBrick', 'manorBrickD', 'towerStone', 'towerStoneD', 'castleStone', 'castleStoneD', 'skyBody'] },
     roofs: { label: 'Roofs', materials: ['roofBlue', 'roofBlueD', 'manorRoof', 'manorRoofD', 'towerRoof', 'towerRoofD', 'skyRoof'] },
@@ -6961,6 +7033,71 @@
   };
   const partMaterialBaseColors = new Map();
   const partMaterialBaseMaps = new Map();
+  const partMaterialBaseScales = new Map();
+
+  const SURFACE_TEXTURE_DEFAULTS = {
+    grass: { texture: 'cottage-grass', fallbackTexture: 'checkered', scale: 1.0, materials: ['grass', 'grassEdge', 'grassHi'] },
+    dirt: { texture: 'cottage-dirt', scale: 1.4, materials: ['dirt', 'dirtRich'] },
+    sand: { texture: 'sand', scale: 1.8, materials: ['sand', 'sandDk'] },
+    stone: { texture: 'cottage-stone', scale: 2.0, materials: ['stone', 'stoneDk', 'rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD'] },
+  };
+  const SURFACE_LINKED_MODEL_MATERIALS = {
+    stone: ['rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD', 'chimney'],
+  };
+
+  function surfaceDefaultTextureKey(surface) {
+    const def = SURFACE_TEXTURE_DEFAULTS[surface];
+    if (!def) return 'default';
+    if (surface === 'grass' && !renderTexturedGrass) return def.fallbackTexture || 'checkered';
+    return def.texture;
+  }
+
+  function applySurfaceTextureToMaterial(name, textureKey, scale, updateBaseMaps = false) {
+    const mat = M[name];
+    const tex = materialTextureForKey(textureKey);
+    if (!mat || !tex) return;
+    applyWorldUVs(mat, tex, scale);
+    if (updateBaseMaps) {
+      if (terrainMaterialBaseMaps.has(name)) terrainMaterialBaseMaps.set(name, mat.map || null);
+      if (terrainMaterialBaseScales.has(name)) terrainMaterialBaseScales.set(name, scale);
+      if (partMaterialBaseMaps.has(name)) partMaterialBaseMaps.set(name, mat.map || null);
+      if (partMaterialBaseScales.has(name)) partMaterialBaseScales.set(name, scale);
+    }
+  }
+
+  function applySurfaceTextureDefaults() {
+    for (const [surface, def] of Object.entries(SURFACE_TEXTURE_DEFAULTS)) {
+      const textureKey = surfaceDefaultTextureKey(surface);
+      for (const name of def.materials) applySurfaceTextureToMaterial(name, textureKey, def.scale, true);
+    }
+  }
+
+  function terrainSurfaceTextureKey(surface) {
+    const adjustment = renderTerrainMaterialAdjustments && renderTerrainMaterialAdjustments[surface];
+    const texture = normalizeMaterialTextureKey(adjustment && adjustment.texture);
+    return texture === 'default' ? surfaceDefaultTextureKey(surface) : texture;
+  }
+
+  function terrainSurfaceTextureScale(surface) {
+    const def = SURFACE_TEXTURE_DEFAULTS[surface];
+    const adjustment = renderTerrainMaterialAdjustments && renderTerrainMaterialAdjustments[surface];
+    return (def ? def.scale : 1) * normalizeMaterialTextureScale(adjustment && adjustment.scale);
+  }
+
+  function applyLinkedSurfaceMaterialTextures() {
+    if (!renderSurfaceLinkedMaterials) return;
+    for (const [surface, names] of Object.entries(SURFACE_LINKED_MODEL_MATERIALS)) {
+      const def = SURFACE_TEXTURE_DEFAULTS[surface];
+      if (!def) continue;
+      const textureKey = terrainSurfaceTextureKey(surface);
+      const textureScale = terrainSurfaceTextureScale(surface);
+      for (const name of names) applySurfaceTextureToMaterial(name, textureKey, textureScale);
+    }
+    if (typeof customMaterialCache !== 'undefined') customMaterialCache.clear();
+    if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
+  }
+
+  applySurfaceTextureDefaults();
 
   function loadTerrainMaterialAdjustments() {
     let raw = null;
@@ -6972,7 +7109,8 @@
       const tint = normalizeHexColor(src.tint);
       const tone = Math.max(-0.5, Math.min(0.5, parseFloat(src.tone) || 0));
       const texture = normalizeMaterialTextureKey(src.texture);
-      if (tint || Math.abs(tone) > 0.001 || texture !== 'default') out[key] = { tint, tone, texture };
+      const scale = normalizeMaterialTextureScale(src.scale);
+      if (tint || Math.abs(tone) > 0.001 || texture !== 'default' || Math.abs(scale - 1) > 0.001) out[key] = { tint, tone, texture, scale };
     }
     return out;
   }
@@ -6987,7 +7125,8 @@
       const tint = normalizeHexColor(src.tint);
       const tone = Math.max(-0.5, Math.min(0.5, parseFloat(src.tone) || 0));
       const texture = normalizeMaterialTextureKey(src.texture);
-      if (tint || Math.abs(tone) > 0.001 || texture !== 'default') out[key] = { tint, tone, texture };
+      const scale = normalizeMaterialTextureScale(src.scale);
+      if (tint || Math.abs(tone) > 0.001 || texture !== 'default' || Math.abs(scale - 1) > 0.001) out[key] = { tint, tone, texture, scale };
     }
     return out;
   }
@@ -7003,12 +7142,14 @@
   function captureTerrainMaterialBaseColors() {
     terrainMaterialBaseColors.clear();
     terrainMaterialBaseMaps.clear();
+    terrainMaterialBaseScales.clear();
     for (const names of Object.values(TERRAIN_COLOR_MATERIALS)) {
       for (const name of names) {
         const mat = M[name];
         if (!mat) continue;
         if (mat.color) terrainMaterialBaseColors.set(name, mat.color.getHex());
         terrainMaterialBaseMaps.set(name, mat.map || null);
+        terrainMaterialBaseScales.set(name, mat.userData && mat.userData.worldTextureScale ? mat.userData.worldTextureScale : 1);
       }
     }
   }
@@ -7021,8 +7162,11 @@
     for (const [name, map] of terrainMaterialBaseMaps.entries()) {
       const mat = M[name];
       if (mat) {
-        mat.map = map || null;
-        mat.needsUpdate = true;
+        if (map) applyWorldUVs(mat, map, terrainMaterialBaseScales.get(name) || 1);
+        else {
+          mat.map = null;
+          mat.needsUpdate = true;
+        }
       }
     }
   }
@@ -7086,6 +7230,7 @@
       const tint = normalizeHexColor(adjustment && adjustment.tint);
       const tone = Math.max(-0.5, Math.min(0.5, parseFloat(adjustment && adjustment.tone) || 0));
       const texture = normalizeMaterialTextureKey(adjustment && adjustment.texture);
+      const scale = normalizeMaterialTextureScale(adjustment && adjustment.scale);
       for (const name of names) {
         const mat = M[name];
         if (!mat || !mat.color) continue;
@@ -7093,9 +7238,10 @@
         if (tint) c.lerp(new THREE.Color(tint), 0.55);
         applyToneToColor(c, tone);
         mat.color.copy(c);
-        if (texture !== 'default') {
-          mat.map = materialTextureForKey(texture);
-          mat.needsUpdate = true;
+        const baseScale = terrainMaterialBaseScales.get(name) || (mat.userData && mat.userData.worldTextureScale) || 1;
+        const nextMap = texture !== 'default' ? materialTextureForKey(texture) : mat.map;
+        if (nextMap && (texture !== 'default' || Math.abs(scale - 1) > 0.001)) {
+          applyWorldUVs(mat, nextMap, baseScale * scale);
         }
       }
     }
@@ -7109,12 +7255,14 @@
   function capturePartMaterialBaseState() {
     partMaterialBaseColors.clear();
     partMaterialBaseMaps.clear();
+    partMaterialBaseScales.clear();
     for (const group of Object.values(PART_MATERIAL_GROUPS)) {
       for (const name of group.materials) {
         const mat = M[name];
         if (!mat) continue;
         if (mat.color) partMaterialBaseColors.set(name, mat.color.getHex());
         partMaterialBaseMaps.set(name, mat.map || null);
+        partMaterialBaseScales.set(name, mat.userData && mat.userData.worldTextureScale ? mat.userData.worldTextureScale : 1);
       }
     }
   }
@@ -7127,8 +7275,11 @@
     for (const [name, map] of partMaterialBaseMaps.entries()) {
       const mat = M[name];
       if (mat) {
-        mat.map = map || null;
-        mat.needsUpdate = true;
+        if (map) applyWorldUVs(mat, map, partMaterialBaseScales.get(name) || 1);
+        else {
+          mat.map = null;
+          mat.needsUpdate = true;
+        }
       }
     }
   }
@@ -7152,6 +7303,7 @@
       const tint = normalizeHexColor(adjustment && adjustment.tint);
       const tone = Math.max(-0.5, Math.min(0.5, parseFloat(adjustment && adjustment.tone) || 0));
       const texture = normalizeMaterialTextureKey(adjustment && adjustment.texture);
+      const scale = normalizeMaterialTextureScale(adjustment && adjustment.scale);
       for (const name of group.materials) {
         const mat = M[name];
         if (!mat) continue;
@@ -7161,9 +7313,10 @@
           applyToneToColor(c, tone);
           mat.color.copy(c);
         }
-        if (texture !== 'default') {
-          mat.map = materialTextureForKey(texture);
-          mat.needsUpdate = true;
+        const baseScale = partMaterialBaseScales.get(name) || (mat.userData && mat.userData.worldTextureScale) || 1;
+        const nextMap = texture !== 'default' ? materialTextureForKey(texture) : mat.map;
+        if (nextMap && (texture !== 'default' || Math.abs(scale - 1) > 0.001)) {
+          applyWorldUVs(mat, nextMap, baseScale * scale);
         }
       }
     }
@@ -7177,6 +7330,7 @@
   function commitTerrainMaterialAdjustments() {
     applyTerrainMaterialAdjustments();
     applyPartMaterialAdjustments();
+    applyLinkedSurfaceMaterialTextures();
     recaptureWeatherMaterialBase();
     applyWeatherMaterialTint();
   }
@@ -7184,6 +7338,7 @@
   function commitPartMaterialAdjustments() {
     applyTerrainMaterialAdjustments();
     applyPartMaterialAdjustments();
+    applyLinkedSurfaceMaterialTextures();
     recaptureWeatherMaterialBase();
     applyWeatherMaterialTint();
   }
@@ -7339,6 +7494,7 @@
     applyTerrainMaterialAdjustments();
     capturePartMaterialBaseState();
     applyPartMaterialAdjustments();
+    applyLinkedSurfaceMaterialTextures();
     recaptureWeatherMaterialBase();
     applyWeatherMaterialTint();
   }
@@ -10986,19 +11142,12 @@
   }
 
   function voxelInvertedSteppedRoof(parent, width, depth, topY, roofMat = M.islandUnder, trimMat = M.islandUnderD) {
-    const layers = Math.max(7, Math.min(14, Math.round(Math.max(width, depth) * 0.65)));
     const totalDrop = Math.max(1.85, Math.min(6.2, Math.max(width, depth) * 0.30));
-    const yStep = totalDrop / layers;
-    const layerH = yStep * 1.08;
-    for (let i = 0; i < layers; i++) {
-      const t = i / Math.max(1, layers - 1);
-      const w = Math.max(0.36, width * (1 - t * 0.78));
-      const d = Math.max(0.36, depth * (1 - t * 0.78));
-      const y = topY - i * yStep - layerH * 0.5;
-      const mat = i % 3 === 0 ? trimMat : roofMat;
-      vbox(parent, w, layerH, d, 0, y, 0, mat, { noGap: true, noBevel: true });
-    }
-    vbox(parent, Math.max(0.30, width * 0.10), layerH * 1.1, Math.max(0.30, depth * 0.10), 0, topY - totalDrop - layerH * 0.55, 0, trimMat, { noGap: true, noBevel: true });
+    const geo = getOpenBoxGeometry(width, totalDrop, depth, true, false, false, false, false, false);
+    const mesh = new THREE.Mesh(geo, roofMat);
+    mesh.position.y = topY - totalDrop * 0.5;
+    mesh.userData.noShadow = true;
+    parent.add(mesh);
   }
 
   function voxelChimney(parent, x, y, z, tops) {
@@ -14033,7 +14182,7 @@
       const c = homeBorderGroup.children.pop();
       safeDisposeGeometry(c.geometry);
     }
-    voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE * 1.035, GRID * TILE * 1.035, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
+    voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE * 0.94, GRID * TILE * 0.94, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
     castReceive(homeBorderGroup);
     if (typeof buildUnderIslandClouds === 'function') buildUnderIslandClouds();
   }
@@ -19365,16 +19514,19 @@
     const landscapeMeshModeEl = document.getElementById('render-landscape-mesh-mode');
     const voxelTerrainEl = document.getElementById('render-voxel-terrain');
     const texturedGrassEl = document.getElementById('render-textured-grass');
+    const surfaceLinkedMaterialsEl = document.getElementById('render-surface-linked-materials');
     const showCrownsEl = document.getElementById('render-show-crowns');
     const terrainVoxelResolutionEl = document.getElementById('render-terrain-voxel-resolution');
     const terrainColorTargetEl = document.getElementById('render-terrain-color-target');
     const terrainTintEl = document.getElementById('render-terrain-tint');
     const terrainTextureEl = document.getElementById('render-terrain-texture');
+    const terrainTextureScaleEl = document.getElementById('render-terrain-texture-scale');
     const terrainToneEl = document.getElementById('render-terrain-tone');
     const terrainColorResetEl = document.getElementById('render-terrain-color-reset');
     const materialTargetEl = document.getElementById('render-material-target');
     const materialTintEl = document.getElementById('render-material-tint');
     const materialTextureEl = document.getElementById('render-material-texture');
+    const materialTextureScaleEl = document.getElementById('render-material-texture-scale');
     const materialToneEl = document.getElementById('render-material-tone');
     const materialResetEl = document.getElementById('render-material-reset');
     const materialWearEl = document.getElementById('render-material-wear');
@@ -19411,7 +19563,9 @@
     const voxelGapValue = document.getElementById('render-voxel-gap-value');
     const voxelBevelValue = document.getElementById('render-voxel-bevel-value');
     const terrainToneValue = document.getElementById('render-terrain-tone-value');
+    const terrainTextureScaleValue = document.getElementById('render-terrain-texture-scale-value');
     const materialToneValue = document.getElementById('render-material-tone-value');
+    const materialTextureScaleValue = document.getElementById('render-material-texture-scale-value');
     const materialWearValue = document.getElementById('render-material-wear-value');
     const settingsTabs = Array.from(modal.querySelectorAll('[data-settings-tab]'));
     const settingsPanels = Array.from(modal.querySelectorAll('[data-settings-panel]'));
@@ -19492,6 +19646,7 @@
       }
       if (voxelTerrainEl) voxelTerrainEl.checked = !!renderVoxelTerrain;
       if (texturedGrassEl) texturedGrassEl.checked = !!renderTexturedGrass;
+      if (surfaceLinkedMaterialsEl) surfaceLinkedMaterialsEl.checked = !!renderSurfaceLinkedMaterials;
       if (showCrownsEl) showCrownsEl.checked = !!showCrowns;
       if (terrainVoxelResolutionEl) terrainVoxelResolutionEl.value = renderTerrainVoxelResolution;
       if (terrainColorTargetEl) terrainColorTargetEl.value = renderTerrainColorTarget;
@@ -19499,11 +19654,13 @@
       if (terrainTintEl) terrainTintEl.value = terrainAdjustment.tint || terrainBaseColorForTarget(renderTerrainColorTarget);
       if (terrainToneEl) terrainToneEl.value = String(Math.round((terrainAdjustment.tone || 0) * 100));
       if (terrainTextureEl) terrainTextureEl.value = normalizeMaterialTextureKey(terrainAdjustment.texture);
+      if (terrainTextureScaleEl) terrainTextureScaleEl.value = String(Math.round(normalizeMaterialTextureScale(terrainAdjustment.scale) * 100));
       if (materialTargetEl) materialTargetEl.value = renderMaterialTarget;
       const materialAdjustment = renderPartMaterialAdjustments[renderMaterialTarget] || {};
       if (materialTintEl) materialTintEl.value = materialAdjustment.tint || partBaseColorForTarget(renderMaterialTarget);
       if (materialToneEl) materialToneEl.value = String(Math.round((materialAdjustment.tone || 0) * 100));
       if (materialTextureEl) materialTextureEl.value = normalizeMaterialTextureKey(materialAdjustment.texture);
+      if (materialTextureScaleEl) materialTextureScaleEl.value = String(Math.round(normalizeMaterialTextureScale(materialAdjustment.scale) * 100));
       if (materialWearEl) materialWearEl.value = String(Math.round(renderMaterialWear * 100));
       if (crowdCountEl) crowdCountEl.value = String(crowdCount);
       if (crowdScaleEl) crowdScaleEl.value = String(Math.round(crowdScale * 100));
@@ -19561,10 +19718,12 @@
         const tone = parseInt(terrainToneEl.value, 10) || 0;
         terrainToneValue.textContent = tone === 0 ? 'neutral' : (tone > 0 ? '+' : '') + tone + '%';
       }
+      if (terrainTextureScaleValue && terrainTextureScaleEl) terrainTextureScaleValue.textContent = terrainTextureScaleEl.value + '%';
       if (materialToneValue && materialToneEl) {
         const tone = parseInt(materialToneEl.value, 10) || 0;
         materialToneValue.textContent = tone === 0 ? 'neutral' : (tone > 0 ? '+' : '') + tone + '%';
       }
+      if (materialTextureScaleValue && materialTextureScaleEl) materialTextureScaleValue.textContent = materialTextureScaleEl.value + '%';
       if (materialWearValue && materialWearEl) materialWearValue.textContent = materialWearEl.value + '%';
       if (crowdCountEl) document.getElementById('crowd-count-value').textContent = crowdCount;
       if (crowdScaleEl) document.getElementById('crowd-scale-value').textContent = Math.round(crowdScale * 100) + '%';
@@ -19616,6 +19775,7 @@
       localStorage.setItem(RENDER_LS.voxelBevel, renderVoxelBevel.toFixed(3));
       localStorage.setItem(RENDER_LS.voxelTerrain, renderVoxelTerrain ? '1' : '0');
       localStorage.setItem(RENDER_LS.texturedGrass, renderTexturedGrass ? '1' : '0');
+      localStorage.setItem(RENDER_LS.surfaceLinkedMaterials, renderSurfaceLinkedMaterials ? '1' : '0');
       localStorage.setItem(RENDER_LS.terrainColors, JSON.stringify(renderTerrainMaterialAdjustments || {}));
       localStorage.setItem(RENDER_LS.terrainColorTarget, renderTerrainColorTarget);
       localStorage.setItem(RENDER_LS.materialParts, JSON.stringify(renderPartMaterialAdjustments || {}));
@@ -19634,6 +19794,7 @@
       const oldVoxelBevel = renderVoxelBevel;
       const oldVoxelTerrain = renderVoxelTerrain;
       const oldTexturedGrass = renderTexturedGrass;
+      const oldSurfaceLinkedMaterials = renderSurfaceLinkedMaterials;
       const oldTerrainVoxelResolution = renderTerrainVoxelResolution;
       const oldShowCrowns = showCrowns;
       const oldCrowdEnabled = crowdEnabled;
@@ -19699,17 +19860,13 @@
       if (texturedGrassEl) {
         renderTexturedGrass = !!texturedGrassEl.checked;
         if (oldTexturedGrass !== renderTexturedGrass) {
-          const nextTex = renderTexturedGrass ? texCottageGrass : texCheckered;
-          M.grass.map = nextTex;
-          M.grass.needsUpdate = true;
-          M.grassEdge.map = nextTex;
-          M.grassEdge.needsUpdate = true;
-          M.grassHi.map = nextTex;
-          M.grassHi.needsUpdate = true;
+          applySurfaceTextureDefaults();
+          commitTerrainMaterialAdjustments();
           customMaterialCache.clear();
           rebuildTerrainRender();
         }
       }
+      if (surfaceLinkedMaterialsEl) renderSurfaceLinkedMaterials = !!surfaceLinkedMaterialsEl.checked;
       if (showCrownsEl) showCrowns = !!showCrownsEl.checked;
       if (terrainVoxelResolutionEl) renderTerrainVoxelResolution = terrainVoxelResolutionEl.value;
       if (terrainColorTargetEl && TERRAIN_COLOR_KEYS.includes(terrainColorTargetEl.value)) {
@@ -19719,9 +19876,10 @@
         const tint = normalizeHexColor(terrainTintEl.value) || terrainBaseColorForTarget(renderTerrainColorTarget);
         const tone = Math.max(-0.5, Math.min(0.5, (parseInt(terrainToneEl.value, 10) || 0) / 100));
         const texture = normalizeMaterialTextureKey(terrainTextureEl && terrainTextureEl.value);
+        const scale = normalizeMaterialTextureScale((parseInt(terrainTextureScaleEl && terrainTextureScaleEl.value, 10) || 100) / 100);
         const baseTint = terrainBaseColorForTarget(renderTerrainColorTarget).toLowerCase();
-        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default') {
-          renderTerrainMaterialAdjustments[renderTerrainColorTarget] = { tint, tone, texture };
+        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default' || Math.abs(scale - 1) > 0.001) {
+          renderTerrainMaterialAdjustments[renderTerrainColorTarget] = { tint, tone, texture, scale };
         } else {
           delete renderTerrainMaterialAdjustments[renderTerrainColorTarget];
         }
@@ -19733,9 +19891,10 @@
         const tint = normalizeHexColor(materialTintEl.value) || partBaseColorForTarget(renderMaterialTarget);
         const tone = Math.max(-0.5, Math.min(0.5, (parseInt(materialToneEl.value, 10) || 0) / 100));
         const texture = normalizeMaterialTextureKey(materialTextureEl && materialTextureEl.value);
+        const scale = normalizeMaterialTextureScale((parseInt(materialTextureScaleEl && materialTextureScaleEl.value, 10) || 100) / 100);
         const baseTint = partBaseColorForTarget(renderMaterialTarget).toLowerCase();
-        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default') {
-          renderPartMaterialAdjustments[renderMaterialTarget] = { tint, tone, texture };
+        if (Math.abs(tone) > 0.001 || tint.toLowerCase() !== baseTint || texture !== 'default' || Math.abs(scale - 1) > 0.001) {
+          renderPartMaterialAdjustments[renderMaterialTarget] = { tint, tone, texture, scale };
         } else {
           delete renderPartMaterialAdjustments[renderMaterialTarget];
         }
@@ -19773,6 +19932,11 @@
       if (oldTerrainColors !== JSON.stringify(renderTerrainMaterialAdjustments || {})) {
         commitTerrainMaterialAdjustments();
         rebuildTerrainRender();
+      }
+      if (oldSurfaceLinkedMaterials !== renderSurfaceLinkedMaterials) {
+        commitPartMaterialAdjustments();
+        rebuildTerrainRender();
+        rebuildObjectsRender();
       }
       if (oldPartMaterials !== JSON.stringify(renderPartMaterialAdjustments || {})) {
         commitPartMaterialAdjustments();
@@ -19821,7 +19985,7 @@
     });
     closeBtn.addEventListener('click', () => { closeTinyModal(modal); });
     modal.addEventListener('click', e => { if (e.target === modal) closeTinyModal(modal); });
-    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, ambientFillEl, frontFillEl, sideFillEl, backFillEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, underCloudSpreadEl, skyBlueDepthEl, skyBlueSaturationEl, distanceMistEl, backdropEl, backdropVignetteEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, showCrownsEl, terrainVoxelResolutionEl, terrainTintEl, terrainTextureEl, terrainToneEl, materialTintEl, materialTextureEl, materialToneEl, materialWearEl, crowdCountEl, crowdScaleEl, crowdSpeedEl, crowdBobEl, crowdSwayEl, crowdLeanEl, crowdZoneRadiusEl, crowdShowZonesEl, crowdPausedEl, crowdEnabledEl, crowdDebugEl, crowdModeEl, crowdCountLiveEl, crowdScaleLiveEl, crowdSpeedLiveEl, crowdZoneRadiusLiveEl, crowdShowZonesLiveEl, crowdShowArrowsLiveEl, crowdPausedLiveEl, crowdEnabledLiveEl]) {
+    for (const el of [shadowEl, resolutionEl, distanceEl, visibleSizeEl, brightnessEl, lightingEl, ambientFillEl, frontFillEl, sideFillEl, backFillEl, saturationEl, contrastEl, cloudsEl, cloudSpeedEl, cloudHeightEl, cloudShadowEl, underCloudSpreadEl, skyBlueDepthEl, skyBlueSaturationEl, distanceMistEl, backdropEl, backdropVignetteEl, pixelSizeEl, pixelDepthEdgeEl, pixelNormalEdgeEl, shaderAntialiasEl, tiltBlurEl, tiltFocusEl, ghostOpacityEl, floorOpacityEl, objectOpacityEl, voxelGapEl, voxelBevelEl, voxelTerrainEl, surfaceLinkedMaterialsEl, showCrownsEl, terrainVoxelResolutionEl, terrainTintEl, terrainTextureEl, terrainTextureScaleEl, terrainToneEl, materialTintEl, materialTextureEl, materialTextureScaleEl, materialToneEl, materialWearEl, crowdCountEl, crowdScaleEl, crowdSpeedEl, crowdBobEl, crowdSwayEl, crowdLeanEl, crowdZoneRadiusEl, crowdShowZonesEl, crowdPausedEl, crowdEnabledEl, crowdDebugEl, crowdModeEl, crowdCountLiveEl, crowdScaleLiveEl, crowdSpeedLiveEl, crowdZoneRadiusLiveEl, crowdShowZonesLiveEl, crowdShowArrowsLiveEl, crowdPausedLiveEl, crowdEnabledLiveEl]) {
       if (!el) continue;
       el.addEventListener('input', applyFromControls);
       el.addEventListener('change', applyFromControls);
@@ -19909,15 +20073,14 @@
       renderVoxelBevel = parseFloat(RENDER_DEFAULTS.voxelBevel);
       renderVoxelTerrain = false;
       renderTexturedGrass = true;
+      renderSurfaceLinkedMaterials = true;
       renderTerrainMaterialAdjustments = {};
       renderTerrainColorTarget = 'grass';
       renderPartMaterialAdjustments = {};
       renderMaterialTarget = 'walls';
       renderMaterialWear = 0;
       if (typeof texCottageGrass !== 'undefined') {
-        M.grass.map = texCottageGrass; M.grass.needsUpdate = true;
-        M.grassEdge.map = texCottageGrass; M.grassEdge.needsUpdate = true;
-        M.grassHi.map = texCottageGrass; M.grassHi.needsUpdate = true;
+        applySurfaceTextureDefaults();
       }
       commitTerrainMaterialAdjustments();
       commitPartMaterialAdjustments();
