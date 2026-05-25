@@ -5176,7 +5176,7 @@
     objectOpacity: '1',
     voxelGap: '0',
     voxelBevel: '0.018',
-    voxelTerrain: '0',
+    voxelTerrain: '1',
     texturedGrass: '1',
     surfaceLinkedMaterials: '1',
     terrainColors: '{}',
@@ -5206,7 +5206,7 @@
     crowdDebug: '1',
     crowdMode: 'wander',
     crowdShowArrows: '1',
-    crowdEnabled: '1',
+    crowdEnabled: '0',
   };
   const renderSettingsReset = localStorage.getItem(RENDER_LS.version) !== RENDER_SETTINGS_VERSION;
   if (renderSettingsReset) {
@@ -5363,7 +5363,7 @@
   let renderObjectOpacity = storedNumber(RENDER_LS.objectOpacity, 1, 0, 1);
   let renderVoxelGap = storedNumber(RENDER_LS.voxelGap, 0, 0, 0.14);
   let renderVoxelBevel = storedNumber(RENDER_LS.voxelBevel, parseFloat(RENDER_DEFAULTS.voxelBevel), 0, 0.06);
-  let renderVoxelTerrain = localStorage.getItem(RENDER_LS.voxelTerrain) === '1';
+  let renderVoxelTerrain = localStorage.getItem(RENDER_LS.voxelTerrain) !== '0';
   let renderTexturedGrass = localStorage.getItem(RENDER_LS.texturedGrass) !== '0';
   let renderSurfaceLinkedMaterials = localStorage.getItem(RENDER_LS.surfaceLinkedMaterials) !== '0';
   let renderTerrainVoxelResolution = localStorage.getItem(RENDER_LS.terrainVoxelResolution) || 'mixed';
@@ -6296,10 +6296,10 @@
     water:     new THREE.MeshLambertMaterial({ color: 0x3a8fcc, side: THREE.FrontSide }),
     waterDk:   new THREE.MeshLambertMaterial({ color: 0x2f77ad, side: THREE.FrontSide }),
     waterFoam: new THREE.MeshLambertMaterial({ color: 0xbbe9ff, transparent: true, opacity: 0.74, side: THREE.FrontSide }),
-    waterfall: new THREE.MeshBasicMaterial({ color: 0x78c9f4, transparent: true, opacity: 0.46, depthWrite: true, side: THREE.FrontSide }),
-    waterfallHi: new THREE.MeshBasicMaterial({ color: 0xd8f6ff, transparent: true, opacity: 0.62, depthWrite: true, side: THREE.FrontSide }),
+    waterfall: new THREE.MeshBasicMaterial({ color: 0x28b5f0, transparent: true, opacity: 0.56, depthWrite: true, side: THREE.FrontSide }),
+    waterfallHi: new THREE.MeshBasicMaterial({ color: 0x96e7ff, transparent: true, opacity: 0.68, depthWrite: true, side: THREE.FrontSide }),
     waterfallFoamPuff: new THREE.MeshBasicMaterial({ color: 0xe8fbff, transparent: true, opacity: 0.58, depthWrite: true }),
-    waterfallCube: new THREE.MeshBasicMaterial({ color: 0x168ed0, transparent: true, opacity: 0.68, depthWrite: true }),
+    waterfallCube: new THREE.MeshBasicMaterial({ color: 0x078bd8, transparent: true, opacity: 0.82, depthWrite: true }),
     shore:     new THREE.MeshLambertMaterial({ color: 0xd8c18a, side: THREE.FrontSide }),
 
     rock:      new THREE.MeshLambertMaterial({ color: 0x9b9a8f, side: THREE.FrontSide }),
@@ -6880,10 +6880,10 @@
   applyWorldUVs(M.water, texRipples, 1.0);
   applyWorldUVs(M.waterDk, texRipples, 1.0);
 
-  applyWorldUVs(M.wallCream, texCottageStone, 2.0);
-  applyWorldUVs(M.wallTrim, texCottageStone, 2.0);
-  applyWorldUVs(M.roofBlue, texShingles, 3.2);
-  applyWorldUVs(M.roofBlueD, texShingles, 3.2);
+  applyWorldUVs(M.wallCream, texCottageStone, 2.6);
+  applyWorldUVs(M.wallTrim, texCottageStone, 2.6);
+  applyWorldUVs(M.roofBlue, texShingles, 7.0);
+  applyWorldUVs(M.roofBlueD, texShingles, 7.0);
   applyWorldUVs(M.islandUnder, texRockFace, 2.8);
   applyWorldUVs(M.islandUnderD, texRockFace, 2.8);
 
@@ -6897,14 +6897,14 @@
   applyWorldUVs(M.rockDk, texStone, 4.0);
   applyWorldUVs(M.rockHi, texStone, 4.0);
 
-  applyWorldUVs(M.manorBrick, texCottageStone, 2.0);
-  applyWorldUVs(M.manorBrickD, texCottageStone, 2.0);
+  applyWorldUVs(M.manorBrick, texCottageStone, 2.6);
+  applyWorldUVs(M.manorBrickD, texCottageStone, 2.6);
   applyWorldUVs(M.manorTrim, texNoise, 1.6);
-  applyWorldUVs(M.manorRoof, texShingles, 2.0);
-  applyWorldUVs(M.manorRoofD, texShingles, 2.0);
+  applyWorldUVs(M.manorRoof, texShingles, 7.0);
+  applyWorldUVs(M.manorRoofD, texShingles, 7.0);
 
-  applyWorldUVs(M.towerRoof, texShingles, 2.0);
-  applyWorldUVs(M.towerRoofD, texShingles, 2.0);
+  applyWorldUVs(M.towerRoof, texShingles, 7.0);
+  applyWorldUVs(M.towerRoofD, texShingles, 7.0);
 
   applyWorldUVs(M.leaves, texLeaves, 4.0);
   applyWorldUVs(M.leavesDk, texLeaves, 4.0);
@@ -6916,8 +6916,8 @@
   applyWorldUVs(M.woodTrim, texCottageWood, 3.0);
   applyWorldUVs(M.sand, texSand, 1.8);
   applyWorldUVs(M.sandDk, texSand, 1.8);
-  applyWorldUVs(M.towerStone, texCottageStone, 2.0);
-  applyWorldUVs(M.towerStoneD, texCottageStone, 2.0);
+  applyWorldUVs(M.towerStone, texCottageStone, 2.6);
+  applyWorldUVs(M.towerStoneD, texCottageStone, 2.6);
   M.windowB.map = texCottageGlass;
   M.windowB.color.set(0xffffff);
   M.windowB.needsUpdate = true;
@@ -7040,7 +7040,7 @@
     grass: { texture: 'cottage-grass', fallbackTexture: 'checkered', scale: 1.0, materials: ['grass', 'grassEdge', 'grassHi'] },
     dirt: { texture: 'cottage-dirt', scale: 1.4, materials: ['dirt', 'dirtRich'] },
     sand: { texture: 'sand', scale: 1.8, materials: ['sand', 'sandDk'] },
-    stone: { texture: 'cottage-stone', scale: 2.0, materials: ['stone', 'stoneDk', 'rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD'] },
+    stone: { texture: 'cottage-stone', scale: 2.6, materials: ['stone', 'stoneDk', 'rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD'] },
   };
   const SURFACE_LINKED_MODEL_MATERIALS = {
     stone: ['rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD', 'chimney'],
@@ -8266,7 +8266,7 @@
         speed: 1.00 + cellRand(x - salt, z + salt, 535) * 0.82,
         drift: 0.045 + cellRand(x + salt, z + salt, 536) * 0.072,
         acrossDrift: sideSpan * (0.045 + cellRand(x - salt, z - salt, 537) * 0.10),
-        fallHeight: height * (0.86 + cellRand(x + salt, z - salt, 538) * 0.44),
+        fallHeight: Math.max(height * (1.22 + cellRand(x + salt, z - salt, 538) * 0.72), 1.85),
       };
       mesh.renderOrder = 6;
       mesh.rotation.set(
@@ -8281,13 +8281,13 @@
 
     function addSide(dir) {
       const seed = dir.charCodeAt(0);
-      const curtainBottomY = -DIRT_H - Math.max(1.8, GRID * 0.16);
-      const curtainH = Math.max(height + 1.15, topY - curtainBottomY);
+      const curtainBottomY = -DIRT_H - Math.max(2.75, GRID * 0.24);
+      const curtainH = Math.max(height + 2.05, topY - curtainBottomY);
       const curtainY = topY - curtainH * 0.5;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 7; i++) {
         const r = cellRand(x * 29 + i, z * 31 - i, 670 + seed);
-        const across = (-0.36 + i * 0.18 + (r - 0.5) * 0.055) * sideSpan;
-        const width = sideSpan * (0.09 + cellRand(x + i, z - i, 680 + seed) * 0.08);
+        const across = (-0.41 + i / 6 * 0.82 + (r - 0.5) * 0.060) * sideSpan;
+        const width = sideSpan * (0.10 + cellRand(x + i, z - i, 680 + seed) * 0.09);
         placeWaterCurtain(dir, across, curtainY, width, curtainH * (0.94 + cellRand(x - i, z + i, 690 + seed) * 0.14), seed + i * 23);
       }
       for (let i = 0; i < 7; i++) {
@@ -8313,11 +8313,11 @@
           : 0.040 + cellRand(x - i, z + i, 600 + seed) * 0.045;
         placeFoamPuff(dir, across, y, radius, seed + i * 17, lane);
       }
-      for (let i = 0; i < 9; i++) {
+      for (let i = 0; i < 18; i++) {
         const r = cellRand(x * 59 + i, z * 61 - i, 744 + seed);
-        const across = (-0.38 + i / 8 * 0.76 + (r - 0.5) * 0.11) * sideSpan;
-        const y = topY - height * (0.22 + cellRand(x + i * 5, z + i * 7, 746 + seed) * 0.78);
-        const size = 0.055 + cellRand(x - i, z + i, 748 + seed) * 0.080;
+        const across = (-0.43 + i / 17 * 0.86 + (r - 0.5) * 0.13) * sideSpan;
+        const y = topY - height * (0.12 + cellRand(x + i * 5, z + i * 7, 746 + seed) * 0.92);
+        const size = 0.060 + cellRand(x - i, z + i, 748 + seed) * 0.090;
         placeWaterCube(dir, across, y, size, seed + i * 31);
       }
     }
@@ -8394,7 +8394,7 @@
           mesh.position.z = cfg.baseZ + wave * cfg.drift * 0.45;
         }
         mesh.position.y = cfg.baseY - flow * cfg.fallHeight + Math.max(0, wave) * cfg.drift;
-        if (mesh.position.y < -DIRT_H - 0.25) mesh.position.y += cfg.fallHeight;
+        if (mesh.position.y < -DIRT_H - 1.05) mesh.position.y += cfg.fallHeight;
         mesh.rotation.x += 0.55 * cfg.speed * 0.016;
         mesh.rotation.y += 0.42 * cfg.speed * 0.016;
         const s = cfg.baseScale * (0.88 + Math.max(0, wave) * 0.32);
@@ -14371,6 +14371,12 @@
       { x: 22, z: -13, y: -1.6, s: 0.36, r: -0.45 },
       { x: -26, z: 14, y: -1.9, s: 0.31, r: 0.72 },
       { x: 28, z: 18, y: -2.1, s: 0.28, r: -0.20 },
+      { x: -33, z: -5, y: -2.6, s: 0.23, r: -0.80 },
+      { x: 34, z: 4, y: -2.8, s: 0.22, r: 0.58 },
+      { x: -13, z: 28, y: -2.5, s: 0.24, r: -0.34 },
+      { x: 11, z: -28, y: -2.3, s: 0.25, r: 0.96 },
+      { x: -39, z: 24, y: -3.2, s: 0.18, r: 0.18 },
+      { x: 39, z: -24, y: -3.1, s: 0.18, r: -0.62 },
     ];
     placements.forEach((p, i) => {
       const w = makeDistantMiniWorld(900 + i * 97, i);
@@ -20325,7 +20331,7 @@
       renderObjectOpacity = 1;
       renderVoxelGap = 0;
       renderVoxelBevel = parseFloat(RENDER_DEFAULTS.voxelBevel);
-      renderVoxelTerrain = false;
+      renderVoxelTerrain = true;
       renderTexturedGrass = true;
       renderSurfaceLinkedMaterials = true;
       renderTerrainMaterialAdjustments = {};
@@ -20352,7 +20358,7 @@
       crowdDebug = true;
       crowdMode = 'wander';
       crowdShowArrows = true;
-      crowdEnabled = true;
+      crowdEnabled = false;
       applyCrowdSettings({ reseed: true });
       if (crowdEnabled && !crowdLayer) {
         initCrowdLayer();
@@ -20360,7 +20366,7 @@
       renderAutoExpand = false;
       const autoExpandEl = document.getElementById('minimap-autoexpand');
       if (autoExpandEl) autoExpandEl.checked = false;
-      if (voxelTerrainEl) voxelTerrainEl.checked = false;
+      if (voxelTerrainEl) voxelTerrainEl.checked = true;
       if (terrainVoxelResolutionEl) terrainVoxelResolutionEl.value = renderTerrainVoxelResolution;
       rebuildTerrainRender();
       rebuildObjectsRender();
