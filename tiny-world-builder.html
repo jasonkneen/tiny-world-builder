@@ -4864,23 +4864,11 @@
       <button type="button" class="agent-panel-toggle" id="agent-panel-toggle" aria-label="Close conversation">×</button>
     </div>
     <div class="agent-selection-preview" id="agent-selection-preview" hidden>
-      <div class="selection-tabbar">
-        <button type="button" class="selection-tab active" data-tab="preview">Preview</button>
-        <button type="button" class="selection-tab" data-tab="details">Details</button>
-      </div>
-      <div class="selection-tab-content active" data-content="preview">
-        <div class="selection-preview-pane">
-          <canvas id="selection-preview-canvas" width="128" height="128"></canvas>
-          <div class="selection-preview-actions" id="selection-preview-actions"></div>
-        </div>
-      </div>
-      <div class="selection-tab-content" data-content="details">
-        <div class="selection-details-pane">
-          <div class="agent-selection-count" id="agent-selection-count">0 tiles selected</div>
-          <ul class="agent-selection-list" id="agent-selection-list"></ul>
-          <div class="agent-selection-properties" id="agent-selection-properties" hidden></div>
-          <div class="agent-selection-hint">Type above and the prompt will target this selection.</div>
-        </div>
+      <div class="selection-details-pane">
+        <div class="agent-selection-count" id="agent-selection-count">0 tiles selected</div>
+        <ul class="agent-selection-list" id="agent-selection-list"></ul>
+        <div class="agent-selection-properties" id="agent-selection-properties" hidden></div>
+        <div class="agent-selection-hint">Type above and the prompt will target this selection.</div>
       </div>
     </div>
     <div class="agent-messages" id="agent-messages"></div>
@@ -6886,15 +6874,15 @@
   applyWorldUVs(M.water, texRipples, 1.0);
   applyWorldUVs(M.waterDk, texRipples, 1.0);
 
-  applyWorldUVs(M.wallCream, texCottageStone, 2.6);
-  applyWorldUVs(M.wallTrim, texCottageStone, 2.6);
-  applyWorldUVs(M.roofBlue, texShingles, 7.0);
-  applyWorldUVs(M.roofBlueD, texShingles, 7.0);
+  applyWorldUVs(M.wallCream, texCottageStone, 10.0);
+  applyWorldUVs(M.wallTrim, texCottageStone, 10.0);
+  applyWorldUVs(M.roofBlue, texShingles, 28.0);
+  applyWorldUVs(M.roofBlueD, texShingles, 28.0);
   applyWorldUVs(M.islandUnder, texRockFace, 2.8);
   applyWorldUVs(M.islandUnderD, texRockFace, 2.8);
 
-  applyWorldUVs(M.castleStone, texBrick, 5.2);
-  applyWorldUVs(M.castleStoneD, texBrick, 5.2);
+  applyWorldUVs(M.castleStone, texBrick, 11.0);
+  applyWorldUVs(M.castleStoneD, texBrick, 11.0);
   M.stone.color.set(0x8b8d88);
   M.stoneDk.color.set(0x5f6668);
   applyWorldUVs(M.stone, texCottageStone, 2.0);
@@ -6903,14 +6891,14 @@
   applyWorldUVs(M.rockDk, texStone, 4.0);
   applyWorldUVs(M.rockHi, texStone, 4.0);
 
-  applyWorldUVs(M.manorBrick, texCottageStone, 2.6);
-  applyWorldUVs(M.manorBrickD, texCottageStone, 2.6);
+  applyWorldUVs(M.manorBrick, texCottageStone, 10.0);
+  applyWorldUVs(M.manorBrickD, texCottageStone, 10.0);
   applyWorldUVs(M.manorTrim, texNoise, 1.6);
-  applyWorldUVs(M.manorRoof, texShingles, 7.0);
-  applyWorldUVs(M.manorRoofD, texShingles, 7.0);
+  applyWorldUVs(M.manorRoof, texShingles, 28.0);
+  applyWorldUVs(M.manorRoofD, texShingles, 28.0);
 
-  applyWorldUVs(M.towerRoof, texShingles, 7.0);
-  applyWorldUVs(M.towerRoofD, texShingles, 7.0);
+  applyWorldUVs(M.towerRoof, texShingles, 28.0);
+  applyWorldUVs(M.towerRoofD, texShingles, 28.0);
 
   applyWorldUVs(M.leaves, texLeaves, 4.0);
   applyWorldUVs(M.leavesDk, texLeaves, 4.0);
@@ -6922,8 +6910,8 @@
   applyWorldUVs(M.woodTrim, texCottageWood, 3.0);
   applyWorldUVs(M.sand, texSand, 1.8);
   applyWorldUVs(M.sandDk, texSand, 1.8);
-  applyWorldUVs(M.towerStone, texCottageStone, 2.6);
-  applyWorldUVs(M.towerStoneD, texCottageStone, 2.6);
+  applyWorldUVs(M.towerStone, texCottageStone, 10.0);
+  applyWorldUVs(M.towerStoneD, texCottageStone, 10.0);
   M.windowB.map = texCottageGlass;
   M.windowB.color.set(0xffffff);
   M.windowB.needsUpdate = true;
@@ -7046,10 +7034,22 @@
     grass: { texture: 'cottage-grass', fallbackTexture: 'checkered', scale: 1.0, materials: ['grass', 'grassEdge', 'grassHi'] },
     dirt: { texture: 'cottage-dirt', scale: 1.4, materials: ['dirt', 'dirtRich'] },
     sand: { texture: 'sand', scale: 1.8, materials: ['sand', 'sandDk'] },
-    stone: { texture: 'cottage-stone', scale: 2.6, materials: ['stone', 'stoneDk', 'rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD'] },
+    stone: { texture: 'cottage-stone', scale: 2.6, materials: ['stone', 'stoneDk'] },
   };
   const SURFACE_LINKED_MODEL_MATERIALS = {
     stone: ['rock', 'rockDk', 'rockHi', 'castleStone', 'castleStoneD', 'towerStone', 'towerStoneD', 'chimney'],
+  };
+  const SURFACE_LINKED_MODEL_SCALES = {
+    stone: {
+      rock: 4.0,
+      rockDk: 4.0,
+      rockHi: 4.0,
+      castleStone: 11.0,
+      castleStoneD: 11.0,
+      towerStone: 10.0,
+      towerStoneD: 10.0,
+      chimney: 10.0,
+    },
   };
 
   function surfaceDefaultTextureKey(surface) {
@@ -7091,14 +7091,21 @@
     return (def ? def.scale : 1) * normalizeMaterialTextureScale(adjustment && adjustment.scale);
   }
 
+  function linkedSurfaceMaterialTextureScale(surface, materialName) {
+    const def = SURFACE_TEXTURE_DEFAULTS[surface];
+    const adjustment = renderTerrainMaterialAdjustments && renderTerrainMaterialAdjustments[surface];
+    const linkedScales = SURFACE_LINKED_MODEL_SCALES[surface] || {};
+    const baseScale = linkedScales[materialName] || (def ? def.scale : 1);
+    return baseScale * normalizeMaterialTextureScale(adjustment && adjustment.scale);
+  }
+
   function applyLinkedSurfaceMaterialTextures() {
     if (!renderSurfaceLinkedMaterials) return;
     for (const [surface, names] of Object.entries(SURFACE_LINKED_MODEL_MATERIALS)) {
       const def = SURFACE_TEXTURE_DEFAULTS[surface];
       if (!def) continue;
       const textureKey = terrainSurfaceTextureKey(surface);
-      const textureScale = terrainSurfaceTextureScale(surface);
-      for (const name of names) applySurfaceTextureToMaterial(name, textureKey, textureScale);
+      for (const name of names) applySurfaceTextureToMaterial(name, textureKey, linkedSurfaceMaterialTextureScale(surface, name));
     }
     if (typeof customMaterialCache !== 'undefined') customMaterialCache.clear();
     if (typeof fadeMatCache !== 'undefined') fadeMatCache.clear();
@@ -7365,6 +7372,20 @@
     }
     return customMaterialCache.get(key);
   }
+  function customTextureMaterial(base, textureKey, textureScale) {
+    const cleanKey = normalizeMaterialTextureKey(textureKey);
+    const tex = materialTextureForKey(cleanKey);
+    if (!base || !base.clone || !tex || cleanKey === 'default') return base;
+    const scale = normalizeMaterialTextureScale(textureScale || 1);
+    const key = (base.uuid || base.id || 'mat') + ':tex:' + cleanKey + ':' + scale.toFixed(3);
+    if (!customMaterialCache.has(key)) {
+      const mat = base.clone();
+      if (mat.color) applyWearToMaterialColor(mat.color, 'custom', renderMaterialWear);
+      applyWorldUVs(mat, tex, scale);
+      customMaterialCache.set(key, mat);
+    }
+    return customMaterialCache.get(key);
+  }
   function normalizeAppearance(value) {
     if (!value || typeof value !== 'object') return null;
     const bodyColor = normalizeHexColor(value.bodyColor || value.body || value.wallColor || value.walls);
@@ -7380,6 +7401,19 @@
     const objectScale = Number.isFinite(objectScaleNumber)
       ? Math.max(0.25, Math.min(4, objectScaleNumber))
       : null;
+    const axisScale = raw => {
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.max(0.15, Math.min(5, n)) : null;
+    };
+    const scaleX = axisScale(value.scaleX !== undefined ? value.scaleX : value.objectScaleX);
+    const scaleY = axisScale(value.scaleY !== undefined ? value.scaleY : value.objectScaleY);
+    const scaleZ = axisScale(value.scaleZ !== undefined ? value.scaleZ : value.objectScaleZ);
+    const materialTexture = normalizeMaterialTextureKey(value.materialTexture || value.textureKey || value.texture);
+    const materialTextureScale = normalizeMaterialTextureScale(value.materialTextureScale || value.textureScale || 1);
+    const bodyTexture = normalizeMaterialTextureKey(value.bodyTexture || value.bodyMaterial || value.wallTexture);
+    const bodyTextureScale = normalizeMaterialTextureScale(value.bodyTextureScale || value.bodyMaterialScale || 1);
+    const topTexture = normalizeMaterialTextureKey(value.topTexture || value.topMaterial || value.roofTexture);
+    const topTextureScale = normalizeMaterialTextureScale(value.topTextureScale || value.topMaterialScale || 1);
     const rawObjectStyle = String(value.objectStyle || value.style || '').toLowerCase();
     const objectStyle = rawObjectStyle === 'normal' || rawObjectStyle === 'voxel'
       ? rawObjectStyle
@@ -7389,6 +7423,21 @@
     if (topColor) out.topColor = topColor;
     if (voxelBuildId) out.voxelBuildId = voxelBuildId;
     if (objectScale !== null && Math.abs(objectScale - 1) > 0.001) out.objectScale = +objectScale.toFixed(3);
+    if (scaleX !== null && Math.abs(scaleX - 1) > 0.001) out.scaleX = +scaleX.toFixed(3);
+    if (scaleY !== null && Math.abs(scaleY - 1) > 0.001) out.scaleY = +scaleY.toFixed(3);
+    if (scaleZ !== null && Math.abs(scaleZ - 1) > 0.001) out.scaleZ = +scaleZ.toFixed(3);
+    if (materialTexture !== 'default') {
+      out.materialTexture = materialTexture;
+      if (Math.abs(materialTextureScale - 1) > 0.001) out.materialTextureScale = +materialTextureScale.toFixed(3);
+    }
+    if (bodyTexture !== 'default') {
+      out.bodyTexture = bodyTexture;
+      if (Math.abs(bodyTextureScale - 1) > 0.001) out.bodyTextureScale = +bodyTextureScale.toFixed(3);
+    }
+    if (topTexture !== 'default') {
+      out.topTexture = topTexture;
+      if (Math.abs(topTextureScale - 1) > 0.001) out.topTextureScale = +topTextureScale.toFixed(3);
+    }
     if (objectStyle) out.objectStyle = objectStyle;
     return Object.keys(out).length ? out : null;
   }
@@ -7419,11 +7468,15 @@
     const bodyDark = new Set([M.wallTrim, M.manorBrickD, M.towerStoneD, M.castleStoneD]);
     function remap(mat) {
       if (!mat) return mat;
-      if (a.topColor && topBase.has(mat)) return customMaterial(mat, a.topColor);
-      if (a.topColor && topDark.has(mat)) return customMaterial(mat, shadeHexColor(a.topColor, -48));
-      if (a.bodyColor && bodyBase.has(mat)) return customMaterial(mat, a.bodyColor);
-      if (a.bodyColor && bodyDark.has(mat)) return customMaterial(mat, shadeHexColor(a.bodyColor, -42));
-      return mat;
+      let next = mat;
+      if (a.topColor && topBase.has(mat)) next = customMaterial(mat, a.topColor);
+      else if (a.topColor && topDark.has(mat)) next = customMaterial(mat, shadeHexColor(a.topColor, -48));
+      else if (a.bodyColor && bodyBase.has(mat)) next = customMaterial(mat, a.bodyColor);
+      else if (a.bodyColor && bodyDark.has(mat)) next = customMaterial(mat, shadeHexColor(a.bodyColor, -42));
+      if (a.topTexture && (topBase.has(mat) || topDark.has(mat))) next = customTextureMaterial(next, a.topTexture, a.topTextureScale || 1);
+      else if (a.bodyTexture && (bodyBase.has(mat) || bodyDark.has(mat))) next = customTextureMaterial(next, a.bodyTexture, a.bodyTextureScale || 1);
+      if (a.materialTexture) next = customTextureMaterial(next, a.materialTexture, a.materialTextureScale || 1);
+      return next;
     }
     root.traverse(node => {
       if (!node.isMesh) return;
@@ -8153,6 +8206,9 @@
     return getWaterfallCubeGeometry.geo;
   }
 
+  const WATERFALL_FROTH_SPEED = 0.76;
+  const WATERFALL_DROP_CUBE_SPEED = 0.86;
+
   function addWaterfallRiserEffects(g, x, z, riserSize, topY, sides) {
     if (!sides || !(sides.n || sides.s || sides.e || sides.w)) return;
     const bottomY = -DIRT_H + 0.045;
@@ -8185,7 +8241,7 @@
         baseScaleX: width,
         baseScaleY: length,
         phase: cellRand(x * 13 + salt, z * 17 - salt, 610),
-        speed: 1.8 + cellRand(x - salt, z + salt, 620) * 1.4,
+        speed: 1.25 + cellRand(x - salt, z + salt, 620) * 0.95,
         drift: 0.055 + cellRand(x + salt, z - salt, 630) * 0.070,
       };
       mesh.renderOrder = 6;
@@ -8207,7 +8263,7 @@
         baseScaleX: width,
         baseScaleY: h,
         phase: cellRand(x * 19 + salt, z * 23 - salt, 640),
-        speed: 1.15 + cellRand(x + salt, z - salt, 650) * 0.75,
+        speed: 0.82 + cellRand(x + salt, z - salt, 650) * 0.52,
         drift: 0.12 + cellRand(x - salt, z + salt, 660) * 0.10,
       };
       mesh.renderOrder = 5;
@@ -8244,7 +8300,7 @@
         baseAcross: across,
         baseScale,
         phase: cellRand(x * 7 + salt, z * 9 - salt, 450),
-        speed: (lane === 'lip' ? 5.2 : lane === 'splash' ? 6.8 : 4.8) + cellRand(x - salt, z + salt, 470) * 3.4,
+        speed: ((lane === 'lip' ? 3.9 : lane === 'splash' ? 5.1 : 3.6) + cellRand(x - salt, z + salt, 470) * 2.45) * WATERFALL_FROTH_SPEED,
         drift: 0.045 + cellRand(x + salt, z + salt, 490) * 0.055,
         acrossDrift: sideSpan * ((lane === 'lip' ? 0.025 : 0.035) + cellRand(x - salt, z - salt, 491) * (lane === 'lip' ? 0.055 : 0.075)),
         fallHeight: height * (0.72 + cellRand(x + salt, z - salt, 492) * 0.28),
@@ -8270,7 +8326,7 @@
         baseAcross: across,
         baseScale,
         phase: cellRand(x * 47 + salt, z * 53 - salt, 534),
-        speed: 1.00 + cellRand(x - salt, z + salt, 535) * 0.82,
+        speed: (0.72 + cellRand(x - salt, z + salt, 535) * 0.58) * WATERFALL_DROP_CUBE_SPEED,
         drift: 0.045 + cellRand(x + salt, z + salt, 536) * 0.072,
         acrossDrift: sideSpan * (0.045 + cellRand(x - salt, z - salt, 537) * 0.10),
         fallHeight: Math.max(height * (1.22 + cellRand(x + salt, z - salt, 538) * 0.72), 1.85),
@@ -8424,14 +8480,15 @@
     const ry = c.rotationY || 0;
     const ox = c.offsetX || 0;
     const oz = c.offsetZ || 0;
-    const hasTransform = ry || ox || oz;
+    const oy = c.offsetY || 0;
+    const hasTransform = ry || ox || oz || oy;
     const appearance = normalizeAppearance(c.appearance);
     if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance) {
       const out = [x, z, c.terrain, c.kind, f, bt, tf, fs];
       // Always push extras (or null) before the transform / appearance so
-      // tuple positions stay stable. Transform is [ry, ox, oz].
+      // tuple positions stay stable. Transform is [ry, ox, oz, oy].
       out.push(extras || null);
-      out.push(hasTransform ? [ry, ox, oz] : null);
+      out.push(hasTransform ? [ry, ox, oz, oy] : null);
       if (appearance) out.push(appearance);
       return out;
     }
@@ -10968,11 +11025,15 @@
     const a = normalizeAppearance(appearance);
     if (!a || !role) return base;
     const baseKind = base && base.userData && base.userData.proceduralTextureKind;
-    if (role === 'top' && a.topColor) return voxelBuildMaterial(a.topColor, baseKind);
-    if (role === 'topDark' && a.topColor) return voxelBuildMaterial(shadeHexColor(a.topColor, -48), baseKind);
-    if (role === 'body' && a.bodyColor) return voxelBuildMaterial(a.bodyColor, baseKind);
-    if (role === 'bodyDark' && a.bodyColor) return voxelBuildMaterial(shadeHexColor(a.bodyColor, -42), baseKind);
-    return base;
+    let mat = base;
+    if (role === 'top' && a.topColor) mat = voxelBuildMaterial(a.topColor, baseKind);
+    if (role === 'topDark' && a.topColor) mat = voxelBuildMaterial(shadeHexColor(a.topColor, -48), baseKind);
+    if (role === 'body' && a.bodyColor) mat = voxelBuildMaterial(a.bodyColor, baseKind);
+    if (role === 'bodyDark' && a.bodyColor) mat = voxelBuildMaterial(shadeHexColor(a.bodyColor, -42), baseKind);
+    if ((role === 'top' || role === 'topDark') && a.topTexture) mat = customTextureMaterial(mat, a.topTexture, a.topTextureScale || 1);
+    else if ((role === 'body' || role === 'bodyDark') && a.bodyTexture) mat = customTextureMaterial(mat, a.bodyTexture, a.bodyTextureScale || 1);
+    else if (a.materialTexture) mat = customTextureMaterial(mat, a.materialTexture, a.materialTextureScale || 1);
+    return mat;
   }
 
   function customPartsBounds(parts) {
@@ -13998,6 +14059,13 @@
         const cell = cellForKey(key) || defaultCell();
         const k = cell.kind || cell.terrain;
         counts[k] = (counts[k] || 0) + 1;
+        if (Array.isArray(cell.extras)) {
+          for (const extra of cell.extras) {
+            if (!extra || !extra.kind) continue;
+            const extraKey = 'extra ' + extra.kind;
+            counts[extraKey] = (counts[extraKey] || 0) + 1;
+          }
+        }
         totalTerrain[cell.terrain] = (totalTerrain[cell.terrain] || 0) + 1;
       });
       return {
@@ -14032,6 +14100,7 @@
       extras: cloneExtras(src && src.extras),
       rotationY: (src && src.rotationY) || 0,
       offsetX: (src && src.offsetX) || 0,
+      offsetY: (src && src.offsetY) || 0,
       offsetZ: (src && src.offsetZ) || 0,
       appearance: normalizeAppearance(src && src.appearance),
     };
@@ -15048,8 +15117,10 @@
         applyElementOpacity(root, current);
         if (!root.userData.landing) {
           const s = 0.6 + 0.4 * current;
+          const baseVec = root.userData.objectScaleBaseVec;
           const baseScale = root.userData.objectScaleBase || 1;
-          if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
+          if (baseVec) root.scale.set(baseVec.x * s, baseVec.y * s, baseVec.z * s);
+          else if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
         }
         continue;
       }
@@ -15074,8 +15145,10 @@
       if (!root.userData.landing) {
         const t = root.userData.currentOpacity;
         const s = 0.6 + 0.4 * t;
+        const baseVec = root.userData.objectScaleBaseVec;
         const baseScale = root.userData.objectScaleBase || 1;
-        if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
+        if (baseVec) root.scale.set(baseVec.x * s, baseVec.y * s, baseVec.z * s);
+        else if (Math.abs(root.scale.x - s * baseScale) > 0.001) root.scale.setScalar(s * baseScale);
       }
 
       // Once the fade has settled and no further work is queued, take the
@@ -16644,22 +16717,30 @@
     applyAppearanceToObject(mesh, kind, cell.appearance);
     const appearanceForTransform = appearanceForRender;
     const userScale = appearanceForTransform && appearanceForTransform.objectScale ? appearanceForTransform.objectScale : 1;
+    const userScaleX = appearanceForTransform && appearanceForTransform.scaleX ? appearanceForTransform.scaleX : 1;
+    const userScaleY = appearanceForTransform && appearanceForTransform.scaleY ? appearanceForTransform.scaleY : 1;
+    const userScaleZ = appearanceForTransform && appearanceForTransform.scaleZ ? appearanceForTransform.scaleZ : 1;
     const userRot     = (cell.rotationY || 0);
     const userOffsetX = (cell.offsetX   || 0);
+    const userOffsetY = (cell.offsetY   || 0);
     const userOffsetZ = (cell.offsetZ   || 0);
     if (userRot) mesh.rotation.y += userRot;
     if (userScale !== 1) mesh.scale.multiplyScalar(userScale);
+    if (userScaleX !== 1 || userScaleY !== 1 || userScaleZ !== 1) {
+      mesh.scale.set(mesh.scale.x * userScaleX, mesh.scale.y * userScaleY, mesh.scale.z * userScaleZ);
+    }
     mesh.userData.objectScaleBase = userScale;
+    mesh.userData.objectScaleBaseVec = mesh.scale.clone();
     const objectY = isLandscapeMeshActive()
       ? landscapeHeightAtCell(x, z)
       : TOP_H + terrainRiseAt(x, z);
-    mesh.position.set(posX + userOffsetX, objectY, posZ + userOffsetZ);
+    mesh.position.set(posX + userOffsetX, objectY + userOffsetY, posZ + userOffsetZ);
     if (setGridUserData) {
       mesh.userData.gx = x;
       mesh.userData.gz = z;
     }
     if (kind === 'house') prepareBuildingWindowLights(mesh, x, z);
-    mesh.userData.baseY = objectY;
+    mesh.userData.baseY = objectY + userOffsetY;
     mesh.userData.fadeRole = 'object';
     prepareFadeable(mesh, { opacity: opacityAtWorldPosition(posX, posZ), grayscale: isOutsideHomeGrid(x, z) });
     worldGroup.add(mesh);
@@ -16764,7 +16845,7 @@
   const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
 
   function setCell(x, z, opts) {
-    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetZ, appearance } = opts;
+    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance } = opts;
     const prev = ensureWorldCell(x, z);
     const prevVehicleDrivable = isVehicleDrivableCell(prev);
     let nextTerrain = terrain || 'grass';
@@ -16809,16 +16890,18 @@
     const kindIsNew = (prev.kind || null) !== nextKind;
     const newRotationY = (rotationY !== undefined) ? rotationY : (kindIsNew ? 0 : (prev.rotationY || 0));
     const newOffsetX   = (offsetX   !== undefined) ? offsetX   : (kindIsNew ? 0 : (prev.offsetX   || 0));
+    const newOffsetY   = (offsetY   !== undefined) ? offsetY   : (kindIsNew ? 0 : (prev.offsetY   || 0));
     const newOffsetZ   = (offsetZ   !== undefined) ? offsetZ   : (kindIsNew ? 0 : (prev.offsetZ   || 0));
     const transformChanged = (prev.rotationY || 0) !== newRotationY
       || (prev.offsetX || 0) !== newOffsetX
+      || (prev.offsetY || 0) !== newOffsetY
       || (prev.offsetZ || 0) !== newOffsetZ;
     const newAppearance = Object.prototype.hasOwnProperty.call(opts || {}, 'appearance')
       ? normalizeAppearance(appearance)
       : (kindIsNew ? null : normalizeAppearance(prev.appearance));
     const appearanceChanged = !sameAppearance(prev.appearance, newAppearance);
     const userEdited = !!(prev.userEdited || (opts && opts.userEdited));
-    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetZ: newOffsetZ, appearance: newAppearance };
+    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance };
     if (userEdited) world[x][z].userEdited = true;
     const vehicleDrivableChanged = prevVehicleDrivable !== isVehicleDrivableCell(world[x][z]);
     if (vehicleDrivableChanged) refreshVehiclesForWorldObstacleChange(x, z);
@@ -17961,6 +18044,26 @@
     t.ctx.drawImage(thumbRenderer.domElement, 0, 0, t.canvas.width, t.canvas.height);
   }
 
+  function drawFallbackThumb(canvas, label, color) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const size = THUMB_SIZE * dpr;
+    if (canvas.width !== size || canvas.height !== size) {
+      canvas.width = size;
+      canvas.height = size;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = color || '#9b9a8f';
+    ctx.fillRect(size * 0.18, size * 0.18, size * 0.64, size * 0.64);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 ' + Math.round(size * 0.32) + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(label || '?').charAt(0).toUpperCase(), size / 2, size / 2);
+  }
+
   function startThumbHover(id) {
     const t = thumbScenes.get(id);
     if (!t) return;
@@ -18169,7 +18272,11 @@
       });
       card.append(canvas, title);
       grid.appendChild(card);
-      renderStampBuilderThumb(tool, canvas);
+      try {
+        renderStampBuilderThumb(tool, canvas);
+      } catch (err) {
+        drawFallbackThumb(canvas, tool.label, tool.color || '#9b9a8f');
+      }
     }
   }
 
@@ -18213,7 +18320,13 @@
       canvas.style.width = ((opts && opts.flyout) ? 42 : 30) + 'px';
       canvas.style.height = ((opts && opts.flyout) ? 42 : 30) + 'px';
       btn.appendChild(canvas);
-      setTimeout(() => buildToolThumb(t, canvas), 0);
+      setTimeout(() => {
+        try {
+          buildToolThumb(t, canvas);
+        } catch (err) {
+          drawFallbackThumb(canvas, t.label, t.color);
+        }
+      }, 0);
     }
 
     const lbl = document.createElement('span');
@@ -20500,8 +20613,13 @@
   })();
 
   function selectedBoardObjectTarget() {
+    const objects = selectedBoardObjectTargets();
+    return objects.length === 1 ? objects[0] : null;
+  }
+
+  function selectedBoardObjectTargets() {
     const sel = window.__tinyworldSelection;
-    if (!sel || !sel.worldCoords) return null;
+    if (!sel || !sel.worldCoords) return [];
     const coords = sel.worldCoords();
     const byKey = new Map();
     coords.forEach(({ x, z }) => {
@@ -20520,8 +20638,7 @@
       }
       byKey.set(tx + ',' + tz, { x: tx, z: tz, cell: targetCell || cell });
     });
-    const objects = Array.from(byKey.values());
-    return objects.length === 1 ? objects[0] : null;
+    return Array.from(byKey.values());
   }
 
   function selectedBoardObjectLabel(target) {
@@ -20551,22 +20668,38 @@
     return true;
   }
 
-  function scaleSelectedBoardObject(amount) {
-    const target = selectedBoardObjectTarget();
-    if (!target) return false;
-    const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
-    const current = appearance.objectScale || 1;
-    appearance.objectScale = Math.max(0.25, Math.min(4, current * amount));
-    if (Math.abs(appearance.objectScale - 1) < 0.001) delete appearance.objectScale;
-    return updateSelectedBoardObject(target, { appearance });
+  function updateSelectedBoardObjects(patchForTarget) {
+    const targets = selectedBoardObjectTargets();
+    if (!targets.length) return false;
+    let changed = false;
+    for (const target of targets) {
+      const patch = typeof patchForTarget === 'function' ? patchForTarget(target) : patchForTarget;
+      if (patch) changed = updateSelectedBoardObject(target, patch) || changed;
+    }
+    if (changed && window.__tinyworldSelection) window.__tinyworldSelection.materialize();
+    if (changed) notifySelectionChanged();
+    return changed;
   }
 
-  function moveSelectedBoardObject(dx, dz) {
-    const target = selectedBoardObjectTarget();
-    if (!target) return false;
-    const nextX = Math.max(-0.48, Math.min(0.48, (target.cell.offsetX || 0) + dx));
-    const nextZ = Math.max(-0.48, Math.min(0.48, (target.cell.offsetZ || 0) + dz));
-    return updateSelectedBoardObject(target, { offsetX: nextX, offsetZ: nextZ });
+  function scaleSelectedBoardObject(amount, axis) {
+    return updateSelectedBoardObjects(target => {
+      const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+      const key = axis === 'x' ? 'scaleX' : axis === 'y' ? 'scaleY' : axis === 'z' ? 'scaleZ' : 'objectScale';
+      const current = appearance[key] || 1;
+      const min = key === 'objectScale' ? 0.25 : 0.15;
+      const max = key === 'objectScale' ? 4 : 5;
+      appearance[key] = Math.max(min, Math.min(max, current * amount));
+      if (Math.abs(appearance[key] - 1) < 0.001) delete appearance[key];
+      return { appearance };
+    });
+  }
+
+  function moveSelectedBoardObject(dx = 0, dy = 0, dz = 0) {
+    return updateSelectedBoardObjects(target => ({
+      offsetX: Math.max(-0.48, Math.min(0.48, (target.cell.offsetX || 0) + dx)),
+      offsetY: Math.max(-0.75, Math.min(2.5, (target.cell.offsetY || 0) + dy)),
+      offsetZ: Math.max(-0.48, Math.min(0.48, (target.cell.offsetZ || 0) + dz)),
+    }));
   }
 
   function seedVoxelBuildForSelectedObject(target) {
@@ -21296,7 +21429,7 @@
       const grid = document.getElementById('stamp-builder-grid');
       if (grid) grid.scrollTop = 0;
       applySavedStampPanelPosition();
-      if (status) status.textContent = 'Choose a stamp to place';
+      if (status) status.textContent = 'Choose a stamp to place (' + stampBuilderTools().length + ' available)';
       closeBtn.focus({ preventScroll: true });
     }
 
@@ -23406,6 +23539,45 @@
             "minimum": 0.25,
             "maximum": 4
           },
+          "scaleX": {
+            "type": "number",
+            "minimum": 0.15,
+            "maximum": 5
+          },
+          "scaleY": {
+            "type": "number",
+            "minimum": 0.15,
+            "maximum": 5
+          },
+          "scaleZ": {
+            "type": "number",
+            "minimum": 0.15,
+            "maximum": 5
+          },
+          "materialTexture": {
+            "type": "string"
+          },
+          "materialTextureScale": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 4
+          },
+          "bodyTexture": {
+            "type": "string"
+          },
+          "bodyTextureScale": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 4
+          },
+          "topTexture": {
+            "type": "string"
+          },
+          "topTextureScale": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 4
+          },
           "objectStyle": {
             "type": "string",
             "enum": [
@@ -23420,7 +23592,7 @@
           {
             "type": "array",
             "minItems": 3,
-            "maxItems": 3,
+            "maxItems": 4,
             "prefixItems": [
               {
                 "type": "number",
@@ -23433,6 +23605,10 @@
               {
                 "type": "number",
                 "description": "offsetZ in tile units"
+              },
+              {
+                "type": "number",
+                "description": "offsetY in tile units"
               }
             ],
             "items": false
@@ -23448,6 +23624,9 @@
                 "type": "number"
               },
               "offsetZ": {
+                "type": "number"
+              },
+              "offsetY": {
                 "type": "number"
               }
             }
@@ -26212,6 +26391,17 @@
       { label: 'Ash', value: '#a99b85', color: '#a99b85' },
       { label: 'Dark', value: '#3f2a18', color: '#3f2a18' },
     ];
+    const SELECTION_MATERIAL_OPTIONS = [
+      { label: 'Default', value: 'default' },
+      { label: 'Brick', value: 'brick' },
+      { label: 'Stone', value: 'cottage-stone' },
+      { label: 'Rock', value: 'rock-face' },
+      { label: 'Slate', value: 'shingles' },
+      { label: 'Wood', value: 'cottage-wood' },
+      { label: 'Grass', value: 'cottage-grass' },
+      { label: 'Dirt', value: 'cottage-dirt' },
+      { label: 'Sand', value: 'sand' },
+    ];
 
     function populatePreviewActions(target) {
       const container = document.getElementById('selection-preview-actions');
@@ -26304,20 +26494,71 @@
         scaleSelectedBoardObject(value === 'down' ? 0.85 : 1.18);
         return;
       }
+      if (rowKey === 'objectScaleX' || rowKey === 'objectScaleY' || rowKey === 'objectScaleZ') {
+        const axis = rowKey === 'objectScaleX' ? 'x' : rowKey === 'objectScaleY' ? 'y' : 'z';
+        scaleSelectedBoardObject(value === 'down' ? 0.85 : 1.18, axis);
+        return;
+      }
       if (rowKey === 'objectMove') {
         const step = 0.08;
-        if (value === 'x-') moveSelectedBoardObject(-step, 0);
-        else if (value === 'x+') moveSelectedBoardObject(step, 0);
-        else if (value === 'z-') moveSelectedBoardObject(0, -step);
-        else if (value === 'z+') moveSelectedBoardObject(0, step);
+        if (value === 'x-') moveSelectedBoardObject(-step, 0, 0);
+        else if (value === 'x+') moveSelectedBoardObject(step, 0, 0);
+        else if (value === 'y-') moveSelectedBoardObject(0, -step, 0);
+        else if (value === 'y+') moveSelectedBoardObject(0, step, 0);
+        else if (value === 'z-') moveSelectedBoardObject(0, 0, -step);
+        else if (value === 'z+') moveSelectedBoardObject(0, 0, step);
+        return;
+      }
+      if (rowKey === 'objectMaterial') {
+        const nextTexture = normalizeMaterialTextureKey(value);
+        updateSelectedBoardObjects(target => {
+          const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+          if (nextTexture === 'default') {
+            delete appearance.materialTexture;
+            delete appearance.materialTextureScale;
+          } else {
+            appearance.materialTexture = nextTexture;
+          }
+          return { appearance };
+        });
+        return;
+      }
+      if (rowKey === 'bodyMaterial' || rowKey === 'topMaterial') {
+        const textureKey = rowKey === 'bodyMaterial' ? 'bodyTexture' : 'topTexture';
+        const scaleKey = rowKey === 'bodyMaterial' ? 'bodyTextureScale' : 'topTextureScale';
+        const nextTexture = normalizeMaterialTextureKey(value);
+        updateSelectedBoardObjects(target => {
+          const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+          if (nextTexture === 'default') {
+            delete appearance[textureKey];
+            delete appearance[scaleKey];
+          } else {
+            appearance[textureKey] = nextTexture;
+          }
+          return { appearance };
+        });
+        return;
+      }
+      if (rowKey === 'objectMaterialScale' || rowKey === 'bodyMaterialScale' || rowKey === 'topMaterialScale') {
+        const key = rowKey === 'bodyMaterialScale' ? 'bodyTextureScale'
+          : rowKey === 'topMaterialScale' ? 'topTextureScale'
+            : 'materialTextureScale';
+        updateSelectedBoardObjects(target => {
+          const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+          const current = appearance[key] || 1;
+          appearance[key] = Math.max(0.5, Math.min(4, current * (value === 'down' ? 0.8 : 1.25)));
+          if (Math.abs(appearance[key] - 1) < 0.001) delete appearance[key];
+          return { appearance };
+        });
         return;
       }
       if (rowKey === 'objectStyle') {
-        const target = selectedBoardObjectTarget();
-        if (!target || !target.cell || target.cell.kind === 'voxel-build') return;
-        const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
-        appearance.objectStyle = value === 'normal' ? 'normal' : 'voxel';
-        updateSelectedBoardObject(target, { appearance });
+        updateSelectedBoardObjects(target => {
+          if (!target.cell || target.cell.kind === 'voxel-build') return null;
+          const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+          appearance.objectStyle = value === 'normal' ? 'normal' : 'voxel';
+          return { appearance };
+        });
         return;
       }
       if (rowKey === 'objectEnhance') {
@@ -26345,13 +26586,24 @@
             : (cell.floors || 1);
           setCell(x, z, { ...cell, buildingType: value, floors, animate: false, impactDust: false });
         } else if (rowKey === 'size') {
+          const extraFloors = value === 'small' ? 1 : value === 'large' ? 4 : 2;
+          const nextExtras = Array.isArray(cell.extras)
+            ? cell.extras.map(extra => Object.assign({}, extra, { floors: extraFloors }))
+            : cell.extras;
           if (cell.kind) {
             const floors = value === 'small' ? 1 : value === 'large' ? 4 : 2;
-            setCell(x, z, { ...cell, floors, animate: false, impactDust: false });
+            setCell(x, z, { ...cell, floors, extras: nextExtras, animate: false, impactDust: false });
           } else {
             const terrainFloors = value === 'small' ? 1 : value === 'large' ? 4 : 2;
-            setCell(x, z, { ...cell, terrainFloors, animate: false, impactDust: false });
+            setCell(x, z, { ...cell, terrainFloors, extras: nextExtras, animate: false, impactDust: false });
           }
+        } else if (rowKey === 'terrain') {
+          setCell(x, z, { ...cell, terrain: value, animate: false, impactDust: false });
+        } else if (rowKey === 'terrainHeight') {
+          const next = value === 'down'
+            ? Math.max(1, terrainLevelForCell(cell) - 1)
+            : Math.min(MAX_FLOORS, terrainLevelForCell(cell) + 1);
+          setCell(x, z, { ...cell, terrainFloors: next, animate: false, impactDust: false });
         }
       });
       notifySelectionChanged();
@@ -26371,29 +26623,72 @@
         { label: 'Right', value: 'right' },
       ] });
       const selectedTarget = selectedBoardObjectTarget();
-      if (selectedTarget) {
+      const selectedTargets = selectedBoardObjectTargets();
+      if (selectedTargets.length) {
         rows.push(
           { key: 'objectScale', label: 'Scale', options: [
+            { label: 'Down', value: 'down' },
+            { label: 'Up', value: 'up' },
+          ] },
+          { key: 'objectScaleX', label: 'Scale X', options: [
+            { label: 'Down', value: 'down' },
+            { label: 'Up', value: 'up' },
+          ] },
+          { key: 'objectScaleY', label: 'Scale Y', options: [
+            { label: 'Down', value: 'down' },
+            { label: 'Up', value: 'up' },
+          ] },
+          { key: 'objectScaleZ', label: 'Scale Z', options: [
             { label: 'Down', value: 'down' },
             { label: 'Up', value: 'up' },
           ] },
           { key: 'objectMove', label: 'Move', options: [
             { label: 'X-', value: 'x-' },
             { label: 'X+', value: 'x+' },
+            { label: 'Y-', value: 'y-' },
+            { label: 'Y+', value: 'y+' },
             { label: 'Z-', value: 'z-' },
             { label: 'Z+', value: 'z+' },
           ] },
-          { key: 'objectEnhance', label: 'AI', options: [
-            { label: 'Enhance', value: 'enhance' },
+          { key: 'objectMaterial', label: 'All material', options: SELECTION_MATERIAL_OPTIONS },
+          { key: 'objectMaterialScale', label: 'All mat scale', options: [
+            { label: 'Smaller', value: 'up' },
+            { label: 'Larger', value: 'down' },
+          ] },
+          { key: 'bodyMaterial', label: 'Body material', options: SELECTION_MATERIAL_OPTIONS },
+          { key: 'bodyMaterialScale', label: 'Body mat scale', options: [
+            { label: 'Smaller', value: 'up' },
+            { label: 'Larger', value: 'down' },
+          ] },
+          { key: 'topMaterial', label: 'Top material', options: SELECTION_MATERIAL_OPTIONS },
+          { key: 'topMaterialScale', label: 'Top mat scale', options: [
+            { label: 'Smaller', value: 'up' },
+            { label: 'Larger', value: 'down' },
           ] },
         );
-        if (selectedTarget.cell && selectedTarget.cell.kind !== 'voxel-build') {
+        if (selectedTargets.some(t => t.cell && t.cell.kind !== 'voxel-build')) {
           rows.push({ key: 'objectStyle', label: 'Style', options: [
             { label: 'Normal', value: 'normal' },
             { label: 'Voxel', value: 'voxel' },
           ] });
         }
       }
+      rows.push(
+        { key: 'terrain', label: 'Ground', options: [
+          { label: 'Grass', value: 'grass' },
+          { label: 'Path', value: 'path' },
+          { label: 'Dirt', value: 'dirt' },
+          { label: 'Water', value: 'water' },
+          { label: 'Stone', value: 'stone' },
+          { label: 'Sand', value: 'sand' },
+          { label: 'Snow', value: 'snow' },
+          { label: 'Lava', value: 'lava' },
+        ] },
+        { key: 'terrainHeight', label: 'Ground height', options: [
+          { label: 'Down', value: 'down' },
+          { label: 'Up', value: 'up' },
+        ] },
+      );
       if (primary === 'house' || primary === 'voxel-build') {
         rows.push(
           { key: 'topColor', label: 'Top', color: true, options: SELECTION_TOP_COLOR_OPTIONS },
@@ -26416,7 +26711,7 @@
           { key: 'bodyColor', label: 'Trunk', color: true, options: SELECTION_TRUNK_COLOR_OPTIONS },
         );
       }
-      rows.push({ key: 'size', label: 'Size', options: [
+      rows.push({ key: 'size', label: 'Item/ground size', options: [
         { label: 'Small', value: 'small' },
         { label: 'Medium', value: 'medium' },
         { label: 'Large', value: 'large' },
@@ -26459,7 +26754,6 @@
       if (!summary) {
         panel.classList.remove('has-selection');
         previewBox.hidden = true;
-        updateSelectionPreview(null);
         syncAgentTargetChip(null, null);
         if (previewProps) {
           previewProps.innerHTML = '';
@@ -26472,7 +26766,6 @@
       panel.classList.add('has-selection');
       previewBox.hidden = false;
       const selectedObject = selectedBoardObjectTarget();
-      updateSelectionPreview(selectedObject);
       syncAgentTargetChip(selectedObject, summary);
       previewCount.textContent = selectedObject
         ? 'Selected: ' + selectedBoardObjectLabel(selectedObject)
@@ -26919,15 +27212,17 @@
             floors: e.floors || e.f || 1,
           })).filter(e => e.kind === 'fence' || e.kind === 'tuft')
         : [];
-      let rotationY = 0, offsetX = 0, offsetZ = 0;
+      let rotationY = 0, offsetX = 0, offsetY = 0, offsetZ = 0;
       if (Array.isArray(transform) && transform.length >= 3) {
         rotationY = +transform[0] || 0;
         offsetX   = +transform[1] || 0;
         offsetZ   = +transform[2] || 0;
+        offsetY   = +transform[3] || 0;
       } else if (transform && typeof transform === 'object') {
         rotationY = +transform.rotationY || 0;
         offsetX   = +transform.offsetX   || 0;
         offsetZ   = +transform.offsetZ   || 0;
+        offsetY   = +transform.offsetY   || 0;
       }
       overrides.set(x + ',' + z, {
         terrain: terrain || 'grass',
@@ -26937,7 +27232,7 @@
         buildingType: buildingType || null,
         fenceSide: normalizedKind === 'fence' ? normalizeFenceSide(fenceSide) : null,
         extras: normalizedExtras,
-        rotationY, offsetX, offsetZ,
+        rotationY, offsetX, offsetY, offsetZ,
         appearance: normalizeAppearance(appearance),
         __outOfHome: x < 0 || x >= GRID || z < 0 || z >= GRID,
         __x: x,
@@ -27198,15 +27493,17 @@
     }
     if (!Number.isInteger(x) || !Number.isInteger(z)) return null;
     if (x < 0 || x >= GRID || z < 0 || z >= GRID) return null;
-    let rotationY = 0, offsetX = 0, offsetZ = 0;
+    let rotationY = 0, offsetX = 0, offsetY = 0, offsetZ = 0;
     if (Array.isArray(transform) && transform.length >= 3) {
       rotationY = +transform[0] || 0;
       offsetX   = +transform[1] || 0;
       offsetZ   = +transform[2] || 0;
+      offsetY   = +transform[3] || 0;
     } else if (transform && typeof transform === 'object') {
       rotationY = +transform.rotationY || 0;
       offsetX   = +transform.offsetX   || 0;
       offsetZ   = +transform.offsetZ   || 0;
+      offsetY   = +transform.offsetY   || 0;
     }
     return {
       x, z,
@@ -27217,7 +27514,7 @@
       buildingType: buildingType || null,
       fenceSide: kind === 'fence' ? normalizeFenceSide(fenceSide) : null,
       extras: Array.isArray(extras) ? extras : [],
-      rotationY, offsetX, offsetZ,
+      rotationY, offsetX, offsetY, offsetZ,
       appearance: normalizeAppearance(appearance),
     };
   }

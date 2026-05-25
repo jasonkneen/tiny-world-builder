@@ -1,7 +1,3 @@
-The file looks complete and accurate. Here is the final content for `.codesurf/DREAMING.md`:
-
----
-
 # tinyworld — CodeSurf Generated Memory
 
 _Generated 2026-05-25. Do not edit by hand — overwritten on each dreaming run._
@@ -33,31 +29,51 @@ The workspace runs inside **CodeSurf** canvas with an **OpenClaw** agent infrast
 - Cottage deterministic canvas textures: `texCottageGrass`, `texCottageWood`, `texCottageGlass`, `texCottageStone`, `texCottageDirt`
 - `texturedGrass` defaults **on** (`!== '0'`); UI label: "Cottage grass texture"
 
-### Waterfall Effect (committed `1551393`)
+### Waterfall Effect
 
-- Flat plane geometry replaced with layered curtains, surface flows, and **foam-puff system**
+- Flat plane replaced with layered curtains, surface flows, and foam-puff system
 - 16 puffs per exposed water edge, lanes `lip / fall / splash`; per-tick non-uniform scale pulse
 - Puffs carry full position state (`baseX/Y/Z`, `acrossDrift`, `fallHeight`, salts)
 - Single shared material: `M.waterfallFoamPuff`
+- **Animation speeds slowed** — surface, curtains, foam, and falling cubes all reduced; `tinyworld-render-performance` skill reflects this
 
-### Tower Building Variant (committed `1551393`)
+### Tower Building Variant
 
-- **`makeVoxelStoneTower(floors, palette)`** — dedicated voxel factory for `buildingType === 'tower'`; replaces `makeVoxelTurret(..., true)` for towers
+- **`makeVoxelStoneTower(floors, palette)`** — dedicated voxel factory for `buildingType === 'tower'`
 - **`makeVoxelTurret`** now reserved exclusively for castle turrets
 - `tinyworld-lowpoly-stylized-3d` SKILL.md updated to reflect this split
 
-### Stamp Builder UI (committed `1551393`)
+### Stamp Builder UI
 
 - AI/prompt controls fully removed; only "Import build JSON" remains
+- **No thumbnail preview pane** — controls visible immediately
+- Part-specific texture fields: `bodyTexture/bodyTextureScale` and `topTexture/topTextureScale` alongside body/top colors
 - Cards clickable to select; `selected` CSS state; `stampBuilderSelectionKey()` tracks selection
-- Compact layout: `86px` min col, `104px` min card height, `72×72` thumbnails; keyboard/role accessibility added
+- **Multi-selection operations** apply to all selected targets (not refused when >1 selected)
+- Compact layout: `86px` min col, `104px` min card height, `72×72` thumbnails; keyboard/role accessibility
 
-### Orbit Camera & Terrain (committed `1551393`)
+### Thumbnail Render Hardening
 
-- `MIN_ORBIT_POLAR = 0.18` / `MAX_ORBIT_POLAR = Math.PI - 0.18` — camera can now orbit below island
+- Toolbar thumbnails and stamp card thumbnails both have fallback guards
+- A single preview render error no longer aborts the whole stamp/tool grid
+- Cards still render (empty labeled swatch) even if `TOOLS` thumbnail generation throws
+
+### Selection Pane & Object Transforms
+
+- Selection pane exposes:
+  - `Y-` / `Y+` movement (`offsetY`)
+  - Separate `Scale X`, `Scale Y`, `Scale Z` sliders
+  - **Material assignment**: default, brick, stone, rock, slate, wood, grass, dirt, sand — split into All / Body / Top with independent scale
+- Object transforms save/load `offsetY`; appearance data supports per-axis scale and material texture
+- Building brick/stone texture density tighter; roof slate/shingle texture density much tighter
+- Extras (tuft, fence, tree on same tile) now advertised in selection summary; size control affects extras too
+
+### Orbit Camera & Terrain
+
+- `MIN_ORBIT_POLAR = 0.18` / `MAX_ORBIT_POLAR = Math.PI - 0.18` — camera can orbit below island
 - Terrain gap fix: `positiveTerrainOffset = Math.max(0, terrainOffset)` fed into riser height
 
-### LandscapeEngine (committed `d77a172`)
+### LandscapeEngine
 
 - **Airfield config injectable**: `_makeAirfieldConfig(airfield)`, pass `false` to disable; all constants data-driven
 - Lives in `LandscapeEngine.js` — separate file, not inlined
@@ -65,8 +81,8 @@ The workspace runs inside **CodeSurf** canvas with an **OpenClaw** agent infrast
 ### Git State (as of 2026-05-25)
 
 - **3 commits ahead of `origin/main`** — not pushed
-- **Working tree**: clean apart from this dreaming update (`DREAMING.md` itself)
-- `cottage.html` committed; `context.md` deleted; `tinyworld-ghost-world-gen` skill added — all in `d77a172`
+- Recent commits: waterfall foam-puff system, tower voxel factory split, stamp builder UI cleanup, orbit camera bounds, terrain gap fix, `cottage.html`, `context.md` deleted, `tinyworld-ghost-world-gen` skill added
+- Working tree: clean (apart from dreaming file itself)
 
 ---
 
@@ -74,36 +90,42 @@ The workspace runs inside **CodeSurf** canvas with an **OpenClaw** agent infrast
 
 | Agent / Cron | Status |
 |---|---|
-| Ava heartbeat (lead board `c3f78d0c`) | **OK** |
-| VibeClaw Article Generator | **OK** |
-| Codesurf Extension Skills Scout | **OK** |
+| Ava heartbeat (lead board `c3f78d0c`) | **OK** — responding with HEARTBEAT_OK, no active board tasks |
+| VibeClaw Article Generator | **FAILING** — assistant turns producing no content (3+ consecutive failures) |
+| Codesurf Extension Skills Scout | **FAILING** — assistant turns producing no content |
 | MC Gateway `894a3d5b` (`localhost:19789`) | **BROKEN** — connection refused; all assistant turns returning empty |
-| Tom Doerr Tweet Tracker | **BROKEN** — X.com auth wall |
+| Tom Doerr Tweet Tracker | **BROKEN** — X.com auth wall blocks browser and nitter; no content extracted |
 | DGX image server | **UNREACHABLE** |
+
+The VibeClaw Skills Scout and Article Generator failures appear to be an agent/provider-level issue (empty assistant turns), not a logic error — the cron prompts are well-formed and unchanged. MC Gateway failure is independent.
 
 ---
 
 ## Companion Repo: hermes-agent-core-rs
 
-Several Codex sessions today worked in `/Users/jkneen/Documents/GitHub/hermes-agent/agent-core-rs`. Separate project, frequently co-active in this workspace.
+`/Users/jkneen/Documents/GitHub/hermes-agent/agent-core-rs` — frequently co-active.
 
-**TUI Gateway Config Fix** — `ui-tui/src/gatewayClient.ts` patched: was falling back to Apple Python 3.9, which crashes on Hermes' modern syntax before `gateway.ready`. Now discovers parent Hermes checkout, prefers parent `.venv`/`venv`, falls back to `~/.hermes/hermes-agent/venv/bin/python`. `npm run dev` in `agent-core-rs/ui-tui/` now connects correctly.
+- **TUI Gateway Config Fix**: `ui-tui/src/gatewayClient.ts` discovers parent Hermes checkout; prefers parent `.venv`/`venv`, falls back to `~/.hermes/hermes-agent/venv/bin/python`. Avoids Apple Python 3.9 crash.
+- **Codex Provider Routing Split**: `src/main.rs` oneshot/manual CLI uses `CommandPrompt`; `src/gateway.rs` gateway uses `ApiServer`. Cargo check + clippy pass.
+- **Crossterm Input Modals**: `/` opens slash command modal; `@` opens file mention modal with relative paths. Hermes-aware: local commands surface as `//command`.
+- **Open**: SmallHarness → Hermes migration not executed; startup profiling incomplete; gateway connects but Hermes context loads without provider/skills state — root cause uninvestigated.
 
-**Codex Provider Routing Split** — `src/main.rs` oneshot/manual CLI uses `CommandPrompt`; `src/gateway.rs` gateway uses `ApiServer`. Cargo check + clippy pass; local-listener socket-bind failures are a known sandbox limitation, not a regression.
+---
 
-**Crossterm Input: Slash & @ Modals** — `/` at prompt start opens slash command modal; `@` anywhere opens file mention modal with relative paths. Hermes-aware: local commands surface as `//command` so single-slash still routes to Hermes backend. Tests added for all modal behaviors.
+## Companion Repo: grok-cli
 
-**SmallHarness / Open Issues** — SmallHarness → Hermes migration thread exists but not executed. Startup profiling incomplete. Second-stage runtime issue: gateway connects but Hermes context loads without provider/skills state — root cause uninvestigated.
+`/Users/jkneen/Documents/GitHub/grok-cli` — TUI terminal app using OpenTUI/React renderer.
+
+- **TUI layout overlap fix**: transcript area made a bounded shrinkable column (`flexShrink={1}`, `minHeight={0}`, explicit column layout); `MessageList` scrollbox now shrinks below content height instead of pushing over the prompt
+- Files changed: `src/ui/app.tsx`, `src/ui/components/message-list.tsx`
+- Regression test added (narrow, avoids OpenTUI Vitest harness issue with `react-reconciler/constants`)
+- Build passes; visual QA not yet confirmed in a write-capable session; inline-image patch still pending
 
 ---
 
 ## Companion Repo: CortexIDE (Electron app)
 
-Security hardening pass completed today (same workspace operator).
-
-- `npm test` passes: 194 tests, 0 failures
-- Hardened: custom protocol file/resource access; chat/extension iframe `postMessage` source validation; collab IPC path/mailbox/filename validation; browser tile URL scheme blocking + localhost-only host bridge injection; mac release signing/notarization guardrails
-- Touched-file TypeScript errors resolved; broader repo-wide TS debt (`App.tsx`, `Kanban*`, `MCPPanel`, relay tests) intentionally deferred
+Security hardening pass completed; `npm test` passes (194 tests, 0 failures). Broader TypeScript debt intentionally deferred.
 
 ---
 
@@ -112,10 +134,10 @@ Security hardening pass completed today (same workspace operator).
 - **3 commits not pushed** to `origin/main` (tinyworld)
 - `cottage.html` integration decision pending
 - `tinyworld-ghost-world-gen` skill contents unreviewed
-- MC Gateway `894a3d5b` root cause not investigated
-- `grok-cli` inline-image patch needs a write-capable session
+- MC Gateway `894a3d5b` root cause not investigated — connection refused, all agent turns fail silently
+- VibeClaw cron agents (Skills Scout, Article Generator) producing empty turns — likely needs provider/agent-level investigation, not prompt changes
+- Tom Doerr Tweet Tracker needs authenticated browser session for X.com
+- `grok-cli` inline-image patch needs a write-capable session; visual QA of layout overlap fix not yet confirmed
 - LandscapeEngine browser QA (outlines, cel-shading, fog) backlogged
 - openclicky build verification pending
-- hermes-agent-core-rs: SmallHarness → Hermes migration not executed; startup profiling incomplete
-- hermes-agent-core-rs: gateway connects but Hermes context missing provider/skills state — unresolved
-- CortexIDE: broader TypeScript debt pass backlogged
+- hermes-agent-core-rs: SmallHarness → Hermes migration not executed; startup profiling incomplete; gateway connects but Hermes context missing provider/skills state

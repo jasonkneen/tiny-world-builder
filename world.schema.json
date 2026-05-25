@@ -79,6 +79,15 @@
         "topColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "voxelBuildId": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
         "objectScale": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "scaleX": { "type": "number", "minimum": 0.15, "maximum": 5 },
+        "scaleY": { "type": "number", "minimum": 0.15, "maximum": 5 },
+        "scaleZ": { "type": "number", "minimum": 0.15, "maximum": 5 },
+        "materialTexture": { "type": "string" },
+        "materialTextureScale": { "type": "number", "minimum": 0.5, "maximum": 4 },
+        "bodyTexture": { "type": "string" },
+        "bodyTextureScale": { "type": "number", "minimum": 0.5, "maximum": 4 },
+        "topTexture": { "type": "string" },
+        "topTextureScale": { "type": "number", "minimum": 0.5, "maximum": 4 },
         "objectStyle": { "type": "string", "enum": ["normal", "voxel"] }
       }
     },
@@ -87,11 +96,12 @@
         {
           "type": "array",
           "minItems": 3,
-          "maxItems": 3,
+          "maxItems": 4,
           "prefixItems": [
             { "type": "number", "description": "rotationY in radians" },
             { "type": "number", "description": "offsetX in tile units" },
-            { "type": "number", "description": "offsetZ in tile units" }
+            { "type": "number", "description": "offsetZ in tile units" },
+            { "type": "number", "description": "offsetY in tile units" }
           ],
           "items": false
         },
@@ -101,7 +111,8 @@
           "properties": {
             "rotationY": { "type": "number" },
             "offsetX": { "type": "number" },
-            "offsetZ": { "type": "number" }
+            "offsetZ": { "type": "number" },
+            "offsetY": { "type": "number" }
           }
         }
       ]
