@@ -5637,6 +5637,8 @@
     wantNormals: false,
   };
   const renderBufferSizeVec = new THREE.Vector2();
+  const PIXEL_ZOOM_MIN_RES_SCALE = 0.5;
+  const PIXEL_ZOOM_MAX_RES_SCALE = 3.5;
 
   function disposePixelNormalResources() {
     if (pixelState.normalTarget) {
@@ -5647,6 +5649,18 @@
       pixelState.normalMaterial.dispose();
       pixelState.normalMaterial = null;
     }
+  }
+
+  function pixelZoomResolutionScale() {
+    if (cameraMode === 'fp') return 1;
+    const base = Math.max(0.001, DEFAULT_VIEW_SIZE);
+    const zoomRatio = Math.max(0.05, viewSize / base);
+    return Math.max(PIXEL_ZOOM_MIN_RES_SCALE, Math.min(PIXEL_ZOOM_MAX_RES_SCALE, Math.sqrt(zoomRatio)));
+  }
+
+  function effectivePixelSizeForZoom(pixelSize) {
+    if (pixelSize <= 1) return 1;
+    return Math.max(1, pixelSize / pixelZoomResolutionScale());
   }
 
   function ensurePixelResources(drawW, drawH, pixelSize, wantNormals) {
@@ -5798,7 +5812,7 @@
     }
     const size = renderer.getDrawingBufferSize(renderBufferSizeVec);
     const wantNormals = usePixelation && renderPixelNormalEdge > 0.001;
-    const postPixelSize = usePixelation ? renderPixelSize : 1;
+    const postPixelSize = usePixelation ? effectivePixelSizeForZoom(renderPixelSize) : 1;
     ensurePixelResources(size.x, size.y, postPixelSize, wantNormals);
     const prevTarget = renderer.getRenderTarget();
     renderer.setRenderTarget(pixelState.target);
@@ -5989,7 +6003,7 @@
     expandVisibleSizeOnFirstMove();
     clampTargetToHomeBoard();
     updateCamera();
-    if (renderAutoExpand) ensureGhostBoardsAroundTarget();
+    maybeEnsureGhostBoardsAroundTarget();
     updateLandscapeClipBounds();
     if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
   }
@@ -6000,7 +6014,7 @@
     expandVisibleSizeOnFirstMove();
     clampTargetToHomeBoard();
     updateCamera();
-    if (renderAutoExpand) ensureGhostBoardsAroundTarget();
+    maybeEnsureGhostBoardsAroundTarget(true);
     updateLandscapeClipBounds();
     if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
   }
@@ -7407,11 +7421,14 @@
     const tex = materialTextureForKey(cleanKey);
     if (!base || !base.clone || !tex || cleanKey === 'default') return base;
     const scale = normalizeMaterialTextureScale(textureScale || 1);
-    const key = (base.uuid || base.id || 'mat') + ':tex:' + cleanKey + ':' + scale.toFixed(3);
+    const baseScale = base.userData && base.userData.worldTextureScale
+      ? base.userData.worldTextureScale
+      : proceduralTextureScaleForKind(cleanKey);
+    const key = (base.uuid || base.id || 'mat') + ':tex:' + cleanKey + ':' + baseScale.toFixed(3) + ':' + scale.toFixed(3);
     if (!customMaterialCache.has(key)) {
       const mat = base.clone();
       if (mat.color) applyWearToMaterialColor(mat.color, 'custom', renderMaterialWear);
-      applyWorldUVs(mat, tex, scale);
+      applyWorldUVs(mat, tex, baseScale * scale);
       customMaterialCache.set(key, mat);
     }
     return customMaterialCache.get(key);
@@ -8236,7 +8253,7 @@
     return getWaterfallCubeGeometry.geo;
   }
 
-  const WATERFALL_FROTH_SPEED = 0.76;
+  const WATERFALL_FROTH_SPEED = 0.30;
   const WATERFALL_DROP_CUBE_SPEED = 0.86;
 
   function addWaterfallRiserEffects(g, x, z, riserSize, topY, sides) {
@@ -15076,8 +15093,11 @@
 
   function applyElementOpacity(root, opacity) {
     const displayOpacity = displayOpacityForRole(root, opacity);
+    const visible = displayOpacity > 0.001;
+    if (root.userData._lastAppliedDisplayOpacity === displayOpacity && root.visible === visible) return;
+    root.userData._lastAppliedDisplayOpacity = displayOpacity;
     // Hide invisible roots entirely so the renderer skips their draws.
-    root.visible = displayOpacity > 0.001;
+    root.visible = visible;
     if (!root.visible) return;
     root.traverse(o => {
       if (!o.isMesh) return;
@@ -15459,6 +15479,7 @@
     const cells = makeGhostWorld(boardX, boardZ);
     const board = new THREE.Group();
     const detail = getDesiredGhostDetail(boardX, boardZ);
+    if (detail !== 'full') ghostDetailReevaluationActive = true;
     board.userData = { ghostBoard: true, boardX, boardZ, detail };
     board.renderOrder = -5;
 
@@ -15825,10 +15846,13 @@
     return 'full';
   }
 
+  let ghostDetailReevaluationActive = false;
+
   // Called when the user changes zoom (renderVisibleSize) or after significant
   // camera movement. Rebuilds stale boards if their detail marker differs from
   // the full-fidelity Preview contract.
   function reevaluateGhostDetailLevels() {
+    let stillNeedsReevaluation = false;
     for (const board of ghostBoards.values()) {
       const bx = board.userData.boardX;
       const bz = board.userData.boardZ;
@@ -15836,14 +15860,19 @@
       const desired = getDesiredGhostDetail(bx, bz);
       if (current !== desired) {
         rebuildGhostBoard(bx, bz);
+        stillNeedsReevaluation = true;
+      } else if (current !== 'full' || desired !== 'full') {
+        stillNeedsReevaluation = true;
       }
     }
+    ghostDetailReevaluationActive = stillNeedsReevaluation;
   }
 
   // Throttled re-evaluation on camera movement so stale cheap Preview boards
   // are rebuilt as full quality without doing that work every frame.
   let lastGhostDetailCheck = 0;
   function maybeReevaluateGhostDetails() {
+    if (!ghostDetailReevaluationActive) return;
     const now = performance.now();
     if (now - lastGhostDetailCheck > 350) {   // ~3 times per second is plenty
       lastGhostDetailCheck = now;
@@ -15869,7 +15898,34 @@
     }
     if (built) updateGhostRenderBubble();
   }
+
+  let lastGhostEnsureTargetX = null;
+  let lastGhostEnsureTargetZ = null;
+  let lastGhostEnsureBoardX = null;
+  let lastGhostEnsureBoardZ = null;
+  const GHOST_ENSURE_TARGET_DIST = 0.55;
+
+  function noteGhostEnsureTarget() {
+    lastGhostEnsureTargetX = target.x;
+    lastGhostEnsureTargetZ = target.z;
+    lastGhostEnsureBoardX = boardFromTargetCoord(target.x);
+    lastGhostEnsureBoardZ = boardFromTargetCoord(target.z);
+  }
+
+  function maybeEnsureGhostBoardsAroundTarget(force = false) {
+    if (!renderAutoExpand) return;
+    const bx = boardFromTargetCoord(target.x);
+    const bz = boardFromTargetCoord(target.z);
+    const sameBoard = bx === lastGhostEnsureBoardX && bz === lastGhostEnsureBoardZ;
+    const moved = lastGhostEnsureTargetX === null || lastGhostEnsureTargetZ === null
+      ? Infinity
+      : Math.hypot(target.x - lastGhostEnsureTargetX, target.z - lastGhostEnsureTargetZ);
+    if (!force && sameBoard && moved < GHOST_ENSURE_TARGET_DIST) return;
+    ensureGhostBoardsAroundTarget();
+  }
+
   function ensureGhostBoardsAroundTarget() {
+    noteGhostEnsureTarget();
     syncGhostRenderBudget();
     if (!ghostBoardsEnabledForGrid()) {
       clearPendingGhostBoards();

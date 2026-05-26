@@ -25,6 +25,9 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Backdrop/game-screen vignette should remain a cheap CSS overlay variable, not another WebGL post pass. Keep it separate from scene brightness/lighting so it can frame the background without retuning materials.
 - Sky/background colour controls are direct scene/CSS settings, not post passes: `Sky blue depth` darkens the shader sphere and CSS backdrop, `Sky blue saturation` pushes the same blue hue harder, and `Undercloud width` rebuilds the small under-island cloud ring. Keep the undercloud layer as a handful of instanced cloud-puff groups attached below the floating island; do not make a full volumetric cloud field or reuse the full multi-mesh shadow-casting sky cloud factory there.
 - Floating-island underside depth should use a small number of cached voxel/box slabs attached to `homeBorderGroup`, not per-cell underside geometry. Animated waterfall froth should stay capped to a few simple meshes per exposed water edge and reuse the waterfall animation set.
+- Waterfall froth/foam should drift slowly. Keep `WATERFALL_FROTH_SPEED`
+  conservative (currently `0.30`) so the white puff layer reads as moving foam,
+  not flashing particles.
 - The object/stamp voxel bevel is a persisted render setting (`tinyworld:render:voxelBevel`) applied inside `vbox()` through cached centered voxel box geometry. It is intentionally fine-grained (0.001 steps) so tiny voxels can keep only a slight softened edge. Keep it subtle and global; do not hand-bevel individual stamps unless they need a genuinely different silhouette.
 - Voxel terrain top panels need a small width/depth overlap. Exact edge-to-edge panels produce sub-pixel cracks in the pixelated render path, especially on dark soil. Do not add a full top underlay to hide seams: terrain tile fade materials are transparent/depthWrite-off, so broad underlays can sort over the voxel panels and make the surface read flat.
 - Terrain leak blockers belong under the dirt/riser body as bottom caps, not beneath the visible top surface. Mark those caps `userData.noShadow = true` and keep `castReceive()` respecting that flag so they block sky/background misses without adding shadow cost or flattening voxel tops.
@@ -33,6 +36,23 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Per-frame object work is set-based: `animatedCellObjects` tracks swaying
   trees/tufts and `smokeHouseObjects` tracks chimney sources. Do not return to
   scanning every `cellMeshes` entry each frame for these effects.
+- Pixel-drag panning must not call `ensureGhostBoardsAroundTarget()` directly
+  on every pointer event. Route panning through `maybeEnsureGhostBoardsAroundTarget()`
+  so preview-board enqueue/fade work only runs after a meaningful target move
+  or a board-coordinate change; settings/reset/import paths may still force an
+  immediate ensure when they deliberately change preview state.
+- Ghost detail reevaluation is dormant by default because Preview boards are
+  currently full-fidelity only. Keep `ghostDetailReevaluationActive` false unless
+  a non-full-detail board exists; otherwise the animation loop should not scan
+  every ghost board several times per second just to confirm `'full' === 'full'`.
+- `applyElementOpacity()` caches the last display opacity applied to each root.
+  Preserve that no-op guard so repeated fade/bubble updates do not traverse an
+  unchanged tile/object subtree or redo fade-material bucket checks.
+- Per-object appearance texture overrides are relative multipliers on top of
+  the base material's `userData.worldTextureScale`, not absolute world scales.
+  Keep `customTextureMaterial()` multiplying by the base material scale so roof
+  shingles/slate and brick courses do not balloon when selected through the
+  inspector/appearance path.
 - Generated/imported world application supports sliced progressive rendering. In sliced mode, `applyState(..., { sliced: true })` sorts terrain and object/detail passes by distance from `opts.renderOrigin` or the current camera `target`, so visible/nearby cells appear before farther cells. Preserve that distance-ranked ordering when changing generation rendering. Demo/stress routes may pass `skipGhostBoards: true` to keep a large home board from also preloading preview boards; in that mode `applyState` should zero the in-memory preview distance, sync the ghost budget, and clear ghost boards without persisting render settings.
 - Home grids above the windowing threshold are **intent-full / render-windowed**: `world[][]` may hold the full 512×512 board, but `cellMeshes` must only hold the camera-centred home render window. Keep large-grid bulk load/clear paths on intent writes plus `requestHomeRenderWindowSync()`, not `GRID²` mesh rebuilds. Keep `world[][]` sparse: virtual default grass comes from `getWorldCell()`/`ensureWorldCell()`, not from preallocating `HOME_GRID_MAX²` cells. Any direct `world[x][z]` read on an editing/API path must either guard the row or use `getWorldCell()` so untouched large-grid rows still behave as default terrain.
 - Preview/ghost boards are full `GRID²` boards today. Until they are chunked/windowed too, clamp 96+ grids to `ghostRadius = 0` / preview distance 0, and keep 128+ boards preview-disabled. Otherwise a single neighbour at 128+ explodes into tens of thousands of meshes/instances per board. Do not degrade visible Preview objects into cheap proxy boxes/cones/pyramids; if full-fidelity preview is too expensive, reduce or disable preview rings instead. If the cheap ghost terrain instancing path is used, clear its global buckets when ghost boards are cleared/disabled/resized so stale instanced terrain cannot remain in the scene.

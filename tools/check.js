@@ -134,6 +134,18 @@ if (!/function makeUnderIslandCloud/.test(html) || !/new THREE\.InstancedMesh\(g
 if (!/mesh\.castShadow = renderCloudShadow > 0\.001/.test(html) || !/o\.castShadow = renderCloudShadow > 0\.001/.test(html)) {
   fail('clouds must leave the shadow pass when cloud shadow is disabled');
 }
+if (!/function maybeEnsureGhostBoardsAroundTarget/.test(html) || !/panCameraByPixels[\s\S]*maybeEnsureGhostBoardsAroundTarget\(\)/.test(html)) {
+  fail('pixel-drag panning must throttle ghost preview work instead of rebuilding preview state on every pointer event');
+}
+if (!/ghostDetailReevaluationActive/.test(html) || !/if \(!ghostDetailReevaluationActive\) return;/.test(html)) {
+  fail('ghost detail reevaluation must stay disabled unless a non-full-detail preview board exists');
+}
+if (!/_lastAppliedDisplayOpacity/.test(html)) {
+  fail('opacity application must skip redundant root traversals when display opacity is unchanged');
+}
+if (!/function customTextureMaterial[\s\S]*base\.userData\.worldTextureScale[\s\S]*applyWorldUVs\(mat, tex, baseScale \* scale\)/.test(html)) {
+  fail('custom appearance textures must inherit the base material world texture scale');
+}
 if (!/function makeSelectionPreviewObject/.test(html) || /makeVoxelBuild\(target\.cell\)/.test(html) || /makeGenericObject\(kind\)/.test(html)) {
   fail('selection preview must render real object factories instead of falling back to the blue cube');
 }
@@ -166,6 +178,9 @@ if (!/const frontFill = makeFillLight/.test(html) || !/sideFillA\.intensity = re
 }
 if (!/function addWaterfallRiserEffects/.test(html) || !/terrain === 'water'[\s\S]*addWaterfallRiserEffects/.test(html)) {
   fail('exposed water risers must render lightweight waterfall effects');
+}
+if (!/const WATERFALL_FROTH_SPEED = 0\.30/.test(html)) {
+  fail('waterfall foam/froth animation must stay slow enough to read as drifting foam');
 }
 if (!/function updateWaterfallEffects/.test(html) || !/updateWaterfallEffects\(t\)/.test(html)) {
   fail('waterfall effects must animate in the main render loop');
