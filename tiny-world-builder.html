@@ -1646,12 +1646,55 @@
     padding-top: 8px;
   }
   .selection-prop-section-title {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     font-size: 10.5px;
     font-weight: 800;
     letter-spacing: 0;
     line-height: 1.2;
     text-transform: uppercase;
     color: var(--muted);
+    cursor: pointer;
+    text-align: left;
+  }
+  .selection-prop-section-title:hover {
+    color: var(--ink);
+  }
+  .selection-prop-section-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 9.5px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .selection-prop-section-cue {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.42);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+  }
+  .selection-prop-section-cue::before {
+    content: '-';
+  }
+  .selection-prop-section.is-collapsed .selection-prop-section-cue::before {
+    content: '+';
+  }
+  .selection-prop-section.is-collapsed .selection-prop-row {
+    display: none;
   }
   .selection-prop-row {
     display: grid;
@@ -30000,6 +30043,24 @@
     const previewProps = document.getElementById('agent-selection-properties');
     const panelTitle = document.getElementById('agent-panel-title');
     const previewCanvas = document.getElementById('selection-preview-canvas');
+    const SELECTION_PROP_COLLAPSED_LS = 'tinyworld:selection-props-collapsed.v1';
+
+    function loadSelectionPropCollapsedSections() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(SELECTION_PROP_COLLAPSED_LS) || '[]');
+        return new Set(Array.isArray(raw) ? raw.filter(item => typeof item === 'string') : []);
+      } catch (_) {
+        return new Set();
+      }
+    }
+
+    function saveSelectionPropCollapsedSections() {
+      try {
+        localStorage.setItem(SELECTION_PROP_COLLAPSED_LS, JSON.stringify(Array.from(selectionPropCollapsedSections)));
+      } catch (_) {}
+    }
+
+    const selectionPropCollapsedSections = loadSelectionPropCollapsedSections();
 
     // Preview rotator state (reused Three.js r128)
     let previewRenderer = null;
@@ -30709,13 +30770,34 @@
       sectionOrder.forEach(sectionName => {
         const rows = rowsBySection[sectionName] || [];
         if (!rows.length) return;
+        const sectionKey = sectionName.toLowerCase().replace(/\s+/g, '-');
+        const isCollapsed = selectionPropCollapsedSections.has(sectionKey);
         const sectionWrap = document.createElement('section');
-        sectionWrap.className = 'selection-prop-section';
-        sectionWrap.dataset.section = sectionName.toLowerCase().replace(/\s+/g, '-');
+        sectionWrap.className = 'selection-prop-section' + (isCollapsed ? ' is-collapsed' : '');
+        sectionWrap.dataset.section = sectionKey;
         sectionWrap.setAttribute('aria-label', sectionName + ' properties');
-        const sectionTitle = document.createElement('div');
+        const sectionTitle = document.createElement('button');
+        sectionTitle.type = 'button';
         sectionTitle.className = 'selection-prop-section-title';
-        sectionTitle.textContent = sectionName;
+        sectionTitle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        sectionTitle.setAttribute('aria-label', sectionName + ' properties, ' + rows.length + ' row' + (rows.length === 1 ? '' : 's') + ', ' + (isCollapsed ? 'collapsed' : 'expanded'));
+        const sectionLabel = document.createElement('span');
+        sectionLabel.textContent = sectionName;
+        const sectionMeta = document.createElement('span');
+        sectionMeta.className = 'selection-prop-section-meta';
+        sectionMeta.textContent = rows.length + ' row' + (rows.length === 1 ? '' : 's');
+        const sectionCue = document.createElement('span');
+        sectionCue.className = 'selection-prop-section-cue';
+        sectionCue.setAttribute('aria-hidden', 'true');
+        sectionMeta.appendChild(sectionCue);
+        sectionTitle.append(sectionLabel, sectionMeta);
+        sectionTitle.addEventListener('click', e => {
+          e.stopPropagation();
+          if (selectionPropCollapsedSections.has(sectionKey)) selectionPropCollapsedSections.delete(sectionKey);
+          else selectionPropCollapsedSections.add(sectionKey);
+          saveSelectionPropCollapsedSections();
+          renderSelectionProperties(summary, entries);
+        });
         sectionWrap.appendChild(sectionTitle);
         rows.forEach(row => {
           const wrap = document.createElement('div');
