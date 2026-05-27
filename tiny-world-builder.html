@@ -20087,6 +20087,16 @@
     saveRecentStampKeys(keys);
   }
 
+  function canRememberRecentStampTool(tool) {
+    if (!tool || tool.select || tool.erase || tool.auto || tool.hidden) return false;
+    if (tool.assetTemplateId || tool.modelStampId || tool.voxelBuildId) return true;
+    return !!(tool.terrain || tool.kind);
+  }
+
+  function rememberSelectedStampTool(tool) {
+    if (canRememberRecentStampTool(tool)) rememberRecentStampTool(tool);
+  }
+
   function normalizeStampBuilderCategory(id) {
     return STAMP_BUILDER_CATEGORY_IDS.has(id) ? id : 'all';
   }
@@ -20927,6 +20937,7 @@
     // user-applied rotation/offset so they don't bleed across tools.
     ensureGhostPreview();
     resetGhostTransform();
+    rememberSelectedStampTool(t);
     syncModelStampSettingsPanel(t);
     refreshOpenStampBuilderCards();
     twPerfMark('selectTool:end:' + (t && t.id ? t.id : 'unknown'));
@@ -20962,6 +20973,8 @@
         tool.activeVariant = v;
         renderFlyout(el, tool);
         if (typeof refreshToolThumb === 'function') refreshToolThumb(tool.id);
+        rememberSelectedStampTool(tool);
+        refreshOpenStampBuilderCards();
         // Active variant changed → rebuild the ghost preview to match.
         ensureGhostPreview();
         resetGhostTransform();
