@@ -19974,8 +19974,11 @@
   let voxelStampRefreshTimer = 0;
   let selectedVoxelBuildId = VOXEL_BUILD_STAMPS[0] && VOXEL_BUILD_STAMPS[0].id;
   let selectedAssetTemplateId = null;
+  const STAMP_BUILDER_RECENT_LS = 'tinyworld:stamp-builder-recent.v1';
+  const STAMP_BUILDER_RECENT_MAX = 12;
   const STAMP_BUILDER_CATEGORY_DEFS = [
     { id: 'all', label: 'All' },
+    { id: 'recent', label: 'Recent' },
     { id: 'templates', label: 'Templates' },
     { id: 'models', label: 'Models' },
     { id: 'voxel', label: 'Voxel' },
@@ -20026,6 +20029,35 @@
 
   function stampBuilderCategoryLabel(id) {
     return stampBuilderCategoryDef(id).label;
+  }
+
+  function loadRecentStampKeys() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STAMP_BUILDER_RECENT_LS) || '[]');
+      return Array.isArray(raw) ? raw.filter(key => typeof key === 'string' && key) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveRecentStampKeys(keys) {
+    try {
+      localStorage.setItem(STAMP_BUILDER_RECENT_LS, JSON.stringify((keys || []).filter(Boolean).slice(0, STAMP_BUILDER_RECENT_MAX)));
+    } catch (_) {}
+  }
+
+  function rememberRecentStampTool(tool) {
+    const key = stampBuilderSelectionKey(tool);
+    if (!key) return;
+    const keys = loadRecentStampKeys().filter(item => item !== key);
+    keys.unshift(key);
+    saveRecentStampKeys(keys);
+  }
+
+  function removeRecentStampKey(key) {
+    if (!key) return;
+    const keys = loadRecentStampKeys().filter(item => item !== key);
+    saveRecentStampKeys(keys);
   }
 
   function normalizeStampBuilderCategory(id) {
@@ -20166,6 +20198,7 @@
     if (selectedTool && selectedTool.kind === 'asset-template' && selectedTool.assetTemplateId === id) {
       selectTool(DEFAULT_TOOL);
     }
+    removeRecentStampKey('asset-template:' + id);
     renderStampBuilderCards();
     const status = document.getElementById('stamp-builder-status');
     if (status) status.textContent = 'Deleted template: ' + (removed.name || id);
@@ -20346,6 +20379,21 @@
         tools.push(stampTool);
       }
     }
+    return applyRecentStampCategories(tools);
+  }
+
+  function applyRecentStampCategories(tools) {
+    const recentKeys = loadRecentStampKeys();
+    if (!recentKeys.length) return tools;
+    const recentIndex = new Map(recentKeys.map((key, index) => [key, index]));
+    tools.forEach(tool => {
+      const key = stampBuilderSelectionKey(tool);
+      if (!recentIndex.has(key)) return;
+      const categories = new Set(tool.stampCategories || []);
+      categories.add('recent');
+      tool.stampCategories = stampBuilderCategoryList(categories, null);
+      tool.recentStampIndex = recentIndex.get(key);
+    });
     return tools;
   }
 
@@ -20354,9 +20402,13 @@
     const q = stampBuilderSearchQuery();
     const category = normalizeStampBuilderCategory(activeStampBuilderCategory);
     if (category !== activeStampBuilderCategory) activeStampBuilderCategory = category;
-    return tools.filter(tool => {
+    const filtered = tools.filter(tool => {
       return stampBuilderToolMatchesCategory(tool, category) && stampBuilderToolMatchesSearch(tool, q);
     });
+    if (category === 'recent') {
+      filtered.sort((a, b) => (a.recentStampIndex ?? 9999) - (b.recentStampIndex ?? 9999));
+    }
+    return filtered;
   }
 
   function renderStampBuilderCategoryStrip(sourceTools) {
@@ -20480,6 +20532,7 @@
     if (tool.isAssetTemplate) {
       const template = tool.assetTemplate;
       if (!template || !setAssetClipboard(template.clipboard)) return;
+      rememberRecentStampTool(tool);
       selectedAssetTemplateId = template.id;
       selectTool({
         id: 'asset-template:' + template.id,
@@ -20502,6 +20555,7 @@
         if (status) status.textContent = (asset ? asset.format.toUpperCase() : 'Model') + ' detected, but only GLB/GLTF/OBJ are placeable right now';
         return;
       }
+      rememberRecentStampTool(tool);
       selectedModelStampId = asset.id;
       selectTool({
         id: 'model-stamp:' + asset.id,
@@ -20516,6 +20570,7 @@
       return;
     }
     const realTool = tool.baseTool || tool;
+    rememberRecentStampTool(tool);
     if (tool.baseTool && tool.activeVariant) realTool.activeVariant = tool.activeVariant;
     selectTool(realTool);
     if (tool.voxelBuildId) selectedVoxelBuildId = tool.voxelBuildId;
