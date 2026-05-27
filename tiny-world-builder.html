@@ -11763,7 +11763,11 @@
     if (!summary) return;
     const modelCount = MODEL_STAMP_ASSETS.filter(a => a.supported).length;
     const voxelCount = VOXEL_BUILD_STAMPS.length;
-    summary.innerHTML = '<span><strong>' + (modelCount + voxelCount) + '</strong> stamp sources</span><span>' + modelStampScanMessage + '</span>';
+    let templateCount = 0;
+    try {
+      templateCount = loadAssetTemplates().filter(t => t && t.clipboard && normalizeClipboardCells(t.clipboard.cells).length).length;
+    } catch (_) {}
+    summary.innerHTML = '<span><strong>' + (modelCount + voxelCount + templateCount) + '</strong> stamp sources</span><span>' + modelStampScanMessage + (templateCount ? ' · ' + templateCount + ' saved template' + (templateCount === 1 ? '' : 's') : '') + '</span>';
   }
 
   function isStampBuilderPanelOpen() {
@@ -19811,8 +19815,10 @@
 
   let voxelStampRefreshTimer = 0;
   let selectedVoxelBuildId = VOXEL_BUILD_STAMPS[0] && VOXEL_BUILD_STAMPS[0].id;
+  let selectedAssetTemplateId = null;
   const STAMP_BUILDER_CATEGORY_DEFS = [
     { id: 'all', label: 'All' },
+    { id: 'templates', label: 'Templates' },
     { id: 'models', label: 'Models' },
     { id: 'voxel', label: 'Voxel' },
     { id: 'build', label: 'Build' },
@@ -19938,10 +19944,138 @@
     return stampBuilderCategoryList(categories, 'models');
   }
 
+  function normalizedAssetTemplateTool(template, index) {
+    const clipboard = template && template.clipboard;
+    const cells = normalizeClipboardCells(clipboard && clipboard.cells);
+    if (!cells.length) return null;
+    const id = (typeof template.id === 'string' && template.id) ? template.id : 'template-' + index;
+    const size = clipboard && clipboard.size ? clipboard.size : {
+      x: Math.max(...cells.map(c => c.dx)) + 1,
+      z: Math.max(...cells.map(c => c.dz)) + 1,
+    };
+    return {
+      id: 'asset-template:' + id,
+      label: template.name || 'Template ' + (index + 1),
+      kind: 'asset-template',
+      assetTemplateId: id,
+      assetTemplate: {
+        id,
+        name: template.name || 'Template ' + (index + 1),
+        createdAt: Number(template.createdAt) || 0,
+        clipboard: {
+          version: 1,
+          origin: clipboard.origin || { x: 0, z: 0 },
+          size,
+          cells,
+        },
+      },
+      isAssetTemplate: true,
+      color: '#c98f54',
+      stampCategories: ['templates'],
+    };
+  }
+
+  function assetTemplateTools() {
+    return loadAssetTemplates()
+      .map(normalizedAssetTemplateTool)
+      .filter(Boolean);
+  }
+
+  function assetTemplateById(id) {
+    const match = assetTemplateTools().find(tool => tool.assetTemplateId === id);
+    return match ? match.assetTemplate : null;
+  }
+
+  function assetTemplateSearchText(tool) {
+    const template = tool && tool.assetTemplate;
+    const cells = template && template.clipboard ? normalizeClipboardCells(template.clipboard.cells) : [];
+    return cells.map(item => {
+      const cell = item.cell || {};
+      const extras = Array.isArray(cell.extras) ? cell.extras.map(extra => extra && extra.kind).join(' ') : '';
+      return [cell.terrain, cell.kind, cell.buildingType, cell.fenceSide, extras].filter(Boolean).join(' ');
+    }).join(' ');
+  }
+
+  function renderAssetTemplateThumb(tool, canvas) {
+    const template = tool && tool.assetTemplate;
+    const cells = template && template.clipboard ? normalizeClipboardCells(template.clipboard.cells) : [];
+    if (!cells.length) {
+      drawFallbackThumb(canvas, tool && tool.label, tool && tool.color || '#c98f54');
+      return;
+    }
+    const terrainColors = {
+      grass: '#93c66b',
+      path: '#d7b77d',
+      dirt: '#a56c45',
+      water: '#66add6',
+      stone: '#a9adb3',
+      lava: '#e55b29',
+      sand: '#e4cf8a',
+      snow: '#edf3f4',
+    };
+    const kindColors = {
+      house: '#c77446',
+      tree: '#3f8b4c',
+      rock: '#747b82',
+      bridge: '#8f613c',
+      fence: '#9b7049',
+      crop: '#d2ab36',
+      corn: '#d8bb35',
+      wheat: '#d9b964',
+      pumpkin: '#dd782d',
+      carrot: '#df7b31',
+      sunflower: '#e5bf36',
+      flower: '#d2668f',
+      bush: '#507d48',
+      cow: '#4c5156',
+      sheep: '#e8e0cf',
+      'model-stamp': '#7fa0b8',
+      'voxel-build': '#8f80c7',
+    };
+    const size = template.clipboard.size || {};
+    const sizeX = Math.max(1, Number(size.x) || Math.max(...cells.map(c => c.dx)) + 1);
+    const sizeZ = Math.max(1, Number(size.z) || Math.max(...cells.map(c => c.dz)) + 1);
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = THUMB_SIZE * dpr;
+    canvas.height = THUMB_SIZE * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+    ctx.fillStyle = '#f7edda';
+    ctx.fillRect(0, 0, THUMB_SIZE, THUMB_SIZE);
+    const pad = 13;
+    const gap = 2;
+    const cellSize = Math.max(2, Math.min((THUMB_SIZE - pad * 2 - gap * (sizeX - 1)) / sizeX, (THUMB_SIZE - pad * 2 - gap * (sizeZ - 1)) / sizeZ));
+    const totalW = sizeX * cellSize + Math.max(0, sizeX - 1) * gap;
+    const totalH = sizeZ * cellSize + Math.max(0, sizeZ - 1) * gap;
+    const startX = (THUMB_SIZE - totalW) / 2;
+    const startY = (THUMB_SIZE - totalH) / 2;
+    ctx.lineWidth = 1.25;
+    for (const item of cells) {
+      const cell = item.cell || {};
+      const x = startX + item.dx * (cellSize + gap);
+      const y = startY + item.dz * (cellSize + gap);
+      ctx.fillStyle = terrainColors[cell.terrain] || terrainColors.grass;
+      ctx.fillRect(x, y, cellSize, cellSize);
+      ctx.strokeStyle = 'rgba(76, 61, 39, 0.18)';
+      ctx.strokeRect(x + 0.5, y + 0.5, cellSize - 1, cellSize - 1);
+      if (cell.kind) {
+        ctx.fillStyle = kindColors[cell.kind] || '#8d6b4d';
+        const inset = Math.max(3, cellSize * 0.22);
+        ctx.fillRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
+      }
+      if (Array.isArray(cell.extras) && cell.extras.length) {
+        ctx.fillStyle = 'rgba(62, 47, 31, 0.54)';
+        ctx.fillRect(x + 2, y + cellSize - 4, Math.max(3, cellSize - 4), 2);
+      }
+    }
+  }
+
   function stampBuilderToolSearchText(tool) {
     const variant = tool && tool.activeVariant;
     const asset = tool && (tool.modelAsset || getModelStamp(tool.modelStampId));
     const stamp = tool && (tool.voxelStamp || getVoxelBuildStamp(tool.voxelBuildId));
+    const templateText = tool && tool.isAssetTemplate ? assetTemplateSearchText(tool) : '';
     const categories = (tool && tool.stampCategories ? tool.stampCategories : [])
       .map(id => stampBuilderCategoryLabel(id))
       .join(' ');
@@ -19957,6 +20091,7 @@
       asset && asset.url,
       stamp && stamp.name,
       stamp && stamp.id,
+      templateText,
     ].filter(Boolean).join(' ').toLowerCase();
   }
 
@@ -19973,6 +20108,7 @@
 
   function stampBuilderAllTools() {
     const tools = [];
+    tools.push(...assetTemplateTools());
     for (const asset of MODEL_STAMP_ASSETS) {
       tools.push({
         id: 'model-stamp:' + asset.id,
@@ -20081,6 +20217,10 @@
   }
 
   function renderStampBuilderThumb(tool, canvas) {
+    if (tool && tool.isAssetTemplate) {
+      renderAssetTemplateThumb(tool, canvas);
+      return;
+    }
     // Cache hit: blit and skip the 3D scene build. Cards on this panel re-mount
     // on every state change, so caching is the dominant win.
     const cacheKey = thumbCacheKeyForTool(tool);
@@ -20127,6 +20267,7 @@
 
   function stampBuilderSelectionKey(tool) {
     if (!tool) return '';
+    if (tool.assetTemplateId) return 'asset-template:' + tool.assetTemplateId;
     if (tool.modelStampId) return 'model-stamp:' + tool.modelStampId;
     if (tool.voxelBuildId) return 'voxel-build:' + tool.voxelBuildId;
     const variant = tool.activeVariant && tool.activeVariant.id ? tool.activeVariant.id : '';
@@ -20135,6 +20276,7 @@
 
   function currentStampBuilderSelectionKey() {
     if (!selectedTool) return '';
+    if (selectedTool.kind === 'asset-template' && selectedTool.assetTemplateId) return 'asset-template:' + selectedTool.assetTemplateId;
     if (selectedTool.kind === 'model-stamp' && selectedTool.modelStampId) return 'model-stamp:' + selectedTool.modelStampId;
     if (selectedTool.kind === 'voxel-build' && selectedTool.voxelBuildId) return 'voxel-build:' + selectedTool.voxelBuildId;
     const variant = selectedTool.activeVariant && selectedTool.activeVariant.id ? selectedTool.activeVariant.id : '';
@@ -20149,6 +20291,24 @@
   }
 
   function selectStampToolFromCard(tool) {
+    if (tool.isAssetTemplate) {
+      const template = tool.assetTemplate;
+      if (!template || !setAssetClipboard(template.clipboard)) return;
+      selectedAssetTemplateId = template.id;
+      selectTool({
+        id: 'asset-template:' + template.id,
+        label: template.name,
+        kind: 'asset-template',
+        assetTemplateId: template.id,
+        assetTemplate: template,
+        isAssetTemplate: true,
+        color: '#c98f54',
+      });
+      const status = document.getElementById('stamp-builder-status');
+      const count = template.clipboard.cells.length;
+      if (status) status.textContent = 'Selected template: ' + template.name + ' (' + count + ' cell' + (count === 1 ? '' : 's') + ')';
+      return;
+    }
     if (tool.isModelStamp) {
       const asset = tool.modelAsset || getModelStamp(tool.modelStampId);
       const status = document.getElementById('stamp-builder-status');
@@ -20226,6 +20386,12 @@
         meta.appendChild(stampCardChip(unsupported ? 'detected' : 'model', unsupported ? 'warn' : 'model'));
         if (!unsupported && warning) meta.appendChild(stampCardChip('fallback', 'warn'));
         else if (!unsupported && hasTexture) meta.appendChild(stampCardChip('texture', 'model'));
+      } else if (tool.isAssetTemplate) {
+        const count = tool.assetTemplate && tool.assetTemplate.clipboard ? tool.assetTemplate.clipboard.cells.length : 0;
+        const size = tool.assetTemplate && tool.assetTemplate.clipboard && tool.assetTemplate.clipboard.size;
+        meta.appendChild(stampCardChip('template'));
+        if (size) meta.appendChild(stampCardChip(size.x + 'x' + size.z));
+        if (count) meta.appendChild(stampCardChip(count + ' cell' + (count === 1 ? '' : 's')));
       } else if (tool.isVoxelBuild) {
         meta.appendChild(stampCardChip('voxel'));
       } else if (tool.terrain) {
@@ -20636,6 +20802,12 @@
       return;
     }
     if (selectedTool.select) {
+      return;
+    }
+    if (selectedTool.kind === 'asset-template') {
+      const template = selectedTool.assetTemplate || assetTemplateById(selectedTool.assetTemplateId || selectedAssetTemplateId);
+      if (!template || !setAssetClipboard(template.clipboard)) return;
+      pasteClipboardAtTarget({ x, z, userEdited: isOutsideHomeGrid(x, z) }, { animate: true, impactDust: true });
       return;
     }
 
@@ -21524,6 +21696,8 @@
       clipboard: assetClipboard,
     });
     saveAssetTemplates(templates);
+    updateStampBuilderSummary();
+    refreshOpenStampBuilderCards();
     return true;
   }
 
