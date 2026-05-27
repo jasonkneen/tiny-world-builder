@@ -1595,6 +1595,9 @@
     flex-direction: column;
     gap: 8px;
     border-bottom: 1px solid rgba(120, 130, 150, 0.12);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .agent-selection-preview[hidden] { display: none; }
   .agent-panel.collapsed .agent-selection-preview { display: none; }
@@ -1629,21 +1632,39 @@
   .agent-selection-properties {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     padding-top: 4px;
   }
   .agent-selection-properties[hidden] { display: none; }
+  .selection-prop-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .selection-prop-section + .selection-prop-section {
+    border-top: 1px solid rgba(120, 130, 150, 0.16);
+    padding-top: 8px;
+  }
+  .selection-prop-section-title {
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
   .selection-prop-row {
     display: grid;
-    grid-template-columns: 52px 1fr;
+    grid-template-columns: minmax(62px, 74px) 1fr;
     align-items: start;
     gap: 8px;
   }
   .selection-prop-label {
     font-size: 11px;
     font-weight: 750;
-    letter-spacing: 0.06em;
-    line-height: 24px;
+    letter-spacing: 0;
+    line-height: 1.2;
+    padding-top: 5px;
     text-transform: uppercase;
     color: var(--muted);
   }
@@ -29854,8 +29875,17 @@
         return;
       }
       const primary = entries[0][0];
-      const rows = [];
-      rows.push({ key: 'selectionAction', label: 'Edit', options: [
+      const sectionOrder = ['Edit', 'Transform', 'Appearance', 'Ground'];
+      const rowsBySection = {};
+      sectionOrder.forEach(section => { rowsBySection[section] = []; });
+      const addRow = (section, row) => {
+        if (!rowsBySection[section]) rowsBySection[section] = [];
+        rowsBySection[section].push(row);
+      };
+      const addRows = (section, sectionRows) => {
+        sectionRows.forEach(row => addRow(section, row));
+      };
+      addRow('Edit', { key: 'selectionAction', label: 'Actions', options: [
         { label: 'Copy', value: 'copy' },
         { label: 'Cut', value: 'cut' },
         { label: 'Paste', value: 'paste' },
@@ -29863,14 +29893,14 @@
         { label: 'Save template', value: 'save-template' },
         { label: 'Paste latest', value: 'paste-template' },
       ] });
-      rows.push({ key: 'rotate', label: 'Rotate', options: [
+      addRow('Transform', { key: 'rotate', label: 'Rotate', options: [
         { label: 'Left', value: 'left' },
         { label: 'Right', value: 'right' },
       ] });
       const selectedTarget = selectedBoardObjectTarget();
       const selectedTargets = selectedBoardObjectTargets();
       if (selectedTargets.length) {
-        rows.push(
+        addRows('Transform', [
           { key: 'objectScale', label: 'Scale', options: [
             { label: 'Down', value: 'down' },
             { label: 'Up', value: 'up' },
@@ -29895,6 +29925,8 @@
             { label: 'Z-', value: 'z-' },
             { label: 'Z+', value: 'z+' },
           ] },
+        ]);
+        addRows('Appearance', [
           { key: 'objectMaterial', label: 'All material', options: SELECTION_MATERIAL_OPTIONS },
           { key: 'objectMaterialScale', label: 'All mat scale', options: [
             { label: 'Smaller', value: 'down' },
@@ -29910,15 +29942,15 @@
             { label: 'Smaller', value: 'down' },
             { label: 'Larger', value: 'up' },
           ] },
-        );
+        ]);
         if (selectedTargets.some(t => t.cell && t.cell.kind !== 'voxel-build')) {
-          rows.push({ key: 'objectStyle', label: 'Style', options: [
+          addRow('Appearance', { key: 'objectStyle', label: 'Style', options: [
             { label: 'Normal', value: 'normal' },
             { label: 'Voxel', value: 'voxel' },
           ] });
         }
       }
-      rows.push(
+      addRows('Ground', [
         { key: 'terrain', label: 'Ground', options: [
           { label: 'Grass', value: 'grass' },
           { label: 'Path', value: 'path' },
@@ -29933,10 +29965,10 @@
           { label: 'Down', value: 'down' },
           { label: 'Up', value: 'up' },
         ] },
-      );
+      ]);
       const hasWaterSelection = selectedWorldCoords().some(({ x, z }) => getWorldCell(x, z).terrain === 'water');
       if (hasWaterSelection) {
-        rows.push({ key: 'waterFlow', label: 'Water flow', options: [
+        addRow('Ground', { key: 'waterFlow', label: 'Water flow', options: [
           { label: 'Auto', value: 'auto' },
           { label: 'North', value: 'n' },
           { label: 'South', value: 's' },
@@ -29945,60 +29977,71 @@
         ] });
       }
       if (primary === 'house' || primary === 'voxel-build') {
-        rows.push(
+        addRows('Appearance', [
           { key: 'topColor', label: 'Top', color: true, options: SELECTION_TOP_COLOR_OPTIONS },
           { key: 'bodyColor', label: 'Body', color: true, options: SELECTION_BODY_COLOR_OPTIONS },
-        );
+        ]);
         if (primary === 'house') {
-          rows.push(
-          { key: 'buildingType', label: 'Shape', options: [
+          addRow('Appearance', { key: 'buildingType', label: 'Shape', options: [
             { label: 'Cottage', value: 'cottage' },
             { label: 'Manor', value: 'manor' },
             { label: 'Tower', value: 'tower' },
             { label: 'Castle', value: 'turret' },
             { label: 'High-rise', value: 'skyscraper' },
-          ] },
-          );
+          ] });
         }
       } else if (primary === 'tree') {
-        rows.push(
+        addRows('Appearance', [
           { key: 'topColor', label: 'Leaves', color: true, options: SELECTION_LEAF_COLOR_OPTIONS },
           { key: 'bodyColor', label: 'Trunk', color: true, options: SELECTION_TRUNK_COLOR_OPTIONS },
-        );
+        ]);
       }
-      rows.push({ key: 'size', label: 'Item/ground size', options: [
+      addRow('Transform', { key: 'size', label: 'Size', options: [
         { label: 'Small', value: 'small' },
         { label: 'Medium', value: 'medium' },
         { label: 'Large', value: 'large' },
       ] });
-      rows.forEach(row => {
-        const wrap = document.createElement('div');
-        wrap.className = 'selection-prop-row';
-        const label = document.createElement('div');
-        label.className = 'selection-prop-label';
-        label.textContent = row.label;
-        const options = document.createElement('div');
-        options.className = 'selection-prop-options';
-        row.options.forEach(opt => {
-          const chip = document.createElement('button');
-          chip.type = 'button';
-          chip.className = 'selection-prop-chip' + (row.color ? ' color-chip' : '');
-          if (row.color && opt.color) {
-            const swatch = document.createElement('span');
-            swatch.className = 'selection-prop-swatch';
-            swatch.style.background = opt.color;
-            chip.appendChild(swatch);
-          }
-          chip.appendChild(document.createTextNode(opt.label));
-          chip.addEventListener('click', e => {
-            e.stopPropagation();
-            applySelectionProperty(row.key, opt.value);
+      sectionOrder.forEach(sectionName => {
+        const rows = rowsBySection[sectionName] || [];
+        if (!rows.length) return;
+        const sectionWrap = document.createElement('section');
+        sectionWrap.className = 'selection-prop-section';
+        sectionWrap.dataset.section = sectionName.toLowerCase().replace(/\s+/g, '-');
+        sectionWrap.setAttribute('aria-label', sectionName + ' properties');
+        const sectionTitle = document.createElement('div');
+        sectionTitle.className = 'selection-prop-section-title';
+        sectionTitle.textContent = sectionName;
+        sectionWrap.appendChild(sectionTitle);
+        rows.forEach(row => {
+          const wrap = document.createElement('div');
+          wrap.className = 'selection-prop-row';
+          const label = document.createElement('div');
+          label.className = 'selection-prop-label';
+          label.textContent = row.label;
+          const options = document.createElement('div');
+          options.className = 'selection-prop-options';
+          row.options.forEach(opt => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'selection-prop-chip' + (row.color ? ' color-chip' : '');
+            if (row.color && opt.color) {
+              const swatch = document.createElement('span');
+              swatch.className = 'selection-prop-swatch';
+              swatch.style.background = opt.color;
+              chip.appendChild(swatch);
+            }
+            chip.appendChild(document.createTextNode(opt.label));
+            chip.addEventListener('click', e => {
+              e.stopPropagation();
+              applySelectionProperty(row.key, opt.value);
+            });
+            options.appendChild(chip);
           });
-          options.appendChild(chip);
+          wrap.appendChild(label);
+          wrap.appendChild(options);
+          sectionWrap.appendChild(wrap);
         });
-        wrap.appendChild(label);
-        wrap.appendChild(options);
-        previewProps.appendChild(wrap);
+        previewProps.appendChild(sectionWrap);
       });
       previewProps.hidden = false;
     }
