@@ -1,12 +1,12 @@
 # CodeSurf Workspace Memory — tinyworld
 
-_Generated: 2026-05-27 (fourteenth pass)_
+_Generated: 2026-05-27 (fifteenth pass)_
 
 ---
 
 ## Overview
 
-Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built on Three.js r128. The runtime is `tiny-world-builder.html` (inline CSS + JS, 36,330 lines as of last confirmed check). `LandscapeEngine.js` handles procedural continuous terrain; internals in `engine/landscape/` mixin modules (chunks.js, geometries.js, noise.js, shaders.js, water.js). Deployment is static: `publish.sh` → `dist/`. `npm test` runs ESLint + HTMLHint; all pass.
+Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built on Three.js r128. The runtime is `tiny-world-builder.html` (inline CSS + JS; ~36,869 lines after latest commit). `LandscapeEngine.js` handles procedural continuous terrain; internals in `engine/landscape/` mixin modules (chunks.js, geometries.js, noise.js, shaders.js, water.js). Deployment is static: `publish.sh` → `dist/`. `npm test` runs ESLint + HTMLHint; all pass.
 
 ---
 
@@ -17,11 +17,12 @@ Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built
 - All mutations via `setCell(x, z, opts)`; sparse-safe reads via `getWorldCell()` / `ensureWorldCell()`
 - Never write to `world[x][z]` directly outside init
 
-**Committed, stable on main (HEAD `2e20a38`):**
+**Committed, stable on main (HEAD `ed08603`):**
 - Planet underlay
 - Water flow system
 - Ghost world generation
 - Audio UI and defaults bootstrap
+- Updated editing controls (latest commit — includes `.codex/config.toml`, skill update, and 539-line HTML diff)
 
 **Properties Panel** — Preview/Properties tab split in place. "Details" tab renamed to "Properties". Panel stays visible without AI features. Row UI is chip-list based; controls not yet iconified or undo-aware.
 
@@ -31,7 +32,8 @@ Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built
 
 ## Branch State
 
-**main** — HEAD `2e20a38` (no new commits since prior passes):
+**main** — HEAD `ed08603` (working tree clean as of this pass):
+- `ed08603` Updated editing controls ← **NEW** (committed `.codex/config.toml`, `.codex/skills/tinyworld-asset-editing/SKILL.md`, `tiny-world-builder.html`)
 - `2e20a38` Add audio UI, defaults bootstrap, and assets
 - `78a019f` Merge asset system improvements
 - `c30bb6e` Finish asset move and stamp inventory
@@ -39,16 +41,11 @@ Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built
 - `7cfa92c` Improve stamp search keyboard flow
 - `f40143b` Select drawn placement strokes
 - `c394352` Clarify settings navigation
-- `fdd46e5` Limit part material controls to editable assets
-- `f04af67` Rename details tab to properties
-- `664aaa3` Keep properties visible without AI
 
-**Working tree (still uncommitted):**
-- `tiny-world-builder.html` — modified
-- `.codex/skills/tinyworld-asset-editing/SKILL.md` — modified
-- `.codex/config.toml` — new untracked file
+**Resolved since last pass:**
+- Previously uncommitted `tiny-world-builder.html`, `.codex/skills/tinyworld-asset-editing/SKILL.md`, and `.codex/config.toml` are now committed in `ed08603`.
 
-**Stale branches/worktrees to prune:**
+**Stale branches/worktrees to prune (still open):**
 - `asset-system-slice` — behind main after merge; `/private/tmp/tinyworld-asset-system` worktree stale
 - `worktree-agent-a17895f4`, `worktree-agent-a35bb1ef`, `worktree-agent-a6b44378` — local worktrees under `.claude/worktrees/`; all at `acfb18b`; safe to delete if no work in flight
 
@@ -59,7 +56,7 @@ Tiny World Builder is a single-file, no-bundler 3-D isometric world editor built
 All 17 local skills confirmed present in `.codex/skills/`:
 - `tinyworld-single-file`, `tinyworld-auto-batching`, `tinyworld-opacity-torch`, `tinyworld-tile-variation`, `tinyworld-asset-editing`, `tinyworld-visual-qa`, `tinyworld-render-performance`, `tinyworld-settings`, `tinyworld-webxr`, `tinyworld-crowd-layer`, `tinyworld-lowpoly-world-prompt`, `tinyworld-lowpoly-stylized-3d`, `tinyworld-integrations`, `tinyworld-runtime-state`, `tinyworld-island-and-planes`, `tinyworld-ghost-world-gen`, `threejs-primitive-reconstructor`
 
-**AGENTS.md routing table gap:** `tinyworld-ghost-world-gen` and `threejs-primitive-reconstructor` exist in `.codex/skills/` but are not listed in the AGENTS.md skill routing section.
+**AGENTS.md routing table gap:** `tinyworld-ghost-world-gen` and `threejs-primitive-reconstructor` exist in `.codex/skills/` but are not listed in the AGENTS.md skill routing section — still unresolved.
 
 ---
 
@@ -95,7 +92,6 @@ Approach (Codex session, 2026-05-27):
 
 ## Open Threads
 
-- Commit uncommitted changes to `tiny-world-builder.html` and `.codex/skills/tinyworld-asset-editing/SKILL.md`; stage and review `.codex/config.toml`
 - Implement and commit Properties Panel overhaul (category tabs, icon buttons, undo/redo, custom constrained gizmo)
 - Confirm freehand fence extras gap is closed by existing commit
 - Patch `makeModelStamp()` to consume `opts.appearance` (~line 12272)

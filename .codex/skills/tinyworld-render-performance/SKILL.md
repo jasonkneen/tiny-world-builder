@@ -23,9 +23,13 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Pixelation shader AA should work in pixel mode, but only through edge/depth/normal detection. Do not use a broad fullscreen blur; it smears terrain texture and UI-like decals. Shader AA must not force the normal prepass by itself; only `Pixel normal edge` should allocate/render the normal target.
 - Pixel post shaders must preserve the renderer output encoding. In Three r128 `ShaderMaterial` already injects encoding helpers, so include/apply `encodings_fragment` at the final `gl_FragColor` step but do not duplicate `encodings_pars_fragment`.
 - Backdrop/game-screen vignette should remain a cheap CSS overlay variable, not another WebGL post pass. Keep it separate from scene brightness/lighting so it can frame the background without retuning materials.
-- Sky/background colour controls are direct scene/CSS settings, not post passes: `Sky blue depth` darkens the shader sphere and CSS backdrop, `Sky blue saturation` pushes the same blue hue harder, and `Undercloud width` rebuilds the small under-island cloud ring. Keep the undercloud layer as a handful of instanced cloud-puff groups attached below the floating island; do not make a full volumetric cloud field or reuse the full multi-mesh shadow-casting sky cloud factory there.
+- Sky/background colour controls are direct scene/CSS settings, not post passes: `Sky blue depth` darkens the shader sphere and CSS backdrop, `Sky blue saturation` pushes the same blue hue harder, and `Undercloud width` rebuilds the small under-island cloud ring. `Cloud height` also controls undercloud depth below the island, slightly farther than the upper cloud distance, so one height adjustment moves both cloud layers. Keep the undercloud layer as a handful of instanced cloud-puff groups attached below the floating island; do not make a full volumetric cloud field or reuse the full multi-mesh shadow-casting sky cloud factory there.
 - Floating-island underside depth should use a small number of cached voxel/box slabs attached to `homeBorderGroup`, not per-cell underside geometry. Treat underside/edge/rocket dressing as decorative scenery: set `castShadow = false` and `receiveShadow = false` after building it so hundreds of tiny underside boxes do not enter the shadow-map pass.
 - Animated waterfall froth should stay capped to a few simple meshes per exposed water edge and reuse the waterfall animation set.
+- Waterfall curtain/blade variety should stay mesh-light: vary plane lengths,
+  add only a few faint lower tail planes, and use the shared quantized particle
+  material cache for opacity changes. Do not introduce a per-frame cloned
+  material or shader pass just to make blade ends fade unevenly.
 - Waterfall froth/foam should drift slowly. Keep `WATERFALL_FROTH_SPEED`
   conservative (currently `0.30`) so the white puff layer reads as moving foam,
   not flashing particles.
@@ -112,6 +116,13 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - When Cloud shadow is 0, cloud puffs should set `castShadow = false` so they leave the shadow-map pass entirely. Alpha-testing every cloud out in the depth material still costs draw calls.
 - Smoke particles must be capped and must not cast/receive shadows.
 - Per-particle opacity should use the shared quantized particle material cache and skip material assignment when the quantized bucket has not changed. Do not clone or assign particle materials every frame for smoke/dust.
+- Ambient underside wear/debris should use a separate capped particle pool with
+  cached tiny box geometry and the shared quantized particle material cache, so
+  slow falling crumbs do not consume chimney/impact smoke capacity. Make them
+  visible by tuning cap/rate/size within that pool before adding another effect
+  path.
+- Floating-island rocket/engine smoke puffs should reuse the existing capped `smokeParticles` pool and cached particle materials. Impact-triggered puffs from heavy drop-ins should be brief, grey/dark-grey, non-shadowing particles rather than a second smoke system.
+- Under-island clouds and rocket plume/smoke effects must render before board/tile transparent fade materials (`UNDER_ISLAND_EFFECT_RENDER_ORDER`) so foreground grass, cliffs, fences, and buildings visually occlude them instead of sorting behind the puffs.
 - Crop duster planes should remain ambient year-round. Only crop-dusting passes are summer/crop-gated; non-summer or no-crop states should fall back to banner flyovers rather than hiding the plane system.
 - Ghost board frustum culling: In `renderScene()`, active ghost boards must be dynamically frustum-culled using the camera view frustum. Apply a safety padding (e.g., `GRID * TILE * 0.5`) to the bounding boxes to prevent mountain shadow pop-out.
 - Cheap ghost terrain bounds culling: Set `frustumCulled = true` on the instanced meshes of cheap ghost terrain. Update their geometry bounding boxes and spheres in `updateGhostRenderBubble()` to match the active preload area so they are culled as a single unit when the camera is panned away.

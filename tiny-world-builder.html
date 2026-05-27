@@ -6162,6 +6162,7 @@
   const WEATHER_DECAL_LIFT = 0.09;
   const WEATHER_RIPPLE_LIFT = 0.10;
   const DIRT_H = 0.55;    // dirt block height (visible side)
+  const UNDERCLOUD_HEIGHT_MULTIPLIER = 1.08;
   const RENDER_LS = {
     resolution: 'tinyworld:render:resolution',
     saturation: 'tinyworld:render:saturation',
@@ -7550,6 +7551,8 @@
     rocketFlameY: new THREE.MeshBasicMaterial({ color: 0xfff05a, transparent: true, opacity: 0.92, depthWrite: false }),
     rocketFlameO: new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0.82, depthWrite: false }),
     rocketFlameR: new THREE.MeshBasicMaterial({ color: 0xe23a20, transparent: true, opacity: 0.66, depthWrite: false }),
+    rocketSmoke:  new THREE.MeshBasicMaterial({ color: 0x8a8d8b, transparent: true, opacity: 0.34, depthWrite: false }),
+    rocketSmokeD: new THREE.MeshBasicMaterial({ color: 0x4a4d4d, transparent: true, opacity: 0.26, depthWrite: false }),
     door:      new THREE.MeshLambertMaterial({ color: 0x7a4a2e }),
     woodTrim:  new THREE.MeshLambertMaterial({ color: 0x5c3818 }),
     windowB:   new THREE.MeshLambertMaterial({ color: 0x2a6dd1 }),
@@ -9597,6 +9600,8 @@
   const WATERFALL_FROTH_SPEED = 0.30;
   const WATERFALL_DROP_CUBE_SPEED = 0.86;
   const WATERFALL_FROTH_OUTSET = 0.16;
+  const WATERFALL_CURTAIN_MIN_DROP = 3.55;
+  const WATERFALL_CURTAIN_EXTRA_DROP = 2.85;
 
   function addWaterfallRiserEffects(g, x, z, riserSize, topY, sides) {
     if (!sides || !(sides.n || sides.s || sides.e || sides.w)) return;
@@ -9641,32 +9646,43 @@
       g.add(mesh);
     }
 
-    function placeWaterCurtain(dir, across, y, width, h, salt) {
-      const mesh = new THREE.Mesh(getWaterfallPlaneGeometry(), M.waterfall);
+    function placeWaterCurtain(dir, across, topAnchorY, width, h, salt, opts = {}) {
+      const mat = opts.mat || M.waterfall;
+      const opacity = opts.opacity === undefined ? 0.46 : opts.opacity;
+      const baseY = topAnchorY - h * 0.5;
+      const mesh = new THREE.Mesh(getWaterfallPlaneGeometry(), mat);
       mesh.userData.noShadow = true;
       mesh.userData.waterfall = {
         kind: 'curtain',
         dir,
-        baseY: y,
+        baseMat: mat,
+        baseOpacity: opacity,
+        minOpacity: opts.minOpacity === undefined ? 0.12 : opts.minOpacity,
+        baseY,
         baseAcross: across,
         baseScaleX: width,
         baseScaleY: h,
+        tail: !!opts.tail,
         phase: cellRand(x * 19 + salt, z * 23 - salt, 640),
         speed: 0.82 + cellRand(x + salt, z - salt, 650) * 0.52,
         drift: 0.12 + cellRand(x - salt, z + salt, 660) * 0.10,
+        fadePhase: cellRand(x * 71 + salt, z * 73 - salt, 665),
+        fadeSpeed: 0.72 + cellRand(x - salt, z + salt, 666) * 0.62,
+        lengthPulse: (opts.tail ? 0.055 : 0.032) + cellRand(x + salt, z - salt, 667) * 0.030,
       };
       mesh.renderOrder = 5;
       mesh.scale.set(width, h, 1);
+      setCachedParticleMaterial(mesh, mat, opacity);
       if (dir === 'n') {
-        mesh.position.set(across, y, -half - 0.010);
+        mesh.position.set(across, baseY, -half - 0.010);
         mesh.rotation.y = Math.PI;
       } else if (dir === 's') {
-        mesh.position.set(across, y, half + 0.010);
+        mesh.position.set(across, baseY, half + 0.010);
       } else if (dir === 'e') {
-        mesh.position.set(half + 0.010, y, across);
+        mesh.position.set(half + 0.010, baseY, across);
         mesh.rotation.y = Math.PI / 2;
       } else {
-        mesh.position.set(-half - 0.010, y, across);
+        mesh.position.set(-half - 0.010, baseY, across);
         mesh.rotation.y = -Math.PI / 2;
       }
       waterfallEffectMeshes.add(mesh);
@@ -9733,14 +9749,30 @@
 
     function addSide(dir) {
       const seed = dir.charCodeAt(0);
-      const curtainBottomY = -DIRT_H - Math.max(2.75, GRID * 0.24);
-      const curtainH = Math.max(height + 2.05, topY - curtainBottomY);
-      const curtainY = topY - curtainH * 0.5;
+      const curtainBottomY = -DIRT_H - Math.max(WATERFALL_CURTAIN_MIN_DROP, GRID * 0.34);
+      const curtainH = Math.max(height + WATERFALL_CURTAIN_EXTRA_DROP, topY - curtainBottomY);
       for (let i = 0; i < 7; i++) {
         const r = cellRand(x * 29 + i, z * 31 - i, 670 + seed);
         const across = (-0.41 + i / 6 * 0.82 + (r - 0.5) * 0.060) * sideSpan;
         const width = sideSpan * (0.10 + cellRand(x + i, z - i, 680 + seed) * 0.09);
-        placeWaterCurtain(dir, across, curtainY, width, curtainH * (0.94 + cellRand(x - i, z + i, 690 + seed) * 0.14), seed + i * 23);
+        const bladeRand = cellRand(x - i, z + i, 690 + seed);
+        const bladeH = curtainH * (1.04 + bladeRand * 0.42);
+        const lipY = topY - 0.010 - cellRand(x + i, z + i, 691 + seed) * 0.045;
+        const opacity = 0.35 + cellRand(x - i, z - i, 692 + seed) * 0.19;
+        placeWaterCurtain(dir, across, lipY, width, bladeH, seed + i * 23, {
+          opacity,
+          minOpacity: 0.10,
+        });
+        if (i % 2 === 0 || cellRand(x + i, z - i, 693 + seed) > 0.48) {
+          const tailTop = lipY - bladeH * (0.68 + cellRand(x - i, z + i, 694 + seed) * 0.22);
+          const tailH = bladeH * (0.18 + cellRand(x + i, z - i, 695 + seed) * 0.22);
+          const tailWidth = width * (0.36 + cellRand(x + i, z + i, 696 + seed) * 0.30);
+          placeWaterCurtain(dir, across + (cellRand(x - i, z - i, 697 + seed) - 0.5) * sideSpan * 0.045, tailTop, tailWidth, tailH, seed + i * 23 + 11, {
+            opacity: 0.13 + cellRand(x + i, z - i, 698 + seed) * 0.12,
+            minOpacity: 0.05,
+            tail: true,
+          });
+        }
       }
       for (let i = 0; i < 7; i++) {
         const r = cellRand(x * 37 + i, z * 39 - i, 700 + seed);
@@ -9806,10 +9838,16 @@
       if (cfg.kind === 'curtain') {
         const wave = Math.sin((t * cfg.speed + cfg.phase) * Math.PI * 2);
         const shimmer = Math.cos((t * cfg.speed * 1.7 + cfg.phase) * Math.PI * 2);
+        const fadeWave = Math.sin((t * cfg.fadeSpeed + cfg.fadePhase) * Math.PI * 2);
+        const fade = cfg.tail
+          ? 0.64 + Math.max(0, fadeWave) * 0.36
+          : 0.82 + Math.max(0, fadeWave) * 0.18;
+        const opacity = Math.max(cfg.minOpacity, cfg.baseOpacity * fade);
         mesh.position.y = cfg.baseY - (flow - 0.5) * cfg.drift;
         if (cfg.dir === 'n' || cfg.dir === 's') mesh.position.x = cfg.baseAcross + wave * 0.022;
         else mesh.position.z = cfg.baseAcross + wave * 0.022;
-        mesh.scale.set(cfg.baseScaleX * (0.86 + Math.abs(shimmer) * 0.30), cfg.baseScaleY * (0.96 + wave * 0.035), 1);
+        mesh.scale.set(cfg.baseScaleX * (0.82 + Math.abs(shimmer) * 0.34), cfg.baseScaleY * (0.96 + wave * cfg.lengthPulse), 1);
+        setCachedParticleMaterial(mesh, cfg.baseMat || M.waterfall, opacity);
         continue;
       }
       if (cfg.kind === 'foam') {
@@ -13780,16 +13818,23 @@
   }
 
   const ISLAND_ROCKET_FLAME_SPEED = 3;
+  const UNDER_ISLAND_EFFECT_RENDER_ORDER = -24;
   let islandRocketFlames = new Set();
+  let islandRocketEngines = new Set();
+  let islandRocketSmokeTimer = 0;
 
-  function registerIslandRocketFlame(mesh, seed, travel = 0.08) {
+  function registerIslandRocketFlame(mesh, seed, travel = 0.08, opts = {}) {
     mesh.userData.rocketFlame = true;
+    mesh.userData.rocketSmoke = !!opts.smoke;
+    mesh.userData.rocketSmokeDark = !!opts.darkSmoke;
     mesh.userData.flamePhase = seed * 1.73;
     mesh.userData.baseX = mesh.position.x;
     mesh.userData.baseZ = mesh.position.z;
     mesh.userData.baseY = mesh.position.y;
     mesh.userData.baseScale = mesh.scale.x || 1;
     mesh.userData.travel = travel;
+    mesh.userData.baseMat = mesh.material;
+    mesh.renderOrder = UNDER_ISLAND_EFFECT_RENDER_ORDER;
     islandRocketFlames.add(mesh);
     return mesh;
   }
@@ -13816,6 +13861,8 @@
       { y: -1.36, s: 0.22, spread: 0.34, mat: M.rocketFlameR, count: 8, travel: 0.095 },
       { y: -1.66, s: 0.17, spread: 0.48, mat: M.rocketFlameO, count: 7, travel: 0.125 },
       { y: -1.98, s: 0.12, spread: 0.62, mat: M.rocketFlameR, count: 6, travel: 0.155 },
+      { y: -1.54, s: 0.23, spread: 0.50, mat: M.rocketSmoke, count: 4, travel: 0.085, smoke: true },
+      { y: -2.18, s: 0.18, spread: 0.76, mat: M.rocketSmokeD, count: 3, travel: 0.120, smoke: true, darkSmoke: true },
     ];
     plume.forEach((layer, layerIdx) => {
       for (let i = 0; i < layer.count; i++) {
@@ -13833,7 +13880,7 @@
           layer.mat,
           { noGap: true, noBevel: true, noShadow: true },
         );
-        registerIslandRocketFlame(mesh, seed + layerIdx * 11 + i, layer.travel);
+        registerIslandRocketFlame(mesh, seed + layerIdx * 11 + i, layer.travel, layer);
       }
     });
 
@@ -13856,28 +13903,92 @@
     placements.forEach(([x, z], i) => {
       const engine = makeVoxelRocketEngine(1200 + i * 97);
       engine.position.set(x, y, z);
+      islandRocketEngines.add(engine);
       parent.add(engine);
     });
   }
 
+  const islandRocketSmokePoint = new THREE.Vector3();
+  function spawnIslandRocketSmokePuff(engine, intensity = 1) {
+    if (!engine || !engine.parent || typeof smokeGeo === 'undefined' || smokeParticles.length >= MAX_SMOKE_PARTICLES) return;
+    engine.getWorldPosition(islandRocketSmokePoint);
+    xrWorldRoot.worldToLocal(islandRocketSmokePoint);
+    const baseCount = Math.max(1, Math.min(5, Math.round(1 + intensity * 2)));
+    for (let i = 0; i < baseCount; i++) {
+      if (smokeParticles.length >= MAX_SMOKE_PARTICLES) break;
+      const colorHex = Math.random() < 0.42 ? 0x4d5052 : (Math.random() < 0.55 ? 0x7c7f7e : 0xa9aaa5);
+      const initialOpacity = 0.42 + Math.random() * 0.18;
+      const p = new THREE.Mesh(smokeGeo, getCachedParticleMaterial(smokeMat, initialOpacity, colorHex));
+      p.frustumCulled = true;
+      p.renderOrder = UNDER_ISLAND_EFFECT_RENDER_ORDER;
+      p.castShadow = false;
+      p.receiveShadow = false;
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.14 + Math.random() * 0.30;
+      p.position.set(
+        islandRocketSmokePoint.x + Math.cos(a) * r,
+        islandRocketSmokePoint.y - 1.35 - Math.random() * 0.55,
+        islandRocketSmokePoint.z + Math.sin(a) * r
+      );
+      p.userData = {
+        life: 0,
+        maxLife: 1.0 + Math.random() * 0.65,
+        maxOpacity: initialOpacity,
+        vy: -0.20 - Math.random() * 0.22,
+        vx: Math.cos(a) * (0.12 + Math.random() * 0.20),
+        vz: Math.sin(a) * (0.12 + Math.random() * 0.20),
+        colorHex,
+      };
+      const sc = 1.35 + Math.random() * 1.10;
+      p.scale.set(sc, sc * 0.78, sc);
+      setCachedParticleMaterial(p, smokeMat, initialOpacity, colorHex);
+      xrWorldRoot.add(p);
+      smokeParticles.push(p);
+    }
+  }
+
+  function triggerIslandRocketSmokePuffs(intensity = 1) {
+    if (!islandRocketEngines || !islandRocketEngines.size) return;
+    for (const engine of islandRocketEngines) {
+      if (!engine || !engine.parent) {
+        islandRocketEngines.delete(engine);
+        continue;
+      }
+      if (Math.random() < Math.min(0.85, 0.32 + intensity * 0.16)) {
+        spawnIslandRocketSmokePuff(engine, intensity);
+      }
+    }
+  }
+
   function tickIslandRocketEngines(t, dt) {
     if (!islandRocketFlames || !islandRocketFlames.size) return;
+    islandRocketSmokeTimer += dt;
+    if (islandRocketSmokeTimer > 2.8) {
+      islandRocketSmokeTimer = 0;
+      if (Math.random() < 0.55) triggerIslandRocketSmokePuffs(0.65);
+    }
     for (const mesh of islandRocketFlames) {
       if (!mesh || !mesh.parent) {
         islandRocketFlames.delete(mesh);
         continue;
       }
       const phase = mesh.userData.flamePhase || 0;
-      const pulse = 0.5 + Math.sin(t * 10.5 * ISLAND_ROCKET_FLAME_SPEED + phase) * 0.5;
-      const flicker = 0.86 + pulse * 0.30;
+      const smoke = !!mesh.userData.rocketSmoke;
+      const pulse = 0.5 + Math.sin(t * (smoke ? 3.2 : 10.5) * ISLAND_ROCKET_FLAME_SPEED + phase) * 0.5;
+      const puff = smoke ? Math.max(0, Math.sin(t * 0.92 + phase * 0.31)) : 0;
+      const flicker = smoke ? (0.82 + pulse * 0.16 + puff * 0.42) : (0.86 + pulse * 0.30);
       const baseScale = mesh.userData.baseScale || 1;
-      const mirror = Math.sin(t * 3.4 * ISLAND_ROCKET_FLAME_SPEED + phase * 0.73);
-      const stretch = 0.90 + Math.abs(mirror) * 0.22;
-      mesh.scale.set(baseScale * flicker * stretch, baseScale * flicker, baseScale * flicker * (1.16 - (stretch - 0.90)));
-      mesh.position.x = (mesh.userData.baseX || 0) * mirror;
-      mesh.position.z = mesh.userData.baseZ || 0;
-      mesh.position.y = mesh.userData.baseY - (mesh.userData.travel || 0.08) * pulse;
-      mesh.rotation.y += 0.65 * ISLAND_ROCKET_FLAME_SPEED * (0.6 + pulse) * dt;
+      const mirror = Math.sin(t * (smoke ? 1.5 : 3.4) * ISLAND_ROCKET_FLAME_SPEED + phase * 0.73);
+      const stretch = smoke ? (1.08 + puff * 0.38) : (0.90 + Math.abs(mirror) * 0.22);
+      mesh.scale.set(baseScale * flicker * stretch, baseScale * flicker * (smoke ? 0.76 : 1), baseScale * flicker * (smoke ? stretch : (1.16 - (stretch - 0.90))));
+      mesh.position.x = (mesh.userData.baseX || 0) * (smoke ? (0.84 + mirror * 0.12) : mirror);
+      mesh.position.z = (mesh.userData.baseZ || 0) * (smoke ? (0.84 - mirror * 0.10) : 1);
+      mesh.position.y = mesh.userData.baseY - (mesh.userData.travel || 0.08) * (smoke ? (0.4 + puff) : pulse);
+      if (smoke && mesh.userData.baseMat) {
+        const maxOp = mesh.userData.rocketSmokeDark ? 0.32 : 0.42;
+        setCachedParticleMaterial(mesh, mesh.userData.baseMat, maxOp * (0.45 + puff * 0.55));
+      }
+      mesh.rotation.y += (smoke ? 0.22 : 0.65) * ISLAND_ROCKET_FLAME_SPEED * (0.6 + pulse) * dt;
     }
   }
 
@@ -18725,6 +18836,9 @@
         const oz = (typeof gz === 'number') ? gz : Math.round(a.obj.position.z + GRID / 2 - 0.5);
         if (mass >= 2) {
           triggerRipple(ox, oz, mass); // also plays 'ripple' SFX
+          if (mass >= 4 && typeof triggerIslandRocketSmokePuffs === 'function') {
+            triggerIslandRocketSmokePuffs(Math.min(3, mass / 5));
+          }
         } else if (typeof playSfx === 'function') {
           playSfx('land', 0.35);
         }
@@ -18743,7 +18857,12 @@
           const gz = a.obj.userData.gz;
           const ox = (typeof gx === 'number') ? gx : Math.round(a.obj.position.x + GRID / 2 - 0.5);
           const oz = (typeof gz === 'number') ? gz : Math.round(a.obj.position.z + GRID / 2 - 0.5);
-          if (mass >= 2) triggerRipple(ox, oz, mass);
+          if (mass >= 2) {
+            triggerRipple(ox, oz, mass);
+            if (mass >= 4 && typeof triggerIslandRocketSmokePuffs === 'function') {
+              triggerIslandRocketSmokePuffs(Math.min(3, mass / 5));
+            }
+          }
           else if (typeof playSfx === 'function') playSfx('land', 0.35);
         }
         dropAnims.splice(i, 1);
@@ -24573,6 +24692,7 @@
       const oldTerrainColors = JSON.stringify(renderTerrainMaterialAdjustments || {});
       const oldPartMaterials = JSON.stringify(renderPartMaterialAdjustments || {});
       const oldMaterialWear = renderMaterialWear;
+      const oldCloudHeight = renderCloudHeight;
       const oldUnderCloudSpread = renderUnderCloudSpread;
       setShadowQuality(shadowEl.value);
       setRenderResolutionScale(parseInt(resolutionEl.value, 10) / 100);
@@ -24597,7 +24717,11 @@
       if (typeof applyCloudShadowSetting === 'function') applyCloudShadowSetting();
       applyCloudSettings();
       if (typeof applyCloudHeight === 'function') applyCloudHeight();
-      if (Math.abs(renderUnderCloudSpread - oldUnderCloudSpread) > 0.001 && typeof buildUnderIslandClouds === 'function') buildUnderIslandClouds();
+      if (
+        (Math.abs(renderUnderCloudSpread - oldUnderCloudSpread) > 0.001 ||
+          Math.abs(renderCloudHeight - oldCloudHeight) > 0.001) &&
+        typeof buildUnderIslandClouds === 'function'
+      ) buildUnderIslandClouds();
       renderDistanceMist = parseInt(distanceMistEl.value, 10) / 100;
       renderBackdrop = parseInt(backdropEl.value, 10) / 100;
       renderBackdropVignette = parseInt(backdropVignetteEl.value, 10) / 100;
@@ -26523,6 +26647,11 @@
   const smokeMat = new THREE.MeshBasicMaterial({ color: 0xd4cfc2, transparent: true, opacity: 0.65, depthWrite: false });
   const smokeGeo = new THREE.SphereGeometry(0.06, 6, 6);
   const smokeParticles = [];
+  const MAX_UNDERSIDE_DEBRIS_PARTICLES = 96;
+  const undersideDebrisMat = new THREE.MeshBasicMaterial({ color: 0x8b8173, transparent: true, opacity: 0.64, depthWrite: false });
+  const undersideDebrisGeo = getBoxGeometry(1, 1, 1);
+  const undersideDebrisParticles = [];
+  let undersideDebrisTimer = 0;
 
   function spawnSmoke(houseObj) {
     if (smokeParticles.length >= MAX_SMOKE_PARTICLES) return;
@@ -26569,6 +26698,105 @@
       if (t >= 1) {
         if (s.parent) s.parent.remove(s);
         smokeParticles.splice(i, 1);
+      }
+    }
+  }
+
+  function islandUndersideDebrisOrigin() {
+    const span = GRID * TILE;
+    const half = span * 0.5;
+    let x = 0, z = 0;
+    if (Math.random() < 0.58) {
+      const side = Math.floor(Math.random() * 4);
+      const across = (Math.random() - 0.5) * span * 0.86;
+      const edge = half * (0.80 + Math.random() * 0.16);
+      if (side === 0) { x = across; z = -edge; }
+      else if (side === 1) { x = across; z = edge; }
+      else if (side === 2) { x = -edge; z = across; }
+      else { x = edge; z = across; }
+    } else {
+      x = (Math.random() - 0.5) * span * 0.72;
+      z = (Math.random() - 0.5) * span * 0.72;
+    }
+    const radial = half > 0 ? Math.min(1, Math.max(Math.abs(x), Math.abs(z)) / half) : 1;
+    const centerDrop = Math.max(1.55, Math.min(5.4, GRID * 0.18));
+    const undersideDrop = 0.24 + Math.pow(1 - radial, 0.82) * centerDrop + Math.random() * 0.32;
+    return { x, y: -DIRT_H - undersideDrop, z };
+  }
+
+  function spawnUndersideDebris(count = 1) {
+    if (!homeBorderGroup || !homeBorderGroup.children.length) return;
+    const colors = [0x4f4c48, 0x665f55, 0x837866, 0xa08f78];
+    for (let i = 0; i < count; i++) {
+      if (undersideDebrisParticles.length >= MAX_UNDERSIDE_DEBRIS_PARTICLES) break;
+      const origin = islandUndersideDebrisOrigin();
+      const colorHex = colors[Math.floor(Math.random() * colors.length)];
+      const initialOpacity = 0.50 + Math.random() * 0.28;
+      const p = new THREE.Mesh(undersideDebrisGeo, getCachedParticleMaterial(undersideDebrisMat, initialOpacity, colorHex));
+      const chunk = Math.random() < 0.18;
+      const size = chunk
+        ? 0.055 + Math.random() * 0.050
+        : 0.026 + Math.random() * 0.052;
+      p.frustumCulled = true;
+      p.renderOrder = UNDER_ISLAND_EFFECT_RENDER_ORDER;
+      p.castShadow = false;
+      p.receiveShadow = false;
+      p.position.set(
+        origin.x + (Math.random() - 0.5) * 0.18,
+        origin.y,
+        origin.z + (Math.random() - 0.5) * 0.18
+      );
+      p.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      p.scale.set(size * (0.68 + Math.random() * 0.58), size * (0.58 + Math.random() * 0.48), size * (0.68 + Math.random() * 0.58));
+      p.userData = {
+        life: 0,
+        maxLife: 1.70 + Math.random() * 1.45,
+        maxOpacity: initialOpacity,
+        baseScaleX: p.scale.x,
+        baseScaleY: p.scale.y,
+        baseScaleZ: p.scale.z,
+        vx: (Math.random() - 0.5) * 0.075,
+        vy: -0.34 - Math.random() * 0.54,
+        vz: (Math.random() - 0.5) * 0.075,
+        spinX: (Math.random() - 0.5) * 2.0,
+        spinY: (Math.random() - 0.5) * 2.4,
+        spinZ: (Math.random() - 0.5) * 1.8,
+        colorHex,
+      };
+      setCachedParticleMaterial(p, undersideDebrisMat, initialOpacity, colorHex);
+      xrWorldRoot.add(p);
+      undersideDebrisParticles.push(p);
+    }
+  }
+
+  function tickUndersideDebris(dt) {
+    undersideDebrisTimer += dt;
+    if (undersideDebrisTimer > 0.16) {
+      undersideDebrisTimer = 0;
+      if (Math.random() < 0.78) {
+        const burst = Math.random() < 0.10 ? 4 : (Math.random() < 0.32 ? 3 : 2);
+        spawnUndersideDebris(burst);
+      }
+    }
+    for (let i = undersideDebrisParticles.length - 1; i >= 0; i--) {
+      const p = undersideDebrisParticles[i];
+      p.userData.life += dt;
+      const u = p.userData.life / p.userData.maxLife;
+      p.userData.vy -= 0.12 * dt;
+      p.position.x += p.userData.vx * dt;
+      p.position.y += p.userData.vy * dt;
+      p.position.z += p.userData.vz * dt;
+      p.rotation.x += p.userData.spinX * dt;
+      p.rotation.y += p.userData.spinY * dt;
+      p.rotation.z += p.userData.spinZ * dt;
+      const fade = Math.max(0, 1 - u);
+      const opacity = p.userData.maxOpacity * fade * fade;
+      setCachedParticleMaterial(p, undersideDebrisMat, opacity, p.userData.colorHex);
+      const s = Math.max(0.08, 1 - u * 0.62);
+      p.scale.set(p.userData.baseScaleX * s, p.userData.baseScaleY * s, p.userData.baseScaleZ * s);
+      if (u >= 1) {
+        if (p.parent) p.parent.remove(p);
+        undersideDebrisParticles.splice(i, 1);
       }
     }
   }
@@ -26931,6 +27159,7 @@
 
   var underIslandCloudGroup = new THREE.Group();
   underIslandCloudGroup.name = 'under-island-clouds';
+  underIslandCloudGroup.renderOrder = UNDER_ISLAND_EFFECT_RENDER_ORDER;
   xrWorldRoot.add(underIslandCloudGroup);
   var underIslandClouds = [];
 
@@ -26944,14 +27173,16 @@
     const span = GRID * TILE;
     const spread = Math.max(0.7, Math.min(2.2, renderUnderCloudSpread || 1));
     const count = Math.max(6, Math.min(14, Math.round((GRID * 0.20 + 4) * Math.min(1.35, spread))));
-    const cloudY = -DIRT_H - Math.max(2.3, Math.min(5.8, GRID * 0.13));
+    const depthFromCloudHeight = renderCloudHeight * UNDERCLOUD_HEIGHT_MULTIPLIER;
+    const gridDepth = Math.min(7.4, GRID * 0.18);
+    const cloudY = -DIRT_H - Math.max(3.2, gridDepth, depthFromCloudHeight);
     const ring = span * 0.58 * spread;
     for (let i = 0; i < count; i++) {
       const c = makeUnderIslandCloud(i + 37);
       const angle = (i / count) * Math.PI * 2 + cellRand(i, GRID, 910) * 0.62;
       const radius = ring * (0.52 + cellRand(i, GRID, 920) * 0.36);
       const scale = 0.55 + cellRand(i, GRID, 930) * 0.55;
-      c.scale.set(scale * 1.30, scale * 0.34, scale * 0.82);
+      c.scale.set(scale * 1.36, scale * 0.58, scale * 0.96);
       c.position.set(
         Math.cos(angle) * radius,
         cloudY + (cellRand(i, GRID, 940) - 0.5) * 0.78,
@@ -26964,6 +27195,7 @@
       c.userData.baseY = c.position.y;
       c.traverse(o => {
         if (!o.isMesh) return;
+        o.renderOrder = UNDER_ISLAND_EFFECT_RENDER_ORDER;
         o.castShadow = false;
         o.receiveShadow = false;
         if (o.customDepthMaterial && o.customDepthMaterial.userData && o.customDepthMaterial.userData.cloudShadowDepth) {
@@ -28355,6 +28587,7 @@
     if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
     tickWeather(dt);
     tickIslandRocketEngines(t, dt);
+    tickUndersideDebris(dt);
     updateClouds(dt);
     tickWaterTextureFlow(dt);
     updateWaterfallEffects(t);
