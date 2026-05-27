@@ -21764,6 +21764,14 @@
     return pasteClipboardPayloadAtTarget(payload, target, { animate: true, impactDust: true });
   }
 
+  function arrowSelectionShiftDelta(key) {
+    if (key === 'ArrowLeft') return { dx: -1, dz: 0 };
+    if (key === 'ArrowRight') return { dx: 1, dz: 0 };
+    if (key === 'ArrowUp') return { dx: 0, dz: -1 };
+    if (key === 'ArrowDown') return { dx: 0, dz: 1 };
+    return null;
+  }
+
   function loadAssetTemplates() {
     try {
       const raw = JSON.parse(localStorage.getItem(ASSET_TEMPLATES_LS) || '[]');
@@ -21866,8 +21874,17 @@
       e.preventDefault();
       return;
     }
-    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && window.__tinyworldSelection && window.__tinyworldSelection.cells.size) {
-      if (window.__tinyworldSelection.rotate(e.key === 'ArrowLeft' ? -Math.PI / 2 : Math.PI / 2)) {
+    const selectionApi = window.__tinyworldSelection;
+    const hasSelectedCells = !!(selectionApi && selectionApi.cells && selectionApi.cells.size);
+    if (hasSelectedCells && e.shiftKey) {
+      const delta = arrowSelectionShiftDelta(e.key);
+      if (delta && shiftSelectedCellIntent(delta.dx, delta.dz)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && hasSelectedCells) {
+      if (selectionApi.rotate(e.key === 'ArrowLeft' ? -Math.PI / 2 : Math.PI / 2)) {
         e.preventDefault();
         return;
       }

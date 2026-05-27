@@ -27,6 +27,7 @@ Clipboard and templates:
 - Paste actions should target the hovered cell first, then fall back to the selected region origin. Clear stale hover when the pointer leaves the canvas so this fallback remains reachable. The latest-template shortcut should paste the loaded template, not just stage it in memory.
 - Saved asset templates should also surface in the Stamps panel under `Templates`; selecting one loads its clipboard and clicking the board places it through the normal paste path.
 - Saved template names should summarize their copied cell contents so template cards stay readable and searchable without a separate naming dialog.
+- Keyboard tile moves should keep selection behavior consistent with the property panel: `Shift+Arrow` shifts selected cells through the internal move path without replacing the user's explicit clipboard, while arrows without an active selection keep camera/ghost behavior.
 
 Selection properties:
 
