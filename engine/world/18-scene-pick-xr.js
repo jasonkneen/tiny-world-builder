@@ -171,8 +171,37 @@
     return tool.id + '|' + (v ? v.id : '') + '|' + (tool.kind || tool.terrain || '') + '|' + (tool.voxelBuildId || '');
   }
 
+  // A flat, camera-facing icon used as the placement preview instead of a full
+  // 3D mesh. Reuses the pre-baked PNG icon (loaded into the thumb cache), so
+  // following the cursor costs a sprite update rather than rebuilding voxels.
+  // Returns null when no baked icon exists (e.g. user-imported stamps) so the
+  // caller falls back to the 3D mesh path.
+  function buildGhostBillboard(tool) {
+    if (!tool || !tool.kind) return null;
+    if (typeof getStaticIconImage !== 'function' || typeof thumbCacheKeyForTool !== 'function') return null;
+    const img = getStaticIconImage(thumbCacheKeyForTool(tool));
+    if (!img) return null;
+    const tex = new THREE.Texture(img);
+    tex.needsUpdate = true;
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.generateMipmaps = false;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
+    sp.center.set(0.5, 0.06); // anchor near the bottom so the icon stands on the tile
+    sp.scale.set(1.3, 1.3, 1);
+    sp.userData.ghostPreview = true;
+    sp.userData.iconBillboard = true;
+    return sp;
+  }
+
   function buildGhostMesh(tool) {
     if (!tool || tool.erase || tool.auto) return null;
+    // Prefer the cheap icon billboard; only object tools have baked icons, so
+    // terrain swatches and stamp-less tools fall through to the 3D path below.
+    const billboard = buildGhostBillboard(tool);
+    if (billboard) return billboard;
     const kind = tool.kind;
     let mesh = null;
     if      (kind === 'voxel-build') mesh = makeVoxelBuildStamp(tool.voxelBuildId);
@@ -253,7 +282,16 @@
     if (sig === ghostPreviewKey && ghostPreview) return;
     if (ghostPreview) {
       if (ghostPreview.parent) ghostPreview.parent.remove(ghostPreview);
-      disposeGroup(ghostPreview);
+      if (ghostPreview.userData && ghostPreview.userData.iconBillboard) {
+        // Sprites share an internal geometry — only dispose the per-ghost
+        // material + texture, never the shared geometry via disposeGroup.
+        if (ghostPreview.material) {
+          if (ghostPreview.material.map) ghostPreview.material.map.dispose();
+          ghostPreview.material.dispose();
+        }
+      } else {
+        disposeGroup(ghostPreview);
+      }
       ghostPreview = null;
     }
     ghostPreviewKey = sig;
@@ -264,6 +302,14 @@
       xrWorldRoot.add(ghostPreview);
     }
   }
+
+  // Force a ghost rebuild — used when a pre-baked icon finishes loading so the
+  // current tool's preview swaps from the 3D fallback to the cheap billboard.
+  window.__twRefreshGhostPreview = function refreshGhostPreview() {
+    ghostPreviewKey = null;
+    ensureGhostPreview();
+    updateGhostPlacement();
+  };
 
   function updateGhostPlacement() {
     if (!ghostPreview) return;

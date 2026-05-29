@@ -74,6 +74,29 @@ if [[ -d engine ]]; then
   ' sh {} +)
 fi
 
+# Stylesheet referenced via <link href="styles/tiny-world.css">.
+if [[ -d styles ]]; then
+  mkdir -p "$DIST/styles"
+  (cd styles && find . -type f ! -name '.DS_Store' -exec sh -c '
+    for f do
+      mkdir -p "../dist/styles/$(dirname "$f")"
+      cp "$f" "../dist/styles/$f"
+    done
+  ' sh {} +)
+fi
+
+# Pre-baked tool icons (PNG + manifest) loaded by preloadStaticIcons().
+# Regenerate with `npm run icons` after adding/changing a tool.
+if [[ -d icons ]]; then
+  mkdir -p "$DIST/icons"
+  (cd icons && find . -type f ! -name '.DS_Store' -exec sh -c '
+    for f do
+      mkdir -p "../dist/icons/$(dirname "$f")"
+      cp "$f" "../dist/icons/$f"
+    done
+  ' sh {} +)
+fi
+
 cp README.md "$DIST/README.md"
 cp LICENSE "$DIST/LICENSE"
 

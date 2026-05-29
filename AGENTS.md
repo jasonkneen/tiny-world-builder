@@ -36,6 +36,7 @@ Guidance for AI coding agents working in this repo. Read this before touching
   - `.codex/skills/tinyworld-integrations` — API, webhook, SSE, MCP, plugin, and automation examples.
   - `.codex/skills/tinyworld-runtime-state` — persisted localStorage, defaults pipeline (`tinyworld-defaults.json` + `/api/save-defaults`), audio, camera, panel positions, inline-script gotcha.
   - `.codex/skills/tinyworld-island-and-planes` — home island layout, sponsor banner drape, plane/crop-duster flight curves, "front" side conventions.
+  - `.codex/skills/tinyworld-tool-icons-and-modes` — pre-baked PNG tool icons (`npm run icons`), ghost billboard preview, mode indicator, boot-to-Select, deterministic next-item suggestions.
 
 ## House style
 
@@ -77,6 +78,9 @@ or you will desync intent from rendering.
 4. If the kind needs adjacency awareness, write a `getXxxNeighbors(x, z)`
    helper and re-render neighbors inside `setCell` (mirror the fence/house
    pattern at the bottom of `setCell`).
+4b. Re-bake the tool icons with `npm run icons` and commit the new PNG(s) +
+   `icons/manifest.json` — the toolbar and ghost preview read these, not live
+   3D. See `.codex/skills/tinyworld-tool-icons-and-modes`.
 5. If the kind animates per-frame, add a branch inside the `for (const key in
    cellMeshes)` loop in `animate()` and **respect `obj.userData.landing`** so
    it doesn't fight the drop-in.

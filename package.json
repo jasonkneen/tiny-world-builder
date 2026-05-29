@@ -9,6 +9,7 @@
     "check": "node tools/check.js",
     "smoke": "node tools/smoke-static.js",
     "perf": "node tools/perf-probe.js",
+    "icons": "node tools/bake-icons.js",
     "demo:vehicles": "node plugins/examples/vehicle-road-demo.js",
     "test": "npm run check && npm run smoke"
   },

@@ -172,6 +172,18 @@
     while (toolThumbBuildQueue.length && built < 1) {
       const item = toolThumbBuildQueue.shift();
       if (!item || !item.canvas || !item.canvas.isConnected) continue;
+      // A pre-baked PNG is on its way for this tool — wait for the image to
+      // finish loading rather than spinning up the WebGL renderer. Bounded so
+      // a missing/broken icon still falls back to a live render.
+      if (hasOrExpectsStaticIcon(item.tool) === 'pending') {
+        item._iconWaits = (item._iconWaits || 0) + 1;
+        if (item._iconWaits < 40) {
+          toolThumbBuildQueue.push(item);
+          toolThumbQueuedCanvases.add(item.canvas);
+          built++; // yield this pass; the scheduled retry picks it up once the PNG lands
+          continue;
+        }
+      }
       toolThumbQueuedCanvases.delete(item.canvas);
       try {
         buildToolThumb(item.tool, item.canvas);
@@ -249,6 +261,21 @@
     return 'grass';
   }
 
+  // Camera framing for a tool's thumbnail/icon. Buildings need a taller
+  // frustum than cottages, and islands need a wider one — shared by the live
+  // 3D thumbnail path and the offline icon baker so both frame identically.
+  function thumbFrameFor(tool) {
+    const houseType = tool.kind === 'house' && tool.activeVariant && tool.activeVariant.buildingType;
+    if (tool.kind === 'house') {
+      if (houseType === 'skyscraper') return { left: -1.7, right: 1.7, top: 2.6, bottom: -1.0, lookAtY: 1.0 };
+      if (houseType === 'tower' || houseType === 'turret') return { left: -1.58, right: 1.58, top: 2.15, bottom: -0.95, lookAtY: 0.85 };
+      if (houseType === 'manor') return { left: -1.48, right: 1.48, top: 1.9, bottom: -0.95, lookAtY: 0.68 };
+      return { left: -1.36, right: 1.36, top: 1.65, bottom: -0.95, lookAtY: 0.56 };
+    }
+    if (tool.island) return { left: -2.15, right: 2.15, top: 1.62, bottom: -1.55, lookAtY: 0.12 };
+    return { left: -1.3, right: 1.3, top: 1.3, bottom: -1.3, lookAtY: 0.4 };
+  }
+
   function buildToolThumb(tool, canvas) {
     if (!window.THREE) return null;
     // Cache hit: blit and skip the scene build entirely.
@@ -274,24 +301,8 @@
     // Strip shadows — the thumb renderer has no shadow maps.
     scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
-    // Buildings need variant-specific framing: the skyscraper/towers need a
-    // taller frustum, but using that same crop for cottages leaves a lot of
-    // empty air above the icon in the flyout.
-    const houseType = tool.kind === 'house' && tool.activeVariant && tool.activeVariant.buildingType;
-    let thumbFrame = { left: -1.3, right: 1.3, top: 1.3, bottom: -1.3, lookAtY: 0.4 };
-    if (tool.kind === 'house') {
-      if (houseType === 'skyscraper') {
-        thumbFrame = { left: -1.7, right: 1.7, top: 2.6, bottom: -1.0, lookAtY: 1.0 };
-      } else if (houseType === 'tower' || houseType === 'turret') {
-        thumbFrame = { left: -1.58, right: 1.58, top: 2.15, bottom: -0.95, lookAtY: 0.85 };
-      } else if (houseType === 'manor') {
-        thumbFrame = { left: -1.48, right: 1.48, top: 1.9, bottom: -0.95, lookAtY: 0.68 };
-      } else {
-        thumbFrame = { left: -1.36, right: 1.36, top: 1.65, bottom: -0.95, lookAtY: 0.56 };
-      }
-    } else if (tool.island) {
-      thumbFrame = { left: -2.15, right: 2.15, top: 1.62, bottom: -1.55, lookAtY: 0.12 };
-    }
+    // Buildings need variant-specific framing (see thumbFrameFor).
+    const thumbFrame = thumbFrameFor(tool);
     const cam = new THREE.OrthographicCamera(
       thumbFrame.left, thumbFrame.right, thumbFrame.top, thumbFrame.bottom, 0.1, 30,
     );
@@ -315,6 +326,136 @@
     // the scene build, then drop the scene so it doesn't sit in memory.
     storeThumbBitmap(cacheKey, canvas);
     try { scene.traverse(o => safeDisposeGeometry(o.geometry)); } catch (_) {}
+    return null;
+  }
+
+  // -------- pre-baked PNG icons --------
+  // The live 3D thumbnail renderer (buildToolThumb) is expensive: it spins up
+  // an off-DOM WebGL context and renders a scene per tool. To avoid that at
+  // runtime we ship pre-baked PNGs (see tools/bake-icons.js + icons/). At boot
+  // we load them straight into thumbBitmapCache so every toolbar button, stamp
+  // card, and ghost preview blits a bitmap instead of building a scene. The
+  // WebGL path stays only as a fallback for user-imported stamps with no
+  // pre-baked icon.
+  const ICON_BAKE_SIZE = 256;          // logical px the baker renders each icon at
+  const staticIconImages = new Map();  // cache key -> loaded HTMLImageElement (for ghost billboards)
+  let staticIconManifest = null;       // { version, icons: { key: filename } } or null until loaded
+
+  // Render a single tool to a transparent PNG data URL. Object tools are cut
+  // out on alpha (no ground tile) so they read as clean icons and double as
+  // ghost billboards; pure terrain tools keep their tile so the material shows.
+  // Reuses the shared thumb renderer + framing so baked icons match the look
+  // the live thumbnails used to produce.
+  function bakeToolIcon(tool, opts) {
+    if (!window.THREE) return null;
+    ensureThumbRenderer();
+    const size = (opts && opts.size) || ICON_BAKE_SIZE;
+    const showTile = !tool.kind; // terrain/island tools keep ground context; objects are cut out
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 0.30));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb39879, 0.42));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.18);
+    sun.position.set(3, 6, 2);
+    scene.add(sun);
+    if (showTile && !tool.island) {
+      scene.add(makeTile(thumbTerrainFor(tool), { path: {}, terrain: {} }, 0, 0, 1));
+    }
+    const obj = makeThumbObject(tool);
+    if (obj) { obj.position.y = TOP_H; scene.add(obj); }
+    scene.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    const f = thumbFrameFor(tool);
+    const cam = new THREE.OrthographicCamera(f.left, f.right, f.top, f.bottom, 0.1, 30);
+    const r = 3.4;
+    const lookY = f.lookAtY != null ? f.lookAtY : 0.4;
+    cam.position.set(Math.cos(THUMB_BASE_ANGLE) * r, 2.4 + lookY, Math.sin(THUMB_BASE_ANGLE) * r);
+    cam.lookAt(0, lookY, 0);
+    const prevAlpha = thumbRenderer.getClearAlpha();
+    thumbRenderer.setClearColor(0x000000, 0); // transparent background
+    thumbRenderer.setSize(size, size, false);
+    thumbRenderer.render(scene, cam);
+    let url = null;
+    try { url = thumbRenderer.domElement.toDataURL('image/png'); } catch (_) {}
+    thumbRenderer.setClearAlpha(prevAlpha);
+    thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false); // restore for live thumbs
+    try { scene.traverse(o => safeDisposeGeometry(o.geometry)); } catch (_) {}
+    return url;
+  }
+
+  // Offline hook called by tools/bake-icons.js inside headless Chromium. Walks
+  // every paintable tool + variant and returns [{ key, url }] so the baker can
+  // write one PNG per cache key. Guarded behind the global so production never
+  // calls it accidentally.
+  window.__twBakeIcons = function bakeAllToolIcons(opts) {
+    const out = [];
+    const seen = new Set();
+    const emit = (tool) => {
+      const key = thumbCacheKeyForTool(tool);
+      if (!key || seen.has(key)) return;
+      const url = bakeToolIcon(tool, opts);
+      if (url) { seen.add(key); out.push({ key, url }); }
+    };
+    for (const t of TOOLS) {
+      if (t.select || t.auto || t.erase || t.mooring) continue; // no object to render
+      emit(Object.assign({}, t, { activeVariant: null }));
+      if (t.variants && t.variants.length) {
+        for (const v of t.variants) emit(Object.assign({}, t, { activeVariant: v }));
+      }
+    }
+    return out;
+  };
+
+  function getStaticIconImage(key) {
+    const img = staticIconImages.get(key);
+    return img && img.complete && img.naturalWidth ? img : null;
+  }
+
+  function repaintToolThumbsForKey(key) {
+    toolThumbCanvases.forEach(({ tool, canvas }) => {
+      if (canvas && canvas.isConnected && thumbCacheKeyForTool(tool) === key) drawCachedThumb(canvas, key);
+    });
+  }
+
+  // Fetch the manifest and load each PNG into thumbBitmapCache. Because the
+  // existing thumb pipeline already checks that cache first, populating it here
+  // means the WebGL renderer is never created for any tool that has an icon.
+  function preloadStaticIcons() {
+    if (staticIconManifest) return;
+    fetch('icons/manifest.json', { cache: 'force-cache' })
+      .then(r => (r && r.ok ? r.json() : null))
+      .then(manifest => {
+        if (!manifest || !manifest.icons) return;
+        staticIconManifest = manifest;
+        Object.keys(manifest.icons).forEach(key => {
+          const img = new Image();
+          img.decoding = 'async';
+          img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth;
+            c.height = img.naturalHeight;
+            try {
+              c.getContext('2d').drawImage(img, 0, 0);
+              thumbBitmapCache.set(key, c);
+              repaintToolThumbsForKey(key);
+              // If the held tool just gained its icon, upgrade the live ghost.
+              if (selectedTool && thumbCacheKeyForTool(selectedTool) === key &&
+                  typeof window.__twRefreshGhostPreview === 'function') {
+                window.__twRefreshGhostPreview();
+              }
+            } catch (_) {}
+          };
+          img.src = 'icons/' + manifest.icons[key];
+          staticIconImages.set(key, img);
+        });
+      })
+      .catch(() => {});
+  }
+
+  // True when the tool has (or is expected to have) a pre-baked icon, so the
+  // WebGL build queue can wait for the PNG instead of rendering a scene.
+  function hasOrExpectsStaticIcon(tool) {
+    const key = thumbCacheKeyForTool(tool);
+    if (thumbBitmapCache.has(key)) return 'ready';
+    if (staticIconManifest && staticIconManifest.icons && staticIconManifest.icons[key]) return 'pending';
     return null;
   }
 
@@ -1413,8 +1554,152 @@
     rememberSelectedStampTool(t);
     syncModelStampSettingsPanel(t);
     refreshOpenStampBuilderCards();
+    updateModeIndicator();
+    updateSuggestions(t);
     twPerfMark('selectTool:end:' + (t && t.id ? t.id : 'unknown'));
   }
+
+  // -------- mode indicator --------
+  // A persistent HUD chip that names the current mode so a click never starts
+  // building by surprise. Select/Move reads calm; any build/paint/erase tool
+  // reads "armed" (coloured) so it's obvious the canvas is hot.
+  function modeDescriptor(t) {
+    if (!t || t.select) return { cls: 'select', label: 'Select / Move', sub: 'Click to inspect — drag to orbit' };
+    if (t.erase) return { cls: 'erase', label: 'Erasing', sub: 'Click a cell to remove' };
+    if (t.auto) return { cls: 'build', label: 'Auto', sub: 'AI suggests placements' };
+    if (t.island) return { cls: 'build', label: 'New Island', sub: 'Click empty space to add land' };
+    if (t.mooring) return { cls: 'build', label: 'Mooring', sub: 'Pin two anchors to link' };
+    const variant = t.activeVariant && t.activeVariant.label ? ' · ' + t.activeVariant.label : '';
+    const noun = t.terrain ? 'Painting' : 'Building';
+    return { cls: 'build', label: noun + ': ' + t.label + variant, sub: 'Esc to return to Select' };
+  }
+  function updateModeIndicator() {
+    const el = document.getElementById('mode-indicator');
+    if (!el) return;
+    const d = modeDescriptor(selectedTool);
+    el.className = 'mode-indicator mode-' + d.cls;
+    const labelEl = el.querySelector('.mode-label');
+    const subEl = el.querySelector('.mode-sub');
+    if (labelEl) labelEl.textContent = d.label;
+    if (subEl) subEl.textContent = d.sub;
+    el.setAttribute('aria-label', d.label + '. ' + d.sub);
+  }
+
+  // -------- deterministic next-item suggestions --------
+  // A fixed rule map: given the tool you're holding, what do builders usually
+  // reach for next? Rules are deterministic (no AI) so the "Next" strip is
+  // predictable. The first entry is usually "continue with the same tool"
+  // (e.g. keep laying wall segments). { id, variant } resolves to a tool +
+  // optional variant id.
+  const SUGGESTION_RULES = {
+    grass:  [{ id: 'tree' }, { id: 'path' }, { id: 'house' }, { id: 'flower' }],
+    path:   [{ id: 'path' }, { id: 'house' }, { id: 'tree' }, { id: 'grass' }],
+    dirt:   [{ id: 'crop' }, { id: 'wheat' }, { id: 'fence' }],
+    water:  [{ id: 'bridge' }, { id: 'water' }, { id: 'rock' }],
+    stone:  [{ id: 'house', variant: 'turret' }, { id: 'fence', variant: 'wall' }, { id: 'rock' }],
+    sand:   [{ id: 'water' }, { id: 'rock' }, { id: 'tuft' }],
+    snow:   [{ id: 'tree' }, { id: 'rock' }, { id: 'house', variant: 'cottage' }],
+    house:  [{ id: 'path' }, { id: 'fence' }, { id: 'tree' }, { id: 'house' }],
+    fence:  [{ id: 'fence' }, { id: 'house' }, { id: 'path' }, { id: 'tree' }],
+    bridge: [{ id: 'bridge' }, { id: 'path' }, { id: 'house' }],
+    tree:   [{ id: 'tree' }, { id: 'bush' }, { id: 'flower' }, { id: 'tuft' }],
+    bush:   [{ id: 'bush' }, { id: 'tree' }, { id: 'flower' }],
+    flower: [{ id: 'flower' }, { id: 'tuft' }, { id: 'bush' }],
+    tuft:   [{ id: 'tuft' }, { id: 'flower' }, { id: 'tree' }],
+    rock:   [{ id: 'rock' }, { id: 'tree' }, { id: 'tuft' }],
+    crop:   [{ id: 'crop' }, { id: 'corn' }, { id: 'wheat' }, { id: 'fence' }],
+    corn:   [{ id: 'corn' }, { id: 'wheat' }, { id: 'pumpkin' }],
+    wheat:  [{ id: 'wheat' }, { id: 'corn' }, { id: 'sunflower' }],
+    pumpkin:[{ id: 'pumpkin' }, { id: 'carrot' }, { id: 'crop' }],
+    carrot: [{ id: 'carrot' }, { id: 'pumpkin' }, { id: 'crop' }],
+    sunflower:[{ id: 'sunflower' }, { id: 'wheat' }, { id: 'flower' }],
+    cow:    [{ id: 'cow' }, { id: 'sheep' }, { id: 'fence' }],
+    sheep:  [{ id: 'sheep' }, { id: 'cow' }, { id: 'fence' }],
+    'new-island': [{ id: 'grass' }, { id: 'house' }, { id: 'tree' }],
+  };
+
+  function resolveSuggestion(spec, currentTool) {
+    const base = TOOLS.find(t => t.id === spec.id);
+    if (!base || base.hidden) return null;
+    // "Continue" suggestions (same tool) keep the variant the user is holding;
+    // explicit variant ids override.
+    let variant = null;
+    if (spec.variant && base.variants) {
+      variant = base.variants.find(v => v.id === spec.variant) || null;
+    } else if (base.variants) {
+      const keep = currentTool && currentTool.id === base.id ? currentTool.activeVariant : null;
+      variant = keep || base.activeVariant || base.variants[0];
+    }
+    return { tool: base, variant };
+  }
+
+  function computeSuggestions(tool) {
+    if (!tool || tool.select || tool.erase || tool.auto || tool.mooring) return [];
+    const rules = SUGGESTION_RULES[tool.id];
+    if (!rules) return [];
+    const out = [];
+    const seen = new Set();
+    for (const spec of rules) {
+      const r = resolveSuggestion(spec, tool);
+      if (!r) continue;
+      const sig = r.tool.id + ':' + (r.variant ? r.variant.id : '');
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      out.push(r);
+      if (out.length >= 4) break;
+    }
+    return out;
+  }
+
+  function suggestionButton(entry, isContinue) {
+    const btn = document.createElement('button');
+    btn.className = 'suggestion' + (isContinue ? ' suggestion-continue' : '');
+    const label = entry.variant && entry.variant.label && entry.tool.variants
+      ? entry.tool.label + ' · ' + entry.variant.label
+      : entry.tool.label;
+    btn.title = (isContinue ? 'Keep placing: ' : 'Next: ') + label;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'suggestion-icon';
+    canvas.width = 48; canvas.height = 48;
+    // A throwaway tool object carrying the suggested variant so the icon and
+    // the click select the same thing.
+    const iconTool = Object.assign({}, entry.tool, { activeVariant: entry.variant || entry.tool.activeVariant || null });
+    scheduleToolThumbBuild(iconTool, canvas, { priority: true });
+    const text = document.createElement('span');
+    text.className = 'suggestion-label';
+    text.textContent = isContinue ? 'Continue' : label;
+    btn.appendChild(canvas);
+    btn.appendChild(text);
+    btn.addEventListener('click', () => {
+      if (entry.variant) entry.tool.activeVariant = entry.variant;
+      selectTool(entry.tool);
+    });
+    return btn;
+  }
+
+  function updateSuggestions(tool) {
+    const bar = document.getElementById('suggestion-bar');
+    if (!bar) return;
+    const list = computeSuggestions(tool);
+    bar.innerHTML = '';
+    if (!list.length) { bar.hidden = true; return; }
+    const title = document.createElement('span');
+    title.className = 'suggestion-title';
+    title.textContent = 'Next';
+    bar.appendChild(title);
+    list.forEach((entry, i) => {
+      const isContinue = i === 0 && entry.tool.id === (tool && tool.id) &&
+        (!entry.variant || !tool.activeVariant || entry.variant === tool.activeVariant);
+      bar.appendChild(suggestionButton(entry, isContinue));
+    });
+    bar.hidden = false;
+  }
+
+  // Called from the placement path after a successful drop so the strip stays
+  // live as you build (deterministic, so it simply re-asserts the rule set).
+  window.__twNotifyPlacement = function notifyPlacement() {
+    updateSuggestions(selectedTool);
+  };
 
   function renderToolGroupFlyout(el, group) {
     el.innerHTML = '';

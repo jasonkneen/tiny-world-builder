@@ -948,6 +948,132 @@
     opacity: 1;
   }
 
+  /* -------- mode indicator -------- */
+  /* Persistent chip naming the current mode so a click never starts building
+     by surprise. Calm for Select; "armed" colours for build/paint/erase. */
+  .mode-indicator {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 16px 7px 12px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 1px 2px rgba(20, 30, 50, 0.05), 0 10px 30px -14px rgba(40, 50, 80, 0.28);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    z-index: 13;
+    pointer-events: none;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+  }
+  .mode-indicator .mode-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+    background: #6fae54;
+    box-shadow: 0 0 0 3px rgba(111, 174, 84, 0.22);
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+  }
+  .mode-indicator .mode-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+  .mode-indicator .mode-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #2a2723;
+    letter-spacing: 0.01em;
+  }
+  .mode-indicator .mode-sub {
+    font-size: 10.5px;
+    color: rgba(42, 39, 35, 0.62);
+  }
+  .mode-indicator.mode-build {
+    background: rgba(255, 244, 222, 0.82);
+    box-shadow: 0 1px 2px rgba(20, 30, 50, 0.05), 0 0 0 1px rgba(224, 150, 40, 0.45), 0 10px 30px -12px rgba(224, 150, 40, 0.4);
+  }
+  .mode-indicator.mode-build .mode-dot {
+    background: #e0962b;
+    box-shadow: 0 0 0 3px rgba(224, 150, 40, 0.25);
+  }
+  .mode-indicator.mode-erase {
+    background: rgba(255, 230, 228, 0.85);
+    box-shadow: 0 1px 2px rgba(20, 30, 50, 0.05), 0 0 0 1px rgba(208, 70, 64, 0.5), 0 10px 30px -12px rgba(208, 70, 64, 0.42);
+  }
+  .mode-indicator.mode-erase .mode-dot {
+    background: #d04640;
+    box-shadow: 0 0 0 3px rgba(208, 70, 64, 0.28);
+  }
+
+  /* -------- next-item suggestion strip -------- */
+  .suggestion-bar {
+    position: fixed;
+    bottom: 92px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 10px 28px -14px rgba(40, 50, 80, 0.3);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    z-index: 11;
+    max-width: calc(100vw - 32px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .suggestion-bar[hidden] { display: none; }
+  .suggestion-bar .suggestion-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(42, 39, 35, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0 4px 0 2px;
+    flex: none;
+  }
+  .suggestion-bar .suggestion {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    flex: none;
+    transition: background 0.14s ease, transform 0.14s ease;
+  }
+  .suggestion-bar .suggestion:hover {
+    background: rgba(255, 255, 255, 0.78);
+    transform: translateY(-1px);
+  }
+  .suggestion-bar .suggestion-continue {
+    background: rgba(255, 244, 222, 0.7);
+    border-color: rgba(224, 150, 40, 0.4);
+  }
+  .suggestion-bar .suggestion-icon {
+    width: 30px;
+    height: 30px;
+    flex: none;
+  }
+  .suggestion-bar .suggestion-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2a2723;
+    white-space: nowrap;
+  }
+
   .toolbar {
     position: fixed;
     bottom: 28px;

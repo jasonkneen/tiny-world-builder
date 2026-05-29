@@ -1266,6 +1266,18 @@
     <div id="agent-suggestions" class="agent-suggestions" role="listbox" aria-label="Suggested prompts" hidden></div>
   </form>
 
+  <!-- Current-mode HUD chip: tells you whether a click will inspect or build. -->
+  <div class="mode-indicator mode-select" id="mode-indicator" role="status" aria-live="polite">
+    <span class="mode-dot" aria-hidden="true"></span>
+    <span class="mode-text">
+      <span class="mode-label">Select / Move</span>
+      <span class="mode-sub">Click to inspect — drag to orbit</span>
+    </span>
+  </div>
+
+  <!-- Deterministic "what to place next" strip, sits above the toolbar. -->
+  <div class="suggestion-bar" id="suggestion-bar" role="toolbar" aria-label="Suggested next items" hidden></div>
+
   <div class="toolbar" id="toolbar"></div>
   <div class="flyout" id="flyout" hidden></div>
 

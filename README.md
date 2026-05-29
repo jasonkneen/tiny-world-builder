@@ -43,6 +43,7 @@ netlify deploy --build
 | Stack/enhance item | click the same object tool on an existing object (max 8) |
 | Raise/lower terrain | `R` / `F` over the hovered cell      |
 | Switch tool       | `1`–`9`, then letter shortcuts shown in the toolbar |
+| Back to Select    | `Esc` (disarms any build/paint/erase tool)          |
 | Toggle camera     | `P` or `I` (isometric ⇄ soft ⇄ perspective) |
 | Reset to preset   | reset button                           |
 | Clear to grass    | `C`                                    |
