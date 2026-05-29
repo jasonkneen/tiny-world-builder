@@ -154,6 +154,14 @@ if (!/id="render-material-target"/.test(html) || !/id="render-material-texture"/
 if (!/textures\/HJCliEjbEAA9Ah2\.jpeg/.test(html) || !/dist\/textures/.test(fs.readFileSync(path.join(root, 'publish.sh'), 'utf8'))) {
   fail('texture-folder material assets must be referenced by the app and copied to dist/textures');
 }
+// The page hard-depends on its external stylesheet. A build that does not copy
+// styles/ into dist deploys an unstyled page (CSS 404 served as text/html), so
+// guard both the <link> reference and the publish.sh copy step.
+if (/<link[^>]+rel=["']stylesheet["'][^>]+href=["']styles\//.test(htmlRaw)) {
+  if (!/dist\/styles/.test(fs.readFileSync(path.join(root, 'publish.sh'), 'utf8'))) {
+    fail('referenced styles/ stylesheet must be copied to dist/styles by publish.sh');
+  }
+}
 if (/function makeCustomPartsStamp[\s\S]*?\n\s*addVoxelBuildTrimFrame\(g, trimBounds, voxelTrimMaterial\(trimBase\)\);\n\s*g\.userData/.test(html)) {
   fail('custom voxel part stamps must not render bounding trim frames by default');
 }
