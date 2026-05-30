@@ -140,10 +140,10 @@
     const wallH = DIRT_H + 0.035;
     const y = -DIRT_H * 0.5 - 0.018;
     const mat = islandShellMaterial(M.boardSide);
-    const north = vbox(parent, span, wallH, thickness, 0, y, -half + inset, mat, { noGap: true, noBevel: true, noShadow: true, skipTop: true, skipBottom: true });
-    const south = vbox(parent, span, wallH, thickness, 0, y,  half - inset, mat, { noGap: true, noBevel: true, noShadow: true, skipTop: true, skipBottom: true });
-    const west  = vbox(parent, thickness, wallH, span, -half + inset, y, 0, mat, { noGap: true, noBevel: true, noShadow: true, skipTop: true, skipBottom: true });
-    const east  = vbox(parent, thickness, wallH, span,  half - inset, y, 0, mat, { noGap: true, noBevel: true, noShadow: true, skipTop: true, skipBottom: true });
+    const north = vbox(parent, span, wallH, thickness, 0, y, -half + inset, mat, { noGap: true, noShadow: true });
+    const south = vbox(parent, span, wallH, thickness, 0, y,  half - inset, mat, { noGap: true, noShadow: true });
+    const west  = vbox(parent, thickness, wallH, span, -half + inset, y, 0, mat, { noGap: true, noShadow: true });
+    const east  = vbox(parent, thickness, wallH, span,  half - inset, y, 0, mat, { noGap: true, noShadow: true });
     for (const mesh of [north, south, west, east]) {
       mesh.name = 'island-side-backing';
       mesh.userData.islandSideBacking = true;
@@ -222,7 +222,7 @@
         y,
         z,
         M.utilityClamp,
-        { noGap: true, noBevel: true, noShadow: true },
+        { noGap: true, noShadow: true },
       );
     }
     function addRun(seed, alongX, band, length, x, y, z, radius, mat, segments = 8) {
@@ -285,7 +285,7 @@
         y,
         z,
         mat,
-        { noGap: true, noBevel: true, noShadow: true },
+        { noGap: true, noShadow: true },
       );
       if (cellRand(i, GRID, 8950) > 0.46) {
         vbox(
@@ -297,7 +297,7 @@
           y - 0.024,
           z + (alongX ? 0 : (cellRand(i, GRID, 8960) - 0.5) * length * 0.40),
           M.utilityClamp,
-          { noGap: true, noBevel: true, noShadow: true },
+          { noGap: true, noShadow: true },
         );
       }
     }
@@ -313,7 +313,7 @@
       const h = 0.07 + cellRand(i, GRID, 9000) * 0.10;
       vbox(parent, w, h, d, x, y, z, cellRand(i, GRID, 9010) < 0.52 ? M.utilityPipeD : M.rocketSteelD, { noGap: true, noShadow: true, ry: cellRand(i, GRID, 9020) * Math.PI });
       if (cellRand(i, GRID, 9030) > 0.35) {
-        vbox(parent, w * 0.55, 0.018, d * 0.30, x, y - h * 0.50 - 0.012, z, M.utilityClamp, { noGap: true, noBevel: true, noShadow: true });
+        vbox(parent, w * 0.55, 0.018, d * 0.30, x, y - h * 0.50 - 0.012, z, M.utilityClamp, { noGap: true, noShadow: true });
       }
     }
 
@@ -328,7 +328,7 @@
       cable.rotation.x = (cellRand(i, GRID, 9080) - 0.5) * 0.20;
       cable.rotation.z = (cellRand(i, GRID, 9090) - 0.5) * 0.20;
       if (cellRand(i, GRID, 9100) > 0.48) {
-        vbox(parent, 0.055, 0.038, 0.055, x, y - length * 0.52, z, M.utilityClamp, { noGap: true, noBevel: true, noShadow: true });
+        vbox(parent, 0.055, 0.038, 0.055, x, y - length * 0.52, z, M.utilityClamp, { noGap: true, noShadow: true });
       }
     }
   }
@@ -363,7 +363,7 @@
       const c = homeBorderGroup.children.pop();
       disposeGroup(c);
     }
-    vbox(homeBorderGroup, GRID * TILE, 0.10, GRID * TILE, 0, -DIRT_H - 0.055, 0, M.islandUnderD, { noGap: true, skipTop: true });
+    vbox(homeBorderGroup, GRID * TILE, 0.10, GRID * TILE, 0, -DIRT_H - 0.055, 0, M.islandUnderD, { noGap: true });
     voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE, GRID * TILE, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
     addIslandSideBacking(homeBorderGroup);
     addIslandUtilityUnderside(homeBorderGroup);

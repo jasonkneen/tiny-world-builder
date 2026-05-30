@@ -1485,9 +1485,9 @@
       const d = Math.max(0.36, depth * (1 - t * 0.78));
       const y = topY - i * yStep - layerH * 0.5;
       const mat = i % 3 === 0 ? trimMat : roofMat;
-      vbox(parent, w, layerH, d, 0, y, 0, mat, { noGap: true, skipTop: true });
+      vbox(parent, w, layerH, d, 0, y, 0, mat, { noGap: true });
     }
-    vbox(parent, Math.max(0.30, width * 0.10), layerH * 1.1, Math.max(0.30, depth * 0.10), 0, topY - totalDrop - layerH * 0.55, 0, trimMat, { noGap: true, skipTop: true });
+    vbox(parent, Math.max(0.30, width * 0.10), layerH * 1.1, Math.max(0.30, depth * 0.10), 0, topY - totalDrop - layerH * 0.55, 0, trimMat, { noGap: true });
   }
 
   function makeBlankIsland() {

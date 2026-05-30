@@ -495,6 +495,30 @@
   const MOORING_HAZARD_CLEARANCE = 0.4; // extra margin when routing a cable around an engine
   const mooringCables = [];
   let mooringCableSerial = 1;
+  // Mooring connection styles — each colours the cable; "mooring" is the
+  // default plain tie. The list order also drives the radial style picker.
+  const MOORING_STYLES = [
+    { id: 'power',   label: 'Power',   color: 0xf2b417 },
+    { id: 'water',   label: 'Water',   color: 0x2f8fd6 },
+    { id: 'waste',   label: 'Waste',   color: 0x4f9a3a },
+    { id: 'data',    label: 'Data',    color: 0x9a5ec8 },
+    { id: 'mooring', label: 'Mooring', color: 0x0f1216 },
+  ];
+  const mooringStyleMaterials = {};
+  function mooringStyleMaterial(style) {
+    const def = MOORING_STYLES.find(s => s.id === style) || MOORING_STYLES[MOORING_STYLES.length - 1];
+    if (!mooringStyleMaterials[def.id]) {
+      mooringStyleMaterials[def.id] = new THREE.MeshLambertMaterial({ color: def.color, side: THREE.FrontSide });
+    }
+    return mooringStyleMaterials[def.id];
+  }
+  // Shared blue highlight swapped onto a cable's meshes while it is hovered.
+  const mooringHoverMaterial = new THREE.MeshLambertMaterial({
+    color: 0x3a86ff, emissive: 0x16407e, emissiveIntensity: 0.7, side: THREE.FrontSide,
+  });
+  function normalizeMooringStyleId(value) {
+    return MOORING_STYLES.some(s => s.id === value) ? value : 'mooring';
+  }
   let pendingMooringAnchor = null;
   let pendingMooringMarker = null;
   let mooringStatusTimer = 0;
@@ -543,7 +567,7 @@
     const rawId = typeof value.id === 'string' && value.id ? value.id : 'mooring-' + mooringCableSerial++;
     const match = rawId.match(/^mooring-(\d+)$/);
     if (match) mooringCableSerial = Math.max(mooringCableSerial, parseInt(match[1], 10) + 1);
-    return { id: rawId, a, b };
+    return { id: rawId, a, b, style: normalizeMooringStyleId(value.style) };
   }
 
   function serializeMooringAnchor(anchor) {
@@ -559,7 +583,7 @@
     return mooringCables.map(cable => {
       const a = serializeMooringAnchor(cable.a);
       const b = serializeMooringAnchor(cable.b);
-      return a && b ? { id: cable.id, a, b } : null;
+      return a && b ? { id: cable.id, a, b, style: normalizeMooringStyleId(cable.style) } : null;
     }).filter(Boolean);
   }
 
@@ -650,7 +674,7 @@
     root.userData = { kind: 'mooring-cable', mooringCableId: cable.id, noPointerPick: true };
     const curve = makeMooringCurve(start.clone(), end.clone());
     const geo = new THREE.TubeGeometry(curve, MOORING_CABLE_SEGMENTS, MOORING_CABLE_RADIUS, 5, false);
-    const tube = new THREE.Mesh(geo, M.utilityCable);
+    const tube = new THREE.Mesh(geo, mooringStyleMaterial(cable.style));
     tube.castShadow = true;
     tube.receiveShadow = false;
     tube.userData.noPointerPick = true;
@@ -819,6 +843,17 @@
     rebuildMooringCables();
     saveState();
     return { ok: true };
+  }
+
+  function setMooringCableStyle(id, style) {
+    const cable = mooringCables.find(c => c.id === id);
+    if (!cable) return false;
+    const next = normalizeMooringStyleId(style);
+    if (cable.style === next) return false;
+    cable.style = next;
+    rebuildMooringCables();
+    saveState();
+    return true;
   }
 
   function clearPendingMooringAnchor() {

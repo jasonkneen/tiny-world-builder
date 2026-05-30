@@ -37,7 +37,7 @@
     },
     { id: 'rock',   label: 'Rock',   kind: 'rock',  color: '#9b9a8f', shortcut: '8', group: 'nature' },
     { id: 'bridge', label: 'Bridge', kind: 'bridge', terrainOverride: 'water', color: '#8b5a32', shortcut: '9', group: 'build' },
-    { id: 'mooring', label: 'Mooring', mooring: true, color: '#171b20', shortcut: 'm', group: 'infra' },
+    { id: 'mooring', label: 'Connect', mooring: true, color: '#171b20', shortcut: 'm', group: 'infra' },
     { id: 'crop',      label: 'Crop',      kind: 'crop',      terrainOverride: 'dirt', color: '#86c544', shortcut: 'g', group: 'crops' },
     { id: 'corn',      label: 'Corn',      kind: 'corn',      terrainOverride: 'dirt', color: '#f2c849', shortcut: 'n', group: 'crops' },
     { id: 'wheat',     label: 'Wheat',     kind: 'wheat',     terrainOverride: 'dirt', color: '#e6c354', shortcut: 'w', group: 'crops' },
@@ -1505,7 +1505,7 @@
     if (t.erase) return { cls: 'erase', label: 'Erasing', sub: 'Click a cell to remove' };
     if (t.auto) return { cls: 'build', label: 'Auto', sub: 'AI suggests placements' };
     if (t.island) return { cls: 'build', label: 'New Island', sub: 'Click empty space to add land' };
-    if (t.mooring) return { cls: 'build', label: 'Mooring', sub: 'Pin two anchors to link' };
+    if (t.mooring) return { cls: 'build', label: 'Connect', sub: 'Pin two anchors to link' };
     const variant = t.activeVariant && t.activeVariant.label ? ' · ' + t.activeVariant.label : '';
     const noun = t.terrain ? 'Painting' : 'Building';
     return { cls: 'build', label: noun + ': ' + t.label + variant, sub: 'Esc to return to Select' };

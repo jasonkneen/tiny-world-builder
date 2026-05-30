@@ -37,6 +37,16 @@ Anything you add that should live on the island should be appended inside
 `buildHomeBorder()` so it rebuilds correctly when the user changes
 `#render-home-grid` (the home board size selector).
 
+The home island underside (slab + `voxelInvertedSteppedRoof`), the island
+**edges** (`addIslandSideBacking`), and the underside **greebles**
+(`addIslandUtilityUnderside` trays/clamps) now honour the **Voxel bevel**
+setting (`renderVoxelBevel`): their `vbox` calls no longer pass `noBevel`/`skip*`
+(which would route to the un-beveled `getOpenBoxGeometry`). `voxelInvertedSteppedRoof`
+is shared, so editable islands and the new-island stamp underside bevel too.
+Cost note: at max bevel (0.06) the merged homeBorder geometry grows ~13× (the
+many tiny greebles each round), so keep bevel modest. The **distant ghost-island
+dressing** (tiny far preview islands) intentionally stays `noBevel` for perf.
+
 Home-island rocket engines keep their chunky voxel casing, but the animated
 jet plume is a small set of static or simply X-flipped shader sheets. Do not
 rebuild it as many per-layer flame cubes; the sheet approach keeps the
@@ -155,3 +165,20 @@ After island/plane changes:
 - Confirm planes fly behind the island, banner stays readable against the
   sky, and engine sound (if positional audio active) pans correctly L↔R as
   the plane crosses the camera.
+
+
+## Mooring "Connect" cables — styles + interaction
+
+- The infra tool is labelled **"Connect"** (id stays `mooring`, `t.mooring`).
+- Each placed cable carries a `style` in `MOORING_STYLES`
+  (`14-editable-islands-moorings.js`): power (amber), water (blue), waste
+  (green), data (purple), mooring (default dark). `style` is normalized
+  (`normalizeMooringStyleId`), persisted via `serializeMooringCables`, and
+  drives the tube material (`mooringStyleMaterial`). Change it with the global
+  `setMooringCableStyle(id, style)` (rebuilds + saveState).
+- Cables stay `noPointerPick` for the placement raycast. `36-mooring-interaction.js`
+  runs its **own** raycast against `mooringGroup` (only while the Select tool is
+  active): hover swaps the cable's meshes to `mooringHoverMaterial` (blue);
+  a click opens a radial (`.radial-menu.mooring-radial`, reuses radial CSS) to
+  pick the style. Verify pickability with 3D math (project tube vertices →
+  raycast `mooringGroup`), not screenshots.
