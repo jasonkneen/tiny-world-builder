@@ -4034,11 +4034,12 @@
   /* -------- radial object menu (prototype) -------- */
   .radial-menu {
     position: fixed;
+    left: 0; top: 0;                 /* anchored via per-frame translate3d */
     z-index: 46;
     width: 0;
     height: 0;
     pointer-events: none;            /* only the buttons are interactive */
-    transform: translateZ(0);
+    will-change: transform;
   }
   .radial-menu[hidden] { display: none; }
   .radial-btn {

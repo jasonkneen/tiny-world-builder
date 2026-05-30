@@ -190,6 +190,11 @@
         if (!root.hidden) { root.hidden = true; currentLevel = 'root'; }
         return;
       }
+      // Project against the *current* camera. updateCamera() (orbit) only sets
+      // position + lookAt; it never refreshes matrixWorldInverse, so without
+      // this the menu would project against last frame's camera and swim while
+      // orbiting. Refresh here so the projection matches the frame being drawn.
+      cam.updateMatrixWorld();
       const p = gizmo.position.clone();
       p.y += 0.4;
       p.project(cam);
@@ -198,8 +203,11 @@
       const sx = rect.left + (p.x * 0.5 + 0.5) * rect.width;
       const sy = rect.top + (-p.y * 0.5 + 0.5) * rect.height;
       const m = RADIUS + 52;
-      root.style.left = Math.max(m, Math.min(window.innerWidth - m, sx)) + 'px';
-      root.style.top = Math.max(m, Math.min(window.innerHeight - m, sy)) + 'px';
+      // translate3d (subpixel, GPU-composited) instead of left/top so the menu
+      // tracks the object smoothly without per-frame layout or pixel snapping.
+      const cx = Math.max(m, Math.min(window.innerWidth - m, sx));
+      const cy = Math.max(m, Math.min(window.innerHeight - m, sy));
+      root.style.transform = 'translate3d(' + cx + 'px,' + cy + 'px,0)';
       const islandMode = !!selectedRadialIsland();
       if (root.hidden) {
         // Fresh appearance → reset to root ring and let the buttons spin in.

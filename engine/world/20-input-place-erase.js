@@ -380,6 +380,13 @@
   let dragMode = null;        // 'orbit' | 'pan' | 'pinch' | 'select-area' | 'draw' | 'move-selection' | 'transform-gizmo' | 'engine-select' | 'mooring'
   let selectionDragAnchor = null;
   let selectionMoveDragLastCoord = null;
+  // Click-selection state (Select tool). lastSelectionAnchor is the last single
+  // cell the user picked — the anchor for a Shift+click contiguous range.
+  // pointerDownHit/Mods snapshot the press so we can resolve a click on pointerup
+  // even if a modifier is released before mouseup.
+  let lastSelectionAnchor = null;
+  let pointerDownHit = null;
+  let pointerDownMods = { shift: false, meta: false };
   let transformGizmoDrag = null;
   const drawVisitedCells = new Set();
   const drawChangedWorldCoords = new Map();
@@ -712,16 +719,23 @@
     // Area selection triggers only on Shift+drag now. Cmd/Ctrl+drag used to
     // do the same — turned off so users don't accidentally rectangle-select
     // while reaching for a system shortcut.
-    if (dragMode === 'orbit' && e.shiftKey) {
+    // Cmd/Ctrl+Shift+click is a discontiguous toggle (resolved on pointerup),
+    // so keep the marquee on plain Shift only — otherwise it would clobber the
+    // toggle. (Cmd/Ctrl alone stays off per the note above.)
+    if (dragMode === 'orbit' && e.shiftKey && !e.metaKey && !e.ctrlKey) {
       const hit = pressHit;
       if (hit) {
         dragMode = 'select-area';
         selectionDragAnchor = { hit };
-        setRectangleSelection(hit, hit, 'replace');
+        // No immediate replace: a Shift *drag* fills the marquee on pointermove,
+        // while a Shift *click* (no drag) extends a range from lastSelectionAnchor
+        // on pointerup. Selecting here would collapse the click to one cell.
       }
     }
     pointerDown = { x: e.clientX, y: e.clientY };
     lastPointer = { x: e.clientX, y: e.clientY };
+    pointerDownHit = pressHit;
+    pointerDownMods = { shift: !!e.shiftKey, meta: !!(e.metaKey || e.ctrlKey) };
     didDrag = false;
     drawVisitedCells.clear();
     drawChangedWorldCoords.clear();
@@ -877,11 +891,33 @@
       return;
     }
 
-    if (pointerDown && !didDrag && currentHover && dragMode !== 'pan' && dragMode !== 'select-area' && dragMode !== 'draw' && dragMode !== 'mooring') {
-      // Plain click on the select tool is a no-op; the user must hold
-      // shift to engage selection (shift+click for one cell, shift+drag
-      // for a marquee). Other tools apply as usual.
-      if (!(selectedTool && selectedTool.select)) {
+    // Resolve a click (no drag). engine-select / transform-gizmo already
+    // selected on press and return early, so exclude them; pan/draw/mooring/
+    // pinch aren't clicks. Modifier clicks select on any tool; a plain click
+    // selects with the Select tool, otherwise applies the active tool.
+    if (pointerDown && !didDrag
+        && dragMode !== 'pan' && dragMode !== 'draw' && dragMode !== 'mooring'
+        && dragMode !== 'pinch' && dragMode !== 'engine-select' && dragMode !== 'transform-gizmo') {
+      const hit = pointerDownHit;
+      const mods = pointerDownMods;
+      if (mods.meta && mods.shift) {
+        // Cmd/Ctrl+Shift+click → toggle one cell on/off (discontiguous).
+        if (hit) { toggleCellSelection(hit); lastSelectionAnchor = hit; }
+      } else if (mods.shift) {
+        // Shift+click → contiguous range from the last anchor, added to the
+        // current selection (or just this cell if there's no anchor yet).
+        if (hit) {
+          if (lastSelectionAnchor) setRectangleSelection(lastSelectionAnchor, hit, 'add');
+          else setRectangleSelection(hit, hit, 'add');
+          lastSelectionAnchor = hit;
+        }
+      } else if (selectedTool && selectedTool.select) {
+        // Plain click with the Select tool → select the single cell (replace),
+        // which raises the transform gizmo + radial menu. Empty space clears.
+        if (hit) { setRectangleSelection(hit, hit, 'replace'); lastSelectionAnchor = hit; }
+        else { clearSelection(); lastSelectionAnchor = null; }
+      } else if (currentHover) {
+        // Plain click with any other tool → place/erase as before.
         applyToolToCell(currentHover);
       }
     }
