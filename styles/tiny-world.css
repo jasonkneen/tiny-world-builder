@@ -118,9 +118,70 @@
     margin-top: 6px;
     letter-spacing: 0.02em;
   }
-  /* world-menu-btn lives inside .brand only so JS can find it and
-     relocate it into the toolbar's world-slot; not visible here. */
-  .brand #world-menu-btn { display: none; }
+  /* World menu trigger — top-center rounded pill; menu opens beneath it. */
+  .world-pill {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 13;
+    display: flex;
+    align-items: center;
+    padding: 5px 14px 5px 9px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 10px 30px -14px rgba(40, 50, 80, 0.28);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .world-pill .brand-title-btn {
+    position: relative;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 2px 0 0;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0;
+    line-height: 1;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .world-pill .brand-title-btn::before {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #a6ca53, #75a83a);
+    box-shadow: inset 0 -3px 0 rgba(63, 98, 29, 0.2), 0 1px 2px rgba(60, 40, 10, 0.14);
+    flex: 0 0 auto;
+  }
+  .world-pill .brand-title-btn::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 13px;
+    width: 10px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-top: 0;
+    border-radius: 0 0 2px 2px;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .world-pill .brand-title-btn em { display: none; }
+  .world-pill .brand-title-btn .brand-chevron {
+    width: 11px;
+    height: 11px;
+    margin-left: 1px;
+    color: #8d887d;
+  }
 
   /* Keyboard/mouse tips — discreet pill above the appbar. */
   .tips-panel {
@@ -262,6 +323,23 @@
   }
   .appbar .btn.icon svg { width: 15px; height: 15px; }
 
+  .brand-banner {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 12;
+    display: block;
+    line-height: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    opacity: 0.92;
+    box-shadow: 0 8px 24px -10px rgba(40, 50, 80, 0.35);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .brand-banner:hover { opacity: 1; transform: translateY(-1px); }
+  .brand-banner:focus-visible { outline: 2px solid rgba(90, 140, 255, 0.8); outline-offset: 2px; }
+  .brand-banner img { display: block; width: 200px; height: auto; }
+
   .token-pill {
     position: fixed;
     top: 18px;
@@ -352,6 +430,8 @@
   body.xr-active .xr-panel { background: rgba(42, 39, 34, 0.72); }
   body.xr-active .xr-status { color: rgba(255, 255, 255, 0.86); }
   body.xr-active .brand,
+  body.xr-active .world-pill,
+  body.xr-active .brand-banner,
   body.xr-active .controls,
   body.xr-active .toolbar,
   body.xr-active .appbar,
@@ -723,29 +803,99 @@
   .audio-mute.muted .ic-off { display: block; }
 
   /* --- Sound icon (lives inside the bottom toolbar) --- */
-  .sound-icon {
-    width: 38px;
-    height: 38px;
+  button.sound-icon {
+    position: fixed;
+    right: 24px;
+    top: 346px;
+    z-index: 41;
+    width: 34px;
+    height: 72px;
     padding: 0;
-    margin-left: 4px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--ink);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.6);
+    color: #8a7a58;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 120ms ease, transform 120ms ease;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    transition: background 120ms ease, transform 120ms ease, color 120ms ease, box-shadow 120ms ease;
     flex-shrink: 0;
   }
   .sound-icon:hover {
-    background: rgba(255, 255, 255, 0.5);
+    color: var(--ink);
+    transform: scale(1.02);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 3px rgba(20, 30, 50, 0.08),
+      0 16px 40px -10px rgba(40, 50, 80, 0.28);
   }
+  .sound-icon:active { transform: scale(0.98); }
   .sound-icon.open {
     background: rgba(60, 110, 220, 0.18);
     color: #1f4ea8;
   }
+  button.layers-handle {
+    position: fixed;
+    right: 24px;
+    top: 430px;
+    z-index: 41;
+    width: 34px;
+    height: 72px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.6);
+    color: #8a7a58;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    transition: background 120ms ease, transform 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    flex-shrink: 0;
+  }
+  .layers-handle:hover {
+    color: var(--ink);
+    transform: scale(1.02);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 3px rgba(20, 30, 50, 0.08),
+      0 16px 40px -10px rgba(40, 50, 80, 0.28);
+  }
+  .layers-handle:active { transform: scale(0.98); }
+  .layers-handle.on {
+    background: rgba(60, 110, 220, 0.18);
+    color: #1f4ea8;
+  }
+  .layers-handle svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  body.vehicle-demo-active .layers-handle,
+  body.showcase .layers-handle { display: none; }
+
   .sound-icon svg {
     width: 18px;
     height: 18px;
@@ -765,11 +915,11 @@
   /* --- Floating sound panel — anchored above the toolbar --- */
   .sound-panel {
     position: fixed;
-    bottom: 94px;
-    right: 18px;
+    top: 346px;
+    right: 70px;
     z-index: 50;
     width: 280px;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 380px);
     overflow: auto;
     background: rgba(255, 255, 255, 0.66);
     border: 1px solid rgba(255, 255, 255, 0.55);
@@ -1626,6 +1776,9 @@
     padding: 1px 3px 5px;
     justify-content: flex-start;
     gap: 1px;
+    /* Same etched edge effect as the properties-panel chips. */
+    border-color: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
   }
   .flyout .tool.flyout-tool .tool-thumb {
     width: 42px;
@@ -2834,6 +2987,8 @@
   /* --- Showcase mode (hide chrome, let the scene speak) --- */
   body.showcase .brand,
   body.showcase .controls,
+  body.showcase .world-pill,
+  body.showcase .brand-banner,
   body.showcase .toolbar,
   body.showcase .audio-panel,
   body.showcase .help,
@@ -5152,3 +5307,42 @@
   html.ai-disabled #agent-panel.has-selection .agent-messages {
     display: none !important;
   }
+
+
+/* -------- flyable plane flight -------- */
+body.flight-active { cursor: none; }
+.flight-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 9000;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(14, 18, 24, 0.78);
+  color: #eaf2ff;
+  font: 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+.flight-hud b { color: #ffd27a; }
+.flight-menu {
+  position: fixed;
+  z-index: 9100;
+  transform: translate(-50%, -120%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.flight-menu-btn {
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #c8503a;
+  color: #fff;
+  font: 600 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.flight-menu-btn:hover { background: #d96148; }

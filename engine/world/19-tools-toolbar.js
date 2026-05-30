@@ -1362,13 +1362,6 @@
       clearTimeout(toolThumbBuildQueueTimer);
       toolThumbBuildQueueTimer = 0;
     }
-    const worldBtn = document.getElementById('world-menu-btn');
-    if (worldBtn) {
-      const slot = document.createElement('div');
-      slot.className = 'toolbar-world-slot';
-      slot.appendChild(worldBtn);
-      bar.appendChild(slot);
-    }
     const select = TOOLS.find(t => t.id === 'select');
     if (select) bar.appendChild(buildToolButton(select));
 
@@ -1406,8 +1399,6 @@
 
     const audioPanel = document.getElementById('audio-panel');
     if (audioPanel) bar.appendChild(audioPanel);
-    const soundIcon = document.getElementById('sound-icon');
-    if (soundIcon) bar.appendChild(soundIcon);
     updateToolActiveStates();
     twPerfMark('toolbar:end');
   }

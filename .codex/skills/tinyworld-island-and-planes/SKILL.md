@@ -1,6 +1,6 @@
 ---
 name: tinyworld-island-and-planes
-description: Use when changing the home island layout, edge dressing, undersides, draped banners (autoincentive sponsor flag), plane/crop-duster flight paths, banner streamers, or which side of the island is "front".
+description: Use when changing the home island layout, edge dressing, undersides, autoincentive sponsor banner (now a bottom-right DOM banner), plane/crop-duster flight paths, banner streamers, or which side of the island is "front".
 ---
 
 # Tiny World Island & Planes
@@ -27,7 +27,7 @@ vbox(... underside slab ...)
 voxelInvertedSteppedRoof(... cascading underside ...)
 addIslandRocketEngines(homeBorderGroup)
 addIslandEdgeDressing(homeBorderGroup)    // tufts, rocks, dirt accents
-buildIslandFrontBanner(homeBorderGroup)   // ← autoincentive drape
+(island front drape removed — autoincentive now a DOM banner, bottom-right)
 prepareHomeBorderForRender(homeBorderGroup)
 buildDistantWorlds()
 buildUnderIslandClouds() (if defined)
@@ -49,20 +49,19 @@ they may be useful again for alternate engine styles or detail settings.
 The PNG/JPG ships inline as `AUTOINCENTIVE_BANNER_DATA_URL` (~41 KB base64
 JPEG) so there's no extra HTTP. Same data URL feeds:
 
-1. The island front-facing drape (`buildIslandFrontBanner`) — a flapping
-   cloth mesh on the +Z side, top edge anchored just below the grass
-   (`ISLAND_BANNER_TOP_Y = -0.32`), offset outward from the rock face by
-   `ISLAND_BANNER_OFFSET = 0.35` so it doesn't intersect edge dressing.
+1. A fixed DOM banner in the **bottom-right** of the screen
+   (`<a id="brand-banner"><img id="brand-banner-img">`), src set by the
+   `applyAutoincentiveSponsorLogo` IIFE. Clickable, opens
+   `https://x.com/Autoincentiv3`. Hidden in showcase + XR via `.brand-banner`
+   rules in `styles/tiny-world.css`.
 2. The sponsor logo in the Workspace settings panel
-   (`<img id="sponsor-logo-autoincentive">`, populated by the
-   `applyAutoincentiveSponsorLogo` IIFE). The image is clickable, opening
-   `https://x.com/Autoincentiv3` in a new tab.
+   (`<img id="sponsor-logo-autoincentive">`, populated by the same IIFE).
 
-The flap shader is custom (`tickIslandBanners` ticked from
-`updateCropDuster`'s loop): top edge fixed, motion grows toward the bottom
-(`t = -by / H`), side-to-side sway + forward/back ripple, slight gravity droop.
-The island banner now ticks from the main animation time and is throttled to
-12 Hz so it does not depend on the plane system being enabled.
+The old 3D island front-facing drape (`buildIslandFrontBanner` /
+`tickIslandBanners`, a flapping cloth mesh on the +Z side) has been **removed
+from the scene**: the call in `buildHomeBorder()` (13-distant-dressing-ghost.js)
+is gone, so the functions remain defined but inert (legacy). `tickIslandBanners`
+still ticks but is a no-op while `islandBannerEntry` stays null.
 
 If the user changes art, swap the data URL and the `2.5:1` aspect — width
 fits ~`GRID * 0.7`.

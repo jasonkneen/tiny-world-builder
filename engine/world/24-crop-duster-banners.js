@@ -212,6 +212,8 @@
   (function applyAutoincentiveSponsorLogo() {
     const img = document.getElementById('sponsor-logo-autoincentive');
     if (img && !img.src) img.src = AUTOINCENTIVE_BANNER_DATA_URL;
+    const brand = document.getElementById('brand-banner-img');
+    if (brand && !brand.src) brand.src = AUTOINCENTIVE_BANNER_DATA_URL;
   })();
 
   // -------- bottom-left keyboard/mouse tips --------

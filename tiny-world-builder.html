@@ -101,7 +101,10 @@
   <div class="brand">
     <div class="title">Tiny World <em>Builder</em></div>
     <div class="sub">Tap to place · drag to orbit · pinch or scroll to zoom</div>
-    <!-- Kept for JS to relocate into the toolbar's world-slot. -->
+  </div>
+
+  <!-- World menu trigger — top-center rounded pill; menu opens beneath it. -->
+  <div class="world-pill" id="world-pill">
     <button type="button" class="brand-title-btn" id="world-menu-btn" aria-haspopup="menu" aria-expanded="false">
       <span id="world-menu-label">My world</span>
       <svg class="brand-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
@@ -235,6 +238,9 @@
     <svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
     <svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/></svg>
   </button>
+  <button type="button" id="layers-toggle" class="layers-handle" data-tooltip="Layers" aria-label="Open layers panel" aria-expanded="false" aria-controls="layers-panel">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
+  </button>
 
   <div id="sound-panel" class="sound-panel" role="dialog" aria-label="Sound controls" hidden>
     <div class="sound-panel-head">
@@ -307,10 +313,30 @@
         <path d="M6 14h12"/>
       </svg>
     </button>
+    <button class="btn icon" id="render-settings" data-tooltip="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="btn icon" id="import" data-tooltip="Import JSON" aria-label="Import world from JSON">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+    </button>
+    <button class="btn icon" id="export" data-tooltip="Export JSON" aria-label="Export world as JSON">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+    </button>
+    <button class="btn icon" id="reset" data-tooltip="Reset world" aria-label="Reset world">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    </button>
+    <button class="btn icon" id="dev-mode" data-tooltip="Developer overlay (`)" aria-label="Developer overlay">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </button>
+    <input type="file" id="import-file" accept=".json,application/json" hidden />
     <button class="btn icon" id="account-btn" data-tooltip="My account" aria-label="My account" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     </button>
   </div>
+
+  <a class="brand-banner" id="brand-banner" href="https://x.com/Autoincentiv3" target="_blank" rel="noopener noreferrer" aria-label="Autoincentive on X">
+    <img id="brand-banner-img" alt="Autoincentive" />
+  </a>
 
   <div class="controls">
     <button class="btn icon" id="home" data-tooltip="Center on your grid" aria-label="Center on your grid">
@@ -328,33 +354,14 @@
     <button class="btn icon" id="showcase-mode" data-tooltip="Showcase mode (hide chrome + orbit)" aria-label="Showcase mode">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>
     </button>
-    <button class="btn icon" id="dev-mode" data-tooltip="Developer overlay (`)" aria-label="Developer overlay">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-    </button>
-    <button class="btn icon" id="reset" data-tooltip="Reset world" aria-label="Reset world">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-    </button>
-    <button class="btn icon" id="export" data-tooltip="Export JSON" aria-label="Export world as JSON">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-    </button>
-    <button class="btn icon" id="import" data-tooltip="Import JSON" aria-label="Import world from JSON">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
-    </button>
-    <input type="file" id="import-file" accept=".json,application/json" hidden />
     <button class="btn icon" id="stamp-builder" data-tooltip="Stamps" aria-label="Open stamps">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="m3 7 9 5v10l-9-5V7Z"/><path d="m21 7-9 5v10l9-5V7Z"/></svg>
-    </button>
-    <button class="btn icon" id="layers-toggle" data-tooltip="Layers" aria-label="Open layers panel" aria-expanded="false" aria-controls="layers-panel">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>
     </button>
     <button class="btn icon" id="generate" data-tooltip="Generate from prompt" aria-label="Generate world from prompt" data-ai-interface hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
     </button>
     <button class="btn icon" id="clear" data-tooltip="Clear to grass" aria-label="Clear world to grass">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-    </button>
-    <button class="btn icon" id="render-settings" data-tooltip="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   </div>
 
@@ -1287,15 +1294,6 @@
     <div id="agent-suggestions" class="agent-suggestions" role="listbox" aria-label="Suggested prompts" hidden></div>
   </form>
 
-  <!-- Current-mode HUD chip: tells you whether a click will inspect or build. -->
-  <div class="mode-indicator mode-select" id="mode-indicator" role="status" aria-live="polite">
-    <span class="mode-dot" aria-hidden="true"></span>
-    <span class="mode-text">
-      <span class="mode-label">Select / Move</span>
-      <span class="mode-sub">Click to inspect — drag to orbit</span>
-    </span>
-  </div>
-
   <div class="toolbar" id="toolbar"></div>
   <div class="flyout" id="flyout" hidden></div>
 
@@ -1387,6 +1385,7 @@
   <script src="engine/world/31-cloud-sea.js"></script>
   <script src="engine/world/32-layers-panel.js"></script>
   <script src="engine/world/33-radial-menu.js"></script>
+  <script src="engine/world/34-flight-sim.js"></script>
   <script src="engine/world/99-late-boot.js"></script>
 </body>
 </html>

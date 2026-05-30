@@ -371,7 +371,6 @@
     addIslandEdgeDressing(homeBorderGroup);
     optimizeVoxelObjectGroup(homeBorderGroup, { reason: 'home-island-border' });
     mergeStaticBaseMeshesByMaterial(homeBorderGroup, { reason: 'home-island-border' });
-    buildIslandFrontBanner(homeBorderGroup);
     prepareHomeBorderForRender(homeBorderGroup);
     buildDistantWorlds();
     if (typeof buildUnderIslandClouds === 'function') buildUnderIslandClouds();
