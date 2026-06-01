@@ -175,11 +175,10 @@
     }
 
     const SHIELD_WEAPON_SPEED = 1.6;        // hatch + cannon deploy speed (after the shield locks)
-    const SHIELD_EDGE_HATCH_ANGLE = 1.6;    // radians the gunport DOOR swings open on its side edge (~92deg)
-    const SHIELD_EDGE_GUN_SCALE = 1.5;       // edge gun size on the dark cliff wall
-    const SHIELD_EDGE_GUN_WORLD_Y = -1.5;    // target world Y: on the DARK cliff wall, flush below the greeble lumps (tune)
-    const SHIELD_EDGE_GUN_INSET = 0.3;       // ring-local pull inward (toward island) so the door sits flush in the wall (tune)
-    const SHIELD_EDGE_GUN_EVERY = 2;         // arm every Nth panel: 16 guns = 4 per side (end cannons + 2 between)
+    const SHIELD_EDGE_HATCH_ANGLE = 1.85;   // radians the perimeter gunport flap drops (out + down)
+    const SHIELD_EDGE_GUN_SCALE = 1.0;       // edge guns sized to match the island-edge greebles
+    const SHIELD_EDGE_GUN_WORLD_Y = -1.0;    // target world Y: down on the DARK cliff wall, below the tan/grey greeble lumps (tune)
+    const SHIELD_EDGE_GUN_EVERY = 4;         // arm every Nth panel around the ring (a few greebles per side)
 
     // Voxel laser cannon in the shield's own VoxelKit style, barrel pointing +Z
     // (a panel's outward normal). Added to a panel before optimizeVoxelObjectGroup,
@@ -619,65 +618,47 @@
           const unit = this.buildEdgeGunUnit();
           unit.scale.setScalar(SHIELD_EDGE_GUN_SCALE);
           const fp = panel.userData.finalPos;
-          // +Z under rotation.y=ry points outward; pull the unit inward along it so
-          // the door sits flush in the dark wall instead of floating off the edge.
-          const ry = panel.rotation.y;
-          unit.position.set(
-            fp.x - Math.sin(ry) * SHIELD_EDGE_GUN_INSET,
-            fp.y + gunLocalY,
-            fp.z - Math.cos(ry) * SHIELD_EDGE_GUN_INSET
-          );
-          unit.rotation.y = ry;
+          unit.position.set(fp.x, fp.y + gunLocalY, fp.z);
+          unit.rotation.y = panel.rotation.y;
           unit.userData.kind = 'shield-edge-gun';
           this.add(unit);
           this.batteryUnits.push(unit);
         });
       }
 
-      // One edge gun. Everything sits at the wall plane (z=0) or BEHIND it (z<0) so
-      // the assembly is flush in the dark cliff wall -- only the deployed cannon
-      // pokes out past z=0. A BLACK panel above the flap, a BLACK back panel deep in
-      // the recess, and a stone DOOR hinged on its side EDGE that swings open. The
-      // cannon sits low, retracts inward to touch the black back panel, slides out +Z.
+      // One edge gun: a stone socket, a bottom-hinged gunport flap, and a cannon
+      // retracted inside that slides out (+Z) past the edge once the port is open.
       buildEdgeGunUnit() {
         const k = this.kit;
         const m = k.materials;
         const unit = new THREE.Group();
         const free = (c) => { c.userData.noBatch = true; c.userData.noStaticBaseMerge = true; return c; };
-        // BLACK panel above the flap, flush in the wall face
-        free(k.cube(unit, 0, 1.55, -0.03, 1.78, 1.0, 0.10, m.slot, false));
-        // BLACK back panel deep in the recess (cannon retracts inward to touch it)
-        free(k.cube(unit, 0, 0.6, -1.15, 1.78, 2.9, 0.12, m.slot, false));
-        // dark recess side + top walls framing the cavity
-        free(k.cube(unit, -0.92, 0.6, -0.55, 0.12, 2.9, 1.2, m.stoneDark, false));
-        free(k.cube(unit, 0.92, 0.6, -0.55, 0.12, 2.9, 1.2, m.stoneDark, false));
-        free(k.cube(unit, 0, 1.98, -0.55, 1.96, 0.12, 1.2, m.stoneDark, false));
-        // DOOR hinged on its LEFT vertical EDGE; swings open outward (+Z) about Y
+        free(k.cube(unit, 0, 0.30, -0.20, 1.05, 0.60, 0.78, m.stoneDark, false));
+        free(k.cube(unit, 0, 0.62, -0.20, 1.12, 0.10, 0.86, m.edge, false));
         const hatchPivot = new THREE.Group();
-        hatchPivot.position.set(-0.84, 0.5, 0.0);
-        free(k.cube(hatchPivot, 0.84, 0, -0.08, 1.68, 1.0, 0.14, m.stoneDark, false)); // door slab, flush in wall
-        free(k.cube(hatchPivot, 0.84, 0, 0.01, 1.38, 0.8, 0.05, m.edge, false));        // door panel line
+        hatchPivot.position.set(0, 0.06, 0.36);
+        free(k.cube(hatchPivot, 0, 0.46, 0, 0.96, 0.92, 0.14, m.stone, false));
+        free(k.cube(hatchPivot, 0, 0.86, 0.02, 0.86, 0.12, 0.10, m.edge, false));
         unit.add(hatchPivot);
-        // cannon: LOW, retracts inward to touch the black back panel, deploys out +Z
         const cannon = buildShieldCannon(k);
-        const retractZ = -0.7;
+        const retractZ = -0.45;
         const deployZ = 0.95;
-        cannon.position.set(0, 0.4, retractZ);
+        cannon.position.set(0, 0.46, retractZ);
         cannon.visible = false;
         unit.add(cannon);
         unit.userData.gun = { hatchPivot, cannon, retractZ, deployZ };
         return unit;
       }
 
-      // Door swings open on its side edge (weaponProgress 0 -> 0.5), then the cannon
-      // slides out + aims (0.45 -> 1). Reverses on retract. Only armed greebles animate.
+      // Hatches hinge down (weaponProgress 0 -> 0.5), then cannons slide out + aim
+      // (0.45 -> 1). Reverses on retract. Only the armed edge greebles animate.
       applyBattery(wp, time) {
         if (!this.batteryUnits || !this.batteryUnits.length) return;
         const hatchOpen = shieldSmoothstep(wp / 0.5);
         const cannonOut = shieldSmoothstep((wp - 0.45) / 0.55);
         for (const unit of this.batteryUnits) {
           const g = unit.userData.gun;
-          g.hatchPivot.rotation.y = -SHIELD_EDGE_HATCH_ANGLE * hatchOpen;
+          g.hatchPivot.rotation.x = SHIELD_EDGE_HATCH_ANGLE * hatchOpen;
           g.cannon.position.z = shieldLerp(g.retractZ, g.deployZ, cannonOut);
           g.cannon.visible = wp > 0.4;
         }
