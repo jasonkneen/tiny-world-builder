@@ -333,6 +333,7 @@
         this.slots = [];
         this.progress = 0;
         this.targetProgress = 0;
+        this._settled = false;
         this.userData.kind = 'shield-ring';
         this.userData.noPointerPick = true;
 
@@ -541,7 +542,14 @@
       update(deltaTime, time) {
         this.progress = shieldLerp(this.progress, this.targetProgress, shieldClamp01(deltaTime * this.deploymentSpeed * 4));
         if (Math.abs(this.progress - this.targetProgress) < 0.001) this.progress = this.targetProgress;
+        // Dirty-gate: animate only while moving toward target or inside the live-flicker band
+        // (0.001 < progress < 0.986). Both settled states are time-independent and visually static
+        // (closed => glow power 0; fully locked => flicker forced to 1), so once settled we apply one
+        // final frame then skip subsequent frames. Mirrors the atmosphere dirty-flag in 39-atmosphere-effects.js.
+        const active = this.progress !== this.targetProgress || (this.progress > 0.001 && this.progress < 0.986);
+        if (!active && this._settled) return;
         this.applyDeployment(this.progress, time);
+        this._settled = !active;
       }
 
       applyDeployment(progress, time) {
@@ -687,6 +695,12 @@
       }
 
       destroy() {
+        // NOTE: disposeGroup frees geometries but deliberately NOT materials (shared-material contract).
+        // The glow cubes carry per-mesh .clone()d MeshStandardMaterials (marked noBatch, see glowCube ~:116)
+        // that are NOT shared, so they leak on destroy. Harmless today: no engine caller invokes destroy()/
+        // rebuildVoxelShield() (the toolbar is toggle-only), so this path is dormant. IF a GRID-resize rebuild
+        // is ever wired, add a material-dispose pass here that traverses and disposes only the non-shared,
+        // non-cached glow clones before disposeGroup.
         this.isRunning = false;
         if (this.shield && this.shield.parent) this.shield.parent.remove(this.shield);
         if (this.shield && typeof disposeGroup === 'function') disposeGroup(this.shield);
@@ -784,7 +798,11 @@
     }
 
     updateVoxelShieldApi();
-    ensureVoxelShield();
+    // Defer the heavy ShieldDemo build (32 panels + 4 keystones + 6 PBR materials + smoke tests) to
+    // first use: the toolbar calls ensureVoxelShield().toggle() on first toggle (19-tools-toolbar.js).
+    // Only build eagerly when the ?shield=1 autoStart URL flag is present (mirrors the check in
+    // ensureVoxelShield). updateVoxelShieldApi() above keeps window.VoxelShield available regardless.
+    if (new URLSearchParams(window.location.search).get('shield') === '1') ensureVoxelShield();
 
     window.tickVoxelShield = tickVoxelShield;
     window.ensureVoxelShield = ensureVoxelShield;
