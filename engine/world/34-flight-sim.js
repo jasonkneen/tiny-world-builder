@@ -570,6 +570,11 @@
       updateFlightPropellers(dt);
     }
     updateFlightCamera(dt);
+    // Multiplayer: broadcast the live plane transform so peers see a ghost. The
+    // hook self-throttles (~15/s) and reads __flightJet itself; guarded so
+    // single-player / un-upgraded multiplayer simply no-ops.
+    const mp = window.__tinyworldMultiplayer;
+    if (mp && typeof mp.broadcastFlight === 'function') mp.broadcastFlight(true);
   }
   window.tickFlight = tickFlight;
 
@@ -642,6 +647,10 @@
   function exitFlight() {
     if (!flightActive) return;
     flightActive = false;
+    // Multiplayer: tell peers to drop our flight ghost (sent immediately,
+    // bypassing the broadcast throttle). Guarded so single-player no-ops.
+    const mp = window.__tinyworldMultiplayer;
+    if (mp && typeof mp.broadcastFlight === 'function') mp.broadcastFlight(false);
     camera = flightPrevCamera || camera;
     flightPrevCamera = null;
     document.body.classList.remove('flight-active');

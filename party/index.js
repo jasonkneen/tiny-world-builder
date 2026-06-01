@@ -50,6 +50,15 @@ function clampFloors(value) {
 const RATE_LIMITS = {
   presence: { refill: 25, burst: 40 },
   'cell.set': { refill: 40, burst: 80 },
+  // Live flight transform: client self-throttles to ~15/s; this bucket lets the
+  // sustained stream through while a raw socket cannot flood it.
+  entity: { refill: 20, burst: 40 },
+  // Chat messages: human typing rate, so a tight sustained cap with a small
+  // burst is plenty. A raw socket cannot flood the room past this.
+  chat: { refill: 4, burst: 10 },
+  // Typing indicator fires on keystrokes — needs its own bucket or it becomes a
+  // spam vector. Generous enough for fast typing, capped against abuse.
+  'chat.typing': { refill: 8, burst: 16 },
 };
 
 function takeToken(buckets, type, now) {
@@ -92,6 +101,15 @@ function cleanCursor(value) {
     x: cleanNumber(value.x),
     z: cleanNumber(value.z),
     y: cleanNumber(value.y),
+  };
+}
+
+function cleanVec3(value) {
+  if (!value || typeof value !== 'object') return { x: 0, y: 0, z: 0 };
+  return {
+    x: cleanNumber(value.x),
+    y: cleanNumber(value.y),
+    z: cleanNumber(value.z),
   };
 }
 
@@ -259,6 +277,9 @@ export default class TinyWorldParty {
         admitted: true,
         peers: Array.from(this.presence.values()),
       }));
+      // A returning admitted member re-syncs to the host's current world via a
+      // fresh snapshot (their local copy may be stale after the disconnect).
+      if (this.hostId && this.hostId !== conn.id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
       return;
     }
     // Everyone after the host starts in the lobby, un-admitted, no peers yet.
@@ -331,6 +352,97 @@ export default class TinyWorldParty {
       return;
     }
 
+    if (data.type === 'entity') {
+      // Live entity transform (currently the flyable plane). NOT host-gated: any
+      // admitted peer who is flying may broadcast their plane so others see a
+      // ghost. The server stamps id = sender.id (overwrite the client value) so
+      // a peer cannot spoof another's ghost, and relays to admitted peers EXCEPT
+      // the sender — the flyer renders the real plane and must never get its own
+      // ghost back (this exclusion is the whole echo-prevention story).
+      if (!this.admitted.has(sender.id)) return;
+      const kind = cleanText(data.kind, 24);
+      if (kind !== 'plane') return;
+      this.broadcastToAdmitted({
+        type: 'entity',
+        kind: 'plane',
+        id: sender.id,
+        active: data.active !== false,
+        p: cleanVec3(data.p),
+        r: cleanVec3(data.r),
+      }, sender.id);
+      return;
+    }
+
+    if (data.type === 'chat') {
+      // Multi-user chat. NOT host-gated: any admitted peer may post. The server
+      // is the source of truth for identity + ordering: it stamps id = sender.id
+      // (so a peer cannot spoof another's message) and ts = now (client ts is not
+      // trusted). Name is taken from the trusted presence record when available,
+      // else the cleaned client value. Text is hard-capped (the 48KB envelope
+      // limit only gates the transport, not the rendered line). Broadcast to ALL
+      // admitted INCLUDING the sender so chat is server-ordered and every client
+      // renders on receipt through one path (the sender's own line included).
+      if (!this.admitted.has(sender.id)) return;
+      const text = cleanText(data.text, 1000);
+      if (!text) return;
+      const known = this.presence.get(sender.id);
+      const name = cleanText((known && known.name) || data.name || 'Builder', 48) || 'Builder';
+      this.broadcastToAdmitted({ type: 'chat', id: sender.id, name, text, ts: Date.now() });
+      return;
+    }
+
+    if (data.type === 'chat.typing') {
+      // Typing indicator. Admitted-only; stamped id = sender.id. Broadcast to
+      // admitted EXCEPT the sender (you never want your own typing indicator).
+      if (!this.admitted.has(sender.id)) return;
+      const known = this.presence.get(sender.id);
+      const name = cleanText((known && known.name) || data.name || 'Builder', 48) || 'Builder';
+      this.broadcastToAdmitted({ type: 'chat.typing', id: sender.id, name, typing: data.typing === true }, sender.id);
+      return;
+    }
+
+    // ---- Shared-state sync (snapshot / env / moorings). ----
+    // The server never trusts the client: snapshot/env/moorings are honored
+    // ONLY from the current host. snapshot.request is server-generated only
+    // (emitted from admit / re-admit below); a client claiming to be the host
+    // cannot inject world/env into other peers.
+    if (data.type === 'snapshot') {
+      // Host-only. Relayed opaquely (chunked JSON of the host's full state) to
+      // exactly the requesting peer, never broadcast.
+      if (sender.id !== this.hostId) return;
+      const forId = cleanText(data.forId, 96);
+      if (!forId || !this.admitted.has(forId)) return;
+      this.sendTo(forId, {
+        type: 'snapshot',
+        forId,
+        seq: cleanNumber(data.seq, 0),
+        total: cleanNumber(data.total, 0),
+        chunk: typeof data.chunk === 'string' ? data.chunk : '',
+      });
+      return;
+    }
+
+    if (data.type === 'env') {
+      // Host-only environment broadcast (time/weather/season/intensities/
+      // shield/lights). Relayed as-is to admitted peers; the env payload is
+      // applied through the client's own setters/controls, not trusted blindly.
+      if (sender.id !== this.hostId) return;
+      const env = (data.env && typeof data.env === 'object') ? data.env : null;
+      if (!env) return;
+      this.broadcastToAdmitted({ type: 'env', env }, sender.id);
+      return;
+    }
+
+    if (data.type === 'moorings') {
+      // Host-only full mooring-cable list (moorings are not cells, so cell.set
+      // never carries them). Relayed to admitted peers, who replace their list.
+      if (sender.id !== this.hostId) return;
+      const moorings = Array.isArray(data.moorings) ? data.moorings.slice(0, 256) : null;
+      if (!moorings) return;
+      this.broadcastToAdmitted({ type: 'moorings', moorings }, sender.id);
+      return;
+    }
+
     // ---- Host-only moderation. Honored only from the current host. ----
     if (data.type === 'admit') {
       if (sender.id !== this.hostId) return;
@@ -349,6 +461,10 @@ export default class TinyWorldParty {
         island,
         peers: Array.from(this.presence.values()),
       });
+      // Ask the host to ship this newly-admitted peer a full snapshot (world +
+      // environment) so they land in the host's world, not their own. No-op if
+      // the host's client is un-upgraded (it simply ignores snapshot.request).
+      if (this.hostId && this.hostId !== id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: id });
       return;
     }
 

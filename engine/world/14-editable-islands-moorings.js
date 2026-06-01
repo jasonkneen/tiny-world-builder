@@ -925,6 +925,11 @@
     mooringCables.push(cable);
     rebuildMooringCables();
     saveState();
+    // Live multiplayer: moorings are not cells, so cell.set never carries them.
+    // Notify the multiplayer layer (module 38) so the host can broadcast the
+    // full serialized cable list. replaceMooringCables (the peer apply path)
+    // does NOT dispatch this event, so applying a remote update cannot loop.
+    try { window.dispatchEvent(new CustomEvent('tinyworld:moorings-changed')); } catch (_) {}
     return { ok: true };
   }
 
@@ -936,6 +941,7 @@
     cable.style = next;
     rebuildMooringCables();
     saveState();
+    try { window.dispatchEvent(new CustomEvent('tinyworld:moorings-changed')); } catch (_) {}
     return true;
   }
 

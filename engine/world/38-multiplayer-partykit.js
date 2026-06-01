@@ -23,10 +23,27 @@
     let statusEl = null;
     let serverClientId = '';
     let applyingRemote = false;
+    // True while applying a remote ENV update (snapshot or live env message).
+    // Mirrors applyingRemote for the non-cell environment path: the env-control
+    // listeners check it so re-applying a received env never re-broadcasts.
+    let applyingRemoteEnv = false;
+    // Peer-side snapshot reassembly: chunks arrive { seq, total, chunk } and are
+    // buffered until all `total` are present, then JSON.parse'd + applied.
+    let snapshotBuf = null;          // { total, parts: string[], got }
+    let snapshotApplying = false;    // guards against overlapping snapshot applies
+    // Host-side env-broadcast throttle + dedupe (avoids flooding on slider drag).
+    let envBroadcastTimer = null;
+    let lastEnvKey = '';
     let lastPresenceSent = 0;
     let presenceTimer = null;
     let lastPresenceKey = '';
     let lastHoverKey = '';
+    // Live flight ghosts: peer id -> { group, kind }. Built ONCE per id (entity
+    // messages arrive ~15/s), thereafter only the transform is updated. Removed
+    // on active:false, on the peer leaving (covers kick), and on socket close.
+    const flightGhosts = new Map();
+    // Host-side flight broadcast self-throttle (~15/s). active:false bypasses it.
+    let lastFlightSent = 0;
 
     // -------- lobby / roles / moderation state --------
     // SAFETY INVARIANT: default to ADMITTED. An un-upgraded server sends no
@@ -46,6 +63,25 @@
     const pendingLobby = new Map();   // id -> { id, name }
     const toastedLobby = new Set();   // ids we've already toasted for
     let moderationMenuEl = null;
+
+    // -------- chat panel state --------
+    // chatPanelEl: the glassy panel (built lazily). chatOpen: whether it is
+    // visible. chatUnread: messages that arrived while closed (shown as a bubble
+    // on the toggle). chatToggleEl: the floating launcher button. typingPeers:
+    // id -> { name, timer } for peers currently composing (auto-expires so a
+    // dropped typing:false never sticks). chatTypingSent/Timer: self-throttle
+    // for our own chat.typing broadcast.
+    let chatPanelEl = null;
+    let chatToggleEl = null;
+    let chatLogEl = null;
+    let chatInputEl = null;
+    let chatTypingEl = null;
+    let chatBadgeEl = null;
+    let chatOpen = false;
+    let chatUnread = 0;
+    const typingPeers = new Map();
+    let chatTypingActive = false;
+    let chatTypingTimer = null;
 
     function inIsland(island, x, z) {
       if (!island) return false;
@@ -275,6 +311,10 @@
         close: ['M6 6l12 12 M18 6L6 18'],
         // gear / dots (menu)
         menu: ['M5 12h.01 M12 12h.01 M19 12h.01'],
+        // speech bubble (chat)
+        chat: ['M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'],
+        // paper plane (send)
+        send: ['M22 2 11 13 M22 2 15 22 11 13 2 9z'],
       };
       (paths[kind] || []).forEach(d => {
         const p = document.createElementNS(NS, 'path');
@@ -598,6 +638,351 @@
       }, 0);
     }
 
+    // ============================================================
+    // Chat: a draggable glassy panel matching the Layers/Properties design
+    // language (drag-bar head + x close, segmented tab, block-style send button,
+    // SVG glyphs, no emoji). Built lazily in-JS (createElement) like the other
+    // mp-* panels so no HTML edits are needed. All remote-controlled strings
+    // (peer names, message text) render via textContent ONLY — never innerHTML.
+    // Chat is NOT host-gated: host and every admitted guest participate.
+    // ------------------------------------------------------------
+
+    function formatChatTime(ts) {
+      try {
+        const d = new Date(Number(ts) || Date.now());
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return hh + ':' + mm;
+      } catch (_) { return ''; }
+    }
+
+    function updateChatBadge() {
+      if (!chatBadgeEl) return;
+      if (chatUnread > 0 && !chatOpen) {
+        chatBadgeEl.textContent = chatUnread > 99 ? '99+' : String(chatUnread);
+        chatBadgeEl.classList.add('visible');
+      } else {
+        chatBadgeEl.classList.remove('visible');
+      }
+    }
+
+    // Floating launcher button (bottom-right). Visible only to an admitted peer;
+    // clicking opens/closes the panel and clears the unread bubble.
+    function ensureChatToggle() {
+      if (chatToggleEl) return chatToggleEl;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mp-chat-toggle';
+      btn.setAttribute('aria-label', 'Open chat');
+      btn.appendChild(svgGlyph('chat'));
+      const badge = document.createElement('span');
+      badge.className = 'mp-chat-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      btn.appendChild(badge);
+      btn.addEventListener('click', () => { toggleChat(); });
+      document.body.appendChild(btn);
+      chatToggleEl = btn;
+      chatBadgeEl = badge;
+      return btn;
+    }
+
+    function ensureChatPanel() {
+      if (chatPanelEl) return chatPanelEl;
+      const panel = document.createElement('section');
+      panel.className = 'mp-chat-panel';
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-label', 'Shared room chat');
+
+      // Drag-bar head + close (matches .layers-panel-head).
+      const head = document.createElement('div');
+      head.className = 'mp-chat-head';
+      head.setAttribute('aria-label', 'Drag to move chat');
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'mp-chat-close';
+      close.setAttribute('aria-label', 'Close chat');
+      close.appendChild(svgGlyph('close'));
+      close.addEventListener('click', () => { closeChat(); });
+      head.appendChild(close);
+
+      // Segmented tab bar (single Chat tab, in the Layers/Properties style).
+      const tabs = document.createElement('div');
+      tabs.className = 'mp-chat-tabs';
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'mp-chat-tab is-active';
+      const tabLabel = document.createElement('span');
+      tabLabel.textContent = 'Chat';
+      tab.appendChild(svgGlyph('chat'));
+      tab.appendChild(tabLabel);
+      tabs.appendChild(tab);
+
+      const log = document.createElement('div');
+      log.className = 'mp-chat-log';
+      log.setAttribute('aria-live', 'polite');
+
+      const typing = document.createElement('div');
+      typing.className = 'mp-chat-typing';
+
+      const form = document.createElement('form');
+      form.className = 'mp-chat-form';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'mp-chat-input';
+      input.maxLength = 1000;
+      input.placeholder = 'Message...';
+      input.setAttribute('aria-label', 'Chat message');
+      input.autocomplete = 'off';
+      const sendBtn = document.createElement('button');
+      sendBtn.type = 'submit';
+      sendBtn.className = 'mp-chat-send';
+      sendBtn.setAttribute('aria-label', 'Send message');
+      sendBtn.appendChild(svgGlyph('send'));
+      form.appendChild(input);
+      form.appendChild(sendBtn);
+
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        sendChat(input.value);
+        input.value = '';
+        setLocalTyping(false);
+      });
+      // Typing indicator: announce while composing, stop on empty / blur.
+      input.addEventListener('input', () => {
+        setLocalTyping(input.value.trim().length > 0);
+      });
+      input.addEventListener('blur', () => { setLocalTyping(false); });
+
+      panel.appendChild(head);
+      panel.appendChild(tabs);
+      panel.appendChild(log);
+      panel.appendChild(typing);
+      panel.appendChild(form);
+      document.body.appendChild(panel);
+
+      chatPanelEl = panel;
+      chatLogEl = log;
+      chatInputEl = input;
+      chatTypingEl = typing;
+
+      wireChatDrag(panel, head);
+      return panel;
+    }
+
+    // Drag the panel by its head, mirroring the Layers panel behavior
+    // (.dragging class, clamp to viewport, pointer capture).
+    function wireChatDrag(panel, head) {
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+      let baseLeft = 0;
+      let baseTop = 0;
+      head.addEventListener('pointerdown', (ev) => {
+        if (ev.target && ev.target.closest && ev.target.closest('.mp-chat-close')) return;
+        dragging = true;
+        const rect = panel.getBoundingClientRect();
+        baseLeft = rect.left;
+        baseTop = rect.top;
+        startX = ev.clientX;
+        startY = ev.clientY;
+        panel.classList.add('dragging');
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        panel.style.left = baseLeft + 'px';
+        panel.style.top = baseTop + 'px';
+        try { head.setPointerCapture(ev.pointerId); } catch (_) {}
+      });
+      head.addEventListener('pointermove', (ev) => {
+        if (!dragging) return;
+        const w = panel.offsetWidth;
+        const h = panel.offsetHeight;
+        let nx = baseLeft + (ev.clientX - startX);
+        let ny = baseTop + (ev.clientY - startY);
+        nx = Math.max(8, Math.min(nx, window.innerWidth - w - 8));
+        ny = Math.max(8, Math.min(ny, window.innerHeight - h - 8));
+        panel.style.left = nx + 'px';
+        panel.style.top = ny + 'px';
+      });
+      const endDrag = (ev) => {
+        if (!dragging) return;
+        dragging = false;
+        panel.classList.remove('dragging');
+        try { head.releasePointerCapture(ev.pointerId); } catch (_) {}
+      };
+      head.addEventListener('pointerup', endDrag);
+      head.addEventListener('pointercancel', endDrag);
+    }
+
+    function openChat() {
+      if (!admitted) return;
+      ensureChatPanel();
+      chatPanelEl.classList.add('visible');
+      chatOpen = true;
+      chatUnread = 0;
+      updateChatBadge();
+      if (chatToggleEl) chatToggleEl.classList.add('is-open');
+      if (chatLogEl) chatLogEl.scrollTop = chatLogEl.scrollHeight;
+      if (chatInputEl) { try { chatInputEl.focus(); } catch (_) {} }
+    }
+
+    function closeChat() {
+      if (chatPanelEl) chatPanelEl.classList.remove('visible');
+      chatOpen = false;
+      if (chatToggleEl) chatToggleEl.classList.remove('is-open');
+      setLocalTyping(false);
+    }
+
+    function toggleChat() {
+      if (chatOpen) closeChat();
+      else openChat();
+    }
+
+    // Show/hide the chat launcher based on connection + admitted state. Hidden
+    // while in the lobby (un-admitted), shown once admitted (host or guest).
+    function updateChatAvailability() {
+      const show = connected && admitted;
+      ensureChatToggle();
+      chatToggleEl.style.display = show ? 'inline-flex' : 'none';
+      if (!show && chatOpen) closeChat();
+    }
+
+    // Append one message line. name + text are remote-controlled => textContent
+    // ONLY (never innerHTML). `self` styles our own messages distinctly.
+    function appendChatMessage(msg) {
+      ensureChatPanel();
+      const meId = serverClientId || localClientId;
+      const self = String(msg.id || '') === meId;
+      const row = document.createElement('div');
+      row.className = 'mp-chat-msg' + (self ? ' is-self' : '');
+      const metaEl = document.createElement('div');
+      metaEl.className = 'mp-chat-meta';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'mp-chat-name';
+      nameEl.textContent = self ? 'You' : String(msg.name || 'Builder');
+      nameEl.style.color = /^#[0-9a-fA-F]{3,8}$/.test(colorForId(String(msg.id || ''))) ? colorForId(String(msg.id || '')) : '#3c82f7';
+      const timeEl = document.createElement('span');
+      timeEl.className = 'mp-chat-time';
+      timeEl.textContent = formatChatTime(msg.ts);
+      metaEl.appendChild(nameEl);
+      metaEl.appendChild(timeEl);
+      const textEl = document.createElement('div');
+      textEl.className = 'mp-chat-text';
+      textEl.textContent = String(msg.text || '');
+      row.appendChild(metaEl);
+      row.appendChild(textEl);
+      const nearBottom = chatLogEl.scrollHeight - chatLogEl.scrollTop - chatLogEl.clientHeight < 40;
+      chatLogEl.appendChild(row);
+      // Cap the log so a long session never grows unbounded.
+      while (chatLogEl.children.length > 250) chatLogEl.removeChild(chatLogEl.firstChild);
+      if (nearBottom || self || chatOpen) chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    }
+
+    function handleRemoteChat(msg) {
+      if (!admitted) return;
+      const meId = serverClientId || localClientId;
+      appendChatMessage(msg);
+      // Unread bubble only for OTHERS' messages received while the panel is shut.
+      if (!chatOpen && String(msg.id || '') !== meId) {
+        chatUnread++;
+        updateChatBadge();
+      }
+      // Any delivered message means that peer has stopped typing.
+      clearTypingPeer(String(msg.id || ''));
+    }
+
+    // ---- typing indicator ----
+    function renderTyping() {
+      if (!chatTypingEl) return;
+      const names = [];
+      typingPeers.forEach(p => { if (p && p.name) names.push(p.name); });
+      if (!names.length) {
+        chatTypingEl.textContent = '';
+        chatTypingEl.classList.remove('visible');
+        return;
+      }
+      let label;
+      if (names.length === 1) label = names[0] + ' is typing...';
+      else if (names.length === 2) label = names[0] + ' and ' + names[1] + ' are typing...';
+      else label = 'Several people are typing...';
+      chatTypingEl.textContent = label;   // remote names => textContent only.
+      chatTypingEl.classList.add('visible');
+    }
+
+    function clearTypingPeer(id) {
+      const entry = typingPeers.get(id);
+      if (!entry) return;
+      if (entry.timer) clearTimeout(entry.timer);
+      typingPeers.delete(id);
+      renderTyping();
+    }
+
+    function handleRemoteTyping(msg) {
+      if (!admitted) return;
+      const id = String(msg.id || '');
+      const meId = serverClientId || localClientId;
+      if (!id || id === meId) return;
+      if (msg.typing === true) {
+        const prev = typingPeers.get(id);
+        if (prev && prev.timer) clearTimeout(prev.timer);
+        // Auto-expire so a dropped typing:false never leaves a stuck indicator.
+        const timer = setTimeout(() => { typingPeers.delete(id); renderTyping(); }, 4000);
+        typingPeers.set(id, { name: String(msg.name || 'Builder'), timer });
+        renderTyping();
+      } else {
+        clearTypingPeer(id);
+      }
+    }
+
+    // Our own typing state -> throttled chat.typing broadcast. Sends true once
+    // when composing begins (refreshes a stop-timer), false when it ends.
+    function setLocalTyping(active) {
+      if (active) {
+        if (!chatTypingActive) {
+          chatTypingActive = true;
+          sendMessage({ type: 'chat.typing', name: localName(), typing: true });
+        }
+        if (chatTypingTimer) clearTimeout(chatTypingTimer);
+        chatTypingTimer = setTimeout(() => { setLocalTyping(false); }, 3500);
+      } else {
+        if (chatTypingTimer) { clearTimeout(chatTypingTimer); chatTypingTimer = null; }
+        if (chatTypingActive) {
+          chatTypingActive = false;
+          sendMessage({ type: 'chat.typing', name: localName(), typing: false });
+        }
+      }
+    }
+
+    function sendChat(rawText) {
+      if (!admitted) return;
+      const text = String(rawText || '').trim().slice(0, 1000);
+      if (!text) return;
+      // Server stamps id + ts and echoes back to everyone (incl. us), so we do
+      // NOT render locally here — the round-trip drives a single render path.
+      sendMessage({ type: 'chat', name: localName(), text });
+    }
+
+    // ============================================================
+    // Guest menu hide: when this client is an admitted NON-host with a real role
+    // (viewer/player/editor), hide the world-management menu so a guest cannot
+    // leave the host's world. Host / null role (un-upgraded server) / single
+    // player keep the full menu. Single-player never reaches here (the whole IIFE
+    // early-returns when there is no roomId). A body class drives the CSS so this
+    // stays declarative and reversible if the host is promoted/demoted.
+    // ------------------------------------------------------------
+    function updateGuestMenuVisibility() {
+      const isGuest = admitted && !isHost && (myRole === 'viewer' || myRole === 'player' || myRole === 'editor');
+      try {
+        document.body.classList.toggle('mp-guest', !!isGuest);
+        // If a guest had the world menu open, close it so it cannot linger.
+        if (isGuest) {
+          const menu = document.getElementById('world-menu');
+          const btn = document.getElementById('world-menu-btn');
+          if (menu && !menu.hidden) menu.hidden = true;
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+      } catch (_) {}
+    }
+
     function makeNameSprite(name, color) {
       const canvas = document.createElement('canvas');
       canvas.width = 256;
@@ -701,6 +1086,8 @@
       peerRoot.remove(peer.group);
       disposeObject3d(peer.group);
       peers.delete(id);
+      // A departed peer cannot still be "typing" — drop their indicator.
+      clearTypingPeer(id);
       renderRoster();
     }
 
@@ -835,6 +1222,9 @@
         renderRoster();
       }
       renderAdmitPanel();
+      // Role/admitted just changed — refresh guest-menu hide + chat launcher.
+      updateGuestMenuVisibility();
+      updateChatAvailability();
     }
 
     function ingestPending(list) {
@@ -844,6 +1234,401 @@
         pendingLobby.set(p.id, { id: p.id, name: String(p.name || '') });
       });
       renderAdmitPanel();
+    }
+
+    // ============================================================
+    // Shared-state sync: snapshot-on-join, live environment, live moorings.
+    // ------------------------------------------------------------
+    // All names live INSIDE this IIFE (no new top-level globals — the
+    // duplicate-declaration guard in tools/check.js scans engine/world/*.js
+    // top-level scope, which this file's body is nested below).
+    // ============================================================
+
+    const SNAPSHOT_CHUNK = 12000;   // raw chars/chunk; after JSON-escaping into the
+                                    // wire envelope this stays well under the 48KB cap.
+
+    // ---- environment capture (host) ----
+    // Reads the LIVE controls/globals so the snapshot + live-env messages carry
+    // the host's actual environment. time-of-day, weatherIntensity and
+    // weatherSplashIntensity are shared top-level globals (01/23); season +
+    // weather are module-30 closure state, so we read them off the active pills.
+    function activePillValue(containerId, attr) {
+      try {
+        const c = document.getElementById(containerId);
+        if (!c) return '';
+        const active = c.querySelector('.pill.active');
+        return active ? String(active.getAttribute(attr) || '') : '';
+      } catch (_) { return ''; }
+    }
+
+    function shieldIsOn() {
+      try {
+        const s = window.VoxelShield && window.VoxelShield.shield;
+        return !!s && (s.targetProgress > 0.5 || s.progress > 0.05);
+      } catch (_) { return false; }
+    }
+
+    function captureEnvState() {
+      const env = {
+        // shared top-level global (engine/world/01-render-core.js:137).
+        timeOfDay: (typeof currentTodMinutes === 'number') ? currentTodMinutes : 720,
+        weather: activePillValue('weather-pills', 'data-weather') || 'clear',
+        season: activePillValue('season-pills', 'data-season') || 'summer',
+        // shared top-level globals (engine/world/23-particles-clouds.js:650-651).
+        weatherIntensity: (typeof weatherIntensity === 'number') ? weatherIntensity : 0.25,
+        weatherSplashes: (typeof weatherSplashIntensity === 'number') ? weatherSplashIntensity : 1.5,
+        shield: shieldIsOn(),
+        // Placeable lights ride entirely in the world cells (lamp-post/spotlight
+        // kinds register via module 10 -> module 39), so they replicate through
+        // the snapshot cells + live cell.set. There is no non-cell light source,
+        // so this stays [] for wire-shape compliance (no double-sync).
+        lights: [],
+      };
+      return env;
+    }
+
+    // Stable string for dedupe (so a no-op slider tick never re-broadcasts).
+    function envKey(env) {
+      return [env.timeOfDay, env.weather, env.season,
+        Number(env.weatherIntensity).toFixed(2), Number(env.weatherSplashes).toFixed(2),
+        env.shield ? 1 : 0].join('|');
+    }
+
+    // ---- environment apply (peer) ----
+    // Drive module 30's OWN controls so its closure season/weather/todMinutes
+    // and the lighting recompute stay consistent: click the matching pill and
+    // dispatch 'input' on the sliders. Wrapped in applyingRemoteEnv so our own
+    // change listeners do not re-broadcast. Order: season -> weather ->
+    // intensity -> splashes -> time -> shield.
+    function clickPill(containerId, attr, value) {
+      if (!value) return;
+      try {
+        const c = document.getElementById(containerId);
+        if (!c) return;
+        const target = c.querySelector('.pill[' + attr + '="' + String(value).replace(/[^a-z]/gi, '') + '"]');
+        if (target && !target.classList.contains('active')) target.click();
+      } catch (_) {}
+    }
+
+    function setRange(id, value, dispatch) {
+      try {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = String(value);
+        if (dispatch) el.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch (_) {}
+    }
+
+    function applyEnvState(env) {
+      if (!env || typeof env !== 'object') return;
+      applyingRemoteEnv = true;
+      try {
+        if (typeof env.season === 'string') clickPill('season-pills', 'data-season', env.season);
+        if (typeof env.weather === 'string') clickPill('weather-pills', 'data-weather', env.weather);
+        // Intensity/splashes sliders are stored ×100 in the DOM (value/100 -> setter).
+        if (Number.isFinite(Number(env.weatherIntensity))) {
+          setRange('weather-intensity', Math.round(Number(env.weatherIntensity) * 100), true);
+        }
+        if (Number.isFinite(Number(env.weatherSplashes))) {
+          setRange('weather-splashes', Math.round(Number(env.weatherSplashes) * 100), true);
+        }
+        if (Number.isFinite(Number(env.timeOfDay))) {
+          setRange('time-range', Math.max(0, Math.min(1439, Math.round(Number(env.timeOfDay)))), true);
+        }
+        // Shield: drive the public API so the toolbar state + visuals follow.
+        try {
+          if (window.VoxelShield) {
+            if (env.shield) { if (typeof window.VoxelShield.open === 'function') window.VoxelShield.open(); }
+            else if (shieldIsOn() && typeof window.VoxelShield.close === 'function') window.VoxelShield.close();
+          }
+        } catch (_) {}
+        // Sync the env dedupe key so the very next live-capture of our own
+        // (now host-matched) state is not mistaken for a fresh local change.
+        lastEnvKey = envKey(captureEnvState());
+      } finally {
+        applyingRemoteEnv = false;
+      }
+    }
+
+    // ---- live environment broadcast (host only) ----
+    function broadcastEnv() {
+      if (!isHost || applyingRemoteEnv) return;
+      const env = captureEnvState();
+      const key = envKey(env);
+      if (key === lastEnvKey) return;
+      lastEnvKey = key;
+      sendMessage({ type: 'env', env });
+    }
+
+    function scheduleEnvBroadcast() {
+      // Host-only; debounced so a slider drag sends ~one trailing update.
+      if (!isHost || applyingRemoteEnv) return;
+      if (envBroadcastTimer) return;
+      envBroadcastTimer = setTimeout(() => {
+        envBroadcastTimer = null;
+        broadcastEnv();
+      }, 120);
+    }
+
+    // ---- live mooring broadcast (host only) ----
+    function broadcastMoorings() {
+      if (!isHost) return;
+      if (typeof serializeMooringCables !== 'function') return;
+      let list = [];
+      try { list = serializeMooringCables() || []; } catch (_) { list = []; }
+      sendMessage({ type: 'moorings', moorings: list });
+    }
+
+    function applyRemoteMoorings(list) {
+      if (!admitted || !Array.isArray(list)) return;
+      if (typeof replaceMooringCables !== 'function') return;
+      // replaceMooringCables does NOT dispatch tinyworld:moorings-changed, so
+      // applying a remote list cannot loop back into broadcastMoorings.
+      applyingRemote = true;
+      const prevSuppress = (typeof suppressSave !== 'undefined') ? suppressSave : false;
+      try {
+        if (typeof suppressSave !== 'undefined') suppressSave = true;
+        replaceMooringCables(list);
+      } catch (err) {
+        console.warn('[multiplayer] remote moorings failed:', err);
+      } finally {
+        if (typeof suppressSave !== 'undefined') suppressSave = prevSuppress;
+        applyingRemote = false;
+      }
+    }
+
+    // ============================================================
+    // Live flight ghosts: render a lightweight plane proxy for any peer who is
+    // flying, at the transform they broadcast. No suppressSave/applyingRemote
+    // wrapper here on purpose — rendering a ghost calls no setCell and dispatches
+    // no event the broadcast wiring listens to, so there is no feedback loop
+    // (that guard is only for the snapshot/env/moorings world-mutation paths).
+    // ------------------------------------------------------------
+
+    // Build the proxy ONCE per ghost. Reuse a flyable plane model-stamp if one
+    // exists in the (post-snapshot) world so the ghost matches the real plane;
+    // otherwise fall back to a cheap placeholder. The proxy lives under peerRoot
+    // (a child of xrWorldRoot), the SAME content-local frame the broadcaster
+    // captured the transform in (flightJet sits in scene space; in the flat view
+    // xrWorldRoot is identity), so the transforms line up without conversion.
+    function findFlyableStampId() {
+      try {
+        if (typeof world === 'undefined' || typeof isFlyableStampCell !== 'function') return '';
+        for (const x in world) {
+          const col = world[x];
+          if (!col) continue;
+          for (const z in col) {
+            const cell = col[z];
+            if (isFlyableStampCell(cell)) {
+              const id = cell.appearance && cell.appearance.modelStampId;
+              if (id) return id;
+            }
+          }
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    function buildFlightGhostModel() {
+      // Prefer the real plane model; placeholder if makeModelStamp is unavailable.
+      if (typeof makeModelStamp === 'function') {
+        try {
+          const stampId = findFlyableStampId();
+          const model = stampId ? makeModelStamp(stampId) : null;
+          if (model) return model;
+        } catch (_) {}
+      }
+      // Minimal placeholder: a small translucent cone so a peer plane is visible
+      // even before any model-stamp asset is loaded. No emoji, no PNG.
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.ConeGeometry(0.22, 0.9, 12),
+        new THREE.MeshBasicMaterial({ color: 0x9bb8e8, transparent: true, opacity: 0.85 })
+      );
+      body.rotation.x = -Math.PI / 2;
+      g.add(body);
+      return g;
+    }
+
+    function removeFlightGhost(id) {
+      const ghost = flightGhosts.get(id);
+      if (!ghost) return;
+      peerRoot.remove(ghost.group);
+      disposeObject3d(ghost.group);
+      flightGhosts.delete(id);
+    }
+
+    function clearFlightGhosts() {
+      flightGhosts.forEach((_, id) => removeFlightGhost(id));
+    }
+
+    function applyRemoteEntity(msg) {
+      if (!msg || msg.kind !== 'plane') return;
+      const id = String(msg.id || '');
+      if (!id) return;
+      // Never render our own ghost (the flyer sees the real plane). Defensive:
+      // the server already excludes the sender from the broadcast.
+      if (id === (serverClientId || localClientId)) return;
+      if (msg.active === false) {
+        removeFlightGhost(id);
+        return;
+      }
+      let ghost = flightGhosts.get(id);
+      if (!ghost) {
+        const group = new THREE.Group();
+        group.name = 'multiplayer-plane-' + id;
+        const model = buildFlightGhostModel();
+        group.add(model);
+        peerRoot.add(group);
+        ghost = { group };
+        flightGhosts.set(id, ghost);
+      }
+      const p = msg.p || {};
+      const r = msg.r || {};
+      const px = Number(p.x), py = Number(p.y), pz = Number(p.z);
+      if (Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz)) {
+        ghost.group.position.set(px, py, pz);
+      }
+      ghost.group.rotation.set(
+        Number.isFinite(Number(r.x)) ? Number(r.x) : 0,
+        Number.isFinite(Number(r.y)) ? Number(r.y) : 0,
+        Number.isFinite(Number(r.z)) ? Number(r.z) : 0,
+        'XYZ'
+      );
+      ghost.group.visible = true;
+    }
+
+    // ---- live flight broadcast (called from file-34's tickFlight/exitFlight) ----
+    // Reads the real plane transform off the globals file-34 already exposes
+    // (__flightJet / __flightActive). active:false is sent immediately (bypasses
+    // the throttle) so peers drop the ghost the moment flight ends. active:true
+    // self-throttles to ~15/s. No-ops gracefully if the socket is not open.
+    const _flBroadcastPos = new THREE.Vector3();
+    const _flBroadcastQuat = new THREE.Quaternion();
+    const _flBroadcastEuler = new THREE.Euler();
+    function broadcastFlight(active) {
+      if (!admitted) return;
+      if (active === false) {
+        sendMessage({ type: 'entity', kind: 'plane', active: false,
+          p: { x: 0, y: 0, z: 0 }, r: { x: 0, y: 0, z: 0 } });
+        return;
+      }
+      const jet = window.__flightJet;
+      if (!jet) return;
+      const now = Date.now();
+      if (now - lastFlightSent < 66) return;   // ~15/s
+      lastFlightSent = now;
+      // Capture in WORLD space, then convert into peerRoot's local frame so the
+      // ghost lands in the same content-local frame peers render in (matches the
+      // peer-cursor precedent). In the flat view xrWorldRoot is identity, so this
+      // is a no-op; under an XR world transform it keeps the ghost aligned.
+      // Both position and rotation are treated as peerRoot-local; in the flat
+      // view peerRoot is identity so world == local and the ghost lands exactly
+      // on the real plane. (The captured quaternion already includes the model
+      // forward-fix, so a same-model ghost orients identically.)
+      jet.getWorldPosition(_flBroadcastPos);
+      peerRoot.worldToLocal(_flBroadcastPos);
+      jet.getWorldQuaternion(_flBroadcastQuat);
+      _flBroadcastEuler.setFromQuaternion(_flBroadcastQuat, 'XYZ');
+      sendMessage({
+        type: 'entity',
+        kind: 'plane',
+        active: true,
+        p: { x: _flBroadcastPos.x, y: _flBroadcastPos.y, z: _flBroadcastPos.z },
+        r: { x: _flBroadcastEuler.x, y: _flBroadcastEuler.y, z: _flBroadcastEuler.z },
+      });
+    }
+
+    // ---- snapshot: host serializes + chunks the full world + env ----
+    function sendSnapshotTo(forId) {
+      if (!isHost || !forId) return;
+      if (typeof window.buildWorldStateObject !== 'function') return;
+      let payload;
+      try {
+        const world = window.buildWorldStateObject();
+        payload = JSON.stringify({ world, env: captureEnvState() });
+      } catch (err) {
+        console.warn('[multiplayer] snapshot build failed:', err);
+        return;
+      }
+      const total = Math.max(1, Math.ceil(payload.length / SNAPSHOT_CHUNK));
+      for (let seq = 0; seq < total; seq++) {
+        sendMessage({
+          type: 'snapshot',
+          forId,
+          seq,
+          total,
+          chunk: payload.slice(seq * SNAPSHOT_CHUNK, (seq + 1) * SNAPSHOT_CHUNK),
+        });
+      }
+    }
+
+    // ---- snapshot: peer reassembles chunks, parses, applies ----
+    function handleSnapshotChunk(msg) {
+      const total = Math.max(1, Math.round(Number(msg.total) || 0));
+      if (total > 2000) return;   // bound the host-supplied chunk count (anti-OOM)
+      const seq = Math.round(Number(msg.seq) || 0);
+      if (!Number.isFinite(seq) || seq < 0 || seq >= total) return;
+      // A fresh snapshot (seq 0 or a different total) resets the buffer so a
+      // re-sync after reconnect cannot mix chunks from two snapshots.
+      if (!snapshotBuf || snapshotBuf.total !== total || seq === 0) {
+        snapshotBuf = { total, parts: new Array(total), got: 0 };
+      }
+      if (typeof snapshotBuf.parts[seq] === 'undefined' || snapshotBuf.parts[seq] === null) {
+        snapshotBuf.parts[seq] = typeof msg.chunk === 'string' ? msg.chunk : '';
+        snapshotBuf.got++;
+      }
+      if (snapshotBuf.got < snapshotBuf.total) return;
+      const joined = snapshotBuf.parts.join('');
+      snapshotBuf = null;
+      let payload = null;
+      try { payload = JSON.parse(joined); } catch (_) { return; }
+      if (!payload || typeof payload !== 'object') return;
+      applySnapshot(payload);
+    }
+
+    function applySnapshot(payload) {
+      // Apply the host's world + environment WITHOUT echoing back. The world is
+      // the subtle part: applyState's non-windowed path is ASYNC (rAF-chunked)
+      // and brackets suppressSave from its start until finishApplyState. A
+      // synchronous try/finally here would clear suppressSave BEFORE the paint
+      // runs, so every painted cell would re-broadcast (the exact flood
+      // sendCellSnapshot's suppressSave gate exists to stop). So we let
+      // applyState own suppressSave on success and clear applyingRemote +
+      // apply env in its onDone (fires at the END of both the sync and async
+      // paths). Only on an early reject (applyState returns false, never
+      // entering its suppressSave bracket) do we restore synchronously.
+      if (snapshotApplying) return;   // a previous snapshot is still painting; one is enough
+      const applyEnv = () => { if (payload && payload.env) applyEnvState(payload.env); };
+      if (!payload.world || typeof applyState !== 'function') {
+        applyEnv();
+        return;
+      }
+      applyingRemote = true;
+      snapshotApplying = true;
+      if (typeof suppressSave !== 'undefined') suppressSave = true;
+      let ok = false;
+      try {
+        // keepCamera: a joiner keeps their own viewpoint, just adopts the host's
+        // world content (cells + islands + moorings + landscape). onDone runs
+        // after the (possibly async) paint completes — there we drop the remote
+        // guard (suppressSave is reset to false by applyState itself) and apply
+        // the environment so it lands on top of the freshly painted world.
+        ok = applyState(payload.world, {
+          keepCamera: true,
+          onDone: () => { applyingRemote = false; snapshotApplying = false; applyEnv(); },
+        });
+      } catch (err) {
+        console.warn('[multiplayer] snapshot world apply failed:', err);
+      }
+      // Early reject (false) or a throw never reached applyState's suppressSave
+      // bracket / onDone, so undo our guard here to avoid wedging future saves.
+      if (!ok) {
+        if (typeof suppressSave !== 'undefined') suppressSave = false;
+        applyingRemote = false;
+        snapshotApplying = false;
+        applyEnv();
+      }
     }
 
     function handleMessage(event) {
@@ -863,6 +1648,10 @@
         publishPresence(true);
         if (admitted) renderRoster();
         renderAdmitPanel();
+        // welcome sets role inline (seat re-admit path bypasses applySelfState),
+        // so refresh guest-menu hide + chat launcher here too.
+        updateGuestMenuVisibility();
+        updateChatAvailability();
       } else if (data.type === 'lobby.join') {
         if (!data.id) return;
         const name = String(data.name || '');
@@ -903,8 +1692,36 @@
       } else if (data.type === 'leave') {
         removePeer(data.id);
         roleById.delete(data.id);
+        // A departing/kicked peer's flight ghost must vanish too (entity has no
+        // active:false on an abrupt disconnect).
+        removeFlightGhost(data.id);
+      } else if (data.type === 'entity') {
+        // Live entity transform (flying peer's plane). Applies for EVERYONE
+        // except our own id — the host must see a guest's ghost and vice versa.
+        applyRemoteEntity(data);
       } else if (data.type === 'cell.set') {
         applyRemoteCell(data.op);
+      } else if (data.type === 'snapshot.request') {
+        // We are the host: a peer was just admitted and needs our world+env.
+        // No-op for non-hosts (the server only sends this to the host).
+        if (isHost && data.forId) sendSnapshotTo(String(data.forId));
+      } else if (data.type === 'snapshot') {
+        // We are a freshly-admitted peer receiving the host's world in chunks.
+        handleSnapshotChunk(data);
+      } else if (data.type === 'env') {
+        // Host broadcast an environment change; apply it locally (echo-guarded).
+        if (!isHost) applyEnvState(data.env);
+      } else if (data.type === 'moorings') {
+        // Host broadcast the full mooring-cable list; replace ours to match.
+        if (!isHost) applyRemoteMoorings(data.moorings);
+      } else if (data.type === 'chat') {
+        // Multi-user chat. NOT host-gated — host and every admitted guest
+        // receive. The server echoes our own message back too (it stamps id),
+        // so this single path renders everyone's lines, ours included.
+        handleRemoteChat(data);
+      } else if (data.type === 'chat.typing') {
+        // A peer's typing indicator (never our own — server excludes the sender).
+        handleRemoteTyping(data);
       }
     }
 
@@ -928,11 +1745,20 @@
         setStatus('online', 'Shared room: ' + roomId);
         publishPresence(true);
         renderRoster();
+        updateChatAvailability();
       });
       socket.addEventListener('message', handleMessage);
       socket.addEventListener('close', () => {
         connected = false;
         peers.forEach((_, id) => removePeer(id));
+        // Drop every flight ghost on disconnect; they re-arrive live on reconnect.
+        clearFlightGhosts();
+        // Hide the chat launcher + clear any lingering typing indicators while
+        // disconnected; they refresh on reconnect / re-admit.
+        updateChatAvailability();
+        typingPeers.forEach((entry) => { if (entry && entry.timer) clearTimeout(entry.timer); });
+        typingPeers.clear();
+        renderTyping();
         // Declined or kicked: terminal. Do not reconnect; leave the notice up.
         if (declined) {
           setStatus('offline', 'Shared room: closed');
@@ -970,6 +1796,36 @@
     renderer.domElement.addEventListener('pointerleave', () => schedulePresence(true), { passive: true });
     setInterval(() => schedulePresence(true), 2500);
 
+    // -------- live environment + mooring broadcast wiring (host only) --------
+    // The host watches its own env controls and re-broadcasts on change. Each
+    // handler is gated (isHost + !applyingRemoteEnv) inside scheduleEnvBroadcast
+    // / broadcastEnv, so a peer applying a remote env never re-emits. Listeners
+    // attach unconditionally (cheap) and self-gate, so role changes are handled.
+    (function wireEnvBroadcast() {
+      const timeRange = document.getElementById('time-range');
+      const intensity = document.getElementById('weather-intensity');
+      const splashes = document.getElementById('weather-splashes');
+      const seasonPills = document.getElementById('season-pills');
+      const weatherPills = document.getElementById('weather-pills');
+      if (timeRange) timeRange.addEventListener('input', scheduleEnvBroadcast);
+      if (intensity) intensity.addEventListener('input', scheduleEnvBroadcast);
+      if (splashes) splashes.addEventListener('input', scheduleEnvBroadcast);
+      // Pills update season/weather synchronously on click; broadcast after the
+      // module-30 handler has run (it shares the same click event).
+      if (seasonPills) seasonPills.addEventListener('click', scheduleEnvBroadcast);
+      if (weatherPills) weatherPills.addEventListener('click', scheduleEnvBroadcast);
+      // Shield deploy/retract fires this event (engine/world/40-shield-system.js).
+      window.addEventListener('tinyworld:shield-changed', scheduleEnvBroadcast);
+    })();
+
+    // Moorings are not cells: the host re-broadcasts the full serialized list
+    // whenever a cable is added or restyled (engine/world/14 dispatches this).
+    // applyRemoteMoorings uses replaceMooringCables, which does NOT dispatch
+    // this event, so peers applying a remote list cannot loop.
+    window.addEventListener('tinyworld:moorings-changed', () => {
+      if (isHost) broadcastMoorings();
+    });
+
     window.__tinyworldMultiplayer = {
       roomId,
       connect,
@@ -983,6 +1839,21 @@
       canInteract,
       canEditAny,
       role: () => myRole,
+      isHost: () => isHost,
+      // Sync-core hooks. broadcastEnv lets the host force an env re-broadcast
+      // after a programmatic environment change (no DOM event); sendMessage is
+      // the raw channel other live-sync features (flight/chat) broadcast over.
+      broadcastEnv,
+      // Flight live-sync hook for engine/world/34-flight-sim.js. Called every
+      // tick while flying (self-throttled to ~15/s) and once with active:false
+      // on exit so peers drop the ghost. Reads __flightJet itself.
+      broadcastFlight,
+      send: sendMessage,
+      // Chat hooks (open/close the panel, post a line) for any caller that wants
+      // to drive chat programmatically. No-ops gracefully until admitted.
+      openChat,
+      closeChat,
+      sendChat,
     };
 
     connect();

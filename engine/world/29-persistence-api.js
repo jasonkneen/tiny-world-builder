@@ -77,53 +77,65 @@
     if (total > 0) console.info('[stilts-migration] flattened houses-on-stilts in saved state');
   })();
 
+  // Build the full world-state object (cells + islands + moorings +
+  // landscape) and RETURN it. This is the single source of truth shared by
+  // saveState (which JSON-stringifies + persists it) and the multiplayer
+  // snapshot path (engine/world/38-multiplayer-partykit.js), which serializes
+  // the SAME object to ship the host's world to a freshly-admitted peer.
+  // Pure builder: no side effects, never persists, ignores suppressSave.
+  function buildWorldStateObject() {
+    const cells = [];
+    // Walk every populated row + cell, including out-of-home
+    // overrides from clicks on ghost boards. Cells with default
+    // grass / no kind return null from serializeCell and are
+    // skipped naturally.
+    for (const xKey of Object.keys(world)) {
+      const x = parseInt(xKey, 10);
+      if (!Number.isFinite(x)) continue;
+      const row = world[xKey];
+      if (!row) continue;
+      const insideHomeX = x >= 0 && x < GRID;
+      for (const zKey of Object.keys(row)) {
+        const z = parseInt(zKey, 10);
+        if (!Number.isFinite(z)) continue;
+        const c = row[zKey];
+        if (!c) continue;
+        const insideHome = insideHomeX && z >= 0 && z < GRID;
+        // Outside the home grid we only save cells the user has
+        // actually edited — skips the 20x20 pre-allocated buffer.
+        if (!insideHome && !c.userEdited) continue;
+        const entry = serializeCell(x, z, c);
+        if (entry) cells.push(entry);
+      }
+    }
+    return {
+      v: STORAGE_VERSION,
+      gridSize: GRID,
+      islands: serializeEditableIslands(),
+      moorings: serializeMooringCables(),
+      cells,
+      voxelBuildStamps: referencedVoxelBuildStamps(cells),
+      cameraMode,
+      toolId: selectedTool && selectedTool.id,
+      useLandscapeEngine,
+      landscapeMeshMode,
+      landscapeMeshBiome,
+      landscapeMeshStyle,
+      landscapeEngineSeed: landscapeEngineInstance ? landscapeEngineInstance.seed : null,
+      landscapeEngineBiome: landscapeEngineInstance ? landscapeEngineInstance.currentBiomeName : null,
+      planetLandscape: serializePlanetLandscapeState(),
+    };
+  }
+  // Cross-module access for the multiplayer snapshot builder (module 38).
+  window.buildWorldStateObject = buildWorldStateObject;
+
   function saveState() {
     if (typeof window.__requestMinimapRepaint === 'function') window.__requestMinimapRepaint();
     if (suppressSave) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try {
-        const cells = [];
-        // Walk every populated row + cell, including out-of-home
-        // overrides from clicks on ghost boards. Cells with default
-        // grass / no kind return null from serializeCell and are
-        // skipped naturally.
-        for (const xKey of Object.keys(world)) {
-          const x = parseInt(xKey, 10);
-          if (!Number.isFinite(x)) continue;
-          const row = world[xKey];
-          if (!row) continue;
-          const insideHomeX = x >= 0 && x < GRID;
-          for (const zKey of Object.keys(row)) {
-            const z = parseInt(zKey, 10);
-            if (!Number.isFinite(z)) continue;
-            const c = row[zKey];
-            if (!c) continue;
-            const insideHome = insideHomeX && z >= 0 && z < GRID;
-            // Outside the home grid we only save cells the user has
-            // actually edited — skips the 20x20 pre-allocated buffer.
-            if (!insideHome && !c.userEdited) continue;
-            const entry = serializeCell(x, z, c);
-            if (entry) cells.push(entry);
-          }
-        }
-        twSafeSetItem(STORAGE_KEY, JSON.stringify({
-          v: STORAGE_VERSION,
-          gridSize: GRID,
-          islands: serializeEditableIslands(),
-          moorings: serializeMooringCables(),
-          cells,
-          voxelBuildStamps: referencedVoxelBuildStamps(cells),
-          cameraMode,
-          toolId: selectedTool && selectedTool.id,
-          useLandscapeEngine,
-          landscapeMeshMode,
-          landscapeMeshBiome,
-          landscapeMeshStyle,
-          landscapeEngineSeed: landscapeEngineInstance ? landscapeEngineInstance.seed : null,
-          landscapeEngineBiome: landscapeEngineInstance ? landscapeEngineInstance.currentBiomeName : null,
-          planetLandscape: serializePlanetLandscapeState(),
-        }), 'World');
+        twSafeSetItem(STORAGE_KEY, JSON.stringify(buildWorldStateObject()), 'World');
       } catch (_) {}
     }, 200);
   }

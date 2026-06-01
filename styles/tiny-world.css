@@ -698,6 +698,246 @@
     white-space: nowrap;
   }
 
+  /* ---- Multi-user chat ---- */
+  /* Floating launcher (bottom-right) with an unread bubble. */
+  .mp-chat-toggle {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 46;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.74);
+    color: #2b3242;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 10px 26px -10px rgba(40, 50, 80, 0.4);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    cursor: pointer;
+    transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+  }
+  .mp-chat-toggle:hover { background: rgba(255, 255, 255, 0.9); }
+  .mp-chat-toggle:active { transform: scale(0.97); }
+  .mp-chat-toggle.is-open {
+    background: rgba(23, 107, 235, 0.16);
+    border-color: #304878;
+    color: #1f4ea8;
+  }
+  .mp-chat-toggle svg { width: 18px; height: 18px; }
+  .mp-chat-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: #d9483b;
+    color: #fff;
+    font: 800 10px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    border: 2px solid rgba(255, 255, 255, 0.92);
+    box-shadow: 0 1px 3px rgba(20, 28, 45, 0.3);
+  }
+  .mp-chat-badge.visible { display: inline-flex; }
+
+  /* Glassy panel (matches .layers-panel design language). */
+  .mp-chat-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 78px;
+    z-index: 47;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    width: min(300px, calc(100vw - 28px));
+    height: 420px;
+    max-width: calc(100vw - 28px);
+    max-height: calc(100vh - 118px);
+    padding: 4px 8px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 24px 56px -16px rgba(40, 50, 80, 0.30);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+    color: #2b3242;
+    overflow: hidden;
+  }
+  .mp-chat-panel.visible { display: flex; }
+  .mp-chat-panel.dragging { transition: none; user-select: none; }
+
+  /* Drag bar — centred grab cue, close on the right (like .layers-panel-head). */
+  .mp-chat-head {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 4px 3px;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .mp-chat-panel.dragging .mp-chat-head { cursor: grabbing; }
+  .mp-chat-head::after {
+    content: '';
+    width: 28px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(120, 130, 150, 0.35);
+  }
+  .mp-chat-close {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: #5a6172;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mp-chat-close:hover { background: rgba(0, 0, 0, 0.06); color: #2b3242; }
+  .mp-chat-close svg { width: 13px; height: 13px; }
+
+  /* Single segmented tab in the Layers/Properties block-button style. */
+  .mp-chat-tabs { flex: 0 0 auto; display: grid; grid-template-columns: 1fr; padding: 0 1px; }
+  .mp-chat-tab {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1.5px solid rgba(255, 255, 255, 0.55);
+    border-radius: 12px;
+    background: rgba(120, 116, 108, 0.14);
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.9),
+      0 1px 2px -1px rgba(20, 30, 50, 0.2);
+    color: #2b3242;
+    font: 800 11.5px/1 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 6px 8px;
+    cursor: default;
+  }
+  .mp-chat-tab svg { width: 13px; height: 13px; }
+  .mp-chat-tab.is-active {
+    border-color: #304878;
+    background: rgba(23, 107, 235, 0.14);
+    color: #1f4ea8;
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
+      inset 0 -3px 0 rgba(30, 66, 138, 0.22),
+      0 2px 3px -1px rgba(20, 30, 50, 0.22);
+  }
+
+  .mp-chat-log {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 2px;
+  }
+  .mp-chat-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 9px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    align-self: flex-start;
+    max-width: 92%;
+  }
+  .mp-chat-msg.is-self {
+    align-self: flex-end;
+    background: rgba(23, 107, 235, 0.12);
+    border-color: rgba(48, 72, 120, 0.3);
+  }
+  .mp-chat-meta { display: flex; align-items: baseline; gap: 6px; }
+  .mp-chat-name {
+    font: 800 11px/1.2 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+  }
+  .mp-chat-time { font: 600 9.5px/1 system-ui, sans-serif; color: #8a91a0; }
+  .mp-chat-text {
+    font: 600 12.5px/1.4 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #2b3242;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+  .mp-chat-typing {
+    flex: 0 0 auto;
+    min-height: 14px;
+    padding: 0 4px;
+    font: 700 10.5px/1.2 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #5a6172;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .mp-chat-typing.visible { opacity: 1; }
+
+  .mp-chat-form { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; }
+  .mp-chat-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 1px solid rgba(120, 110, 90, 0.18);
+    border-radius: 14px;
+    padding: 9px 11px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #2b3242;
+    font: 600 12.5px/1.2 system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    outline: none;
+  }
+  .mp-chat-input:focus { border-color: #304878; background: rgba(255, 255, 255, 0.9); }
+  .mp-chat-send {
+    flex: 0 0 auto;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    border: 1.5px solid #304878;
+    background: rgba(23, 107, 235, 0.14);
+    color: #1f4ea8;
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.92),
+      0 1px 2px -1px rgba(20, 30, 50, 0.2);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .mp-chat-send:hover { background: rgba(23, 107, 235, 0.24); }
+  .mp-chat-send svg { width: 16px; height: 16px; }
+
+  /* Guest menu hide: an admitted non-host guest cannot leave the host's world,
+     so the world-management trigger + menu are removed for them. Host / null
+     role / single-player are unaffected (body.mp-guest is never set there). */
+  body.mp-guest #world-pill,
+  body.mp-guest #world-menu { display: none !important; }
+
   .controls {
     position: fixed;
     top: 50%;
