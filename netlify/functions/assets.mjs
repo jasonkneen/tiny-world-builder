@@ -9,10 +9,15 @@ function normalizeAssetLibrary(body) {
   const data = body && body.data ? body.data : body;
   const voxelBuilds = Array.isArray(data && data.voxelBuilds) ? data.voxelBuilds.slice(0, 200) : [];
   const assetTemplates = Array.isArray(data && data.assetTemplates) ? data.assetTemplates.slice(0, 200) : [];
+  // Per-model-stamp config (scale/offset/appearance tweaks), keyed by stamp id.
+  // Small JSON; the 2MB cap below still guards the whole library.
+  const rawDefaults = data && data.modelStampDefaults;
+  const modelStampDefaults = (rawDefaults && typeof rawDefaults === 'object' && !Array.isArray(rawDefaults)) ? rawDefaults : {};
   const out = {
     version: 1,
     voxelBuilds,
     assetTemplates,
+    modelStampDefaults,
     updatedAt: new Date().toISOString(),
   };
   if (JSON.stringify(out).length > 2_000_000) {
@@ -44,6 +49,7 @@ export default async function assetsFunction(request) {
           version: 1,
           voxelBuilds: [],
           assetTemplates: [],
+          modelStampDefaults: {},
           createdAt: null,
           updatedAt: null,
         }, origin);

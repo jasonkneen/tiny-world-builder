@@ -87,6 +87,8 @@
   function persistModelStampDefaults() {
     const payload = { version: 1, stamps: modelStampDefaults };
     try { localStorage.setItem(MODEL_STAMP_DEFAULTS_LS, JSON.stringify(payload)); } catch (_) {}
+    // Persist to the signed-in user's account (debounced) alongside their stamps.
+    if (typeof window.__tinyworldSyncAssetsToCloud === 'function') window.__tinyworldSyncAssetsToCloud();
     if (modelStampApiEnabled()) {
       fetch('/api/model-stamp-defaults', {
         method: 'POST',
@@ -95,6 +97,30 @@
       }).catch(() => {});
     }
   }
+
+  // Account-sync bridge: lets the cloud asset-library sync (engine/world/30)
+  // read/write per-stamp config without reaching into module-09 internals.
+  window.__tinyworldModelStampDefaults = {
+    collect() { return modelStampDefaults; },
+    apply(stamps) {
+      if (!stamps || typeof stamps !== 'object') return false;
+      let changed = false;
+      for (const [id, cfg] of Object.entries(stamps)) {
+        const safe = modelStampIdSafe(id);
+        // Fill ids the local copy lacks; never clobber a local edit.
+        if (safe && !modelStampDefaults[safe]) {
+          modelStampDefaults[safe] = normalizeModelStampSettings(cfg);
+          changed = true;
+        }
+      }
+      if (changed) {
+        try { localStorage.setItem(MODEL_STAMP_DEFAULTS_LS, JSON.stringify({ version: 1, stamps: modelStampDefaults })); } catch (_) {}
+        try { syncModelStampSettingsPanel(selectedTool); } catch (_) {}
+        try { refreshOpenStampBuilderCards(); } catch (_) {}
+      }
+      return changed;
+    },
+  };
 
   async function loadModelStampDefaultsConfig() {
     if (!modelStampApiEnabled()) return;

@@ -374,6 +374,8 @@
       version: 1,
       voxelBuilds: collectCustomVoxelBuilds(),
       assetTemplates: (typeof loadAssetTemplates === 'function') ? loadAssetTemplates() : [],
+      modelStampDefaults: (window.__tinyworldModelStampDefaults && window.__tinyworldModelStampDefaults.collect)
+        ? window.__tinyworldModelStampDefaults.collect() : {},
       updatedAt: new Date().toISOString(),
     };
   }
@@ -404,6 +406,12 @@
           changed = true;
         }
         if (changed) saveAssetTemplates(merged);
+      }
+
+      const remoteDefaults = data.modelStampDefaults;
+      if (remoteDefaults && typeof remoteDefaults === 'object'
+          && window.__tinyworldModelStampDefaults && window.__tinyworldModelStampDefaults.apply) {
+        if (window.__tinyworldModelStampDefaults.apply(remoteDefaults)) changed = true;
       }
 
       if (changed && typeof buildToolbar === 'function') {
