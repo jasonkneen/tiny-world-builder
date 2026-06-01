@@ -137,18 +137,18 @@
   starVaultSphere.raycast = function () {};
   scene.add(starVaultSphere);
 
-  let lastAtmosphereBucket = null;
+  let _atmoLastBucket = null;
   function registerPlaceableLightSource(root) {
     if (root && root.userData && root.userData.placeableLightSource) {
       placeableLightSources.add(root);
-      lastAtmosphereBucket = null;
+      _atmoLastBucket = null;
       if (typeof applyPlaceableLightSourceSettings === 'function') applyPlaceableLightSourceSettings();
     }
   }
   function unregisterPlaceableLightSource(root) {
     if (root) {
       placeableLightSources.delete(root);
-      lastAtmosphereBucket = null;
+      _atmoLastBucket = null;
     }
   }
   function placeableLightSceneDistance(root) {
@@ -239,8 +239,8 @@
   function updateStarlitAtmosphere(dt) {
     if (camera) starVaultSphere.position.copy(camera.position);
     const bucket = Math.round((currentTodMinutes || 0) / STAR_VAULT_TOD_BUCKET) + ':' + renderStarVault + ':' + renderStarVaultStrength.toFixed(2) + ':' + renderCloudRimLight.toFixed(2) + ':' + renderAccentLights.toFixed(2);
-    if (bucket !== lastAtmosphereBucket) {
-      lastAtmosphereBucket = bucket;
+    if (bucket !== _atmoLastBucket) {
+      _atmoLastBucket = bucket;
       applyStarlitAtmosphereSettings();
     }
     if (starVaultSphere.visible && dt > 0) starVaultSphere.rotation.y += dt * 0.0016;
