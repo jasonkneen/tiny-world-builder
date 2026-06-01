@@ -17,6 +17,10 @@
   let active = false;
   let jet = null; // window.__flightJet while flying
 
+  const MAX_HEALTH = 100;
+  let health = MAX_HEALTH;
+  let healthEl = null;
+
   // ---- target adapter ----
   // Uniform target interface so guns/missiles/HUD never special-case kinds:
   //   { id, kind, getWorldPos(out), radius, isAlive(), label(), speedKts(),
@@ -314,6 +318,10 @@
     reticleEl = document.createElement('div');
     reticleEl.id = 'flight-reticle';
     overlayEl.appendChild(reticleEl);
+    healthEl = document.createElement('div');
+    healthEl.id = 'flight-combat-health';
+    healthEl.style.cssText = 'position:absolute;left:14px;bottom:64px;font:12px/1.4 ui-monospace,Menlo,monospace;color:#9ff;background:rgba(8,14,25,0.6);padding:3px 8px;border:1px solid #1f2a44;border-radius:4px;';
+    overlayEl.appendChild(healthEl);
     document.body.appendChild(overlayEl);
   }
 
@@ -400,6 +408,7 @@
     reticleState.init = false;
     muzzlesReady = deriveMuzzles();
     lockAmount = 0; lockCandidateId = ''; lockId = '';
+    health = MAX_HEALTH;
   }
 
   function onExit() {
@@ -426,13 +435,14 @@
     updateReticle(dt);
     updateLock(dt);
     updateTargetHud();
+    if (healthEl) healthEl.textContent = 'HULL ' + Math.max(0, Math.round(health)) + '%';
   }
 
   function telemetry() {
     const dir = (active && window.__flightSceneForward)
       ? window.__flightSceneForward(_fireDir).clone() : null;
     return {
-      active, hasJet: !!jet, shotsFired, gunHits,
+      active, hasJet: !!jet, shotsFired, gunHits, health: health,
       fireDir: dir ? { x: dir.x, y: dir.y, z: dir.z } : null,
       muzzleL: jet ? jet.localToWorld(gunMuzzleL.clone()).toArray() : null,
       muzzleR: jet ? jet.localToWorld(gunMuzzleR.clone()).toArray() : null,
