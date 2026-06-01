@@ -179,6 +179,12 @@
     const SHIELD_EDGE_GUN_SCALE = 1.0;       // edge guns sized to match the island-edge greebles
     const SHIELD_EDGE_GUN_WORLD_Y = -1.0;    // target world Y: down on the DARK cliff wall, below the tan/grey greeble lumps (tune)
     const SHIELD_EDGE_GUN_EVERY = 4;         // arm every Nth panel around the ring (a few greebles per side)
+    const SHIELD_TURRET_SPEED = 1.0;         // corner-turret deploy speed (ramps AFTER the edge guns)
+    const SHIELD_TURRET_CUBE = 1.8;          // turret housing cube size (ring-local units)
+    const SHIELD_TURRET_RISE = 2.6;          // how far the cannon + housing rise out of the keystone top
+    const SHIELD_TURRET_YAW_SPEED = 0.55;    // continuous yaw scan speed (rad/sec)
+    const SHIELD_TURRET_PITCH_SPEED = 0.9;   // pitch sweep speed
+    const SHIELD_TURRET_PITCH_RANGE = 0.78;  // pitch sweep amplitude (~90 deg total up/down)
 
     // Voxel laser cannon in the shield's own VoxelKit style, barrel pointing +Z
     // (a panel's outward normal). Added to a panel before optimizeVoxelObjectGroup,
@@ -366,6 +372,8 @@
         this.keystones = [];
         this.weaponProgress = 0;
         this.batteryUnits = [];
+        this.turretProgress = 0;
+        this.turretUnits = [];
         this.slots = [];
         this.progress = 0;
         this.targetProgress = 0;
@@ -376,6 +384,7 @@
         this.build();
         this.optimiseForTinyWorld();
         this.buildPerimeterBattery();
+        this.buildCornerTurrets();
         this.applyDeployment(0, 0);
       }
 
@@ -573,6 +582,8 @@
         // so a fully-deployed shield comes up with its cannons already out.
         this.weaponProgress = this.progress > 0.985 ? 1 : 0;
         this.applyBattery(this.weaponProgress, 0);
+        this.turretProgress = this.progress > 0.985 ? 1 : 0;
+        this.applyTurrets(this.turretProgress);
         this._settled = false;
         notifyVoxelShieldChanged(this);
       }
@@ -594,10 +605,18 @@
         this.weaponProgress = shieldLerp(this.weaponProgress, weaponTarget, shieldClamp01(deltaTime * SHIELD_WEAPON_SPEED));
         if (Math.abs(this.weaponProgress - weaponTarget) < 0.002) this.weaponProgress = weaponTarget;
         const weaponsMoving = this.weaponProgress !== weaponTarget || (this.weaponProgress > 0.001 && this.weaponProgress < 0.999);
-        const active = this.progress !== this.targetProgress || (this.progress > 0.001 && this.progress < 0.986) || weaponsMoving;
+        // Corner turrets deploy AFTER the edge guns are out (sequential), then enter
+        // a continuous scan driven separately (applyTurretScan, ungated) so they keep
+        // sweeping even once the deploy itself settles.
+        const turretTarget = (this.weaponProgress > 0.985 && this.targetProgress > 0.985) ? 1 : 0;
+        this.turretProgress = shieldLerp(this.turretProgress, turretTarget, shieldClamp01(deltaTime * SHIELD_TURRET_SPEED));
+        if (Math.abs(this.turretProgress - turretTarget) < 0.002) this.turretProgress = turretTarget;
+        const turretsMoving = this.turretProgress !== turretTarget || (this.turretProgress > 0.001 && this.turretProgress < 0.999);
+        const active = this.progress !== this.targetProgress || (this.progress > 0.001 && this.progress < 0.986) || weaponsMoving || turretsMoving;
         if (!active && this._settled) return;
         this.applyDeployment(this.progress, time);
         this.applyBattery(this.weaponProgress, time);
+        this.applyTurrets(this.turretProgress);
         this._settled = !active;
       }
 
@@ -661,6 +680,96 @@
           g.hatchPivot.rotation.x = SHIELD_EDGE_HATCH_ANGLE * hatchOpen;
           g.cannon.position.z = shieldLerp(g.retractZ, g.deployZ, cannonOut);
           g.cannon.visible = wp > 0.4;
+        }
+      }
+
+      // Corner turrets. One per keystone, anchored to the RING (uniform fitScale)
+      // at the keystone's xz + post top, so yaw + pitch stay shear-free (the keystone
+      // itself is non-uniformly scaled). A central axle represents the keystone
+      // extending UP through a housing cube (the fixed pivot, light on top); a yaw
+      // group spins the cube + cannon around that axle; a pitch group elevates the
+      // cannon. Built after the perimeter battery, after the optimizer.
+      buildCornerTurrets() {
+        const heightScale = SHIELD_TINYWORLD_CORNER_HEIGHT_SCALE;
+        this.keystones.forEach(keystone => {
+          const fp = keystone.userData.finalPos;
+          const topY = keystone.height * heightScale;   // keystone post top, ring-local
+          const turret = this.buildTurretUnit();
+          turret.position.set(fp.x, topY, fp.z);
+          turret.rotation.y = keystone.rotation.y;
+          turret.userData.kind = 'shield-corner-turret';
+          this.add(turret);
+          this.turretUnits.push(turret);
+        });
+      }
+
+      buildTurretUnit() {
+        const k = this.kit;
+        const m = k.materials;
+        const cube = SHIELD_TURRET_CUBE;
+        const free = (c) => { c.userData.noBatch = true; c.userData.noStaticBaseMerge = true; return c; };
+        const root = new THREE.Group();
+
+        // Central axle: the keystone extending UP through the cube; the fixed pivot.
+        const axle = new THREE.Group();
+        free(k.cube(axle, 0, cube * 0.65, 0, 0.5, cube * 1.3, 0.5, m.stoneDark, false));
+        free(k.cube(axle, 0, cube * 1.3 + 0.05, 0, 0.62, 0.16, 0.62, m.edge, false));
+        k.glowCube(axle, 0, cube * 1.3 + 0.26, 0, 0.34, 0.18, 0.34, false, 2.8);   // light stays on top
+        k.addPointGlow(axle, 0, cube * 1.3 + 0.28, 0, 0.85, 4.5);
+        root.add(axle);
+
+        // Yaw pivot: rotating housing + cannon around the axle (cube centre).
+        const yaw = new THREE.Group();
+        const housing = new THREE.Group();
+        free(k.cube(housing, 0, cube * 0.5, 0, cube, cube, cube, m.stone, false));
+        free(k.cube(housing, 0, cube + 0.05, 0, cube + 0.14, 0.14, cube + 0.14, m.edge, false));
+        free(k.cube(housing, 0, 0.05, 0, cube + 0.14, 0.14, cube + 0.14, m.edge, false));
+        k.glowCube(housing, 0, cube * 0.5, cube * 0.5 + 0.05, cube * 0.7, 0.12, 0.06, false, 2.4);
+        yaw.add(housing);
+
+        // Pitch pivot on the +Z face of the cube; cannon elevates here.
+        const pitch = new THREE.Group();
+        pitch.position.set(0, cube * 0.5, cube * 0.5);
+        const cannon = buildShieldCannon(k);
+        cannon.position.set(0, 0, 0.15);
+        pitch.add(cannon);
+        yaw.add(pitch);
+        root.add(yaw);
+
+        root.userData.turret = { axle, yaw, housing, pitch, cannon };
+        return root;
+      }
+
+      // Deploy: cannon + housing + axle rise up out of the corner (0 -> 0.5), then the
+      // cube housing grows around them Transformers-style (0.35 -> 0.85).
+      applyTurrets(tp) {
+        if (!this.turretUnits || !this.turretUnits.length) return;
+        const rise = shieldSmoothstep(tp / 0.5);
+        const grow = shieldSmoothstep((tp - 0.35) / 0.5);
+        for (const turret of this.turretUnits) {
+          const t = turret.userData.turret;
+          const dy = shieldLerp(-SHIELD_TURRET_RISE, 0, rise);
+          t.axle.position.y = dy;
+          t.yaw.position.y = dy;
+          t.axle.visible = tp > 0.02;
+          t.housing.scale.setScalar(Math.max(0.0001, grow));
+          t.housing.visible = grow > 0.01;
+          t.cannon.visible = grow > 0.15;
+          if (tp < 0.9) { t.yaw.rotation.y = 0; t.pitch.rotation.x = 0; }
+        }
+      }
+
+      // Continuous scan once deployed: yaw spins the housing+cannon around the axle,
+      // pitch sweeps the cannon ~90 deg up/down. Driven UNGATED from ShieldDemo.update
+      // (time-based) so it keeps sweeping after the deploy settles.
+      applyTurretScan(time) {
+        if (!this.turretUnits || this.turretProgress < 0.9) return;
+        const yaw = time * SHIELD_TURRET_YAW_SPEED;
+        const pitch = Math.sin(time * SHIELD_TURRET_PITCH_SPEED) * SHIELD_TURRET_PITCH_RANGE;
+        for (const turret of this.turretUnits) {
+          const t = turret.userData.turret;
+          t.yaw.rotation.y = yaw;
+          t.pitch.rotation.x = pitch;
         }
       }
 
@@ -810,6 +919,9 @@
       update(deltaTime, time) {
         if (!this.isRunning) return;
         this.shield.update(deltaTime, time);
+        // Turret scan runs every frame, independent of the shield's dirty-gate, so
+        // the deployed turrets keep sweeping after deployment settles.
+        this.shield.applyTurretScan(time);
       }
 
       destroy() {
