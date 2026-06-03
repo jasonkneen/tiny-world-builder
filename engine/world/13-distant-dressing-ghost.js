@@ -379,10 +379,14 @@
         c.receiveShadow = false;
         // Scene-level island culling owns this group. Per-mesh frustum culling
         // can clip the side/back faces at low or grazing camera angles, so the
-        // board side/backing meshes stay unculled. Lift engines, however, are
-        // localized objects that don't span the view — leave their per-mesh
-        // frustum culling at the default (true) so off-screen engines don't submit.
-        if (!isEditableIslandEngineNode(c)) c.frustumCulled = false;
+        // board side/backing meshes stay unculled. Lift engine *bodies* are
+        // localized → leave their per-mesh frustum culling at the default (true)
+        // so off-screen engines don't submit. BUT engine thrust plumes / flames /
+        // glow visuals are thin billboards/sheets with degenerate bounds that get
+        // wrongly culled — keep those frustum-visible.
+        const u = c.userData || {};
+        const isPlumeOrGlow = u.rocketPlumeSheet || u.rocketFlame || u.lightVisual || u.placeableLight || u.engineGlow;
+        if (!isEditableIslandEngineNode(c) || isPlumeOrGlow) c.frustumCulled = false;
       }
     });
     return obj;
