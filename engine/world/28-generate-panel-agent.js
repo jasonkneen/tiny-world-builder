@@ -1967,6 +1967,24 @@
             { label: 'Voxel', value: 'voxel' },
           ] });
         }
+        if (window.__tinyworldFlags && window.__tinyworldFlags.inspectorV2) {
+          const ap = cell => normalizeAppearance(cell.appearance) || {};
+          addRows('Transform', [
+            { key: 'posX', label: 'Pos X', control: 'numeric', min: -0.5, max: 0.5, step: 0.01, currentValue: uniformValue(objectCells, c => +(c.offsetX || 0).toFixed(2)) },
+            { key: 'posY', label: 'Pos Y', control: 'numeric', min: -0.5, max: 2, step: 0.01, currentValue: uniformValue(objectCells, c => +(c.offsetY || 0).toFixed(2)) },
+            { key: 'posZ', label: 'Pos Z', control: 'numeric', min: -0.5, max: 0.5, step: 0.01, currentValue: uniformValue(objectCells, c => +(c.offsetZ || 0).toFixed(2)) },
+            { key: 'rotDeg', label: 'Rot Y°', control: 'slider', min: 0, max: 360, step: 1, currentValue: uniformValue(objectCells, c => Math.round((((c.rotationY || 0) * 180 / Math.PI) % 360 + 360) % 360)) },
+            { key: 'scaleAbs', label: 'Scale', control: 'slider', min: 0.25, max: 4, step: 0.05, currentValue: uniformValue(objectCells, c => +(ap(c).objectScale || 1).toFixed(2)) },
+          ]);
+          addRows('Appearance', [
+            { key: 'baseColor', label: 'Base color', control: 'colorpicker', currentValue: uniformValue(objectCells, c => ap(c).bodyColor || null) },
+            { key: 'finish', label: 'Finish', currentValue: uniformValue(objectCells, c => ap(c).finish || 'matte'), options: [
+              { label: 'Matte', value: 'matte' }, { label: 'Satin', value: 'satin' }, { label: 'Glow', value: 'glow' } ] },
+            { key: 'emissiveColor', label: 'Glow color', control: 'colorpicker', currentValue: uniformValue(objectCells, c => ap(c).emissiveColor || '#ffcc88') },
+            { key: 'emissiveIntensity', label: 'Glow', control: 'slider', min: 0, max: 2, step: 0.05, currentValue: uniformValue(objectCells, c => +(ap(c).emissiveIntensity || 0).toFixed(2)) },
+            { key: 'opacity', label: 'Opacity', control: 'slider', min: 0, max: 1, step: 0.05, currentValue: uniformValue(objectCells, c => +((ap(c).opacity === undefined ? 1 : ap(c).opacity)).toFixed(2)) },
+          ]);
+        }
       }
       addRows('Ground', [
         { key: 'terrain', label: 'Ground', currentValue: currentTerrain, options: [
