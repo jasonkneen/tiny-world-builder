@@ -1,7 +1,27 @@
 # Extended Object Inspector — Design
 
 Date: 2026-06-03
-Status: Approved (slice 1 of the editing-system overhaul)
+Status: Implemented (slice 1 of the editing-system overhaul)
+
+## Implementation notes (post-build)
+- Verified live (real app, 3D-math probes, not screenshots): setting emissive/
+  opacity/finish/light via the real `setCell` path renders correct
+  `material.emissive`/`material.opacity` and attaches a registered pool light;
+  the inspector renders all new controls with correct bound values; the Opacity
+  slider + Light "Off" chip edit the world and re-render; values persist across a
+  reload; with the flag OFF there are no new rows and no light attaches.
+- Deviation from plan (justified by [[never-rebuild-existing]]): the codebase
+  already had a capped, distance-culled accent-light pool (`placeableLightSources`
+  + `PLACEABLE_LIGHT_CAP=8` in `39-atmosphere-effects.js`, auto-registered via
+  `registerRuntimeObject` in `10-world-data.js`). Instead of the planned new
+  `44-object-light-pool.js`, inspector lights attach to the object root via a new
+  `attachInspectorObjectLight` helper in module 39 and ride that existing pool. No
+  new module, no HTML/animation-loop edits. Consequence: inspector real-lights are
+  accent lights (shine at dusk/night, like the existing voxel lamps); always-on
+  glow is the separate emissive material path.
+- Surface material rendering (emissive/opacity/finish) is intentionally NOT
+  flag-gated — it renders saved appearance data unconditionally; only the inspector
+  editing UI and the light attach are gated by `inspectorV2`.
 
 ## Background
 
