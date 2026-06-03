@@ -151,6 +151,39 @@
       _atmoLastBucket = null;
     }
   }
+  // Inspector v2: attach a user-configured light (appearance.light) to a freshly
+  // built object root, reusing the existing capped/distance-culled accent-light
+  // pool. Called from the tile renderer before the object is added to the scene,
+  // so registerRuntimeObject picks up placeableLightSource automatically. Like the
+  // voxel-build lamps, these are accent lights and shine at dusk/night.
+  function attachInspectorObjectLight(root, appearance) {
+    if (!root || !(window.__tinyworldFlags && window.__tinyworldFlags.inspectorV2)) return;
+    const a = (typeof normalizeAppearance === 'function') ? normalizeAppearance(appearance) : (appearance || null);
+    const spec = a && a.light;
+    if (!spec || (spec.type !== 'point' && spec.type !== 'spot')) return;
+    const color = new THREE.Color(spec.color || '#ffd9a0');
+    const range = Math.max(1, Math.min(20, spec.range || 6));
+    const baseIntensity = Math.max(0, Math.min(4, spec.intensity || 1));
+    let light;
+    if (spec.type === 'spot') {
+      const tgt = new THREE.Object3D();
+      tgt.position.set(0, -1, 0);
+      root.add(tgt);
+      light = new THREE.SpotLight(color, 0, range, Math.PI / 5.4, 0.5, 1.3);
+      light.position.set(0, 0.7, 0);
+      light.target = tgt;
+    } else {
+      light = new THREE.PointLight(color, 0, range, 1.4);
+      light.position.set(0, 0.6, 0);
+    }
+    light.castShadow = false;
+    light.visible = false;
+    light.userData.placeableLight = true;
+    light.userData.inspectorLight = true;
+    light.userData.baseIntensity = baseIntensity;
+    root.add(light);
+    root.userData.placeableLightSource = true;
+  }
   function placeableLightSceneDistance(root) {
     if (!root) return Infinity;
     const dx = root.position.x - target.x;

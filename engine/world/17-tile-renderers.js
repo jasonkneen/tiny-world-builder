@@ -308,6 +308,7 @@
       mesh = wrapHouseForUnderpass(mesh, cell.terrain);
     }
     if (kind !== 'model-stamp') applyAppearanceToObject(mesh, kind, cell.appearance);
+    if (typeof attachInspectorObjectLight === 'function') attachInspectorObjectLight(mesh, cell.appearance);
     const appearanceForTransform = appearanceForRender;
     const userScale = appearanceForTransform && appearanceForTransform.objectScale ? appearanceForTransform.objectScale : 1;
     const userScaleX = appearanceForTransform && appearanceForTransform.scaleX ? appearanceForTransform.scaleX : 1;

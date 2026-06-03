@@ -1671,6 +1671,21 @@
         });
         return;
       }
+      if (rowKey === 'lightType' || rowKey === 'lightColor' || rowKey === 'lightIntensity' || rowKey === 'lightRange') {
+        updateSelectedBoardObjects(target => {
+          const appearance = Object.assign({}, normalizeAppearance(target.cell.appearance) || {});
+          if (rowKey === 'lightType') {
+            if (value === 'none') delete appearance.light;
+            else appearance.light = Object.assign({ color: '#ffd9a0', intensity: 1, range: 6 }, appearance.light || {}, { type: value });
+          } else if (appearance.light) {
+            if (rowKey === 'lightColor') appearance.light = Object.assign({}, appearance.light, { color: value });
+            else if (rowKey === 'lightIntensity') appearance.light = Object.assign({}, appearance.light, { intensity: Number(value) || 0 });
+            else if (rowKey === 'lightRange') appearance.light = Object.assign({}, appearance.light, { range: Number(value) || 6 });
+          }
+          return { appearance: Object.keys(appearance).length ? appearance : null };
+        });
+        return;
+      }
       if (rowKey === 'objectMaterial') {
         const nextTexture = normalizeMaterialTextureKey(value);
         updateSelectedBoardObjects(target => {
@@ -1983,6 +1998,14 @@
             { key: 'emissiveColor', label: 'Glow color', control: 'colorpicker', currentValue: uniformValue(objectCells, c => ap(c).emissiveColor || '#ffcc88') },
             { key: 'emissiveIntensity', label: 'Glow', control: 'slider', min: 0, max: 2, step: 0.05, currentValue: uniformValue(objectCells, c => +(ap(c).emissiveIntensity || 0).toFixed(2)) },
             { key: 'opacity', label: 'Opacity', control: 'slider', min: 0, max: 1, step: 0.05, currentValue: uniformValue(objectCells, c => +((ap(c).opacity === undefined ? 1 : ap(c).opacity)).toFixed(2)) },
+          ]);
+          const lightOf = c => ap(c).light || null;
+          addRows('Appearance', [
+            { key: 'lightType', label: 'Light', currentValue: uniformValue(objectCells, c => (lightOf(c) ? lightOf(c).type : 'none')), options: [
+              { label: 'Off', value: 'none' }, { label: 'Point', value: 'point' }, { label: 'Spot', value: 'spot' } ] },
+            { key: 'lightColor', label: 'Light color', control: 'colorpicker', currentValue: uniformValue(objectCells, c => (lightOf(c) ? lightOf(c).color : '#ffd9a0')) },
+            { key: 'lightIntensity', label: 'Light int', control: 'slider', min: 0, max: 4, step: 0.1, currentValue: uniformValue(objectCells, c => (lightOf(c) ? lightOf(c).intensity : 0)) },
+            { key: 'lightRange', label: 'Light range', control: 'slider', min: 1, max: 20, step: 0.5, currentValue: uniformValue(objectCells, c => (lightOf(c) ? lightOf(c).range : 6)) },
           ]);
         }
       }
