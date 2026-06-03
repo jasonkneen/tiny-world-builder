@@ -704,9 +704,141 @@
     return tex;
   }
 
+  function createIslandSideStrataReferenceTexture(width = 1024, height = 192) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const rand = makeMulberry32('island-side-strata-reference:' + width + ':' + height);
+    function wrapRect(x, y, w, h, color) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, w, h);
+      if (x < 0) ctx.fillRect(x + width, y, w, h);
+      if (x + w > width) ctx.fillRect(x - width, y, w, h);
+    }
+    function strokeWrapped(x1, y1, x2, y2, color, widthPx = 1) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = widthPx;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      if (x1 < 0 || x2 < 0 || x1 > width || x2 > width) {
+        ctx.beginPath();
+        ctx.moveTo(x1 + width, y1);
+        ctx.lineTo(x2 + width, y2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x1 - width, y1);
+        ctx.lineTo(x2 - width, y2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.fillStyle = '#161610';
+    ctx.fillRect(0, 0, width, height);
+
+    const grassMax = Math.floor(height * 0.34);
+    const dirtTop = Math.floor(height * 0.23);
+    const rockTop = Math.floor(height * 0.72);
+    ctx.fillStyle = '#5a3518';
+    ctx.fillRect(0, dirtTop, width, rockTop - dirtTop);
+    ctx.fillStyle = '#4b493b';
+    ctx.fillRect(0, rockTop, width, height - rockTop);
+
+    for (let y = dirtTop; y < rockTop + 8; y += Math.floor(height * 0.19)) {
+      const rowH = Math.floor(height * (0.17 + rand() * 0.035));
+      const blockW = Math.floor(width * (0.075 + rand() * 0.025));
+      const rowOffset = rand() > 0.5 ? -blockW * 0.45 : 0;
+      for (let x = -blockW * 2 + rowOffset; x < width + blockW; x += blockW) {
+        const bw = Math.floor(blockW * (0.82 + rand() * 0.34));
+        const bh = Math.max(12, Math.floor(rowH * (0.80 + rand() * 0.26)));
+        const px = Math.floor(x + (rand() - 0.5) * blockW * 0.22);
+        const py = Math.floor(y + (rand() - 0.5) * rowH * 0.10);
+        const base = rand();
+        const fill = base > 0.72 ? '#8c5a22' : (base > 0.30 ? '#6b4019' : '#3d2512');
+        wrapRect(px - 2, py - 2, bw + 4, bh + 4, 'rgba(14,10,6,0.72)');
+        wrapRect(px, py, bw, bh, fill);
+        wrapRect(px + 3, py + 3, Math.max(8, bw - 8), 2, 'rgba(236,189,99,0.22)');
+        wrapRect(px + 3, py + bh - 5, Math.max(8, bw - 8), 3, 'rgba(18,11,5,0.30)');
+        if (rand() > 0.65) {
+          wrapRect(px + Math.floor(bw * rand()), py + 5 + Math.floor(rand() * Math.max(4, bh - 10)), 2, Math.max(6, Math.floor(bh * 0.40)), 'rgba(8,6,4,0.35)');
+        }
+      }
+    }
+
+    wrapRect(0, Math.floor(height * 0.55), width, 3, 'rgba(232,190,92,0.46)');
+    wrapRect(0, Math.floor(height * 0.57), width, 2, 'rgba(26,16,8,0.35)');
+
+    const rockRowH = Math.floor(height * 0.16);
+    for (let y = rockTop - 6; y < height + rockRowH; y += rockRowH) {
+      const offset = ((Math.floor(y / rockRowH) % 2) ? 0.5 : 0) * Math.floor(width * 0.07);
+      for (let x = -80 + offset; x < width + 80; x += Math.floor(width * 0.08)) {
+        const bw = Math.floor(width * (0.060 + rand() * 0.035));
+        const bh = Math.floor(rockRowH * (0.72 + rand() * 0.30));
+        const shade = rand();
+        const fill = shade > 0.66 ? '#6b6653' : (shade > 0.30 ? '#504d42' : '#34342f');
+        wrapRect(x - 2, y - 2, bw + 4, bh + 4, 'rgba(11,11,10,0.58)');
+        wrapRect(x, y, bw, bh, fill);
+        wrapRect(x + 3, y + 3, Math.max(7, bw - 8), 2, 'rgba(230,225,190,0.14)');
+      }
+    }
+
+    for (let x = -24; x < width + 48; x += Math.floor(width * (0.035 + rand() * 0.018))) {
+      const capW = Math.floor(width * (0.035 + rand() * 0.035));
+      const drop = Math.floor(height * (0.18 + rand() * 0.22));
+      const color = rand() > 0.60 ? '#7c962c' : (rand() > 0.25 ? '#5f781f' : '#384f15');
+      wrapRect(x - 2, 0, capW + 4, drop + 3, 'rgba(20,31,9,0.45)');
+      wrapRect(x, 0, capW, drop, color);
+      wrapRect(x + 2, 2, Math.max(4, capW - 5), 3, 'rgba(202,223,91,0.18)');
+      const dripCount = 1 + Math.floor(rand() * 4);
+      for (let i = 0; i < dripCount; i++) {
+        const rx = x + Math.floor(rand() * Math.max(1, capW));
+        const rh = Math.floor(height * (0.12 + rand() * 0.30));
+        wrapRect(rx, drop - 4, 2 + Math.floor(rand() * 3), rh, rand() > 0.35 ? '#27370e' : '#0e1707');
+      }
+    }
+
+    for (let i = 0; i < width * 1.25; i++) {
+      const x = Math.floor(rand() * width);
+      const y = Math.floor(rand() * grassMax);
+      const len = 4 + Math.floor(rand() * 14);
+      const lean = Math.floor(rand() * 9) - 4;
+      strokeWrapped(x, y + len, x + lean, y, rand() > 0.55 ? '#a9c94a' : '#304817', 1);
+    }
+    for (let i = 0; i < width * 0.55; i++) {
+      const x = Math.floor(rand() * width);
+      const y = Math.floor(rand() * height);
+      const shade = rand();
+      const color = shade > 0.66 ? 'rgba(255,240,160,0.16)' : (shade > 0.33 ? 'rgba(0,0,0,0.17)' : 'rgba(94,72,35,0.20)');
+      wrapRect(x, y, 1 + Math.floor(rand() * 5), 1 + Math.floor(rand() * 3), color);
+    }
+
+    const image = ctx.getImageData(0, 0, width, height);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const n = Math.floor((rand() - 0.5) * 24);
+      image.data[i] = Math.max(0, Math.min(255, image.data[i] + n));
+      image.data[i + 1] = Math.max(0, Math.min(255, image.data[i + 1] + n));
+      image.data[i + 2] = Math.max(0, Math.min(255, image.data[i + 2] + n));
+    }
+    ctx.putImageData(image, 0, 0);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestMipmapNearestFilter;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.flipY = false;
+    tex.encoding = THREE.sRGBEncoding;
+    return tex;
+  }
+
   function applyWorldUVs(material, texture, textureScale = 1.0, opts = {}) {
     if (!material) return;
     const needsWorldVoxel = !!(opts.voxelSeams || opts.edgeStrata);
+    const edgeStrataTopY = Number.isFinite(opts.edgeTopY) ? opts.edgeTopY : 0;
+    const edgeStrataHeight = Number.isFinite(opts.edgeHeight) ? opts.edgeHeight : DIRT_H + 0.035;
     material.map = texture;
     material.userData = material.userData || {};
     material.userData.worldTextureScale = textureScale;
@@ -798,15 +930,16 @@
           diffuseColor.rgb *= mix(1.0, 0.70, seam);
           ` : ''}
           ${opts.edgeStrata ? `
-          float edgeDepth = clamp((-vWorldVoxelPos.y + 0.0015) / ${(DIRT_H + 0.035).toFixed(4)}, 0.0, 1.0);
-          float edgeTopGate = 1.0 - smoothstep(-0.010, 0.030, vWorldVoxelPos.y);
-          float edgeBody = twSideFace * edgeTopGate * (1.0 - smoothstep(0.98, 1.04, edgeDepth));
+          float edgeTopY = ${edgeStrataTopY.toFixed(4)};
+          float edgeDepth = clamp((edgeTopY - vWorldVoxelPos.y) / ${edgeStrataHeight.toFixed(4)}, 0.0, 1.0);
+          float edgeTopGate = 1.0 - smoothstep(edgeTopY - 0.010, edgeTopY + 0.025, vWorldVoxelPos.y);
+          float edgeBody = edgeTopGate * (1.0 - smoothstep(0.98, 1.04, edgeDepth));
           float edgeCell = floor(twSideCoord * 3.85);
           float edgeSeed = twVoxelBlockHash(vec2(edgeCell, 41.0));
-          float grassDrop = 0.20 + edgeSeed * 0.20;
-          float grassMask = 1.0 - smoothstep(grassDrop, grassDrop + 0.065, edgeDepth);
-          float dirtMask = smoothstep(0.16, 0.24, edgeDepth) * (1.0 - smoothstep(0.70, 0.82, edgeDepth));
-          float rockMask = smoothstep(0.66, 0.80, edgeDepth);
+          float grassDrop = 0.16 + edgeSeed * 0.14;
+          float grassMask = 1.0 - smoothstep(grassDrop, grassDrop + 0.050, edgeDepth);
+          float dirtMask = smoothstep(0.12, 0.20, edgeDepth) * (1.0 - smoothstep(0.68, 0.80, edgeDepth));
+          float rockMask = smoothstep(0.66, 0.78, edgeDepth);
           vec2 dirtCell = floor(vec2(twSideCoord * 3.55, edgeDepth * 4.80));
           vec2 rockCell = floor(vec2(twSideCoord * 3.15 + 2.0, edgeDepth * 4.15));
           float dirtShade = twVoxelBlockHash(dirtCell) - 0.5;
@@ -817,13 +950,19 @@
           float blockLineX = twVoxelSeamLine(twSideCoord + edgeDepth * 0.035, 3.55, 0.012);
           float blockLineY = twVoxelSeamLine(edgeDepth, 4.80, 0.010);
           float blockLine = clamp(blockLineX * 0.44 + blockLineY * 0.36, 0.0, 1.0);
-          float rootLine = 1.0 - smoothstep(0.010, 0.026, abs(fract(twSideCoord * 13.0 + edgeSeed * 0.19) - 0.5));
-          float rootSeed = step(0.58, twVoxelBlockHash(vec2(floor(twSideCoord * 13.0), 23.0)));
-          float rootMask = rootLine * rootSeed * smoothstep(0.17, 0.24, edgeDepth) * (1.0 - smoothstep(0.48, 0.60, edgeDepth));
-          vec3 strataColor = diffuseColor.rgb;
-          strataColor = mix(strataColor, dirtColor, dirtMask * 0.94);
-          strataColor = mix(strataColor, rockColor, rockMask * 0.94);
-          strataColor = mix(strataColor, grassColor, grassMask * 0.96);
+          float bladeLine = 1.0 - smoothstep(0.012, 0.030, abs(fract(twSideCoord * 24.0 + edgeSeed * 0.21) - 0.5));
+          float bladeSeed = step(0.42, twVoxelBlockHash(vec2(floor(twSideCoord * 24.0), 13.0)));
+          float bladeMask = bladeLine * bladeSeed * (1.0 - smoothstep(0.0, grassDrop * 0.90, edgeDepth));
+          float fringeLine = 1.0 - smoothstep(0.010, 0.030, abs(fract(twSideCoord * 11.0 + edgeSeed * 0.37) - 0.5));
+          float fringeDrop = grassDrop + 0.10 * twVoxelBlockHash(vec2(floor(twSideCoord * 11.0), 31.0));
+          float fringeMask = fringeLine * (1.0 - smoothstep(fringeDrop, fringeDrop + 0.060, edgeDepth));
+          float rootLine = 1.0 - smoothstep(0.010, 0.026, abs(fract(twSideCoord * 15.0 + edgeSeed * 0.19) - 0.5));
+          float rootSeed = step(0.52, twVoxelBlockHash(vec2(floor(twSideCoord * 15.0), 23.0)));
+          float rootMask = rootLine * rootSeed * smoothstep(0.13, 0.20, edgeDepth) * (1.0 - smoothstep(0.52, 0.66, edgeDepth));
+          vec3 strataColor = mix(dirtColor, rockColor, rockMask * 0.94);
+          strataColor = mix(strataColor, dirtColor * 0.70, blockLine * dirtMask * 0.52);
+          strataColor = mix(strataColor, grassColor, grassMask * 0.98);
+          strataColor = mix(strataColor, grassColor * 0.62, max(bladeMask * 0.34, fringeMask * 0.42));
           strataColor *= mix(1.0, 0.68, blockLine * max(dirtMask, rockMask));
           strataColor = mix(strataColor, vec3(0.11, 0.075, 0.035), rootMask * 0.72);
           diffuseColor.rgb = mix(diffuseColor.rgb, strataColor, edgeBody);
@@ -984,6 +1123,7 @@
   const texSand = createPixelTexture('sand', 16);
   const texRockFace = createPixelTexture('rock-face', 32);
   const texIslandSideBlocks = createPixelTexture('island-side-blocks', 128);
+  const texIslandSideStrataReference = createIslandSideStrataReferenceTexture();
   const texPipeMetal = createPixelTexture('pipe-metal', 64);
   const texWaterFroth = createPixelTexture('water-froth', 64);
   const texPathPavers = createPixelTexture('path-pavers', 128);
@@ -1105,6 +1245,61 @@
     { key: 'atlas-reference', label: 'Texture folder: reference board' },
   ];
 
+  const ISLAND_SIDE_STRATA_TOP_Y = TOP_H;
+  const ISLAND_SIDE_STRATA_HEIGHT = TILE * 0.035;
+  const ISLAND_SIDE_STRATA_TEXTURE_ASPECT = 1024 / 192;
+
+  function makeIslandSideStrataMaterial() {
+    return new THREE.ShaderMaterial({
+      name: 'island-side-strata-shader',
+      side: THREE.FrontSide,
+      uniforms: {
+        uMap: { value: texIslandSideStrataReference },
+        uTopY: { value: ISLAND_SIDE_STRATA_TOP_Y },
+        uHeight: { value: ISLAND_SIDE_STRATA_HEIGHT },
+        uRepeatWidth: { value: ISLAND_SIDE_STRATA_HEIGHT * ISLAND_SIDE_STRATA_TEXTURE_ASPECT },
+      },
+      vertexShader: `
+        varying vec3 vTwWorldPos;
+        varying vec3 vTwWorldNormal;
+        void main() {
+          vec4 worldPos = vec4(position, 1.0);
+          #ifdef USE_INSTANCING
+            worldPos = instanceMatrix * worldPos;
+          #endif
+          worldPos = modelMatrix * worldPos;
+          vec4 localNormal = vec4(normal, 0.0);
+          #ifdef USE_INSTANCING
+            localNormal = instanceMatrix * localNormal;
+          #endif
+          vTwWorldPos = worldPos.xyz;
+          vTwWorldNormal = normalize((modelMatrix * localNormal).xyz);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D uMap;
+        uniform float uTopY;
+        uniform float uHeight;
+        uniform float uRepeatWidth;
+        varying vec3 vTwWorldPos;
+        varying vec3 vTwWorldNormal;
+
+        void main() {
+          vec3 n = normalize(vTwWorldNormal);
+          float coord = abs(n.x) > abs(n.z) ? vTwWorldPos.z : vTwWorldPos.x;
+          float down = clamp(uTopY - vTwWorldPos.y, 0.0, uHeight);
+          float v = clamp(down / max(uHeight, 0.0001), 0.0, 1.0);
+          float u = fract(coord / max(uRepeatWidth, 0.0001) + 0.5);
+          vec3 col = texture2D(uMap, vec2(u, v)).rgb;
+          float light = 0.82 + 0.18 * clamp(dot(normalize(vec3(-0.45, 0.35, 0.75)), n) * 0.5 + 0.5, 0.0, 1.0);
+          gl_FragColor = vec4(col * light, 1.0);
+        }
+      `,
+    });
+  }
+
   const materialTextureMap = Object.assign({}, proceduralPixelTextures, {
     'atlas-nature-wood': texAtlasNatureWood,
     'atlas-tiles': texAtlasTileSet,
@@ -1144,10 +1339,7 @@
   applyWorldUVs(M.grassHi, initialGrassTex, 1.0);
   M.boardSide.color.set(0xc4bdb2);
   applyWorldUVs(M.boardSide, texIslandSideBlocks, 0.22, { voxelSeams: true });
-  M.boardSideEdge = M.boardSide.clone();
-  M.boardSideEdge.name = 'island-side-edge-shader';
-  M.boardSideEdge.color.copy(M.boardSide.color);
-  applyWorldUVs(M.boardSideEdge, texIslandSideBlocks, 0.22, { voxelSeams: true, edgeStrata: true });
+  M.boardSideEdge = makeIslandSideStrataMaterial();
 
   M.path.color.set(0xf2d29c);
   M.pathTrim.color.set(0xd9b780);

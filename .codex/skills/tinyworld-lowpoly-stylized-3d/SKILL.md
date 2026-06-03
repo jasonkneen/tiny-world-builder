@@ -80,8 +80,10 @@ Use this together with:
   separate large-block material (`M.stoneSide`) so cliffs can scale up without
   changing the stone ground cap.
   Home island edge grass/soil/rock strata is not a texture-map option: it is
-  the `edgeStrata` shader pass on `M.boardSideEdge`, aligned from `y = 0` down
-  the side backing behind the foreground greebles.
+  the dedicated `M.boardSideEdge` shader material, aligned from `TOP_H` (the
+  visible grass-cap top) down a shallow side backing behind the foreground
+  greebles. It samples the internal image-style strata slice; keep that slice
+  image-driven rather than rebuilding tall normalized procedural bands.
   Grass richness should stay FPS-safe through shared texture maps (`grass-voxel`
   or `grass-side` only when intentionally selected), not added blade meshes.
   Stone blocks should stay light cool gray like the stair/column references

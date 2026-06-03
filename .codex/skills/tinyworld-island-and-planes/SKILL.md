@@ -72,10 +72,22 @@ copies the base material's `onBeforeCompile` hook so the side-backing clone keep
 the same coarse grid.
 
 Island edge strata is shader-driven on the side backing only:
-`addIslandSideBacking` uses `M.boardSideEdge`, which enables
-`applyWorldUVs(..., { edgeStrata: true })`. The strata starts at the top edge
-(`y = 0`) and slides down the side behind the current edge greebles/lumps; do
-not add separate overlay panels or per-tile decal geometry for this effect.
+`addIslandSideBacking` uses the dedicated `M.boardSideEdge` shader material. Its
+top is anchored to `ISLAND_SIDE_STRATA_TOP_Y = TOP_H`, the visible top of the
+grass cap. The shader samples the internal image-style slice
+`texIslandSideStrataReference`; do not rebuild this as normalized fragment math
+or the grass/dirt/rock bands will stretch into tall green columns. The function
+still keeps the cheap plain `M.boardSide` backing wall that the island needs
+below the effect. The strata carrier itself is a very shallow top-edge slice:
+`ISLAND_SIDE_STRATA_HEIGHT = TILE * 0.035`; do not stretch it to fit the full
+side height. The carrier is a single wraparound `BufferGeometry` band whose
+outer edge sits just proud of the grass cap edge (`TILE * 0.055`) so corners
+meet cleanly and the layer reads through the edge dressing without becoming a
+floating pane. Do not render the strata carrier as four thick boxes with
+interior faces, because that creates corner gaps and green panes through the
+island. Keep the side-carrier mesh out of static base merging so the shader
+stays inspectable and continues to sit behind the current edge greebles/lumps;
+do not add separate overlay panels or per-tile decal geometry for this effect.
 
 Underside pipes and water details are material-driven: `M.utilityPipe`,
 `M.utilityPipeD`, and `M.utilityClamp` use the internal `pipe-metal` canvas

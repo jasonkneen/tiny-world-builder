@@ -135,20 +135,87 @@
   function addIslandSideBacking(parent) {
     const span = GRID * TILE;
     const half = span * 0.5;
-    const thickness = 0.16;
-    const inset = thickness * 0.5 + 0.035;
-    const wallH = DIRT_H + 0.035;
-    const y = -DIRT_H * 0.5 - 0.018;
-    const mat = islandShellMaterial(M.boardSideEdge || M.boardSide);
-    const shellOpts = { noGap: true, noShadow: true, skipTop: true, skipBottom: true };
-    const north = vbox(parent, span, wallH, thickness, 0, y, -half + inset, mat, shellOpts);
-    const south = vbox(parent, span, wallH, thickness, 0, y,  half - inset, mat, shellOpts);
-    const west  = vbox(parent, thickness, wallH, span, -half + inset, y, 0, mat, shellOpts);
-    const east  = vbox(parent, thickness, wallH, span,  half - inset, y, 0, mat, shellOpts);
-    for (const mesh of [north, south, west, east]) {
-      mesh.name = 'island-side-backing';
-      mesh.userData.islandSideBacking = true;
+    const backingThickness = 0.16;
+    const backingInset = backingThickness * 0.5 + 0.035;
+    const backingH = DIRT_H + 0.035;
+    const backingY = -DIRT_H * 0.5 - 0.018;
+    const backingMat = islandShellMaterial(M.boardSide);
+    vbox(parent, span, backingH, backingThickness, 0, backingY, -half + backingInset, backingMat, {
+      noGap: true, noShadow: true, skipTop: true, skipBottom: true,
+    });
+    vbox(parent, span, backingH, backingThickness, 0, backingY,  half - backingInset, backingMat, {
+      noGap: true, noShadow: true, skipTop: true, skipBottom: true,
+    });
+    vbox(parent, backingThickness, backingH, span, -half + backingInset, backingY, 0, backingMat, {
+      noGap: true, noShadow: true, skipTop: true, skipBottom: true,
+    });
+    vbox(parent, backingThickness, backingH, span,  half - backingInset, backingY, 0, backingMat, {
+      noGap: true, noShadow: true, skipTop: true, skipBottom: true,
+    });
+
+    const sideFaceOutset = TILE * 0.055;
+    const extent = half + sideFaceOutset;
+    const wallTopY = ISLAND_SIDE_STRATA_TOP_Y;
+    const wallH = ISLAND_SIDE_STRATA_HEIGHT;
+    const yTop = wallTopY;
+    const yBottom = wallTopY - wallH;
+    const mat = M.boardSideEdge || islandShellMaterial(M.boardSide);
+    const positions = [];
+    const normals = [];
+    const indices = [];
+    function quad(a, b, c, d, n) {
+      const i = positions.length / 3;
+      positions.push(
+        a[0], a[1], a[2],
+        b[0], b[1], b[2],
+        c[0], c[1], c[2],
+        d[0], d[1], d[2],
+      );
+      for (let k = 0; k < 4; k++) normals.push(n[0], n[1], n[2]);
+      indices.push(i, i + 1, i + 2, i, i + 2, i + 3);
     }
+    quad(
+      [-extent, yBottom, -extent],
+      [-extent, yTop, -extent],
+      [ extent, yTop, -extent],
+      [ extent, yBottom, -extent],
+      [0, 0, -1],
+    );
+    quad(
+      [-extent, yBottom, extent],
+      [ extent, yBottom, extent],
+      [ extent, yTop, extent],
+      [-extent, yTop, extent],
+      [0, 0, 1],
+    );
+    quad(
+      [-extent, yBottom, extent],
+      [-extent, yTop, extent],
+      [-extent, yTop, -extent],
+      [-extent, yBottom, -extent],
+      [-1, 0, 0],
+    );
+    quad(
+      [extent, yBottom, -extent],
+      [extent, yTop, -extent],
+      [extent, yTop, extent],
+      [extent, yBottom, extent],
+      [1, 0, 0],
+    );
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setIndex(indices);
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'island-side-strata-band';
+    mesh.userData.islandSideBacking = true;
+    mesh.userData.islandSideStrataBand = true;
+    mesh.userData.noBatch = true;
+    mesh.userData.noStaticBaseMerge = true;
+    mesh.userData.noShadow = true;
+    parent.add(mesh);
   }
 
   function addIslandEdgeDressing(parent) {
