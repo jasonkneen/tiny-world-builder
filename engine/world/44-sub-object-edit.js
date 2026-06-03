@@ -227,6 +227,11 @@
     });
   }
 
+  // Recolor the selected part. hex null/undefined clears the override.
+  function recolorPart(hex) {
+    return mutateSelectedPart(c => { if (hex) c.col = hex; else delete c.col; });
+  }
+
   function enterSubEdit(x, z) {
     if (typeof setVoxelSubEditCell !== 'function') return false;
     subEditCellX = x; subEditCellZ = z;
@@ -323,6 +328,7 @@
     selectedInfo: () => selectedPartKey ? { partKey: selectedPartKey } : null,
     movePart,
     scalePart,
+    recolorPart,
     removeVoxel: removeSelectedVoxel,
     addVoxel: addVoxelFromSelected,
     smoothVoxel: smoothSelectedVoxel,

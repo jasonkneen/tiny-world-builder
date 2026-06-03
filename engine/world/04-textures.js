@@ -2085,7 +2085,9 @@
           ox: +num(p.ox, -8, 8, 0).toFixed(3), oy: +num(p.oy, -8, 8, 0).toFixed(3), oz: +num(p.oz, -8, 8, 0).toFixed(3),
           sx: +num(p.sx, 0.1, 8, 1).toFixed(3), sy: +num(p.sy, 0.1, 8, 1).toFixed(3), sz: +num(p.sz, 0.1, 8, 1).toFixed(3),
         };
-        const isIdentity = !entry.ox && !entry.oy && !entry.oz && entry.sx === 1 && entry.sy === 1 && entry.sz === 1;
+        const col = normalizeHexColor(p.col);
+        if (col) entry.col = col;
+        const isIdentity = !entry.col && !entry.ox && !entry.oy && !entry.oz && entry.sx === 1 && entry.sy === 1 && entry.sz === 1;
         if (!isIdentity) acc[k] = entry;
       }
       if (Object.keys(acc).length) parts = acc;

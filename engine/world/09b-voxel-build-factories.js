@@ -396,8 +396,11 @@
       const y = (v.y - minY) * unit + unit / 2 + (ov ? ov.oy * unit : 0);
       const z = (v.z - centerZ) * unit + (ov ? ov.oz * unit : 0);
       const mat = voxelAppearanceMaterialNorm(voxelBuildMaterial(v.color), voxelAppearanceRoleForColor(v.color), normApp);
-      trimBase = trimBase || mat;
-      const vm = vbox(g, unit * sx, unit * sy, unit * sz, x, y, z, mat);
+      trimBase = trimBase || mat;  // keep referencing the SHARED cached mat (never the per-voxel clone)
+      // Per-part recolour: clone so we don't poison the shared cached material.
+      let voxMat = mat;
+      if (ov && ov.col) { voxMat = mat.clone(); voxMat.color.set(ov.col); }
+      const vm = vbox(g, unit * sx, unit * sy, unit * sz, x, y, z, voxMat);
       if (opts.editable && vm) {
         // Stable per-voxel identity for sub-object hover/select/sculpt. Keyed on
         // grid coord (NOT array index) so overrides survive add/remove + reload.
@@ -1543,6 +1546,16 @@
       n.position.y += (ov.oy || 0);
       n.position.z += (ov.oz || 0);
       if (ov.sx !== 1 || ov.sy !== 1 || ov.sz !== 1) n.scale.set(n.scale.x * (ov.sx || 1), n.scale.y * (ov.sy || 1), n.scale.z * (ov.sz || 1));
+      if (ov.col) {
+        // Clone each mesh material before tinting — house materials (M.*) are
+        // shared singletons; mutating them would recolour every house.
+        n.traverse(o => {
+          if (o.isMesh && o.material && o.material.color) {
+            o.material = o.material.clone();
+            o.material.color.set(ov.col);
+          }
+        });
+      }
     });
   }
 
