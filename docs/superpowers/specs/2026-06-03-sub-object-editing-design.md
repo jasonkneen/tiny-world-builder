@@ -52,3 +52,31 @@ opacity/drop tweens (`15`/`16`, `25` loop), appearance persistence (`29`).
   resolution for non-voxel objects.
 
 All gated by `window.__tinyworldFlags.inspectorV2`.
+
+## Status & verification (2026-06-03)
+Implemented + verified live (real app, 3D-math probes), all flag-gated, home-board voxel-builds:
+
+- **Slice 3 — req 6 (hover):** editable render un-batches (1259 separate meshes vs 9
+  InstancedMeshes) + stamps stable `v:x,y,z` keys; sub-mesh raycast picks the correct
+  part; hover outlines it and clears on leave. Fixed a state bug (highlightPart was
+  nulling currentHoverPart) caught by verification.
+- **Slice 4 — req 9 (sub-part transform):** click-select a part; move/scale persist to
+  `appearance.parts[key]`. GATE PASSED: after reload, override reattached to the SAME
+  voxel (renders visibly larger than neighbor).
+- **Slice 5 — req 7 (explode):** parts animate radially out + up (radial 1.8→3.9, lift
+  +2.9) and collapse back to base (drift 0.001). Fixed base-capture drift (capture only
+  from collapsed state).
+- **Slice 6 — req 8a (voxel sculpt):** add/remove voxels (1259→1258→1259 by stable key)
+  + smooth (neighbor-offset relax); push = movePart, burst = scalePart. GATE PASSED:
+  add/remove persist across reload and reattach by stable key.
+
+Entry point: select a single voxel-build with inspectorV2 on → inspector "Edit parts"
+toggle. Then hover/click parts; Transform→Part move/size; Edit→Voxel remove/smooth, Add
+voxel; Edit→Explode. Window API: `window.__tinyworldSubEdit`.
+
+## Remaining decision — req 8 (b): non-voxel mesh-deform
+Option (a) done. Option (b) — "voxelize-on-sculpt" for houses/trees/rocks (convert to an
+editable voxel proxy, then sculpt) — is large and NOT yet built; awaiting user go/no-go.
+Option (c) = leave non-voxel deform out of scope. Sub-object hover/select/transform
+currently target voxel-builds (the kind with clean stable identity); extending part-keys
+to house role-parts is a follow-up.
