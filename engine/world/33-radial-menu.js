@@ -140,6 +140,8 @@
         if (level === 'root') {
           exitEditMode();
           if (typeof clearSelection === 'function') clearSelection();
+          root.hidden = true;
+          currentLevel = 'root';
         } else {
           if (level === 'edit') exitEditMode(); // backing out of edit exits sub-edit
           renderLevel(LEVEL_PARENT[level] || 'root');

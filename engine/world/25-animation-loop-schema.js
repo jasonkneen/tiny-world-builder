@@ -45,6 +45,7 @@
     tickStart = repaintProfileBegin();
     tickIslandRocketEngines(t, dt);
     updateEditableIslandLods();
+    if (typeof tickEditableIslandWarpArrivals === 'function') tickEditableIslandWarpArrivals(dt);
     tickEditableIslandEngines(dt, t);
     repaintProfileEnd('tick.islands', tickStart);
 

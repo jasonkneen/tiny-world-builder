@@ -328,6 +328,230 @@
     if (typeof rebuildMooringCables === 'function') rebuildMooringCables();
   }
 
+  // -------- editable island warp-in arrival --------
+  // Final-arrival pass inspired by capital ships exiting hyperspace: a fast
+  // blue-white streak collapses into the destination, the island overshoots a
+  // fraction, then eases back into its real saved transform.
+  const EDITABLE_ISLAND_WARP_DURATION = 0.94;
+  const EDITABLE_ISLAND_WARP_STREAKS = 18;
+  const editableIslandWarpAnims = [];
+  const editableIslandWarpTmpA = new THREE.Vector3();
+  const editableIslandWarpTmpB = new THREE.Vector3();
+  const editableIslandWarpTmpC = new THREE.Vector3();
+  const editableIslandWarpTmpD = new THREE.Vector3();
+  const editableIslandWarpTmpRight = new THREE.Vector3();
+  const editableIslandWarpTmpUp = new THREE.Vector3();
+  const editableIslandWarpDefaultAxis = new THREE.Vector3(0, 0, 1);
+
+  function editableIslandWarpClamp01(v) {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  function editableIslandWarpEaseOutExpo(t) {
+    return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
+  }
+
+  function editableIslandWarpEaseOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function editableIslandWarpSetGroupPosition(group, point, scale) {
+    if (!group) return;
+    group.position.copy(point);
+    group.scale.setScalar(scale);
+    group.updateMatrixWorld(true);
+  }
+
+  function disposeEditableIslandWarpEffect(anim) {
+    if (!anim || !anim.effectGroup) return;
+    if (anim.effectGroup.parent) anim.effectGroup.parent.remove(anim.effectGroup);
+    const disposedMaterials = new Set();
+    anim.effectGroup.traverse(node => {
+      if (node.geometry) node.geometry.dispose();
+      if (node.material && node.material.dispose && !disposedMaterials.has(node.material)) {
+        disposedMaterials.add(node.material);
+        node.material.dispose();
+      }
+    });
+    anim.effectGroup = null;
+  }
+
+  function makeEditableIslandWarpStreak(start, final, right, up, seed, material) {
+    const jitterA = ((seedHash('warp-a-' + seed) % 1000) / 1000 - 0.5);
+    const jitterB = ((seedHash('warp-b-' + seed) % 1000) / 1000 - 0.5);
+    const spread = GRID * (0.16 + (seed % 5) * 0.035);
+    const tail = editableIslandWarpTmpA.copy(start)
+      .addScaledVector(right, jitterA * spread * 3.2)
+      .addScaledVector(up, jitterB * spread * 2.0);
+    const nose = editableIslandWarpTmpB.copy(final)
+      .addScaledVector(right, jitterA * spread * 0.45)
+      .addScaledVector(up, jitterB * spread * 0.28);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      tail.x, tail.y, tail.z,
+      nose.x, nose.y, nose.z,
+    ]), 3));
+    const line = new THREE.Line(geo, material);
+    line.userData.warpBaseOpacity = 0.16 + (seed % 7) * 0.035;
+    line.userData.warpDelay = (seed % 6) * 0.022;
+    line.frustumCulled = false;
+    return line;
+  }
+
+  function startEditableIslandWarpArrival(island, opts = {}) {
+    if (!island || !island.group) return;
+    if (opts.warpIn === false) return;
+    const final = new THREE.Vector3(island.positionX || 0, island.positionY || 0, island.positionZ || 0);
+    const cam = (typeof camera !== 'undefined' && camera) ? camera : null;
+    if (cam && cam.updateMatrixWorld) cam.updateMatrixWorld();
+    const toCamera = editableIslandWarpTmpA.copy(cam ? cam.position : final.clone().add(new THREE.Vector3(0, 8, 18))).sub(final);
+    if (toCamera.lengthSq() < 0.001) toCamera.set(0, 0.35, 1);
+    toCamera.normalize();
+    if (cam && cam.matrixWorld) {
+      editableIslandWarpTmpRight.setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+      editableIslandWarpTmpUp.setFromMatrixColumn(cam.matrixWorld, 1).normalize();
+    } else {
+      editableIslandWarpTmpRight.set(1, 0, 0);
+      editableIslandWarpTmpUp.set(0, 1, 0);
+    }
+    const travel = Math.max(22, GRID * 3.4);
+    const start = editableIslandWarpTmpB.copy(final)
+      .addScaledVector(toCamera, travel)
+      .addScaledVector(editableIslandWarpTmpRight, GRID * 0.75)
+      .addScaledVector(editableIslandWarpTmpUp, GRID * 0.45);
+    const overshoot = editableIslandWarpTmpC.copy(final).addScaledVector(toCamera, -Math.max(0.9, GRID * 0.13));
+    const effectGroup = new THREE.Group();
+    effectGroup.name = island.id + '-warp-arrival';
+    effectGroup.userData.kind = 'editable-island-warp-arrival';
+    effectGroup.frustumCulled = false;
+    const streakMaterial = new THREE.LineBasicMaterial({
+      color: 0xbbefff,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+    });
+    for (let i = 0; i < EDITABLE_ISLAND_WARP_STREAKS; i++) {
+      effectGroup.add(makeEditableIslandWarpStreak(start, final, editableIslandWarpTmpRight, editableIslandWarpTmpUp, i, streakMaterial));
+    }
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: 0xdffbff,
+      transparent: true,
+      opacity: 0.58,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0x75dbff,
+      transparent: true,
+      opacity: 0.18,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const ringQuat = new THREE.Quaternion().setFromUnitVectors(editableIslandWarpDefaultAxis, toCamera);
+    for (let i = 0; i < 3; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.026 + i * 0.009, 8, 64), ringMaterial);
+      ring.position.copy(final).addScaledVector(toCamera, -0.15 + i * 0.08);
+      ring.quaternion.copy(ringQuat);
+      ring.scale.setScalar(GRID * (0.10 + i * 0.05));
+      ring.userData.warpRing = true;
+      ring.userData.warpDelay = 0.45 + i * 0.08;
+      ring.frustumCulled = false;
+      effectGroup.add(ring);
+    }
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 10), flashMaterial);
+    flash.position.copy(final);
+    flash.scale.setScalar(GRID * 0.18);
+    flash.userData.warpFlash = true;
+    flash.frustumCulled = false;
+    effectGroup.add(flash);
+    worldGroup.add(effectGroup);
+
+    const anim = {
+      island,
+      group: island.group,
+      final: final.clone(),
+      start: start.clone(),
+      overshoot: overshoot.clone(),
+      toCamera: toCamera.clone(),
+      effectGroup,
+      streakMaterial,
+      ringMaterial,
+      flashMaterial,
+      t: 0,
+      dur: EDITABLE_ISLAND_WARP_DURATION,
+      arrivalFired: false,
+    };
+    island.group.userData.warpArrival = true;
+    island.group.visible = false;
+    editableIslandWarpSetGroupPosition(island.group, start, 0.08);
+    editableIslandWarpAnims.push(anim);
+    if (typeof playSfx === 'function') playSfx('whoosh', 0.28);
+  }
+
+  function tickEditableIslandWarpArrivals(dt) {
+    if (!editableIslandWarpAnims.length) return;
+    for (let i = editableIslandWarpAnims.length - 1; i >= 0; i--) {
+      const anim = editableIslandWarpAnims[i];
+      if (!anim || !anim.group || !anim.group.parent) {
+        disposeEditableIslandWarpEffect(anim);
+        editableIslandWarpAnims.splice(i, 1);
+        continue;
+      }
+      anim.t += dt;
+      const u = editableIslandWarpClamp01(anim.t / anim.dur);
+      const moveU = editableIslandWarpClamp01((u - 0.16) / 0.58);
+      const settleU = editableIslandWarpClamp01((u - 0.70) / 0.30);
+      if (u >= 0.14) anim.group.visible = true;
+      if (settleU > 0) {
+        editableIslandWarpTmpD.lerpVectors(anim.overshoot, anim.final, editableIslandWarpEaseOutCubic(settleU));
+      } else {
+        editableIslandWarpTmpD.lerpVectors(anim.start, anim.overshoot, editableIslandWarpEaseOutExpo(moveU));
+      }
+      const squash = settleU > 0
+        ? 1 + Math.sin(settleU * Math.PI) * 0.035
+        : 0.08 + editableIslandWarpEaseOutExpo(moveU) * 1.06;
+      editableIslandWarpSetGroupPosition(anim.group, editableIslandWarpTmpD, Math.max(0.08, squash));
+      anim.streakMaterial.opacity = Math.max(0, 0.80 * (1 - editableIslandWarpClamp01((u - 0.32) / 0.40)));
+      anim.ringMaterial.opacity = Math.max(0, 0.66 * (1 - editableIslandWarpClamp01((u - 0.54) / 0.42)));
+      anim.flashMaterial.opacity = Math.max(0, 0.24 * (1 - editableIslandWarpClamp01((u - 0.48) / 0.34)));
+      if (anim.effectGroup) {
+        anim.effectGroup.children.forEach(child => {
+          if (child.userData && child.userData.warpRing) {
+            const ru = editableIslandWarpClamp01((u - child.userData.warpDelay) / 0.32);
+            const ringScale = GRID * (0.15 + editableIslandWarpEaseOutCubic(ru) * 0.82);
+            child.scale.setScalar(ringScale);
+          } else if (child.userData && child.userData.warpFlash) {
+            const fu = editableIslandWarpClamp01((u - 0.43) / 0.24);
+            child.scale.setScalar(GRID * (0.18 + editableIslandWarpEaseOutCubic(fu) * 1.35));
+          } else if (child.userData && child.userData.warpBaseOpacity !== undefined) {
+            child.visible = u >= child.userData.warpDelay && u <= 0.72;
+          }
+        });
+      }
+      if (!anim.arrivalFired && u >= 0.54) {
+        anim.arrivalFired = true;
+        if (typeof playSfx === 'function') playSfx('ripple', 0.22);
+        if (typeof triggerUndersideDebrisBurstAt === 'function') {
+          triggerUndersideDebrisBurstAt(anim.final.x, anim.final.z, 3);
+        }
+      }
+      if (u >= 1) {
+        anim.group.userData.warpArrival = false;
+        anim.group.visible = true;
+        editableIslandWarpSetGroupPosition(anim.group, anim.final, 1);
+        anim.group.rotation.set(0, anim.island.rotationY || 0, 0);
+        anim.group.updateMatrixWorld(true);
+        disposeEditableIslandWarpEffect(anim);
+        editableIslandWarpAnims.splice(i, 1);
+      }
+    }
+  }
+  window.tickEditableIslandWarpArrivals = tickEditableIslandWarpArrivals;
+
   function editableIslandCellDisplayPoint(island, localX, localZ) {
     const p = tilePos(localX, localZ);
     if (!island || !island.contentGroup) return p;
@@ -523,6 +747,9 @@
 
     if (opts.select !== false) selectEditableIsland(island);
     updateEditableIslandLods(true);
+    if (opts.warpIn === true || (opts.warpIn !== false && !opts.skipSave)) {
+      startEditableIslandWarpArrival(island, opts);
+    }
     if (!opts.skipSave) saveState();
     return island;
   }
@@ -1146,4 +1373,3 @@
 
   window.__runIslandStressDemo = runIslandStressDemo;
   window.__islandStressDemoShareUrl = islandStressDemoShareUrl;
-

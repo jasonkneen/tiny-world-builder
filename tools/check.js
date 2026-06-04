@@ -457,6 +457,16 @@ if (!/id="under-occlusion-cloud-wipe"/.test(html) || !/function updateUnderOcclu
 if (!/function editableIslandFullLodBudget/.test(html) || !/function editableIslandFullLodSet/.test(html) || !/islandStats\.fullBudget/.test(html)) {
   fail('duplicate editable islands must cap full-detail LODs and report the active full-island budget');
 }
+const createEditableIslandBody = sourceFunctionBody(html, 'createEditableIsland');
+if (!/const EDITABLE_ISLAND_WARP_DURATION = 0\.94/.test(html) || !/function startEditableIslandWarpArrival/.test(html) || !/function tickEditableIslandWarpArrivals/.test(html) || !/THREE\.AdditiveBlending/.test(html) || !/new THREE\.TorusGeometry\(1, 0\.026/.test(html) || !/new THREE\.SphereGeometry\(1, 20, 10\)/.test(html)) {
+  fail('editable islands must keep the high-speed blue-white warp arrival effect');
+}
+if (!/opts\.warpIn === true \|\| \(opts\.warpIn !== false && !opts\.skipSave\)/.test(createEditableIslandBody) || !/startEditableIslandWarpArrival\(island, opts\)/.test(createEditableIslandBody)) {
+  fail('new editable islands must trigger warp arrival while restored skipSave islands do not');
+}
+if (!/updateEditableIslandLods\(\);\s*if \(typeof tickEditableIslandWarpArrivals === 'function'\) tickEditableIslandWarpArrivals\(dt\);\s*tickEditableIslandEngines\(dt, t\);/.test(html)) {
+  fail('editable island warp arrivals must tick after LOD visibility and before engine animation');
+}
 if (!/optimizeVoxelObjectGroup\(homeBorderGroup, \{ reason: 'home-island-border' \}\)/.test(html) || !/optimizeVoxelObjectGroup\(g, \{ reason: 'editable-island-base' \}\)/.test(html)) {
   fail('home and duplicate island base dressing must route repeated voxel pieces through batching');
 }
@@ -516,8 +526,30 @@ if (!/Unified chrome icon buttons/.test(cssRaw) || !/\.token-corner \.btn\.icon\
 if (!/\.world-pill\[data-pos-type="primary"\]\s*\{[\s\S]*--chrome-bg:\s*rgba\(255, 255, 255, 0\.82\)[\s\S]*--chrome-hover-bg:\s*rgba\(255, 255, 255, 0\.94\)/.test(cssRaw)) {
   fail('world selector pill must keep the bright white chrome fill instead of the tinted primary fill');
 }
+if (!/\.world-pill\[data-pos-type\]:hover\s*\{\s*transform:\s*translateX\(-50%\);/.test(cssRaw)) {
+  fail('world selector pill hover must preserve center anchoring instead of lifting or jumping');
+}
+if (!/<button class="showcase-exit" id="showcase-exit" type="button" aria-label="Exit showcase mode \(Esc\)" aria-keyshortcuts="Escape" title="Exit showcase mode \(Esc\)">\s*<svg viewBox="0 0 24 24" aria-hidden="true">\s*<path d="M6 6l12 12M18 6 6 18"><\/path>\s*<\/svg>\s*<\/button>/.test(htmlRaw) || /data-i18n="controls\.showcaseExit"/.test(htmlRaw)) {
+  fail('showcase exit must be a simple icon-only X button with Escape announced');
+}
+if (!/\.showcase-exit\s*\{[\s\S]*top:\s*18px;[\s\S]*right:\s*18px;[\s\S]*width:\s*44px;[\s\S]*height:\s*44px;[\s\S]*padding:\s*0;[\s\S]*border-radius:\s*999px;/.test(cssRaw) || !/body\.showcase \.showcase-exit\s*\{\s*display:\s*inline-flex;\s*\}/.test(cssRaw) || !/\.showcase-exit svg\s*\{[\s\S]*stroke:\s*currentColor;/.test(cssRaw) || /\.showcase-exit:hover\s*\{[^}]*transform:/.test(cssRaw)) {
+  fail('showcase exit must be a fixed top-right circular X button without hover movement');
+}
+if (!/if \(showcaseExit\) showcaseExit\.addEventListener\('click', \(\) => setShowcaseActive\(false\)\);/.test(html) || !/window\.addEventListener\('keydown', e => \{[\s\S]*if \(e\.key === 'Escape'\) \{[\s\S]*if \(showcaseActive\) setShowcaseActive\(false\);/.test(html)) {
+  fail('showcase exit must keep both click and Escape close behavior');
+}
 if (!/body\.ui-theme-dark \.controls \.btn\.icon\[data-pos-type\]\.on/.test(cssRaw) || !/body\.ui-theme-dark \.sound-icon\[data-pos-type\]\.open/.test(cssRaw) || !/body\.tod-night \.controls \.btn\.icon\[data-pos-type\]\.on/.test(cssRaw)) {
   fail('dark and after-hours themes must preserve chrome icon active/on block-button states');
+}
+const clearSelectionBody = sourceFunctionBody(html, 'clearSelection');
+if (!/selectedEditableIsland\(\)/.test(clearSelectionBody) || !/selectEditableIsland\(null\)/.test(clearSelectionBody) || !/notifySelectionChanged\(\)/.test(clearSelectionBody)) {
+  fail('selection clear must deselect whole editable islands as well as selected cells');
+}
+if (!/Esc first closes\/deselects the active edit target/.test(html) || !/if \(e\.key === 'Escape' && !\(typeof fp !== 'undefined' && fp\.active\)\) \{[\s\S]*const selApi = window\.__tinyworldSelection;[\s\S]*if \(hasSelectedCells \|\| selectedIsland \|\| selectedEditableIslandEngineRef\) \{[\s\S]*selApi\.clear\(\);[\s\S]*lastSelectionAnchor = null;[\s\S]*selectTool\(selTool\);/.test(html)) {
+  fail('Escape must close/deselect active selection before or while disarming tools');
+}
+if (!/if \(typeof clearSelection === 'function'\) clearSelection\(\);[\s\S]*root\.hidden = true;[\s\S]*currentLevel = 'root';/.test(html)) {
+  fail('radial root X must clear selection and hide the radial immediately');
 }
 if (!/\.world-menu-foot\s*\{[\s\S]*overflow-x:\s*auto/.test(cssRaw) || !/\.world-menu-foot-btn\s*\{[\s\S]*white-space:\s*nowrap/.test(cssRaw) || !/\.world-menu-foot-btn span\s*\{[\s\S]*text-overflow:\s*ellipsis/.test(cssRaw)) {
   fail('world menu footer buttons must stay single-line and use horizontal overflow instead of wrapping');

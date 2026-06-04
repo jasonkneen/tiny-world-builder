@@ -351,9 +351,12 @@
     }));
   }
   function clearSelection() {
-    if (!selectedCells.size && !selectedEditableIslandEngineRef) return;
+    const selectedIsland = (typeof selectedEditableIsland === 'function') ? selectedEditableIsland() : null;
+    if (!selectedCells.size && !selectedEditableIslandEngineRef && !selectedIsland) return;
     selectedCells.clear();
     selectedEditableIslandEngineRef = null;
+    if (typeof selectEditableIsland === 'function') selectEditableIsland(null);
+    else if (typeof setIslandSelectionOutline === 'function') setIslandSelectionOutline(null);
     notifySelectionChanged();
   }
   function makeKey(bx, bz, x, z) {

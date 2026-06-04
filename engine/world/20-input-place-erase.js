@@ -1610,13 +1610,35 @@
       e.preventDefault();
       return;
     }
-    // Esc disarms any build/paint/erase tool back to the safe Select tool, so
-    // there's always a one-key way out of "hot" placement. (Skipped in
-    // first-person walk mode, where Esc exits the camera instead.)
-    if (e.key === 'Escape' && !(typeof fp !== 'undefined' && fp.active) &&
-        selectedTool && !selectedTool.select) {
-      const selTool = TOOLS.find(t => t.id === 'select');
-      if (selTool) { selectTool(selTool); e.preventDefault(); return; }
+    // Esc first closes/deselects the active edit target, then falls back to
+    // disarming any hot build/paint/erase tool back to Select.
+    if (e.key === 'Escape' && !(typeof fp !== 'undefined' && fp.active)) {
+      let handledEscape = false;
+      const sub = window.__tinyworldSubEdit;
+      if (sub && sub.isActive && sub.isActive() && sub.exit) {
+        sub.exit();
+        handledEscape = true;
+      }
+      const selApi = window.__tinyworldSelection;
+      const hasSelectedCells = !!(selApi && selApi.cells && selApi.cells.size);
+      const selectedIsland = (typeof selectedEditableIsland === 'function') ? selectedEditableIsland() : null;
+      if (hasSelectedCells || selectedIsland || selectedEditableIslandEngineRef) {
+        if (selApi && typeof selApi.clear === 'function') selApi.clear();
+        else if (typeof clearSelection === 'function') clearSelection();
+        lastSelectionAnchor = null;
+        handledEscape = true;
+      }
+      if (selectedTool && !selectedTool.select) {
+        const selTool = TOOLS.find(t => t.id === 'select');
+        if (selTool) {
+          selectTool(selTool);
+          handledEscape = true;
+        }
+      }
+      if (handledEscape) {
+        e.preventDefault();
+        return;
+      }
     }
     if (e.key === 'Backspace' || e.key === 'Delete') {
       const selApi = window.__tinyworldSelection;

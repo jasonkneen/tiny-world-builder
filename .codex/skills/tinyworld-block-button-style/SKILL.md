@@ -94,7 +94,9 @@ Raised, outlined square (per posType; same pattern for `.tool` and
 - The top-center `.world-pill[data-pos-type="primary"]` keeps the primary blue
   outline, but its resting fill is deliberately bright white glass
   (`rgba(255,255,255,0.82)`) rather than the generic blue primary tint so the
-  world selector matches the whiter chrome surfaces.
+  world selector matches the whiter chrome surfaces. Its hover state must keep
+  `transform: translateX(-50%)`; do not apply the generic hover lift to this
+  fixed centered pill or it jumps.
 - The token corner is deliberately plain text, not a pill panel. Keep
   `.token-corner` free of `data-pos-type`, borders, backdrop blur, and hover
   transforms; only the nested GitHub link uses

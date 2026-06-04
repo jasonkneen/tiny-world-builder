@@ -137,6 +137,16 @@ hologram path is bypassed for the Island tool. GOTCHA: when cloning the
 ghost-outline hull, collect mesh nodes *before* `o.add(hull)` — adding during
 `traverse` recurses into the new hull forever (stack overflow).
 
+Newly placed editable islands warp in instead of popping into place. The effect
+lives in `14-editable-islands-moorings.js`: `startEditableIslandWarpArrival()`
+starts a short blue-white streak/tunnel + arrival flash, and
+`tickEditableIslandWarpArrivals(dt)` runs **after** `updateEditableIslandLods()`
+so it can override LOD visibility during the arrival. Default creation triggers
+the effect, while restored/imported/stress-demo islands with `skipSave: true`
+do not; use `warpIn: true` explicitly for future multiplayer join arrivals.
+The final saved transform remains `island.positionX/Y/Z` + `rotationY`; the warp
+only moves/scales the render group temporarily.
+
 The **home island is not movable**: its editable surface lives in the shared
 world grid (`worldGroup`, picked by logical gx/gz), while only `homeBorderGroup`
 (the base) is its transform group — so dragging it would shift the base away from

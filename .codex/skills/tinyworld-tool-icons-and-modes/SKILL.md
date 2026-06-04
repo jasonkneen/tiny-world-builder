@@ -23,6 +23,10 @@ description: Use when changing Tiny World Builder's mode indicator, boot tool se
   `window.__tinyworldMode` when the user chooses. Do not bring back the old
   farm/vehicle welcome picker for this path, and keep `publish.sh` copying the
   `assets/` directory into `dist/assets/`.
+- Showcase mode keeps only a simple top-right circular `#showcase-exit` X
+  button visible. Do not turn it back into a wide "Exit Showcase Esc" text pill;
+  keep `aria-keyshortcuts="Escape"` and the existing Escape handler that calls
+  `setShowcaseActive(false)`.
 - `#mode-indicator` (HUD chip, updated in `updateModeIndicator` in
   `19-tools-toolbar.js`) names the current mode and colours itself: calm
   `mode-select`, amber `mode-build`, red `mode-erase`. Keep it

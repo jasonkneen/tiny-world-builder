@@ -70,6 +70,11 @@ Selection properties:
   cells through `window.__tinyworldSelection.replaceWorldCoords()`, not by
   mutating selection internals, and should refresh from `tinyworld:selection-changed`,
   `tinyworld:world-changed`, and `tinyworld:grid-changed` events.
+- The radial root X and the Escape key must close by exiting sub-edit when
+  active, then clearing the active selection through
+  `window.__tinyworldSelection.clear()` / `clearSelection()`. That clear path
+  must deselect cells, editable-island engines, and whole editable islands
+  (`selectEditableIsland(null)`), not merely hide the radial DOM.
 - Sub-object editing is surfaced through `window.__tinyworldSubEdit`, not a
   parallel inspector state. Layers should show part rows from
   `__tinyworldSubEdit.hierarchy()`, select them with `selectPart(partKey)`, and
