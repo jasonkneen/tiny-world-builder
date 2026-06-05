@@ -606,7 +606,7 @@
       '  else                 { col = (hit.y < 0.0) ? uFloor : uCeil; }',
       '  col *= mix(0.45, 1.2, depthN);',             // strong front-dark -> back-bright gradient = depth read from any angle
       '  float ld = length(hit.xy);',                 // warm interior light pooled at the back-centre
-      '  float glow = (0.26 + uLit) * smoothstep(0.95, 0.0, ld) * smoothstep(0.0, 0.30, depthN);',
+      '  float glow = (0.04 + uLit * 0.18) * smoothstep(0.9, 0.0, ld) * smoothstep(0.0, 0.40, depthN);',
       '  col = (col + uLightCol * glow) * uInteriorBright;',      // fill light (+extra when "lit"), scaled by brightness
       '  float vz = clamp(-rd.z, 0.0, 1.0);',         // head-on component (rd.z = -1 looking straight in)
       '  float fres = pow(1.0 - vz, 3.0);',

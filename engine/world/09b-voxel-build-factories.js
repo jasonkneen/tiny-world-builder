@@ -725,18 +725,18 @@
     const gw = 0.17 * R, gh = 0.19 * R;               // glass span; rest of the frame is wood border
     if (face === 'x') {
       const sx = Math.sign(x || 1);
-      vbox(w, 0.034, 0.19, 0.17, x, y, z, M.woodTrim);                  // frame
+      vbox(w, 0.034, 0.19, 0.17, x, y, z, M.woodTrim, { noBevel: true });  // frame (noBevel: bevel would inflate it over the glass)
       const pane = makeWindowPane(gw, gh, sx > 0 ? '+x' : '-x', 0.02);  // interior glass
       pane.position.set(x + sx * 0.02, y, z); w.add(pane);
-      vbox(w, 0.042, 0.016, gw, x + sx * 0.024, y, z, M.woodTrim);      // muntins, proud of the glass
-      vbox(w, 0.042, gh, 0.014, x + sx * 0.024, y, z, M.woodTrim);
+      vbox(w, 0.042, 0.016, gw, x + sx * 0.024, y, z, M.woodTrim, { noBevel: true });  // muntins, proud of the glass
+      vbox(w, 0.042, gh, 0.014, x + sx * 0.024, y, z, M.woodTrim, { noBevel: true });
     } else {
       const sz = Math.sign(z || 1);
-      vbox(w, 0.17, 0.19, 0.034, x, y, z, M.woodTrim);
+      vbox(w, 0.17, 0.19, 0.034, x, y, z, M.woodTrim, { noBevel: true });
       const pane = makeWindowPane(gw, gh, sz > 0 ? '+z' : '-z', 0.02);
       pane.position.set(x, y, z + sz * 0.02); w.add(pane);
-      vbox(w, gw, 0.016, 0.042, x, y, z + sz * 0.024, M.woodTrim);
-      vbox(w, 0.014, gh, 0.042, x, y, z + sz * 0.024, M.woodTrim);
+      vbox(w, gw, 0.016, 0.042, x, y, z + sz * 0.024, M.woodTrim, { noBevel: true });
+      vbox(w, 0.014, gh, 0.042, x, y, z + sz * 0.024, M.woodTrim, { noBevel: true });
     }
     parent.add(w);
     return w;
