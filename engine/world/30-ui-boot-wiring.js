@@ -1286,7 +1286,7 @@
     snow:  'snow',
   };
   const MINIMAP_FALLBACK_COLORS = {
-    grass: 0x9ec74b,
+    grass: 0x6f9e30,
     path:  0xe8d5a8,
     dirt:  0x7d4519,
     water: 0x3a8fcc,
