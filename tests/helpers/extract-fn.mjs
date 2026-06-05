@@ -9,8 +9,17 @@ export function extractFunction(filePath, name) {
   const src = readFileSync(filePath, 'utf8');
   const start = src.search(new RegExp('function\\s+' + name + '\\s*\\('));
   if (start === -1) throw new Error('function not found: ' + name);
+  // Skip the parameter list first, so a default like `opts = {}` isn't mistaken
+  // for the body's opening brace.
+  let p = src.indexOf('(', start);
+  if (p === -1) throw new Error('no param list for: ' + name);
+  let pd = 0;
+  for (; p < src.length; p++) {
+    if (src[p] === '(') pd++;
+    else if (src[p] === ')') { pd--; if (pd === 0) { p++; break; } }
+  }
   // Find the opening brace of the body.
-  let i = src.indexOf('{', start);
+  let i = src.indexOf('{', p);
   if (i === -1) throw new Error('no body brace for: ' + name);
   let depth = 0;
   for (; i < src.length; i++) {

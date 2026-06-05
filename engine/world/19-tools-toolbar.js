@@ -685,7 +685,7 @@
       return;
     }
     const terrainColors = {
-      grass: '#93c66b',
+      grass: '#6f9e30',
       path: '#d7b77d',
       dirt: '#a56c45',
       water: '#66add6',
@@ -1075,7 +1075,7 @@
       const asset = tool.modelAsset || getModelStamp(tool.modelStampId);
       const status = document.getElementById('stamp-builder-status');
       if (!asset || !asset.supported) {
-        if (status) status.textContent = (asset ? asset.format.toUpperCase() : 'Model') + ' detected, but only GLB/GLTF/OBJ are placeable right now';
+        if (status) status.textContent = (asset ? asset.format.toUpperCase() : 'Model') + ' detected, but only GLB/GLTF/OBJ/FBX/VOX/VDB are placeable right now';
         return;
       }
       rememberRecentStampTool(tool);
@@ -1126,7 +1126,7 @@
         ? 'No stamps match that search.'
         : activeStampBuilderCategory !== 'all'
           ? 'No stamps in this category yet.'
-          : 'No stamps yet. Drop GLB/OBJ files into models/ or import a voxel build JSON.';
+          : 'No stamps yet. Drop GLB/GLTF/OBJ/FBX/VOX/VDB files into models/ or import a voxel build JSON.';
       grid.appendChild(empty);
       return;
     }

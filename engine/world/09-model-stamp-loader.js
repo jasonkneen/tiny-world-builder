@@ -4,8 +4,8 @@
   const MODEL_STAMP_DROPPED_DB_NAME = 'tinyworld-model-stamps.v1';
   const MODEL_STAMP_DROPPED_DB_VERSION = 1;
   const MODEL_STAMP_DROPPED_STORE = 'dropped-model-files';
-  const MODEL_STAMP_SUPPORTED_FORMATS = new Set(['glb', 'gltf', 'obj']);
-  const MODEL_STAMP_DETECTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx']);
+  const MODEL_STAMP_SUPPORTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox', 'vdb']);
+  const MODEL_STAMP_DETECTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox', 'vdb']);
   const MODEL_STAMP_TEXTURE_FORMATS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
   let MODEL_STAMP_ASSETS = [];
   let selectedModelStampId = null;
@@ -25,6 +25,11 @@
     plane: [0xd84a36, 0xf4e7c3, 0x2d6f93, 0x26364d, 0xf1c15e],
     generic: [0xd4b483, 0x8fb07a, 0x5d86a6, 0xbe6a4a, 0xf0d69c, 0x3b4458],
   };
+  // Muted, natural tones used as a single coherent body colour for untextured
+  // "generic" models. Banding many hues across one mesh (the old behaviour)
+  // produced a rainbow-confetti look; picking one of these per model keeps the
+  // result calm and clearly reads as "no material supplied".
+  const MODEL_STAMP_GENERIC_SOLID = [0xb9b3a6, 0xa8b89a, 0xc7b29a, 0x9fb0bd, 0xc2a99a, 0xb1aab2];
 
   function modelStampApiEnabled() {
     if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return false;
@@ -225,6 +230,9 @@
       size: Number(raw.size) || 0,
       mtimeMs: Number(raw.mtimeMs) || 0,
       sidecars: normalizeModelStampSidecars(raw.sidecars),
+      frames: Array.isArray(raw.frames) && raw.frames.length > 1
+        ? raw.frames.map(f => ({ url: String((f && f.url) || '').trim(), name: String((f && f.name) || '').slice(0, 96) })).filter(f => f.url)
+        : null,
       warnings: Array.isArray(raw.warnings) ? raw.warnings.map(item => String(item || '').slice(0, 120)).filter(Boolean) : [],
       dropped: !!raw.dropped,
       transient: !!raw.transient,
@@ -452,6 +460,14 @@
     return modelStampDroppedRestorePromise;
   }
 
+  // Strip a trailing frame number ("Frame_0", "smoke_012", "puff3") so VDB files
+  // dropped together as a sequence collapse into one animated asset.
+  function vdbSequenceKey(name) {
+    const base = String(name || '').replace(/\.[^.]+$/, '');
+    const m = base.match(/^(.*?)(\d+)\s*$/);
+    return m ? { base: m[1].toLowerCase(), num: parseInt(m[2], 10) || 0 } : { base: base.toLowerCase(), num: 0 };
+  }
+
   function registerDroppedModelStampFiles(fileList) {
     const files = Array.from(fileList || []).filter(file => file && typeof file.name === 'string');
     if (!files.length) return [];
@@ -460,8 +476,10 @@
     const sidecars = ctx.sidecars;
     const mains = ctx.mains;
     const batchId = Date.now().toString(36);
-    const assets = mains.map((main, index) => {
+    let assetIndex = 0;
+    function buildAssetSpec(main, frames) {
       const slug = modelStampSlug(main.file.name);
+      const index = assetIndex++;
       let id = modelStampIdSafe('drop-' + batchId + '-' + index + '-' + slug);
       if (!id) id = 'drop-' + batchId + '-' + index;
       let suffix = 1;
@@ -469,7 +487,10 @@
         id = modelStampIdSafe('drop-' + batchId + '-' + index + '-' + suffix + '-' + slug) || ('drop-' + batchId + '-' + index + '-' + suffix);
         suffix++;
       }
-      const label = String(main.file.name || id).replace(/\.[^.]+$/, '').slice(0, 64) || id;
+      let label = String(main.file.name || id).replace(/\.[^.]+$/, '').slice(0, 64) || id;
+      if (frames && frames.length > 1) {
+        label = (label.replace(/[\s._-]*\d+$/, '') || label).slice(0, 56) + ' (' + frames.length + 'f)';
+      }
       return {
         id,
         label,
@@ -481,12 +502,31 @@
         size: main.file.size || 0,
         mtimeMs: main.file.lastModified || Date.now(),
         sidecars,
+        frames: frames && frames.length > 1 ? frames : null,
         dropped: true,
         transient: true,
         localFiles,
         warnings: MODEL_STAMP_SUPPORTED_FORMATS.has(main.format) ? [] : [main.format.toUpperCase() + ' detected but not placeable in this build'],
       };
-    }).filter(Boolean);
+    }
+    // Group dropped VDB frames by sequence; every other format is one asset each.
+    const vdbGroups = new Map();
+    const specs = [];
+    mains.forEach(main => {
+      if (main.format === 'vdb') {
+        const key = vdbSequenceKey(main.file.name).base;
+        if (!vdbGroups.has(key)) vdbGroups.set(key, []);
+        vdbGroups.get(key).push(main);
+      } else {
+        specs.push(buildAssetSpec(main, null));
+      }
+    });
+    vdbGroups.forEach(groupMains => {
+      groupMains.sort((a, b) => vdbSequenceKey(a.file.name).num - vdbSequenceKey(b.file.name).num);
+      const frames = groupMains.map(m => ({ url: m.url, name: m.file.name }));
+      specs.push(buildAssetSpec(groupMains[0], frames));
+    });
+    const assets = specs.filter(Boolean);
     if (!assets.length) return [];
     mergeModelStampAssets(assets);
     persistDroppedModelStampAssets(assets, files);
@@ -621,6 +661,7 @@
         repaintAfterTextureLoad();
       }, undefined, err => {
         if (opts.warn !== false) console.warn('[model-stamp] texture failed', url, err);
+        if (typeof opts.onError === 'function') { try { opts.onError(err); } catch (_) {} }
       });
       tex.flipY = opts.flipY !== false;
       tex.encoding = THREE.sRGBEncoding;
@@ -808,9 +849,13 @@
   function modelStampMaterialNeedsTinyWorldLighting(material) {
     if (!material || !material.isMaterial) return false;
     if (material.userData && material.userData.modelStampTinyWorldLit) return false;
-    if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) return true;
+    // FBX defaults to MeshPhongMaterial, which washes out (often to white) under
+    // TinyWorld's tuned exposure — the same reason GLB's PBR materials are
+    // re-lit. Convert Phong to the TinyWorld Lambert material too, preserving
+    // its diffuse colour and texture map.
+    if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial || material.isMeshPhongMaterial) return true;
     const type = String(material.type || '');
-    return /Mesh(Standard|Physical)Material/.test(type) || material.metalness !== undefined || material.roughness !== undefined;
+    return /Mesh(Standard|Physical|Phong)Material/.test(type) || material.metalness !== undefined || material.roughness !== undefined || material.shininess !== undefined;
   }
 
   function createTinyWorldLitModelStampMaterial(source) {
@@ -930,6 +975,10 @@
     const kind = modelStampPaletteKind(asset);
     const palette = MODEL_STAMP_FALLBACK_PALETTES[kind] || MODEL_STAMP_FALLBACK_PALETTES.generic;
     const hash = modelStampHash((asset && asset.id) + ':' + (mesh.name || '') + ':' + index);
+    // For unnamed/generic models, commit to a single body colour for the whole
+    // mesh. Shading still comes from surface normals + a gentle vertical
+    // gradient, so the model reads as solid-coloured rather than rainbow.
+    const genericHex = MODEL_STAMP_GENERIC_SOLID[hash % MODEL_STAMP_GENERIC_SOLID.length];
     const shade = new THREE.Color(0x252a30);
     const color = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
@@ -939,7 +988,7 @@
       const yNorm = (y - minY) / spanY;
       const ny = normal ? normal.getY(i) : 0;
       const band = Math.floor((Math.atan2(z, x) + Math.PI) * 2.5) + Math.floor(yNorm * 9) + hash;
-      let hex = palette[Math.abs(band) % palette.length];
+      let hex = genericHex;
       if (kind === 'building') {
         if (yNorm > 0.72 || (ny > 0.48 && yNorm > 0.56)) hex = palette[1];
         else if (yNorm < 0.10) hex = palette[3];
@@ -954,6 +1003,7 @@
         else hex = (band % 4 === 0) ? palette[4] : palette[0];
       }
       color.setHex(hex);
+      if (kind === 'generic') color.offsetHSL(0, 0, (yNorm - 0.5) * 0.08);
       if (ny < -0.12) color.lerp(shade, 0.24);
       else if (Math.abs(ny) < 0.18) color.lerp(shade, 0.10);
       color.toArray(colors, i * 3);
@@ -1174,10 +1224,27 @@
         transparent: def.opacity < 0.999,
         opacity: def.opacity,
       };
-      if (def.map) params.map = loadModelStampTexture(asset, def.map, { baseUrl, flipY: true, modelStampId: asset && asset.id });
       const mat = new THREE.MeshLambertMaterial(params);
       mat.name = def.name;
       mat.userData.modelStampHydrated = def.map ? 'mtl texture' : 'mtl color';
+      if (def.map) {
+        const tex = loadModelStampTexture(asset, def.map, {
+          baseUrl,
+          flipY: true,
+          modelStampId: asset && asset.id,
+          // OBJ files are frequently shared without their referenced images. When
+          // the map_Kd texture can't be loaded, drop back to the material's Kd
+          // diffuse colour instead of leaving it forced to solid white.
+          onError() {
+            mat.map = null;
+            mat.color.setHex(def.color);
+            mat.userData.modelStampHydrated = 'mtl color (texture missing)';
+            mat.needsUpdate = true;
+            if (asset && asset.id) scheduleModelStampRefresh(asset.id);
+          },
+        });
+        if (tex) mat.map = tex;
+      }
       prepareModelStampTextureMaterial(mat);
       out[def.name] = mat;
     });
@@ -1310,6 +1377,106 @@
     return g;
   }
 
+  // Turn a parsed OpenVDB density field (active voxel coords) into a chunky,
+  // stylised "voxel cloud" mesh: downsample to a coarse grid, emit culled cube
+  // faces, and colour by height (warm fire at the base → cool smoke up top).
+  // Returns a clone-safe plain Mesh wrapped in a Group, or null for empty grids.
+  // Shared coarse-grid spec for one volume (or a whole frame sequence, when a
+  // union bbox is passed so every frame downsamples into the same grid and the
+  // plume grows in place instead of jumping around).
+  function vdbGridSpec(min, max, targetRes) {
+    const spanX = max[0] - min[0] + 1;
+    const spanY = max[1] - min[1] + 1;
+    const spanZ = max[2] - min[2] + 1;
+    const target = Math.max(8, Math.min(48, targetRes || 30));
+    const factor = Math.max(1, Math.ceil(Math.max(spanX, spanY, spanZ, 1) / target));
+    return {
+      origin: [min[0], min[1], min[2]],
+      factor,
+      dims: [Math.max(1, Math.ceil(spanX / factor)), Math.max(1, Math.ceil(spanY / factor)), Math.max(1, Math.ceil(spanZ / factor))],
+    };
+  }
+
+  function buildVdbVoxelMesh(parsed, spec) {
+    if (!parsed || !parsed.count || !parsed.coords || !parsed.coords.length) return null;
+    spec = spec || vdbGridSpec(parsed.bbox.min, parsed.bbox.max);
+    const coords = parsed.coords;
+    const min = spec.origin;
+    const factor = spec.factor;
+    const gx = spec.dims[0];
+    const gy = spec.dims[1];
+    const gz = spec.dims[2];
+    const occ = new Uint8Array(gx * gy * gz);
+    const at = (x, y, z) => x + y * gx + z * gx * gy;
+    for (let i = 0; i < coords.length; i += 3) {
+      const cx = Math.min(gx - 1, (coords[i] - min[0]) / factor | 0);
+      const cy = Math.min(gy - 1, (coords[i + 1] - min[1]) / factor | 0);
+      const cz = Math.min(gz - 1, (coords[i + 2] - min[2]) / factor | 0);
+      occ[at(cx, cy, cz)] = 1;
+    }
+    // VDB grid: x/y are horizontal, z is vertical (smoke rises in z), so colour
+    // by the z layer and rotate the finished group so z maps to world-up.
+    const FACES = [
+      { n: [1, 0, 0], d: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+      { n: [-1, 0, 0], d: [-1, 0, 0], c: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
+      { n: [0, 1, 0], d: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+      { n: [0, -1, 0], d: [0, -1, 0], c: [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]] },
+      { n: [0, 0, 1], d: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+      { n: [0, 0, -1], d: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+    ];
+    const positions = [];
+    const colors = [];
+    const normals = [];
+    const cx0 = gx / 2, cy0 = gy / 2, cz0 = gz / 2;
+    const base = new THREE.Color();
+    const fire = new THREE.Color(0xff7a2e);
+    const ember = new THREE.Color(0xffd166);
+    const smoke = new THREE.Color(0xdfe3e8);
+    const haze = new THREE.Color(0xa9b6c6);
+    const tmp = new THREE.Color();
+    for (let z = 0; z < gz; z++) {
+      const t = gz > 1 ? z / (gz - 1) : 0;
+      if (t < 0.28) base.copy(fire).lerp(ember, t / 0.28);
+      else if (t < 0.55) base.copy(ember).lerp(smoke, (t - 0.28) / 0.27);
+      else base.copy(smoke).lerp(haze, (t - 0.55) / 0.45);
+      for (let y = 0; y < gy; y++) {
+        for (let x = 0; x < gx; x++) {
+          if (!occ[at(x, y, z)]) continue;
+          for (const f of FACES) {
+            const nx = x + f.d[0], ny = y + f.d[1], nz = z + f.d[2];
+            const inside = nx >= 0 && ny >= 0 && nz >= 0 && nx < gx && ny < gy && nz < gz;
+            if (inside && occ[at(nx, ny, nz)]) continue; // hidden interior face
+            tmp.copy(base);
+            const jitter = (((x * 73 + y * 19 + z * 37) % 7) - 3) * 0.012;
+            tmp.offsetHSL(0, 0, jitter);
+            const quad = f.c.map(o => [x - cx0 + o[0], y - cy0 + o[1], z - cz0 + o[2]]);
+            const tri = [quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]];
+            for (const v of tri) {
+              positions.push(v[0], v[1], v[2]);
+              normals.push(f.n[0], f.n[1], f.n[2]);
+              colors.push(tmp.r, tmp.g, tmp.b);
+            }
+          }
+        }
+      }
+    }
+    if (!positions.length) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    mat.name = 'TinyWorld VDB cloud';
+    mat.userData.modelStampHydrated = 'vdb';
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.rotation.x = -Math.PI / 2; // VDB z-up → world y-up
+    return group;
+  }
+
   function loadModelStampAsset(asset, onReady, onError) {
     if (!asset) return null;
     let cache = modelStampAssetCache.get(asset.id);
@@ -1375,17 +1542,125 @@
           finish(scene);
         })
         .catch(fail);
-    } else if (asset.format === 'fbx' && THREE.FBXLoader) {
-      const loader = new THREE.FBXLoader();
+    } else if (asset.format === 'fbx') {
+      if (!THREE.FBXLoader) {
+        fail(new Error('FBXLoader missing'));
+        return cache;
+      }
+      const loader = new THREE.FBXLoader(createModelStampLoadingManager(asset));
       loader.load(asset.url, obj => {
-        hydrateModelStampScene(obj, asset, { flipY: true });
-        finish(obj);
+        try {
+          hydrateModelStampScene(obj, asset, { flipY: false });
+          finish(obj, (obj && obj.animations) || []);
+        } catch (err) { fail(err); }
       }, undefined, fail);
+    } else if (asset.format === 'vox') {
+      if (!THREE.VOXLoader || !THREE.VOXMesh) {
+        fail(new Error('VOXLoader missing'));
+        return cache;
+      }
+      const loader = new THREE.VOXLoader(createModelStampLoadingManager(asset));
+      loader.load(asset.url, chunks => {
+        try {
+          const group = new THREE.Group();
+          (chunks || []).forEach(chunk => {
+            try {
+              const voxMesh = new THREE.VOXMesh(chunk);
+              // VOXMesh's constructor requires a chunk, so it is NOT clone-safe:
+              // THREE's clone() calls `new VOXMesh()` with no args, which throws.
+              // Placing a stamp clones the cached scene, so re-wrap the generated
+              // geometry + material in a plain Mesh that clones cleanly.
+              group.add(new THREE.Mesh(voxMesh.geometry, voxMesh.material));
+            } catch (_) {}
+          });
+          if (!group.children.length) throw new Error('VOX file has no voxels');
+          // VOX meshes already carry per-voxel vertex colours from the file's
+          // own palette, so hydrate leaves them alone (no fallback palette).
+          hydrateModelStampScene(group, asset, { flipY: false });
+          finish(group);
+        } catch (err) { fail(err); }
+      }, undefined, fail);
+    } else if (asset.format === 'vdb') {
+      if (!THREE.VDBLoader) {
+        fail(new Error('VDBLoader missing'));
+        return cache;
+      }
+      const loader = new THREE.VDBLoader(createModelStampLoadingManager(asset));
+      // A VDB stamp may be a single file or a dropped frame sequence (asset.frames).
+      const frameUrls = (asset.frames && asset.frames.length) ? asset.frames.map(f => f.url) : [asset.url];
+      Promise.all(frameUrls.map(url => new Promise((res, rej) => loader.load(url, res, undefined, rej))))
+        .then(frames => {
+          try {
+            // Union bbox across all frames so every frame shares one coarse grid
+            // (the plume then grows in place rather than re-centring each frame).
+            const mn = [Infinity, Infinity, Infinity];
+            const mx = [-Infinity, -Infinity, -Infinity];
+            let any = false;
+            frames.forEach(f => {
+              if (!f || !f.count) return;
+              any = true;
+              for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], f.bbox.min[i]); mx[i] = Math.max(mx[i], f.bbox.max[i]); }
+            });
+            if (!any) throw new Error('VDB volume is empty (no active voxels in any frame)');
+            const spec = vdbGridSpec(mn, mx);
+            const group = new THREE.Group();
+            frames.forEach((f, i) => {
+              // Empty frames (e.g. the simulation start) become an empty placeholder
+              // so the frame index stays aligned and the puff grows from nothing.
+              const child = buildVdbVoxelMesh(f, spec) || new THREE.Group();
+              child.visible = (i === 0);
+              group.add(child);
+            });
+            if (frames.length > 1) {
+              group.userData.vdbAnimation = {
+                frameCount: frames.length,
+                loopSeconds: Math.max(0.8, Math.min(4, frames.length / 12)),
+                current: 0,
+              };
+            }
+            // The cloud meshes already carry per-voxel vertex colours, so skip the
+            // palette fallback; castReceive sets up shadows.
+            castReceive(group);
+            finish(group);
+          } catch (err) { fail(err); }
+        })
+        .catch(fail);
     } else {
       fail(new Error(asset.format.toUpperCase() + ' is detected but not placeable in this build'));
     }
     return cache;
   }
+
+  // Animated VDB clouds: every placed/ghost clone of a frame-sequence stamp keeps
+  // its own copy of the userData.vdbAnimation block. A single ticker (driven from
+  // the render loop) cycles each live clone's frame-mesh visibility by wall time.
+  const vdbAnimatedNodes = new Set();
+  function registerVdbAnimation(root) {
+    if (!root || typeof root.traverse !== 'function') return;
+    root.traverse(node => { if (node.userData && node.userData.vdbAnimation) vdbAnimatedNodes.add(node); });
+  }
+  function vdbNodeLive(node) {
+    let top = node;
+    while (top.parent) top = top.parent;
+    if (typeof scene !== 'undefined' && scene) return top === scene;
+    return !!node.parent;
+  }
+  window.__tinyworldVdbTick = function vdbTick(t) {
+    if (!vdbAnimatedNodes.size) return;
+    for (const node of vdbAnimatedNodes) {
+      try {
+        if (!vdbNodeLive(node)) { vdbAnimatedNodes.delete(node); continue; }
+        const info = node.userData.vdbAnimation;
+        const loop = info.loopSeconds || 1.5;
+        const idx = Math.floor(((t % loop) / loop) * info.frameCount) % info.frameCount;
+        if (idx !== info.current) {
+          const kids = node.children;
+          for (let i = 0; i < kids.length; i++) kids[i].visible = (i === idx);
+          info.current = idx;
+        }
+      } catch (_) { vdbAnimatedNodes.delete(node); }
+    }
+  };
 
   function makeModelStamp(idOrAsset, opts = {}) {
     const asset = typeof idOrAsset === 'string' ? getModelStamp(idOrAsset) : idOrAsset;
@@ -1393,6 +1668,7 @@
     const cache = loadModelStampAsset(asset);
     if (cache && cache.state === 'ready' && cache.scene) {
       const stamp = normalizeModelStampObject(cloneModelStampScene(cache.scene), asset);
+      if (asset.format === 'vdb') registerVdbAnimation(stamp);
       return applyAppearanceToObject(stamp, 'model-stamp', opts.appearance);
     }
     const placeholder = makeModelStampPlaceholder(asset, cache && cache.errorMessage ? cache.errorMessage : 'Loading model');

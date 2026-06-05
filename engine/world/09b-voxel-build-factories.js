@@ -14,6 +14,28 @@
     return voxelBuildMaterialCache.get(key);
   }
 
+  // Lift/rocket engines hang in the island's shadow, but their Lambert materials
+  // still catch full ambient + sky light, so they read far too bright against the
+  // dark underside (they look freshly minted instead of "in shadow"). Multiply
+  // every engine palette colour toward black to fake the ambient occlusion the
+  // geometry above would cast — a "used-universe" shaded look. 1 = untouched,
+  // lower = darker. Tune here to taste.
+  const UNDER_ISLAND_ENGINE_SHADE = 0.45;
+  function shadeEngineHex(hex, factor = UNDER_ISLAND_ENGINE_SHADE) {
+    const clean = normalizeHexColor(hex) || '#ffffff';
+    const n = parseInt(clean.slice(1), 16);
+    const r = Math.round(Math.max(0, Math.min(255, ((n >> 16) & 255) * factor)));
+    const g = Math.round(Math.max(0, Math.min(255, ((n >> 8) & 255) * factor)));
+    const b = Math.round(Math.max(0, Math.min(255, (n & 255) * factor)));
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+  }
+  // Same cached MeshLambertMaterial pipeline as voxelBuildMaterial, but with the
+  // under-island shade pre-applied to the colour. Darkened colours cache under
+  // their own key, so engines still merge by material.
+  function engineBuildMaterial(hex, textureKind = null) {
+    return voxelBuildMaterial(shadeEngineHex(hex), textureKind);
+  }
+
   function voxelFallbackColorForMaterialName(name) {
     const key = String(name || '').trim().toLowerCase();
     const direct = normalizeHexColor(key);
@@ -1138,14 +1160,14 @@
     root.add(engine);
     const body = new THREE.Group();
     engine.add(body);
-    const liftStone = voxelBuildMaterial('#6f6a60', 'stone');
-    const liftStoneHi = voxelBuildMaterial('#8b8478', 'stone');
-    const liftSteel = voxelBuildMaterial('#4b5660', 'pipe-metal');
-    const liftSteelD = voxelBuildMaterial('#252d34', 'pipe-metal');
-    const liftWood = voxelBuildMaterial('#6a4a2f', 'wood');
-    const liftWoodD = voxelBuildMaterial('#3d2918', 'wood');
-    const liftLabel = voxelBuildMaterial('#a89d85', 'planks');
-    const liftHeat = voxelBuildMaterial('#432018', 'noise');
+    const liftStone = engineBuildMaterial('#6f6a60', 'stone');
+    const liftStoneHi = engineBuildMaterial('#8b8478', 'stone');
+    const liftSteel = engineBuildMaterial('#4b5660', 'pipe-metal');
+    const liftSteelD = engineBuildMaterial('#252d34', 'pipe-metal');
+    const liftWood = engineBuildMaterial('#6a4a2f', 'wood');
+    const liftWoodD = engineBuildMaterial('#3d2918', 'wood');
+    const liftLabel = engineBuildMaterial('#a89d85', 'planks');
+    const liftHeat = engineBuildMaterial('#432018', 'noise');
 
     function sourceCube(parent, x, y, z, sx = 1, sy = 1, sz = 1, mat = liftStone) {
       return vbox(parent, sx, sy, sz, x, y, z, mat, { noGap: true });

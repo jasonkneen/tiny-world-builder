@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const MODEL_EXTENSIONS = new Set(['.glb', '.gltf', '.obj', '.fbx']);
-const PLACEABLE_EXTENSIONS = new Set(['.glb', '.gltf', '.obj']);
+const MODEL_EXTENSIONS = new Set(['.glb', '.gltf', '.obj', '.fbx', '.vox', '.vdb']);
+const PLACEABLE_EXTENSIONS = new Set(['.glb', '.gltf', '.obj', '.fbx', '.vox', '.vdb']);
 const TEXTURE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const SIDECAR_EXTENSIONS = new Set(['.mtl', ...TEXTURE_EXTENSIONS]);
 const GENERATED_MODEL_FILES = new Set(['stamp-manifest.json', 'stamp-defaults.local.json']);

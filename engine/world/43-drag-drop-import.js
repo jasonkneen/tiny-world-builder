@@ -1,7 +1,11 @@
   // -------- drag/drop imports --------
   (function initTinyWorldDropImports() {
-    const MODEL_DROP_EXT_RE = /\.(glb|gltf|obj|fbx)$/i;
+    const MODEL_DROP_EXT_RE = /\.(glb|gltf|obj|fbx|vox|vdb)$/i;
     const IMAGE_DROP_EXT_RE = /\.(png|jpe?g|webp|gif)$/i;
+    // Material/texture files that ride along with a model (OBJ .mtl + its images).
+    // Texture extensions stay in sync with MODEL_STAMP_TEXTURE_FORMATS in the model
+    // stamp loader, which is what actually classifies/loads them.
+    const MODEL_SIDECAR_EXT_RE = /\.(mtl|png|jpe?g|webp|gif)$/i;
     const MODEL_DROP_STATUS_MS = 2600;
     let agentAttachments = [];
     let dropStatusTimer = 0;
@@ -13,6 +17,16 @@
 
     function modelFiles(files) {
       return (files || []).filter(file => MODEL_DROP_EXT_RE.test(file.name || ''));
+    }
+
+    // A model plus any material/texture sidecars dropped alongside it. The model
+    // registrar separates models from sidecars internally, but it only receives
+    // what we pass it — so an OBJ's .mtl and texture images must be included here
+    // or the model loads untextured (white).
+    function modelBundleFiles(files) {
+      if (!modelFiles(files).length) return [];
+      return (files || []).filter(file =>
+        MODEL_DROP_EXT_RE.test(file.name || '') || MODEL_SIDECAR_EXT_RE.test(file.name || ''));
     }
 
     function imageFiles(files) {
@@ -228,7 +242,7 @@
     }
 
     async function attachFilesToAgent(files) {
-      const models = registerDroppedModels(modelFiles(files));
+      const models = registerDroppedModels(modelBundleFiles(files));
       models.forEach(asset => {
         preloadDroppedModel(asset);
         agentAttachments.push({
@@ -238,7 +252,11 @@
           modelStampId: asset.id,
         });
       });
-      for (const file of imageFiles(files)) {
+      // When a model is dropped, accompanying images are its textures (already
+      // consumed by the model bundle) — only attach images as references when no
+      // model came with them.
+      const images = models.length ? [] : imageFiles(files);
+      for (const file of images) {
         const dataUrl = await fileToDataUrl(file);
         agentAttachments.push({
           id: 'image:' + Date.now().toString(36) + ':' + agentAttachments.length,
@@ -248,8 +266,8 @@
         });
       }
       renderAgentAttachments();
-      if (models.length || imageFiles(files).length) {
-        showDropStatus('Attached ' + (models.length + imageFiles(files).length) + ' file' + ((models.length + imageFiles(files).length) === 1 ? '' : 's') + ' to chat');
+      if (models.length || images.length) {
+        showDropStatus('Attached ' + (models.length + images.length) + ' file' + ((models.length + images.length) === 1 ? '' : 's') + ' to chat');
       }
     }
 
@@ -289,9 +307,9 @@
         kind: 'model',
         effect: 'copy',
         onDrop(files) {
-          const assets = registerDroppedModels(modelFiles(files));
+          const assets = registerDroppedModels(modelBundleFiles(files));
           if (!assets.length) {
-            showDropStatus('Drop GLB, GLTF, or OBJ files for Stamps', 'error');
+            showDropStatus('Drop GLB, GLTF, OBJ, FBX, VOX, or VDB files for Stamps', 'error');
             return;
           }
           selectDroppedModel(assets[0]);
@@ -313,9 +331,9 @@
         kind: 'model',
         effect: 'copy',
         async onDrop(files, evt) {
-          const assets = registerDroppedModels(modelFiles(files));
+          const assets = registerDroppedModels(modelBundleFiles(files));
           if (!assets.length) {
-            showDropStatus('Drop a GLB, GLTF, or OBJ model on the world', 'error');
+            showDropStatus('Drop a GLB, GLTF, OBJ, FBX, VOX, or VDB model on the world', 'error');
             return;
           }
           const target = modelPlacementTarget(evt);

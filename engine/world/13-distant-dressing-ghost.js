@@ -132,6 +132,13 @@
     buildDistantWorlds();
   }
 
+  // Hanging under-island dressing (utility pipes/trays/boxes/clamps and the
+  // edge drop cubes) sits in the island's shadow but its Lambert materials still
+  // catch full sky/ambient light, so it reads too bright. Multiply those pieces
+  // toward black to fake the occlusion. Kept separate from (and a touch lighter
+  // than) the engines so the hardware silhouette still reads. 1 = unchanged.
+  const UNDER_ISLAND_DRESSING_SHADE = 0.6;
+
   function addIslandSideBacking(parent) {
     const span = GRID * TILE;
     const half = span * 0.5;
@@ -190,7 +197,7 @@
           const w = 0.12 + cellRand(i, GRID, 2650 + dir.charCodeAt(0)) * 0.22;
           const h = 0.16 + cellRand(i, GRID, 2660 + dir.charCodeAt(0)) * 0.34;
           const d = 0.10 + cellRand(i, GRID, 2670 + dir.charCodeAt(0)) * 0.16;
-          vbox(parent, alongX ? w : d, h, alongX ? d : w, px, -0.16 - h * 0.5, pz, roll < 0.62 ? M.dirtRich : M.boardSide, { noGap: true });
+          vbox(parent, alongX ? w : d, h, alongX ? d : w, px, -0.16 - h * 0.5, pz, shadeLambertMaterial(roll < 0.62 ? M.dirtRich : M.boardSide, UNDER_ISLAND_DRESSING_SHADE), { noGap: true });
         }
         if (roll > 0.72) {
           const s = 0.11 + cellRand(i, GRID, 2680 + dir.charCodeAt(0)) * 0.18;
@@ -198,7 +205,7 @@
           const inset = 0.05 + cellRand(i, GRID, 2700 + dir.charCodeAt(0)) * 0.22;
           const dx = alongX ? (cellRand(i, GRID, 2710) - 0.5) * 0.12 : -sign * inset;
           const dz = alongX ? -sign * inset : (cellRand(i, GRID, 2720) - 0.5) * 0.12;
-          vbox(parent, s, s, s, px + dx, -drop, pz + dz, cellRand(i, GRID, 2730) < 0.45 ? M.islandUnderD : M.boardSide, { noGap: true });
+          vbox(parent, s, s, s, px + dx, -drop, pz + dz, shadeLambertMaterial(cellRand(i, GRID, 2730) < 0.45 ? M.islandUnderD : M.boardSide, UNDER_ISLAND_DRESSING_SHADE), { noGap: true });
         }
       }
     }
@@ -208,7 +215,13 @@
     addEdge('e');
   }
 
-  function addIslandUtilityUnderside(parent) {
+  function addIslandUtilityUnderside(dest) {
+    // Build into a detached group so every piece can be darkened in one pass
+    // below — this hardware hangs in the island's shadow and must read as
+    // occluded, not sunlit. `dest` is at the island origin, so the local
+    // positions computed here are preserved when the group is reparented.
+    const parent = new THREE.Group();
+    parent.name = 'island-utility-underside';
     const span = GRID * TILE;
     const half = span * 0.5;
     const pipeCount = Math.max(10, Math.min(24, Math.round(GRID * 2.0)));
@@ -357,6 +370,13 @@
         vbox(parent, 0.055, 0.038, 0.055, x, y - length * 0.52, z, M.utilityClamp, { noGap: true, noShadow: true });
       }
     }
+
+    // Darken everything we just built so the under-island hardware reads as
+    // shaded, then hand the group to the caller's border group.
+    parent.traverse(node => {
+      if (node.isMesh) node.material = shadeLambertMaterial(node.material, UNDER_ISLAND_DRESSING_SHADE);
+    });
+    dest.add(parent);
   }
 
   function isEditableIslandEngineNode(node) {

@@ -220,9 +220,9 @@
   })();
 
   const M = {
-    grass:     new THREE.MeshLambertMaterial({ color: 0xb0d949, side: THREE.FrontSide }),
-    grassEdge: new THREE.MeshLambertMaterial({ color: 0x95c138, side: THREE.FrontSide }),
-    grassHi:   new THREE.MeshLambertMaterial({ color: 0xc6ee68, side: THREE.FrontSide }),
+    grass:     new THREE.MeshLambertMaterial({ color: 0x6f9e30, side: THREE.FrontSide }),
+    grassEdge: new THREE.MeshLambertMaterial({ color: 0x5c8a2b, side: THREE.FrontSide }),
+    grassHi:   new THREE.MeshLambertMaterial({ color: 0x7eab38, side: THREE.FrontSide }),
     grassFlower: new THREE.MeshLambertMaterial({ color: 0xf2c849, side: THREE.FrontSide }),
     dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
     dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
@@ -259,8 +259,8 @@
     bridgeWoodD: new THREE.MeshLambertMaterial({ color: 0x5f3a20 }),
 
     trunk:     new THREE.MeshLambertMaterial({ color: 0x5c3818 }),
-    leaves:    new THREE.MeshLambertMaterial({ color: 0x86d139 }),
-    leavesDk:  new THREE.MeshLambertMaterial({ color: 0x5fab26 }),
+    leaves:    new THREE.MeshLambertMaterial({ color: 0x5f9e28 }),
+    leavesDk:  new THREE.MeshLambertMaterial({ color: 0x47781c }),
 
     wallCream: new THREE.MeshLambertMaterial({ color: 0xf2dfb0 }),
     wallTrim:  new THREE.MeshLambertMaterial({ color: 0xe5cf99 }),
@@ -269,8 +269,11 @@
     boardSide:  new THREE.MeshLambertMaterial({ color: 0x8b8d88, side: THREE.FrontSide }),
     islandUnder:  new THREE.MeshLambertMaterial({ color: 0x34373b, side: THREE.DoubleSide }),
     islandUnderD: new THREE.MeshLambertMaterial({ color: 0x202327, side: THREE.DoubleSide }),
-    rocketSteel:  new THREE.MeshLambertMaterial({ color: 0x767d86, side: THREE.FrontSide }),
-    rocketSteelD: new THREE.MeshLambertMaterial({ color: 0x2f353c, side: THREE.FrontSide }),
+    // Darkened (~0.45x) so the heavy/rocket engine reads as shaded under the
+    // island instead of brightly lit — parity with the lift engine's under-island
+    // shade (engine/world/09b UNDER_ISLAND_ENGINE_SHADE). Rocket-only materials.
+    rocketSteel:  new THREE.MeshLambertMaterial({ color: 0x35383c, side: THREE.FrontSide }),
+    rocketSteelD: new THREE.MeshLambertMaterial({ color: 0x15181b, side: THREE.FrontSide }),
     utilityPipe:  new THREE.MeshLambertMaterial({ color: 0x6f7881, side: THREE.FrontSide }),
     utilityPipeD: new THREE.MeshLambertMaterial({ color: 0x343a40, side: THREE.FrontSide }),
     utilityCable: new THREE.MeshLambertMaterial({ color: 0x171b20, side: THREE.FrontSide }),
@@ -675,6 +678,26 @@
       u.uInteriorBright.value = bright;
       u.uReflectAmt.value = reflect;
     };
+  }
+
+  // Return a cached, darkened clone of a Lambert/standard material. Used to make
+  // hardware that hangs in the island's shadow (engines, utility pipes, hanging
+  // dressing cubes) read as occluded instead of brightly lit, without touching
+  // the shared material used on the sunlit top surfaces. Keyed by source material
+  // uuid + factor so darkened meshes still batch/merge by material. 1 = unchanged.
+  const shadedMaterialCache = new Map();
+  function shadeLambertMaterial(mat, factor) {
+    if (!mat || !mat.color || !(factor >= 0) || factor === 1) return mat;
+    const key = mat.uuid + ':' + factor;
+    let out = shadedMaterialCache.get(key);
+    if (!out) {
+      out = mat.clone();
+      out.color.multiplyScalar(factor);
+      if (out.emissive) out.emissive.multiplyScalar(factor);
+      out.userData = Object.assign({}, mat.userData, { underIslandShaded: true });
+      shadedMaterialCache.set(key, out);
+    }
+    return out;
   }
 
   const islandShellMaterialCache = new Map();
