@@ -269,8 +269,11 @@
     boardSide:  new THREE.MeshLambertMaterial({ color: 0x8b8d88, side: THREE.FrontSide }),
     islandUnder:  new THREE.MeshLambertMaterial({ color: 0x34373b, side: THREE.DoubleSide }),
     islandUnderD: new THREE.MeshLambertMaterial({ color: 0x202327, side: THREE.DoubleSide }),
-    rocketSteel:  new THREE.MeshLambertMaterial({ color: 0x767d86, side: THREE.FrontSide }),
-    rocketSteelD: new THREE.MeshLambertMaterial({ color: 0x2f353c, side: THREE.FrontSide }),
+    // Darkened (~0.6x) so the heavy/rocket engine reads as shaded under the
+    // island instead of brightly lit — parity with the lift engine's under-island
+    // shade (engine/world/09b UNDER_ISLAND_ENGINE_SHADE). Rocket-only materials.
+    rocketSteel:  new THREE.MeshLambertMaterial({ color: 0x474b50, side: THREE.FrontSide }),
+    rocketSteelD: new THREE.MeshLambertMaterial({ color: 0x1c2024, side: THREE.FrontSide }),
     utilityPipe:  new THREE.MeshLambertMaterial({ color: 0x6f7881, side: THREE.FrontSide }),
     utilityPipeD: new THREE.MeshLambertMaterial({ color: 0x343a40, side: THREE.FrontSide }),
     utilityCable: new THREE.MeshLambertMaterial({ color: 0x171b20, side: THREE.FrontSide }),
