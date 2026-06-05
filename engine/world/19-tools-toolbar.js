@@ -1075,7 +1075,7 @@
       const asset = tool.modelAsset || getModelStamp(tool.modelStampId);
       const status = document.getElementById('stamp-builder-status');
       if (!asset || !asset.supported) {
-        if (status) status.textContent = (asset ? asset.format.toUpperCase() : 'Model') + ' detected, but only GLB/GLTF/OBJ/FBX/VOX are placeable right now';
+        if (status) status.textContent = (asset ? asset.format.toUpperCase() : 'Model') + ' detected, but only GLB/GLTF/OBJ/FBX/VOX/VDB are placeable right now';
         return;
       }
       rememberRecentStampTool(tool);
@@ -1126,7 +1126,7 @@
         ? 'No stamps match that search.'
         : activeStampBuilderCategory !== 'all'
           ? 'No stamps in this category yet.'
-          : 'No stamps yet. Drop GLB/GLTF/OBJ/FBX/VOX files into models/ or import a voxel build JSON.';
+          : 'No stamps yet. Drop GLB/GLTF/OBJ/FBX/VOX/VDB files into models/ or import a voxel build JSON.';
       grid.appendChild(empty);
       return;
     }

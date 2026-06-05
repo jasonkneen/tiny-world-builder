@@ -1,6 +1,6 @@
   // -------- drag/drop imports --------
   (function initTinyWorldDropImports() {
-    const MODEL_DROP_EXT_RE = /\.(glb|gltf|obj|fbx|vox)$/i;
+    const MODEL_DROP_EXT_RE = /\.(glb|gltf|obj|fbx|vox|vdb)$/i;
     const IMAGE_DROP_EXT_RE = /\.(png|jpe?g|webp|gif)$/i;
     // Material/texture files that ride along with a model (OBJ .mtl + its images).
     // Texture extensions stay in sync with MODEL_STAMP_TEXTURE_FORMATS in the model
@@ -309,7 +309,7 @@
         onDrop(files) {
           const assets = registerDroppedModels(modelBundleFiles(files));
           if (!assets.length) {
-            showDropStatus('Drop GLB, GLTF, OBJ, FBX, or VOX files for Stamps', 'error');
+            showDropStatus('Drop GLB, GLTF, OBJ, FBX, VOX, or VDB files for Stamps', 'error');
             return;
           }
           selectDroppedModel(assets[0]);
@@ -333,7 +333,7 @@
         async onDrop(files, evt) {
           const assets = registerDroppedModels(modelBundleFiles(files));
           if (!assets.length) {
-            showDropStatus('Drop a GLB, GLTF, OBJ, FBX, or VOX model on the world', 'error');
+            showDropStatus('Drop a GLB, GLTF, OBJ, FBX, VOX, or VDB model on the world', 'error');
             return;
           }
           const target = modelPlacementTarget(evt);

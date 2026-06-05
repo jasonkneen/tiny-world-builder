@@ -112,6 +112,28 @@ test('dropped OBJ keeps its .mtl + texture sidecars (so it imports textured)', (
   assert.ok(ctx.localFiles['air_balloon.png'], 'png available to the MTL by basename');
 });
 
+test('VDB voxel mesh: occupancy → coloured clone-safe cloud, empty → null', () => {
+  const { buildVdbVoxelMesh } = buildEngineFns(LOADER, ['buildVdbVoxelMesh']);
+  // Empty volume (e.g. the simulation-start frame) yields no mesh.
+  assert.equal(
+    buildVdbVoxelMesh({ count: 0, coords: new Int32Array(), bbox: { min: [ 0, 0, 0 ], max: [ 0, 0, 0 ] } }),
+    null
+  );
+  // A small solid block of active voxels.
+  const coords = [];
+  for ( let x = 0; x < 3; x ++ ) for ( let y = 0; y < 3; y ++ ) for ( let z = 0; z < 4; z ++ ) coords.push( x, y, z );
+  const parsed = { count: coords.length / 3, coords: new Int32Array( coords ), bbox: { min: [ 0, 0, 0 ], max: [ 2, 2, 3 ] } };
+  const g = buildVdbVoxelMesh( parsed, { targetRes: 8 } );
+  assert.ok( g, 'mesh built' );
+  const mesh = g.children[ 0 ];
+  assert.ok( mesh.isMesh );
+  assert.equal( mesh.material.vertexColors, true );
+  assert.ok( mesh.geometry.attributes.position.count > 0, 'has geometry' );
+  assert.ok( mesh.geometry.attributes.color.count === mesh.geometry.attributes.position.count, 'per-vertex colour' );
+  // Placing a stamp clones the cached scene — must not throw.
+  assert.doesNotThrow( () => g.clone() );
+});
+
 test('VOXMesh is not clone-safe; a plain Mesh wrapper clones cleanly', () => {
   // Minimal one-voxel .vox (version 150) coloured red via an RGBA palette.
   const u32 = n => { const b = Buffer.alloc(4); b.writeUInt32LE(n >>> 0, 0); return b; };

@@ -4,8 +4,8 @@
   const MODEL_STAMP_DROPPED_DB_NAME = 'tinyworld-model-stamps.v1';
   const MODEL_STAMP_DROPPED_DB_VERSION = 1;
   const MODEL_STAMP_DROPPED_STORE = 'dropped-model-files';
-  const MODEL_STAMP_SUPPORTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox']);
-  const MODEL_STAMP_DETECTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox']);
+  const MODEL_STAMP_SUPPORTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox', 'vdb']);
+  const MODEL_STAMP_DETECTED_FORMATS = new Set(['glb', 'gltf', 'obj', 'fbx', 'vox', 'vdb']);
   const MODEL_STAMP_TEXTURE_FORMATS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
   let MODEL_STAMP_ASSETS = [];
   let selectedModelStampId = null;
@@ -1342,6 +1342,94 @@
     return g;
   }
 
+  // Turn a parsed OpenVDB density field (active voxel coords) into a chunky,
+  // stylised "voxel cloud" mesh: downsample to a coarse grid, emit culled cube
+  // faces, and colour by height (warm fire at the base → cool smoke up top).
+  // Returns a clone-safe plain Mesh wrapped in a Group, or null for empty grids.
+  function buildVdbVoxelMesh(parsed, opts = {}) {
+    if (!parsed || !parsed.count || !parsed.coords || !parsed.coords.length) return null;
+    const coords = parsed.coords;
+    const min = parsed.bbox.min;
+    const max = parsed.bbox.max;
+    const spanX = max[0] - min[0] + 1;
+    const spanY = max[1] - min[1] + 1;
+    const spanZ = max[2] - min[2] + 1;
+    const target = Math.max(8, Math.min(48, opts.targetRes || 30));
+    const factor = Math.max(1, Math.ceil(Math.max(spanX, spanY, spanZ, 1) / target));
+    const gx = Math.max(1, Math.ceil(spanX / factor));
+    const gy = Math.max(1, Math.ceil(spanY / factor));
+    const gz = Math.max(1, Math.ceil(spanZ / factor));
+    const occ = new Uint8Array(gx * gy * gz);
+    const at = (x, y, z) => x + y * gx + z * gx * gy;
+    for (let i = 0; i < coords.length; i += 3) {
+      const cx = Math.min(gx - 1, (coords[i] - min[0]) / factor | 0);
+      const cy = Math.min(gy - 1, (coords[i + 1] - min[1]) / factor | 0);
+      const cz = Math.min(gz - 1, (coords[i + 2] - min[2]) / factor | 0);
+      occ[at(cx, cy, cz)] = 1;
+    }
+    // VDB grid: x/y are horizontal, z is vertical (smoke rises in z), so colour
+    // by the z layer and rotate the finished group so z maps to world-up.
+    const FACES = [
+      { n: [1, 0, 0], d: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+      { n: [-1, 0, 0], d: [-1, 0, 0], c: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
+      { n: [0, 1, 0], d: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+      { n: [0, -1, 0], d: [0, -1, 0], c: [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]] },
+      { n: [0, 0, 1], d: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+      { n: [0, 0, -1], d: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+    ];
+    const positions = [];
+    const colors = [];
+    const normals = [];
+    const cx0 = gx / 2, cy0 = gy / 2, cz0 = gz / 2;
+    const base = new THREE.Color();
+    const fire = new THREE.Color(0xff7a2e);
+    const ember = new THREE.Color(0xffd166);
+    const smoke = new THREE.Color(0xdfe3e8);
+    const haze = new THREE.Color(0xa9b6c6);
+    const tmp = new THREE.Color();
+    for (let z = 0; z < gz; z++) {
+      const t = gz > 1 ? z / (gz - 1) : 0;
+      if (t < 0.28) base.copy(fire).lerp(ember, t / 0.28);
+      else if (t < 0.55) base.copy(ember).lerp(smoke, (t - 0.28) / 0.27);
+      else base.copy(smoke).lerp(haze, (t - 0.55) / 0.45);
+      for (let y = 0; y < gy; y++) {
+        for (let x = 0; x < gx; x++) {
+          if (!occ[at(x, y, z)]) continue;
+          for (const f of FACES) {
+            const nx = x + f.d[0], ny = y + f.d[1], nz = z + f.d[2];
+            const inside = nx >= 0 && ny >= 0 && nz >= 0 && nx < gx && ny < gy && nz < gz;
+            if (inside && occ[at(nx, ny, nz)]) continue; // hidden interior face
+            tmp.copy(base);
+            const jitter = (((x * 73 + y * 19 + z * 37) % 7) - 3) * 0.012;
+            tmp.offsetHSL(0, 0, jitter);
+            const quad = f.c.map(o => [x - cx0 + o[0], y - cy0 + o[1], z - cz0 + o[2]]);
+            const tri = [quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]];
+            for (const v of tri) {
+              positions.push(v[0], v[1], v[2]);
+              normals.push(f.n[0], f.n[1], f.n[2]);
+              colors.push(tmp.r, tmp.g, tmp.b);
+            }
+          }
+        }
+      }
+    }
+    if (!positions.length) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    mat.name = 'TinyWorld VDB cloud';
+    mat.userData.modelStampHydrated = 'vdb';
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.rotation.x = -Math.PI / 2; // VDB z-up → world y-up
+    return group;
+  }
+
   function loadModelStampAsset(asset, onReady, onError) {
     if (!asset) return null;
     let cache = modelStampAssetCache.get(asset.id);
@@ -1442,6 +1530,22 @@
           // VOX meshes already carry per-voxel vertex colours from the file's
           // own palette, so hydrate leaves them alone (no fallback palette).
           hydrateModelStampScene(group, asset, { flipY: false });
+          finish(group);
+        } catch (err) { fail(err); }
+      }, undefined, fail);
+    } else if (asset.format === 'vdb') {
+      if (!THREE.VDBLoader) {
+        fail(new Error('VDBLoader missing'));
+        return cache;
+      }
+      const loader = new THREE.VDBLoader(createModelStampLoadingManager(asset));
+      loader.load(asset.url, parsed => {
+        try {
+          const group = buildVdbVoxelMesh(parsed);
+          if (!group) throw new Error('VDB volume is empty (no active voxels in this frame)');
+          // The cloud mesh already carries per-voxel vertex colours, so skip the
+          // palette fallback; castReceive sets up shadows.
+          castReceive(group);
           finish(group);
         } catch (err) { fail(err); }
       }, undefined, fail);
