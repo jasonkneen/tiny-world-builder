@@ -538,11 +538,11 @@
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
       {
-        uDepth:    { value: 1.7 },                     // room depth, in opening-widths
+        uDepth:    { value: 1.0 },                     // room depth, in opening-widths (shallower reads better from above)
         uWall:     { value: new THREE.Color(0x44505f) },// cool, glassy interior (not warm wood)
-        uFloor:    { value: new THREE.Color(0x39434f) },
+        uFloor:    { value: new THREE.Color(0x3c4654) },
         uCeil:     { value: new THREE.Color(0x2f3742) },
-        uBack:     { value: new THREE.Color(0x515f70) },
+        uBack:     { value: new THREE.Color(0x5a6a82) },
         uLightCol: { value: new THREE.Color(0xffcf94) },// warm lamp accent (mostly on "lit" windows)
         uReflect:  { value: new THREE.Color(0x9fc2dd) },// sky tint for glass fresnel
         uGlass:    { value: new THREE.Color(0.78, 0.84, 0.92) }, // tint*(1-darkness), set per-mesh
@@ -604,9 +604,9 @@
       '  if (t == tBack)      { col = uBack; }',
       '  else if (t == tX)    { col = uWall; }',
       '  else                 { col = (hit.y < 0.0) ? uFloor : uCeil; }',
-      '  col *= mix(0.7, 1.05, depthN);',             // gentle depth shading (keep the room readable)
-      '  float ld = length(hit.xy - vec2(0.0, 0.05));',           // warm interior light near back-centre
-      '  float glow = (0.18 + uLit) * smoothstep(0.75, 0.0, ld) * smoothstep(0.0, 0.4, depthN);',
+      '  col *= mix(0.45, 1.2, depthN);',             // strong front-dark -> back-bright gradient = depth read from any angle
+      '  float ld = length(hit.xy);',                 // warm interior light pooled at the back-centre
+      '  float glow = (0.04 + uLit * 0.18) * smoothstep(0.9, 0.0, ld) * smoothstep(0.0, 0.40, depthN);',
       '  col = (col + uLightCol * glow) * uInteriorBright;',      // fill light (+extra when "lit"), scaled by brightness
       '  float vz = clamp(-rd.z, 0.0, 1.0);',         // head-on component (rd.z = -1 looking straight in)
       '  float fres = pow(1.0 - vz, 3.0);',
