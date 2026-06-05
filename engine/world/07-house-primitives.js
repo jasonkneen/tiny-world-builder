@@ -131,12 +131,12 @@
       const p = size === 'small' ? 0.14 : 0.17; // glass / cross length
       if (orientation === 'gable') {
         const wf = new THREE.Mesh(getBoxGeometry(f, f, 0.04), M.woodTrim); wf.position.set(0, 0, 0); g.add(wf);
-        const wg = new THREE.Mesh(getBoxGeometry(p, p, 0.04), M.windowB); wg.position.set(0, 0, 0.015); g.add(wg);
+        const wg = makeWindowPane(p, p, '+z', 0.03); g.add(wg);
         const cH = new THREE.Mesh(getBoxGeometry(p, 0.012, 0.04), M.woodTrim); cH.position.set(0, 0, 0.025); g.add(cH);
         const cV = new THREE.Mesh(getBoxGeometry(0.012, p, 0.04), M.woodTrim); cV.position.set(0, 0, 0.025); g.add(cV);
       } else {
         const wf = new THREE.Mesh(getBoxGeometry(0.04, f, f), M.woodTrim); wf.position.set(0, 0, 0); g.add(wf);
-        const wg = new THREE.Mesh(getBoxGeometry(0.04, p, p), M.windowB); wg.position.set(0.015, 0, 0); g.add(wg);
+        const wg = makeWindowPane(p, p, '+x', 0.03); g.add(wg);
         const cH = new THREE.Mesh(getBoxGeometry(0.04, 0.012, p), M.woodTrim); cH.position.set(0.025, 0, 0); g.add(cH);
         const cV = new THREE.Mesh(getBoxGeometry(0.04, p, 0.012), M.woodTrim); cV.position.set(0.025, 0, 0); g.add(cV);
       }
@@ -705,8 +705,8 @@
     const sashXs = [-0.66, -0.40, 0.40, 0.66];
     function addFrontBackSash(x, y, z, front) {
       const s = front ? 1 : -1;
-      const glass = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.20, 0.018), M.manorWindow);
-      glass.position.set(x, y, z + s * 0.018);
+      const glass = makeWindowPane(0.14, 0.20, front ? '+z' : '-z', 0.03);
+      glass.position.set(x, y, z + s * 0.03);
       g.add(glass);
       const zf = z + s * 0.034;
       const bars = [
@@ -726,8 +726,8 @@
       bars.forEach(b => g.add(b));
     }
     function addSideSash(x, y, z, sign) {
-      const glass = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.20, 0.12), M.manorWindow);
-      glass.position.set(x + sign * 0.018, y, z);
+      const glass = makeWindowPane(0.12, 0.20, sign > 0 ? '+x' : '-x', 0.03);
+      glass.position.set(x + sign * 0.03, y, z);
       g.add(glass);
       const xf = x + sign * 0.034;
       const bars = [

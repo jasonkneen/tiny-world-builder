@@ -480,6 +480,136 @@
     hoverErase:new THREE.MeshBasicMaterial({ color: 0xb84838, transparent: true, opacity: 0.28, depthWrite: false }),
   };
 
+  // -------- fake-interior window glass (interior mapping) --------
+  // A flat pane sits at the window opening, but its fragment shader raycasts a
+  // VIRTUAL room box that lives behind the glass (the "cube … inside the window
+  // housing"). Because the depth is computed per-pixel from the camera's
+  // position in the pane's own local space, the room shifts with correct
+  // parallax as you orbit — so looking through the window reads as looking into
+  // a recessed room, without needing to punch a hole in the (opaque) wall.
+  //
+  // The pane is a unit PlaneGeometry facing +z; callers scale it to the opening
+  // size and rotate it so +z points out of the wall. attachWindowInterior()
+  // feeds the per-mesh camera-in-local-space uniform on every draw, so a single
+  // shared material can back every window in the scene.
+  const _windowPaneGeo = new THREE.PlaneGeometry(1, 1);
+  // Shared across every window in the scene — never dispose it when a single
+  // house is torn down (safeDisposeGeometry honours this flag, like the cached
+  // box geometries the frames/trims use).
+  _windowPaneGeo.userData.cached = true;
+  const _wiInvMat  = new THREE.Matrix4();
+  const _wiCamLoc  = new THREE.Vector3();
+  const _wiPos     = new THREE.Vector3();
+
+  M.windowInterior = new THREE.ShaderMaterial({
+    // Opaque pane (no transparency sorting); only the outward face is drawn.
+    side: THREE.FrontSide,
+    fog: true,                                        // honour scene.fog like the standard materials
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        uCamLocal: { value: new THREE.Vector3() },    // camera in pane-local space
+        uDepth:    { value: 1.4 },                     // room depth, in opening-widths
+        uWall:     { value: new THREE.Color(0x55504a) },
+        uFloor:    { value: new THREE.Color(0x4a3a2a) },
+        uCeil:     { value: new THREE.Color(0x39393f) },
+        uBack:     { value: new THREE.Color(0x2b2b36) },
+        uLightCol: { value: new THREE.Color(0xffd28a) },
+        uReflect:  { value: new THREE.Color(0x9fc2dd) },// sky tint for glass fresnel
+        uGlass:    { value: new THREE.Color(0.60, 0.66, 0.76) }, // dark cool glass tint (multiplier)
+        uLit:      { value: 0.0 },                     // interior light strength (per-mesh)
+      },
+    ]),
+    vertexShader: [
+      '#include <fog_pars_vertex>',
+      'varying vec3 vLocalPos;',
+      'void main() {',
+      '  vLocalPos = position;',                     // unit pane: xy in [-0.5,0.5], z = 0
+      '  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);',
+      '  gl_Position = projectionMatrix * mvPosition;',
+      '  #include <fog_vertex>',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'precision highp float;',
+      '#include <fog_pars_fragment>',
+      'varying vec3 vLocalPos;',
+      'uniform vec3 uCamLocal;',
+      'uniform float uDepth;',
+      'uniform vec3 uWall, uFloor, uCeil, uBack, uLightCol, uReflect, uGlass;',
+      'uniform float uLit;',
+      'void main() {',
+      '  vec3 ro = vLocalPos;',                       // ray origin on the glass plane (z = 0)
+      '  vec3 rd = normalize(vLocalPos - uCamLocal);',// view ray, heading into the room (rd.z < 0)
+      '  float rz = min(rd.z, -1e-3);',               // never look "outward"
+      '  float tBack = (-uDepth - ro.z) / rz;',       // back wall at z = -uDepth
+      '  float dx = abs(rd.x) < 1e-4 ? (rd.x < 0.0 ? -1e-4 : 1e-4) : rd.x;',
+      '  float dy = abs(rd.y) < 1e-4 ? (rd.y < 0.0 ? -1e-4 : 1e-4) : rd.y;',
+      '  float tX = ((rd.x > 0.0 ? 0.5 : -0.5) - ro.x) / dx;',   // side walls  x = +/-0.5
+      '  float tY = ((rd.y > 0.0 ? 0.5 : -0.5) - ro.y) / dy;',   // floor/ceil  y = +/-0.5
+      '  tX = tX <= 0.0 ? 1e9 : tX;',
+      '  tY = tY <= 0.0 ? 1e9 : tY;',
+      '  float t = min(tBack, min(tX, tY));',
+      '  vec3 hit = ro + rd * t;',
+      '  float depthN = clamp(-hit.z / uDepth, 0.0, 1.0);',      // 0 at glass, 1 at back wall
+      '  vec3 col;',
+      '  if (t == tBack)      { col = uBack; }',
+      '  else if (t == tX)    { col = uWall; }',
+      '  else                 { col = (hit.y < 0.0) ? uFloor : uCeil; }',
+      '  col *= mix(0.45, 1.0, depthN);',             // soft falloff toward the dark window mouth
+      '  float ld = length(hit.xy - vec2(0.0, 0.10));',           // warm glow lamp near back-centre
+      '  float glow = uLit * smoothstep(0.55, 0.0, ld) * smoothstep(0.0, 0.5, depthN);',
+      '  col += uLightCol * glow;',
+      '  vec3 V = normalize(uCamLocal - vLocalPos);', // toward camera (V.z = 1 head-on)
+      '  float fres = pow(1.0 - clamp(V.z, 0.0, 1.0), 3.0);',
+      '  col = mix(col, uReflect, fres * 0.5);',      // glassy sky reflection at grazing angles
+      '  col *= uGlass;',                             // overall dark glass tint
+      '  gl_FragColor = vec4(col, 1.0);',
+      '  #include <fog_fragment>',
+      '}',
+    ].join('\n'),
+  });
+
+  // Build an interior-mapped glass pane for a `w` x `h` window opening. `dir` is
+  // the outward wall-normal the glass faces — '+z' (gable, default), '-z',
+  // '+x' or '-x'. `offset` is how far the pane sits proud of the frame centre
+  // along that axis. The virtual room behind it is `w` wide, `h` tall and
+  // roughly as deep as the opening, so tall/narrow sash windows get tall/narrow
+  // rooms. Square calls (w === h) reproduce the simple cottage window.
+  function makeWindowPane(w, h, dir, offset) {
+    const mesh = new THREE.Mesh(_windowPaneGeo, M.windowInterior);
+    mesh.scale.set(w, h, Math.min(w, h));             // unit pane -> opening; z sets room depth scale
+    switch (dir) {
+      case '-z': mesh.rotation.y = Math.PI;      mesh.position.z = -offset; break;
+      case '+x': mesh.rotation.y =  Math.PI / 2; mesh.position.x =  offset; break;
+      case '-x': mesh.rotation.y = -Math.PI / 2; mesh.position.x = -offset; break;
+      default:   /* '+z' */                      mesh.position.z =  offset; break;
+    }
+    attachWindowInterior(mesh);
+    return mesh;
+  }
+
+  // Per-draw uniform feed: put the camera into this pane's local space so the
+  // shader's room raycast is correct for however the house was placed/rotated/
+  // scaled, and seed a stable per-window "lit" flag from its world position so a
+  // fraction of windows glow warmly.
+  function attachWindowInterior(mesh) {
+    mesh.onBeforeRender = function (renderer, scene, camera) {
+      const u = M.windowInterior.uniforms;
+      _wiInvMat.copy(this.matrixWorld).invert();
+      _wiCamLoc.setFromMatrixPosition(camera.matrixWorld).applyMatrix4(_wiInvMat);
+      u.uCamLocal.value.copy(_wiCamLoc);
+      let lit = this.userData.__wiLit;
+      if (lit === undefined) {
+        _wiPos.setFromMatrixPosition(this.matrixWorld);
+        const h = Math.abs(Math.sin(_wiPos.x * 12.9898 + _wiPos.y * 4.1414 + _wiPos.z * 78.233) * 43758.5453);
+        const f = h - Math.floor(h);
+        lit = this.userData.__wiLit = f < 0.32 ? 0.35 + 1.6 * f : 0.0;
+      }
+      u.uLit.value = lit;
+    };
+  }
+
   const islandShellMaterialCache = new Map();
   function syncIslandShellMaterial(baseMat, shellMat) {
     if (baseMat.isShaderMaterial && shellMat.isShaderMaterial) {
