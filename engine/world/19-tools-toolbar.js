@@ -685,7 +685,7 @@
       return;
     }
     const terrainColors = {
-      grass: '#93c66b',
+      grass: '#90b93e',
       path: '#d7b77d',
       dirt: '#a56c45',
       water: '#66add6',

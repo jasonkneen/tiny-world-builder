@@ -220,9 +220,9 @@
   })();
 
   const M = {
-    grass:     new THREE.MeshLambertMaterial({ color: 0xb0d949, side: THREE.FrontSide }),
+    grass:     new THREE.MeshLambertMaterial({ color: 0x97bf41, side: THREE.FrontSide }),
     grassEdge: new THREE.MeshLambertMaterial({ color: 0x95c138, side: THREE.FrontSide }),
-    grassHi:   new THREE.MeshLambertMaterial({ color: 0xc6ee68, side: THREE.FrontSide }),
+    grassHi:   new THREE.MeshLambertMaterial({ color: 0xb6dd55, side: THREE.FrontSide }),
     grassFlower: new THREE.MeshLambertMaterial({ color: 0xf2c849, side: THREE.FrontSide }),
     dirt:      new THREE.MeshLambertMaterial({ color: 0x7d4519, side: THREE.FrontSide }),
     dirtRich:  new THREE.MeshLambertMaterial({ color: 0x462b15, side: THREE.FrontSide }),
@@ -259,8 +259,8 @@
     bridgeWoodD: new THREE.MeshLambertMaterial({ color: 0x5f3a20 }),
 
     trunk:     new THREE.MeshLambertMaterial({ color: 0x5c3818 }),
-    leaves:    new THREE.MeshLambertMaterial({ color: 0x86d139 }),
-    leavesDk:  new THREE.MeshLambertMaterial({ color: 0x5fab26 }),
+    leaves:    new THREE.MeshLambertMaterial({ color: 0x74b630 }),
+    leavesDk:  new THREE.MeshLambertMaterial({ color: 0x4f9220 }),
 
     wallCream: new THREE.MeshLambertMaterial({ color: 0xf2dfb0 }),
     wallTrim:  new THREE.MeshLambertMaterial({ color: 0xe5cf99 }),
