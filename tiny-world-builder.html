@@ -751,9 +751,67 @@
     <form class="modal-card welcome-card launch-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title" onsubmit="return false">
       <h1 class="sr-only" id="welcome-title">Tiny World Builder</h1>
       <img class="welcome-logo" src="assets/twlogo.png" alt="Tiny World Builder" width="1254" height="1254">
-      <div class="welcome-actions" aria-label="Choose mode">
-        <button class="welcome-mode-btn welcome-build" id="welcome-build" type="button" data-pos-type="primary">BUILD</button>
-        <button class="welcome-mode-btn welcome-play" id="welcome-play" type="button" data-pos-type="terrain">PLAY</button>
+      <!-- Stage 1: load everything, then START -->
+      <div class="launch-stage" data-launch-stage="loading">
+        <div class="launch-loadbar" aria-hidden="true"><span class="launch-loadbar-fill" id="launch-loadbar-fill"></span></div>
+        <button class="welcome-mode-btn welcome-build launch-start-btn" id="launch-start" type="button" data-pos-type="primary" disabled aria-live="polite">
+          <span data-i18n="launch.loading">LOADING…</span>
+        </button>
+      </div>
+
+      <!-- Stage 2: pick a mode -->
+      <div class="launch-stage" data-launch-stage="grid" hidden>
+        <div class="mode-grid" role="menu" aria-label="Choose a mode">
+          <button class="mode-tile mode-tile-builder" data-game-mode="builder" role="menuitem" type="button">
+            <span class="mode-tile-icon" aria-hidden="true">🏝️</span>
+            <span class="mode-tile-title" data-i18n="mode.builder.title">TinyWorld Builder</span>
+            <span class="mode-tile-tag" data-i18n="mode.builder.tag">Build solo · share · collab</span>
+          </button>
+          <button class="mode-tile mode-tile-battle" data-game-mode="battle" role="menuitem" type="button">
+            <span class="mode-tile-icon" aria-hidden="true">⚔️</span>
+            <span class="mode-tile-title" data-i18n="mode.battle.title">Battleworld</span>
+            <span class="mode-tile-tag" data-i18n="mode.battle.tag">Squad island combat · fly &amp; conquer</span>
+          </button>
+          <button class="mode-tile mode-tile-meta" data-game-mode="meta" role="menuitem" type="button">
+            <span class="mode-tile-icon" aria-hidden="true">🌐</span>
+            <span class="mode-tile-title" data-i18n="mode.meta.title">Metaworld</span>
+            <span class="mode-tile-tag" data-i18n="mode.meta.tag">Claim · build · own · trade land</span>
+          </button>
+          <button class="mode-tile mode-tile-soon" data-game-mode="soon" role="menuitem" type="button" disabled aria-disabled="true">
+            <span class="mode-tile-icon" aria-hidden="true">✨</span>
+            <span class="mode-tile-title" data-i18n="mode.soon.title">Coming soon</span>
+            <span class="mode-tile-tag" data-i18n="mode.soon.tag">A new world is brewing</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Stage 3: Battleworld lobby (squad + role) -->
+      <div class="launch-stage" data-launch-stage="lobby" hidden>
+        <div class="launch-lobby">
+          <div class="launch-lobby-head">
+            <button class="launch-back" id="lobby-back" type="button" data-i18n="lobby.back">← Back</button>
+            <strong data-i18n="mode.battle.title">Battleworld</strong>
+          </div>
+          <div class="lobby-group" role="radiogroup" aria-label="Squad size">
+            <span class="lobby-label" data-i18n="lobby.squad">Squad</span>
+            <div class="lobby-pills">
+              <button class="lobby-pill active" data-squad="solo" type="button" data-i18n="lobby.squad.solo">Solo</button>
+              <button class="lobby-pill" data-squad="duos" type="button" data-i18n="lobby.squad.duos">Duos</button>
+              <button class="lobby-pill" data-squad="trios" type="button" data-i18n="lobby.squad.trios">Trios</button>
+              <button class="lobby-pill" data-squad="quads" type="button" data-i18n="lobby.squad.quads">Quads</button>
+            </div>
+          </div>
+          <div class="lobby-group" role="radiogroup" aria-label="Role">
+            <span class="lobby-label" data-i18n="lobby.role">Role</span>
+            <div class="lobby-pills">
+              <button class="lobby-pill active" data-role="pilot" type="button" data-i18n="lobby.role.pilot">Pilot</button>
+              <button class="lobby-pill" data-role="gunner" type="button" data-i18n="lobby.role.gunner">Gunner</button>
+              <button class="lobby-pill" data-role="engineer" type="button" data-i18n="lobby.role.engineer">Engineer</button>
+              <button class="lobby-pill" data-role="commander" type="button" data-i18n="lobby.role.commander">Commander</button>
+            </div>
+          </div>
+          <button class="welcome-mode-btn welcome-play launch-deploy" id="lobby-deploy" type="button" data-i18n="lobby.deploy">DEPLOY</button>
+        </div>
       </div>
       <p class="welcome-credit">
         <span>Created by Jason Kneen</span>

@@ -595,12 +595,12 @@ if (!shippedCamera || !shippedCamera.target || shippedCamera.target.x !== 0 || s
 if (!/const RENDER_SETTINGS_VERSION = '24'/.test(html) || !/resolution:\s*'0\.75'/.test(html) || !/brightness:\s*'0\.80'/.test(html) || !/tiltBlur:\s*'10\.5'/.test(html)) {
   fail('hard-coded render defaults must match the shipped v24 defaults');
 }
-if (!/<div id="welcome-modal" class="modal launch-modal" hidden aria-hidden="true">[\s\S]*<img class="welcome-logo" src="assets\/twlogo\.png" alt="Tiny World Builder"[\s\S]*id="welcome-build"[^>]*>BUILD<\/button>[\s\S]*id="welcome-play"[^>]*>PLAY<\/button>[\s\S]*class="welcome-credit"[\s\S]*Created by Jason Kneen[\s\S]*https:\/\/x\.com\/jasonkneen[\s\S]*@jasonkneen[\s\S]*https:\/\/x\.com\/tinyworldsapp[\s\S]*@tinyworldsapp/.test(htmlRaw)) {
-  fail('welcome launcher must render the Tiny World logo, BUILD/PLAY buttons, creator credit, and social links');
+if (!/<div id="welcome-modal" class="modal launch-modal" hidden aria-hidden="true">[\s\S]*<img class="welcome-logo" src="assets\/twlogo\.png" alt="Tiny World Builder"[\s\S]*id="launch-start"[\s\S]*data-game-mode="builder"[\s\S]*data-game-mode="battle"[\s\S]*data-game-mode="meta"[\s\S]*data-game-mode="soon"[\s\S]*class="welcome-credit"[\s\S]*Created by Jason Kneen[\s\S]*https:\/\/x\.com\/jasonkneen[\s\S]*@jasonkneen[\s\S]*https:\/\/x\.com\/tinyworldsapp[\s\S]*@tinyworldsapp/.test(htmlRaw)) {
+  fail('welcome launcher must render the Tiny World logo, START button, the four mode tiles, creator credit, and social links');
 }
 const welcomeDialogBody = sourceFunctionBody(html, 'initWelcomeDialog');
-if (!/modal\.hidden = false;/.test(welcomeDialogBody) || !/welcome-launch-open/.test(welcomeDialogBody) || !/__tinyworldMode/.test(welcomeDialogBody) || !/chooseWelcomeMode\('build'\)/.test(welcomeDialogBody) || !/chooseWelcomeMode\('play'\)/.test(welcomeDialogBody)) {
-  fail('welcome launcher must open at boot and route choices through Build/Play mode');
+if (!/modal\.hidden = false;/.test(welcomeDialogBody) || !/welcome-launch-open/.test(welcomeDialogBody) || !/__tinyworldGameMode/.test(welcomeDialogBody) || !/showStage\('grid'\)/.test(welcomeDialogBody) || !/getAttribute\('data-game-mode'\)/.test(welcomeDialogBody)) {
+  fail('welcome launcher must open at boot and route mode-grid choices through __tinyworldGameMode');
 }
 if (!/\.launch-modal\s*\{[\s\S]*align-items:\s*center/.test(cssRaw) || !/\.welcome-logo\s*\{[\s\S]*border-radius:\s*20px/.test(cssRaw) || !/\.welcome-mode-btn\s*\{[\s\S]*border:\s*1\.5px solid var\(--welcome-outline\)/.test(cssRaw) || !/\.welcome-credit\s*\{[\s\S]*justify-content:\s*center/.test(cssRaw)) {
   fail('welcome launcher must be a centered rounded logo dialog with block-style mode buttons and footer credit');

@@ -1,41 +1,121 @@
-  // -------- welcome dialog --------
+  // -------- launcher: loading -> START -> mode grid -------- //
+  // Replaces the old BUILD/PLAY welcome dialog. The launch card shows a
+  // loading bar until the scene is ready (bootApp calls __tinyLaunchSetReady),
+  // flips the button to START, then reveals a 2x2 grid of game modes. Each
+  // tile routes into an existing system via window.__tinyworldGameMode. A
+  // ?mode=builder|battle|meta deep-link skips the grid (shared arena links).
   function initWelcomeDialog() {
     const modal = document.getElementById('welcome-modal');
     if (!modal) return;
-    const buildBtn = document.getElementById('welcome-build');
-    const playBtn = document.getElementById('welcome-play');
+    const startBtn = document.getElementById('launch-start');
+    const startLabel = startBtn ? startBtn.querySelector('[data-i18n]') : null;
+    const loadbarFill = document.getElementById('launch-loadbar-fill');
+    const stages = Array.from(modal.querySelectorAll('.launch-stage'));
+    const tiles = Array.from(modal.querySelectorAll('.mode-tile'));
+    const lobby = modal.querySelector('[data-launch-stage="lobby"]');
+    const MIN_LOADING_MS = 1100;
+    const shownAt = Date.now();
+    let launchReady = false;
+    let started = false;
+
+    const showStage = (name) => {
+      stages.forEach((s) => { s.hidden = s.getAttribute('data-launch-stage') !== name; });
+    };
     const closeWelcome = () => {
       modal.hidden = true;
       modal.setAttribute('aria-hidden', 'true');
       document.body.classList.remove('welcome-launch-open');
     };
-    const chooseWelcomeMode = (mode) => {
-      const wantsPlay = mode === 'play';
-      let handledByModeApi = false;
+    const enterMode = (mode, opts) => {
+      let handled = false;
       try {
-        if (window.__tinyworldMode) {
-          if (wantsPlay) window.__tinyworldMode.setPlay();
-          else window.__tinyworldMode.setBuild();
-          handledByModeApi = true;
-        }
-      } catch (_) {
-        handledByModeApi = false;
-      }
-      if (!handledByModeApi) {
-        try { localStorage.setItem('tinyworld:build-play-mode.v1', wantsPlay ? 'play' : 'build'); } catch (_) {}
-        document.body.classList.toggle('tw-play-mode', wantsPlay);
+        if (window.__tinyworldGameMode) handled = !!window.__tinyworldGameMode.set(mode, opts || {});
+      } catch (_) { handled = false; }
+      if (!handled && window.__tinyworldMode) {
+        // Fallback: at least flip build/play if the game-mode API is missing.
+        try { (mode === 'builder') ? window.__tinyworldMode.setBuild() : window.__tinyworldMode.setPlay(); } catch (_) {}
       }
       closeWelcome();
     };
 
+    const markReady = () => {
+      if (launchReady) return;
+      launchReady = true;
+      if (loadbarFill) loadbarFill.classList.add('done');
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.classList.add('is-ready');
+      }
+      if (startLabel) {
+        startLabel.setAttribute('data-i18n', 'launch.start');
+        startLabel.textContent = (window.t ? window.t('launch.start') : 'START');
+      }
+    };
+    // bootApp signals readiness once the scene render-loop is live; honour a
+    // minimum loading time for polish, plus a safety net so START never hangs.
+    window.__tinyLaunchSetReady = () => {
+      const wait = Math.max(0, MIN_LOADING_MS - (Date.now() - shownAt));
+      setTimeout(markReady, wait);
+    };
+    setTimeout(markReady, 6000);
+
+    if (startBtn) startBtn.addEventListener('click', () => {
+      if (!launchReady || started) return;
+      started = true;
+      showStage('grid');
+      const first = tiles.find((t) => !t.disabled);
+      if (first) { try { first.focus({ preventScroll: true }); } catch (_) {} }
+    });
+
+    tiles.forEach((tile) => {
+      tile.addEventListener('click', () => {
+        if (tile.disabled) return;
+        const mode = tile.getAttribute('data-game-mode');
+        if (mode === 'battle') { showStage('lobby'); }
+        else if (mode === 'builder' || mode === 'meta') { enterMode(mode); }
+        // 'soon' is disabled: no route yet.
+      });
+    });
+
+    if (lobby) {
+      lobby.querySelectorAll('.lobby-pill').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          const group = pill.dataset.squad ? 'squad' : 'role';
+          lobby.querySelectorAll('.lobby-pill[data-' + group + ']').forEach((p) => p.classList.remove('active'));
+          pill.classList.add('active');
+        });
+      });
+      const back = document.getElementById('lobby-back');
+      if (back) back.addEventListener('click', () => showStage('grid'));
+      const deploy = document.getElementById('lobby-deploy');
+      if (deploy) deploy.addEventListener('click', () => {
+        const squad = lobby.querySelector('.lobby-pill[data-squad].active');
+        const role = lobby.querySelector('.lobby-pill[data-role].active');
+        enterMode('battle', {
+          squad: squad ? squad.dataset.squad : 'solo',
+          role: role ? role.dataset.role : 'pilot',
+        });
+      });
+    }
+
     modal.hidden = false;
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('welcome-launch-open');
-    if (buildBtn) buildBtn.addEventListener('click', () => chooseWelcomeMode('build'));
-    if (playBtn) playBtn.addEventListener('click', () => chooseWelcomeMode('play'));
-    requestAnimationFrame(() => {
-      try { (buildBtn || playBtn).focus({ preventScroll: true }); } catch (_) {}
-    });
+    showStage('loading');
+
+    // Deep-link: ?mode=builder|battle|meta auto-enters once ready (no grid).
+    let urlMode = null;
+    try { urlMode = new URLSearchParams(location.search).get('mode'); } catch (_) {}
+    const autoMode = (urlMode === 'battle' || urlMode === 'meta' || urlMode === 'builder') ? urlMode : null;
+    if (autoMode) {
+      const tryAuto = () => {
+        if (launchReady) enterMode(autoMode, autoMode === 'battle' ? { squad: 'solo', role: 'pilot' } : {});
+        else setTimeout(tryAuto, 120);
+      };
+      tryAuto();
+    } else if (startBtn) {
+      requestAnimationFrame(() => { try { startBtn.focus({ preventScroll: true }); } catch (_) {} });
+    }
   }
 
   // -------- cloud worlds / assets --------
@@ -1245,6 +1325,8 @@
     setRenderSceneReady(true);
     renderer.setAnimationLoop(animate);
     twPerfMark('boot:animation-loop');
+    // Scene is live behind the launch card: flip the loading button to START.
+    if (typeof window.__tinyLaunchSetReady === 'function') window.__tinyLaunchSetReady();
     startToolThumbBuildQueue();
     startDeferredVisualStartupTasks();
     twPerfMark('boot:end');
@@ -2452,6 +2534,63 @@
     };
     if (buildPlayBtn) buildPlayBtn.addEventListener('click', () => setPlayModeActive(!playModeActive));
     setPlayModeActive(playModeActive, { skipEditorCleanup: true });
+
+    // -- Game mode (launcher: builder / battle / meta) --
+    // The launch grid picks one of these; each routes into existing systems
+    // (Builder = build editor, Battle/Meta = play mode + multiplayer/combat).
+    // Deeper Battleworld (capture, respawn, fly-island) and Metaworld
+    // (ownership, marketplace) rules are staged follow-ups.
+    const GAME_MODE_LS = 'tinyworld:game-mode.v1';
+    const TW_GAME_MODES = ['builder', 'battle', 'meta', 'soon'];
+    let currentGameMode = 'builder';
+    try {
+      const savedGameMode = localStorage.getItem(GAME_MODE_LS);
+      if (savedGameMode && TW_GAME_MODES.indexOf(savedGameMode) !== -1 && savedGameMode !== 'soon') {
+        currentGameMode = savedGameMode;
+      }
+    } catch (_) {}
+
+    function applyGameModeBodyClass(mode) {
+      for (const m of TW_GAME_MODES) document.body.classList.toggle('tw-mode-' + m, m === mode);
+    }
+
+    function setGameMode(mode, opts = {}) {
+      if (TW_GAME_MODES.indexOf(mode) === -1 || mode === 'soon') return false;
+      currentGameMode = mode;
+      applyGameModeBodyClass(mode);
+      try { localStorage.setItem(GAME_MODE_LS, mode); } catch (_) {}
+      if (mode === 'builder') {
+        setPlayModeActive(false);
+      } else if (mode === 'battle') {
+        setPlayModeActive(true);
+        const squad = opts.squad || 'solo';
+        const role = opts.role || 'pilot';
+        try {
+          localStorage.setItem('tinyworld:battle-squad.v1', squad);
+          localStorage.setItem('tinyworld:battle-role.v1', role);
+        } catch (_) {}
+        if (typeof twToast === 'function') {
+          const base = window.tx ? window.tx('mode.battle.title', 'Battleworld') : 'Battleworld';
+          twToast(base + ' — ' + squad + ' / ' + role, 'ok');
+        }
+      } else if (mode === 'meta') {
+        setPlayModeActive(true);
+        if (typeof twToast === 'function') {
+          twToast(window.tx ? window.tx('mode.meta.title', 'Metaworld') : 'Metaworld', 'ok');
+        }
+      }
+      window.dispatchEvent(new CustomEvent('tinyworld:game-mode-changed', {
+        detail: Object.assign({ mode: mode }, opts),
+      }));
+      return true;
+    }
+
+    window.__tinyworldGameMode = {
+      get: () => currentGameMode,
+      set: (mode, opts) => setGameMode(mode, opts),
+      modes: () => TW_GAME_MODES.slice(),
+    };
+    applyGameModeBodyClass(currentGameMode);
 
     // -- raise / lower terrain (visible buttons matching R/F keys) --
     const raiseBtn = document.getElementById('raise-terrain');
