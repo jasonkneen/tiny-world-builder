@@ -44,15 +44,39 @@ walls change; ordinary cliffs stay flat. Bands come from `strataBandsForTerrain`
 and reuse existing `M.*` materials — no new textures, no extra render passes.
 (The unused instanced-panel `addVoxelTerrainRiser` is strata-aware too, for parity.)
 
-## Input
+## Two elevation systems
 
-- **Sculpt tool** (id `sculpt`, shortcut `K`, terrain group) with variants
-  `Lower` (default = dig) / `Raise`. Click steps one level; drag carves/builds a
-  run (one step per visited cell). It is drag-paintable (`isDrawablePlacementTool`)
-  and has no ghost preview (returns null from `buildGhostMesh`).
-- **`R` / `F`** and the command palette call `sculptCellElevation(x, z, up)`:
-  raising fills a pit (`dig → 0`) before stacking `terrainFloors`; lowering drops
-  to the base then digs below it. One continuous control from deep pit to tall column.
+1. **Whole-tile** (`terrainFloors` + `dig`): coarse, the whole slab moves. Driven
+   by **`R`/`F`** and the command palette via `sculptCellElevation(x, z, up)`
+   (raising fills a pit then stacks floors; lowering drops to base then digs).
+2. **Per-tile voxel sculpt** (`voxels`): the **Sculpt tool** edits an N×N sub-grid
+   so the surface becomes a blocky voxel *mesh* instead of a flat tower. This is
+   what the user means by "should be voxels … per tile."
+
+## Per-tile voxel sculpt (`voxels`)
+
+- Field: `voxels = { n, h:[n*n] }` — `n` is the sub-grid resolution (the **Voxel
+  Resolution** setting: 4/6/8/10, mixed→8 via `sculptResolutionNumeric()`), `h` is
+  row-major signed integer height offsets in cubic-voxel steps (`vstep = TILE/n`),
+  clamped to ±`MAX_VOX`. `null`/all-zero = flat (`normalizeVoxels` enforces this).
+- Render: `addVoxelSculptTop` (parallel to `addVoxelTerrainTop`, called from
+  `makeTile` only when `cellSculptData` is non-null, gated on voxel mode). It emits
+  per-sub-cell top caps at `rise + h*vstep` plus strata step walls. Walls: the
+  taller of two in-tile neighbours draws the wall down to the lower; at a tile edge
+  it samples the **adjacent tile's** matching edge sub-cell (`neighborEdgeOffset`)
+  so two equally-sculpted tiles meet seamlessly, and reconciles to the base plane
+  against a flat/unsculpted neighbour (no see-through). `setCell` re-renders the 4
+  neighbours on `voxelsChanged` so those edge walls stay in sync.
+- Input: the **Sculpt tool** (id `sculpt`, `K`, Lower/Raise variants) routes to
+  `sculptVoxelBrush(tileX, tileZ, localX, localZ, up)`. It maps the cursor
+  (`currentHover.localX/localZ`, = hit point − tile centre, ±0.5) to a sub-cell,
+  edits a small radius in *global* sub-cell space (spills across tile borders →
+  continuous craters), and commits each touched tile. Strokes paint one step per
+  sub-cell: `drawKeyForHit` returns a `x,z:vI,J` key and `applyDrawToolToHit`
+  applies directly at the live cursor for sculpt (the tile-coord interpolation
+  would skip within-tile voxels).
+- Object/hover/picking Y still use the tile base (`tileLevelForCell`); per-sub-cell
+  surface height is visual only in v1.
 
 ## Persistence (single chokepoint each way)
 

@@ -192,12 +192,15 @@
       return;
     }
     if (selectedTool.sculpt) {
-      // Sandbox terrain brush: lower (dig) by default, raise (mound) when the
-      // Raise variant is active. One step per click; drag carves/builds a run
-      // since each cell is visited once per stroke.
+      // Sandbox terrain brush: edits the tile's N×N voxel sub-grid under the
+      // cursor (a small radius, spilling across tile borders) so the surface
+      // becomes a shaped voxel mesh — not a flat tower. Lower (dig) by default,
+      // raise (mound) on the Raise variant. Drag paints one step per sub-cell.
       const variant = selectedTool.activeVariant;
       const up = !!(variant && variant.mode === 'raise');
-      sculptCellElevation(x, z, up);
+      const lx = currentHover ? (currentHover.localX || 0) : 0;
+      const lz = currentHover ? (currentHover.localZ || 0) : 0;
+      sculptVoxelBrush(x, z, lx, lz, up);
       return;
     }
     if (selectedTool.kind === 'asset-template') {
@@ -600,6 +603,18 @@
     if (selectedTool && selectedTool.kind === 'fence') {
       return x + ',' + z + ':' + fenceSideFromHover(hit);
     }
+    if (selectedTool && selectedTool.sculpt) {
+      // Per-sub-cell stroke key so a drag paints individual voxels within a tile
+      // (not just once per tile), and revisiting the same voxel in one stroke
+      // doesn't keep deepening it.
+      const c = getWorldCell(x, z);
+      const n = (c.voxels && c.voxels.n) || sculptResolutionNumeric();
+      const lx = Number.isFinite(hit.localX) ? hit.localX : 0;
+      const lz = Number.isFinite(hit.localZ) ? hit.localZ : 0;
+      const li = Math.max(0, Math.min(n - 1, Math.floor((Math.max(-0.5, Math.min(0.5, lx)) + 0.5) * n)));
+      const lj = Math.max(0, Math.min(n - 1, Math.floor((Math.max(-0.5, Math.min(0.5, lz)) + 0.5) * n)));
+      return x + ',' + z + ':v' + li + ',' + lj;
+    }
     return x + ',' + z;
   }
 
@@ -668,6 +683,14 @@
   function applyDrawToolToHit(hit) {
     const coord = drawWorldCoordForHit(hit);
     if (!coord) return false;
+    // Sculpt paints in sub-cell space; the per-tile coord interpolation below
+    // would skip within-tile voxels, so apply directly at the live cursor (the
+    // sub-cell stroke key still prevents re-hitting the same voxel).
+    if (selectedTool && selectedTool.sculpt) {
+      const changedSculpt = applyDrawToolToSingleHit(hit);
+      drawLastWorldCoord = coord;
+      return changedSculpt;
+    }
     let changed = false;
     if (drawLastWorldCoord) {
       const dx = coord.x - drawLastWorldCoord.x;
@@ -1976,6 +1999,68 @@
       userEdited: isOutsideHomeGrid(x, z) || undefined,
     });
     return true;
+  }
+
+  // Per-tile voxel sculpt brush. Maps the cursor's within-tile position to a
+  // sub-cell on the tile's N×N grid and nudges a small radius of sub-cells up or
+  // down by one voxel step. The radius is computed in a global sub-cell space so
+  // a brush near a tile edge spills into the neighbour tile and craters/mounds
+  // stay continuous across the board. Each affected tile is committed via setCell
+  // with its updated heightmap.
+  let sculptBrushRadius = 1; // in sub-cells
+  function sculptVoxelBrush(tileX, tileZ, localX, localZ, up) {
+    const baseCell = getWorldCell(tileX, tileZ);
+    const N = (baseCell.voxels && baseCell.voxels.n) || sculptResolutionNumeric();
+    const delta = up ? 1 : -1;
+    const r = sculptBrushRadius;
+    // Brush centre in global sub-cell coordinates (tile index * N + within-tile).
+    const fx = Math.max(0, Math.min(0.9999, Math.max(-0.5, Math.min(0.5, localX)) + 0.5));
+    const fz = Math.max(0, Math.min(0.9999, Math.max(-0.5, Math.min(0.5, localZ)) + 0.5));
+    const gcx = tileX * N + fx * N;
+    const gcz = tileZ * N + fz * N;
+    const edits = new Map(); // 'tx,tz' -> { tx, tz, h:Array(N*N) }
+    function tileHeights(tx, tz) {
+      const key = tx + ',' + tz;
+      let e = edits.get(key);
+      if (!e) {
+        const c = getWorldCell(tx, tz);
+        const h = new Array(N * N).fill(0);
+        if (c.voxels && c.voxels.n === N && Array.isArray(c.voxels.h)) {
+          for (let k = 0; k < N * N; k++) h[k] = c.voxels.h[k] || 0;
+        }
+        e = { tx, tz, h };
+        edits.set(key, e);
+      }
+      return e;
+    }
+    const gi0 = Math.floor(gcx - r - 1), gi1 = Math.ceil(gcx + r + 1);
+    const gj0 = Math.floor(gcz - r - 1), gj1 = Math.ceil(gcz + r + 1);
+    for (let gi = gi0; gi <= gi1; gi++) {
+      for (let gj = gj0; gj <= gj1; gj++) {
+        const dist = Math.hypot((gi + 0.5) - gcx, (gj + 0.5) - gcz);
+        if (dist > r + 0.5) continue;
+        const tx = Math.floor(gi / N), tz = Math.floor(gj / N);
+        const li = gi - tx * N, lj = gj - tz * N;
+        if (li < 0 || li >= N || lj < 0 || lj >= N) continue;
+        const e = tileHeights(tx, tz);
+        const idx = li * N + lj;
+        e.h[idx] = Math.max(-MAX_VOX, Math.min(MAX_VOX, e.h[idx] + delta));
+      }
+    }
+    for (const e of edits.values()) {
+      const c = getWorldCell(e.tx, e.tz);
+      setCell(e.tx, e.tz, {
+        terrain: c.terrain,
+        terrainFloors: terrainLevelForCell(c),
+        dig: cellDigDepth(c),
+        voxels: { n: N, h: e.h },
+        kind: c.kind || null,
+        floors: c.floors || 1,
+        buildingType: c.buildingType || null,
+        fenceSide: c.fenceSide || null,
+        userEdited: isOutsideHomeGrid(e.tx, e.tz) || undefined,
+      });
+    }
   }
 
   // Item 7 — raise/lower (now sculpt) terrain at the hovered cell. Acts on the

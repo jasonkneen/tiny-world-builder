@@ -467,7 +467,7 @@
   let renderSurfaceLinkedMaterials = localStorage.getItem(RENDER_LS.surfaceLinkedMaterials) !== '0';
   let renderTerrainVoxelResolution = localStorage.getItem(RENDER_LS.terrainVoxelResolution) || 'mixed';
   let showCrowns = false;
-  if (!['mixed', '4', '6', '8', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
+  if (!['mixed', '4', '6', '8', '10', '12'].includes(renderTerrainVoxelResolution)) renderTerrainVoxelResolution = 'mixed';
   if (!renderAutoExpand) renderVisibleSize = 0;
   function applyBackdropSettings() {
     const d = Math.max(0, Math.min(1, renderSkyBlueDepth || 0));

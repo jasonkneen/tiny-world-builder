@@ -41,8 +41,8 @@ netlify deploy --build
 | Orbit             | drag                                   |
 | Zoom              | scroll wheel                           |
 | Stack/enhance item | click the same object tool on an existing object (max 8) |
-| Sculpt terrain    | `Sculpt` tool (`K`) — click/drag to dig a pit or raise a mound |
-| Raise/dig terrain | `R` / `F` over the hovered cell (lowers to base, then **digs** below, exposing strata) |
+| Sculpt terrain    | `Sculpt` tool (`K`) — click/drag carves the tile's voxel sub-grid (4/6/8/10 per tile) into a shaped mesh; Lower/Raise variants |
+| Raise/dig terrain | `R` / `F` over the hovered cell — whole-tile: lowers to base, then **digs** below, exposing strata |
 | Switch tool       | `1`–`9`, then letter shortcuts shown in the toolbar |
 | Back to Select    | `Esc` (disarms any build/paint/erase tool)          |
 | Toggle camera     | `P` or `I` (isometric ⇄ soft ⇄ perspective) |
@@ -128,10 +128,12 @@ outcrops.
 Single `<script>` block, currently ~29k lines of vanilla JS, organised by section
 comments (`// -------- xyz --------`). The model is split cleanly:
 
-- **`world[x][z]`** — intent: `{ terrain, terrainFloors, dig, kind, floors }` per cell.
-  `terrainFloors` raises the ground (hills); `dig` carves it *below* the base
-  plane (sandbox excavation). A cell's signed render elevation is
-  `terrainFloors - dig`, and dug pit walls expose geological strata.
+- **`world[x][z]`** — intent: `{ terrain, terrainFloors, dig, voxels, kind, floors }` per cell.
+  `terrainFloors` raises the whole tile (hills); `dig` carves it *below* the base
+  plane (sandbox excavation, signed render elevation `terrainFloors - dig`).
+  `voxels = { n, h[] }` is the per-tile blocky sculpt heightmap (N×N voxel
+  sub-grid) the Sculpt tool edits, so a tile becomes a shaped voxel mesh rather
+  than a flat slab. Both dug walls and sculpt steps expose geological strata.
 - **`cellMeshes['x,z']`** — rendered Three.js groups for each cell.
 - **`setCell(x, z, opts)`** — single mutation entry point. Updates `world`,
   rebuilds the cell's tile/object meshes, and re-renders any neighbors that

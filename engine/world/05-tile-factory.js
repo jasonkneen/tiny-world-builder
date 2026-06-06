@@ -245,6 +245,48 @@
       : ((terrain === 'path' || terrain === 'water' || terrain === 'dirt') ? 8 : 6);
   }
 
+  // -------- per-tile voxel sculpting --------
+  // A sculpted tile carries `voxels = { n, h:[n*n] }`: a signed integer height
+  // offset per sub-cell, so the tile surface is a blocky N×N voxel mesh instead
+  // of one flat slab. `n` is the sub-grid resolution (the Voxel Resolution
+  // setting: 4/6/8/10). Heights are in cubic-voxel steps (one sub-cell wide).
+  const MAX_VOX = 16; // clamp on a sub-cell height offset (± steps)
+  function sculptResolutionNumeric() {
+    const n = parseInt(renderTerrainVoxelResolution, 10);
+    return Number.isFinite(n) ? Math.max(2, Math.min(16, n)) : 8;
+  }
+  // Normalised sculpt data, or null when the tile is flat (all-zero / absent).
+  function cellSculptData(cell) {
+    const v = cell && cell.voxels;
+    if (!v) return null;
+    const n = v.n | 0;
+    if (n < 2 || n > 16 || !Array.isArray(v.h) || v.h.length !== n * n) return null;
+    for (let k = 0; k < v.h.length; k++) { if (v.h[k]) return { n, h: v.h }; }
+    return null;
+  }
+  // Clamp + dedupe a sculpt heightmap to a stored form; null when flat so a
+  // flattened tile serialises like an ordinary one.
+  function normalizeVoxels(v) {
+    if (!v) return null;
+    const n = v.n | 0;
+    if (n < 2 || n > 16 || !Array.isArray(v.h) || v.h.length !== n * n) return null;
+    const h = new Array(n * n);
+    let any = false;
+    for (let k = 0; k < h.length; k++) {
+      const o = Math.max(-MAX_VOX, Math.min(MAX_VOX, Math.round(v.h[k]) || 0));
+      h[k] = o;
+      if (o) any = true;
+    }
+    return any ? { n, h } : null;
+  }
+  function sameVoxels(a, b) {
+    const na = normalizeVoxels(a), nb = normalizeVoxels(b);
+    if (!na && !nb) return true;
+    if (!na || !nb || na.n !== nb.n) return false;
+    for (let k = 0; k < na.h.length; k++) { if (na.h[k] !== nb.h[k]) return false; }
+    return true;
+  }
+
   const waterfallEffectMeshes = new Set();
   const waterfallTimeUniform = { value: 0 };
 
@@ -327,6 +369,126 @@
       g.add(mesh);
     }
     addVoxelTerrainSurfaceDetails(g, terrain, x, z, topSize, rise + topHeight + 0.012, pathN, terrainN);
+  }
+
+  // Blocky voxel heightfield top for a sculpted tile. Each sub-cell gets its own
+  // surface height (`rise + off*vstep`); vertical strata walls fill the steps
+  // between differing sub-cells (and between a raised edge sub-cell and the tile
+  // base, so the surface meets the outer riser). Self-contained per tile: equal-
+  // height columns abut seamlessly within and across tiles, so a continuous
+  // brush reads continuously. Only sculpted tiles run this path.
+  function addVoxelSculptTop(g, terrain, x, z, rise, topSize, topHeight, pathN, terrainN, hiddenSides, vox) {
+    const N = vox.n;
+    const h = vox.h;
+    const mats = terrainVoxelMaterials(terrain, x, z, terrainN);
+    const cellSize = topSize / N;
+    const vstep = cellSize; // cubic voxels
+    const panelOverlap = Math.min(0.014, Math.max(0.006, cellSize * 0.06));
+    const panelSize = cellSize + panelOverlap;
+    const sideDepth = Math.min(0.03, Math.max(0.012, cellSize * 0.14));
+    const half = topSize * 0.5;
+    const offAt = (i, j) => (i >= 0 && i < N && j >= 0 && j < N) ? (h[i * N + j] || 0) : 0;
+    const surfTop = o => rise + o * vstep + topHeight;        // world Y of a sub-cell surface
+    const centerX = i => -half + cellSize * (i + 0.5);
+    const centerZ = j => -half + cellSize * (j + 0.5);
+
+    const buckets = new Map();
+    function queue(geo, mat, m) {
+      const key = (geo.id || geo.uuid) + ':' + (mat.id || mat.uuid);
+      let b = buckets.get(key);
+      if (!b) { b = { geo, mat, mats: [] }; buckets.set(key, b); }
+      b.mats.push(m);
+    }
+    const dummy = addVoxelSculptTop._dummy || (addVoxelSculptTop._dummy = new THREE.Object3D());
+
+    // --- top caps (thin slab under each sub-cell surface) ---
+    const capGeo = getOpenBoxGeometry(panelSize, topHeight, panelSize, false, true, true, true, true, true);
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        const o = offAt(i, j);
+        const r = cellRand(x * N + i, z * N + j, 53);
+        let mat = mats.base;
+        if (r > 0.86) mat = mats.hi;
+        else if (r < 0.16) mat = mats.low;
+        else if (terrain !== 'water' && r > 0.68) mat = mats.scuff;
+        dummy.position.set(centerX(i), surfTop(o) - topHeight * 0.5, centerZ(j));
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        queue(capGeo, mat, dummy.matrix.clone());
+      }
+    }
+
+    // --- strata step walls between a sub-cell and its lower neighbour ---
+    // Unit-height, double-sided wall (scaled per instance) so heights vary freely.
+    const wallGeoNS = getOpenBoxGeometry(panelSize, 1, sideDepth, true, true, false, false, false, false);
+    const wallGeoEW = getOpenBoxGeometry(sideDepth, 1, panelSize, true, true, false, false, false, false);
+    const DIRS = [['n', 0, -1], ['s', 0, 1], ['w', -1, 0], ['e', 1, 0]];
+    // Sample the matching edge sub-cell of an adjacent tile so walls stay seamless
+    // across two sculpted tiles, and cap cleanly against a flat (unsculpted) one.
+    // Returns the neighbour offset, or null when the neighbour tile is flat/at a
+    // different resolution (→ reconcile this tile's edge down to the base plane).
+    function neighborEdgeOffset(dir, i, j) {
+      if (typeof getWorldCell !== 'function') return null;
+      let nx = x, nz = z, ni = i, nj = j;
+      if (dir === 'e') { nx = x + 1; ni = 0; }
+      else if (dir === 'w') { nx = x - 1; ni = N - 1; }
+      else if (dir === 'n') { nz = z - 1; nj = N - 1; }
+      else { nz = z + 1; nj = 0; }
+      const nc = getWorldCell(nx, nz);
+      const v = nc && nc.voxels;
+      if (!v || v.n !== N || !Array.isArray(v.h)) return null;
+      return v.h[ni * N + nj] || 0;
+    }
+    function drawWall(dir, i, j, loY, hiY) {
+      const wallH = hiY - loY;
+      if (wallH <= 1e-4) return;
+      const midY = (loY + hiY) * 0.5;
+      const depth = Math.max(0, -midY); // below the board base plane → strata
+      const band = strataMatsForDepth(terrain, depth);
+      const rr = cellRand(x * N + i, z * N + j, 200 + dir.charCodeAt(0));
+      const wmat = rr > 0.8 ? band.hi : (rr < 0.22 ? band.low : band.base);
+      const alongX = dir === 'n' || dir === 's';
+      const px = alongX ? centerX(i) : (dir === 'w' ? centerX(i) - cellSize * 0.5 : centerX(i) + cellSize * 0.5);
+      const pz = alongX ? (dir === 'n' ? centerZ(j) - cellSize * 0.5 : centerZ(j) + cellSize * 0.5) : centerZ(j);
+      dummy.position.set(px, midY, pz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, wallH, 1);
+      dummy.updateMatrix();
+      queue(alongX ? wallGeoNS : wallGeoEW, wmat, dummy.matrix.clone());
+    }
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        const o = offAt(i, j);
+        for (const [dir, di, dj] of DIRS) {
+          const ni = i + di, nj = j + dj;
+          if (ni >= 0 && ni < N && nj >= 0 && nj < N) {
+            // Interior step: the taller sub-cell draws the wall down to the lower.
+            const no = offAt(ni, nj);
+            if (no < o) drawWall(dir, i, j, surfTop(no), surfTop(o));
+          } else {
+            const nb = neighborEdgeOffset(dir, i, j);
+            if (nb === null) {
+              // Flat / unsculpted neighbour: reconcile this edge to the base
+              // plane (offset 0) in both directions so there is no see-through.
+              if (o !== 0) drawWall(dir, i, j, surfTop(Math.min(o, 0)), surfTop(Math.max(o, 0)));
+            } else if (nb < o) {
+              // Adjacent sculpted tile: only the taller side draws the wall, so
+              // two equally-sculpted tiles meet seamlessly.
+              drawWall(dir, i, j, surfTop(nb), surfTop(o));
+            }
+          }
+        }
+      }
+    }
+
+    for (const b of buckets.values()) {
+      const mesh = new THREE.InstancedMesh(b.geo, b.mat, b.mats.length);
+      for (let i = 0; i < b.mats.length; i++) mesh.setMatrixAt(i, b.mats[i]);
+      mesh.instanceMatrix.needsUpdate = true;
+      g.add(mesh);
+    }
+    // No flat surface flecks here — they would float over the sculpted relief.
   }
 
   function addVoxelTerrainSurfaceDetails(g, terrain, x, z, topSize, y, pathN = null, terrainN = null) {
@@ -1340,18 +1502,20 @@
     const appearance = normalizeAppearance(c.appearance);
     const wf = normalizeWaterFlow(c.waterFlow);
     const dig = cellDigDepth(c);
-    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance || wf !== 'auto' || dig) {
+    const vox = normalizeVoxels(c.voxels);
+    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance || wf !== 'auto' || dig || vox) {
       const out = [x, z, c.terrain, c.kind, f, bt, tf, fs];
       // Always push extras (or null) before the transform / appearance so
       // tuple positions stay stable. Transform is [ry, ox, oz, oy].
-      // `dig` (sandbox excavation depth) is the last optional slot, so when it
-      // is present every earlier optional slot is materialised to keep the
-      // positions stable for the array parser.
+      // `dig` (excavation depth) then `voxels` (per-tile sculpt heightmap) are
+      // the last optional slots, so when a later one is present every earlier
+      // optional slot is materialised to keep the array-parser positions stable.
       out.push(extras || null);
       out.push(hasTransform ? [ry, ox, oz, oy] : null);
-      if (appearance || wf !== 'auto' || dig) out.push(appearance || null);
-      if (wf !== 'auto' || dig) out.push(wf);
-      if (dig) out.push(dig);
+      if (appearance || wf !== 'auto' || dig || vox) out.push(appearance || null);
+      if (wf !== 'auto' || dig || vox) out.push(wf);
+      if (dig || vox) out.push(dig);
+      if (vox) out.push(vox);
       return out;
     }
     return null;

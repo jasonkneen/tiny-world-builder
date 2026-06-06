@@ -80,7 +80,7 @@
       path: getPathNeighbors(x, z),
       terrain: getTerrainNeighbors(x, z),
       levels: getLevelNeighbors(x, z),
-    }, x, z, tileLevelForCell(cell), { simpleTerrain });
+    }, x, z, tileLevelForCell(cell), { simpleTerrain, voxels: cell.voxels });
     repaintProfileEnd('tile.make', makeStart);
 
     const p = cellRenderPositionForCell(x, z);
@@ -496,7 +496,7 @@
   }
 
   function setCellImpl(x, z, opts) {
-    const { terrain, terrainFloors, dig, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow } = opts;
+    const { terrain, terrainFloors, dig, voxels, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow } = opts;
     const historyStart = repaintProfileBegin();
     pushWorldHistorySnapshot();
     repaintProfileEnd('state.history', historyStart);
@@ -524,6 +524,10 @@
     // never accidentally fill a pit).
     const newDig = (dig !== undefined) ? Math.max(0, Math.min(MAX_DIG, Math.round(dig) || 0)) : cellDigDepth(prev);
     const digChanged = cellDigDepth(prev) !== newDig;
+    // Per-tile voxel sculpt heightmap. Preserve when the caller omits it; store
+    // normalised (null when flat) so flattened tiles serialise like plain ones.
+    const newVoxels = (voxels !== undefined) ? normalizeVoxels(voxels) : (prev.voxels || null);
+    const voxelsChanged = !sameVoxels(prev.voxels, newVoxels);
     // buildingType: when caller passes undefined, preserve previous unless the
     // kind is changing (a fresh kind clears any old building-type override).
     let newBType = (buildingType !== undefined) ? (buildingType || null)
@@ -564,7 +568,7 @@
       : 'auto';
     const waterFlowChanged = normalizeWaterFlow(prev.waterFlow) !== newWaterFlow;
     const userEdited = !!(prev.userEdited || (opts && opts.userEdited));
-    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, dig: newDig, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, waterFlow: newWaterFlow };
+    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, dig: newDig, voxels: newVoxels, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, waterFlow: newWaterFlow };
     if (userEdited) world[x][z].userEdited = true;
     const vehicleDrivableChanged = prevVehicleDrivable !== isVehicleDrivableCell(world[x][z]);
     if (vehicleDrivableChanged) refreshVehiclesForWorldObstacleChange(x, z);
@@ -591,7 +595,7 @@
       }
     }
 
-    if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
+    if (terrainChanged || tileHeightChanged || waterFlowChanged || voxelsChanged || forceTile) {
       renderCellTile(x, z, { animate, delay: tileDelay });
     } else if (!hasCellTileMesh(x, z)) {
       // Defensive: if for any reason this cell has no ground mesh
@@ -605,7 +609,7 @@
     // orientation all depend on 4-neighbour terrain; riser side-culling
     // depends on 4-neighbour tile levels. Either kind of change requires
     // re-rendering the immediate neighbours so faces don't go stale.
-    if ((terrainChanged || tileHeightChanged) && !forceTile) {
+    if ((terrainChanged || tileHeightChanged || voxelsChanged) && !forceTile) {
       const neighborStart = repaintProfileBegin();
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, nz = z + dz;
@@ -624,7 +628,7 @@
       scheduleHomeBorderEdgeRefresh();
     }
     if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !digChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !transformChanged && !waterFlowChanged) {
-      if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
+      if (terrainChanged || tileHeightChanged || waterFlowChanged || voxelsChanged || forceTile) {
         const saveStart = repaintProfileBegin();
         saveState();
         repaintProfileEnd('state.save', saveStart);

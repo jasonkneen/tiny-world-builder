@@ -518,7 +518,7 @@
   };
 
   function defaultCell() {
-    return { terrain: 'grass', terrainFloors: 1, dig: 0, kind: null, floors: 1, buildingType: null, fenceSide: null, extras: [], appearance: null, waterFlow: 'auto' };
+    return { terrain: 'grass', terrainFloors: 1, dig: 0, voxels: null, kind: null, floors: 1, buildingType: null, fenceSide: null, extras: [], appearance: null, waterFlow: 'auto' };
   }
 
   function cloneExtras(extras) {
@@ -536,6 +536,7 @@
       terrain: (src && src.terrain) || 'grass',
       terrainFloors: (src && src.terrainFloors) || 1,
       dig: Math.max(0, Math.min(MAX_DIG, Math.round((src && src.dig) || 0))),
+      voxels: normalizeVoxels(src && src.voxels),
       kind: (src && src.kind) || null,
       floors: (src && src.floors) || 1,
       buildingType: (src && src.buildingType) || null,

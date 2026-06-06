@@ -43,10 +43,24 @@ exposes geological strata, or raise it into a mound.
   riserHeight/bottom to the old formula; dug + deep-pit-neighbour walls reach the
   pit floor with no gap.
 
+## Follow-up: per-tile VOXEL sculpting (user feedback)
+
+The first pass moved a whole tile as one flat slab. Per user feedback ("should be
+voxels — 4×4/6×6/8×8/10×10 per tile … actually it's a mesh") the **Sculpt tool**
+now edits a per-tile N×N voxel sub-grid (`voxels = { n, h[] }`) so the surface
+becomes a blocky voxel mesh:
+
+- Added `10×10` to the Voxel Resolution setting; sculpt grid follows that setting.
+- New `addVoxelSculptTop` renderer (caps + strata step walls, cross-tile seamless,
+  flat-neighbour capped). `sculptVoxelBrush` paints a small radius across tile
+  borders; per-sub-cell stroke keys. Whole-tile `R/F` (`sculptCellElevation`) kept.
+- `voxels` persisted through setCell/serialize/parser/schema; `setCell` re-renders
+  neighbours on `voxelsChanged`.
+
 ## Still needs visual QA (no browser in this env)
 
-- Browser-check digging with the Sculpt tool and R/F: pit lowers, neighbour walls
-  show soil/clay/rock strata, objects on a dug cell ride down with it.
-- Confirm shallow dig (1–2) on a flat grass board shows a clean dirt-rimmed dip and
-  deep digs reveal rock/bedrock bands; undug default island looks unchanged.
-- Confirm dig round-trips through save/reload, export/import, and undo/redo.
+- Sculpt tool (K): click/drag carves a voxel-stepped mesh within a tile (not a flat
+  tower); craters/mounds flow across tile borders; Lower/Raise variants both work.
+- Strata bands show on the cut walls; deeper cuts reveal rock/bedrock.
+- Undug/unsculpted default island is unchanged; voxel resolution 4/6/8/10 all render.
+- Sculpt + dig + whole-tile raise round-trip through save/reload, export, undo/redo.

@@ -341,12 +341,12 @@
       // Accept either tuple form [x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide]
       // (storage / export) or object form {x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide}
       // (canonical schema, AI generation output).
-      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig;
+      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig, voxels;
       if (Array.isArray(entry)) {
         if (entry.length < 4) continue;
-        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig] = entry;
+        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig, voxels] = entry;
       } else if (entry && typeof entry === 'object') {
-        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig } = entry);
+        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig, voxels } = entry);
       } else {
         continue;
       }
@@ -398,10 +398,12 @@
         offsetY   = +transform.offsetY   || 0;
       }
       const normalizedDig = Math.max(0, Math.min(MAX_DIG, Math.round(+dig || 0)));
+      const normalizedVoxels = (typeof normalizeVoxels === 'function') ? normalizeVoxels(voxels) : null;
       overrides.set(x + ',' + z, {
         terrain: terrain || 'grass',
         terrainFloors: normalizedTerrainFloors,
         dig: normalizedDig,
+        voxels: normalizedVoxels,
         kind: normalizedKind,
         floors: normalizedFloors,
         buildingType: buildingType || null,
@@ -428,6 +430,7 @@
           terrain: o.terrain,
           terrainFloors: o.terrainFloors,
           dig: o.dig,
+          voxels: o.voxels,
           kind: o.kind,
           floors: o.floors,
           buildingType: o.buildingType,
@@ -518,6 +521,7 @@
         terrain: o ? o.terrain : 'grass',
         terrainFloors: o ? o.terrainFloors : 1,
         dig: o ? o.dig : 0,
+        voxels: o ? o.voxels : null,
         tileDelay: (itemIndex % CHUNK) * TILE_STAGGER,
         objectDelay: (itemIndex % CHUNK) * TILE_STAGGER + 0.04,
         impactDust: false,

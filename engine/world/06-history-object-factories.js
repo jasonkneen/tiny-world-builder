@@ -263,7 +263,16 @@
       // still read as full panels aligned to the board grid.
       const seamOverlap = 0.006;
       const topHeight = TOP_H + seamOverlap;
-      if (useVoxelTerrainForTile) {
+      const sculptData = (opts && opts.voxels) ? cellSculptData({ voxels: opts.voxels }) : null;
+      if (useVoxelTerrainForTile && sculptData) {
+        // Sculpted tile: blocky voxel heightfield surface instead of a flat slab.
+        addVoxelSculptTop(g, terrain, x, z, visualRise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN, {
+          e: skipE,
+          w: skipW,
+          s: skipS,
+          n: skipN,
+        }, sculptData);
+      } else if (useVoxelTerrainForTile) {
         addVoxelTerrainTop(g, terrain, x, z, visualRise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN, {
           e: skipE,
           w: skipW,

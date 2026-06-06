@@ -69,14 +69,16 @@ Guidance for AI coding agents working in this repo. Read this before touching
 Two parallel data structures:
 
 ```
-world[x][z]                  // intent  — { terrain, terrainFloors, dig, kind, floors }
+world[x][z]                  // intent  — { terrain, terrainFloors, dig, voxels, kind, floors }
 cellMeshes['x,z']            // render — { tile: Group, object: Group|null }
 ```
 
-`terrainFloors` (1..8) raises the ground; `dig` (0..`MAX_DIG`) carves it BELOW the
-base plane (sandbox excavation). The signed render level a tile uses is
+`terrainFloors` (1..8) raises the whole tile; `dig` (0..`MAX_DIG`) carves it BELOW
+the base plane. The signed render level a tile uses is
 `tileLevelForCell(cell) = terrainFloors - dig`, which feeds riser side-culling and
-every "sits on the surface" Y lookup. Dug pit walls expose geological strata. See
+every "sits on the surface" Y lookup. `voxels = { n, h[] }` is a per-tile N×N
+sculpt heightmap (the Sculpt tool) rendered by `addVoxelSculptTop` as a blocky
+voxel mesh. Dug walls and sculpt steps expose geological strata. See
 `.codex/skills/tinyworld-sandbox-terrain`.
 
 Mutate via **`setCell(x, z, opts)`**. It:

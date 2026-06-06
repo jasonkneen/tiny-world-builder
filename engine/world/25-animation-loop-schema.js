@@ -796,6 +796,16 @@
             "maximum": 6,
             "description": "Sandbox excavation depth: how many levels this cell's ground is carved BELOW the board base plane (0 = undug). The cell stays a grid tile; digging lowers its surface and exposes geological strata (soil/clay/rock) on the resulting pit walls. The cell's signed render elevation is terrainFloors - dig."
           },
+          "voxels": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["n", "h"],
+            "description": "Per-tile blocky voxel sculpt heightmap. The tile surface becomes an n×n grid of voxel columns instead of one flat slab. Used by the Sculpt tool; omit for flat tiles.",
+            "properties": {
+              "n": { "type": "integer", "minimum": 2, "maximum": 16, "description": "Sub-grid resolution per tile (matches the Voxel Resolution setting: 4/6/8/10)." },
+              "h": { "type": "array", "description": "Row-major n*n signed sub-cell height offsets in voxel steps.", "items": { "type": "integer", "minimum": -16, "maximum": 16 } }
+            }
+          },
           "buildingType": {
             "$ref": "#/$defs/buildingType"
           },
