@@ -496,7 +496,7 @@
   }
 
   function setCellImpl(x, z, opts) {
-    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow } = opts;
+    const { terrain, terrainFloors, dig, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow } = opts;
     const historyStart = repaintProfileBegin();
     pushWorldHistorySnapshot();
     repaintProfileEnd('state.history', historyStart);
@@ -519,6 +519,11 @@
     const floorsChanged = (prev.floors || 1) !== newFloors;
     const newTerrainFloors = (terrainFloors !== undefined) ? terrainFloors : terrainLevelForCell(prev);
     const terrainFloorsChanged = terrainLevelForCell(prev) !== newTerrainFloors;
+    // Sandbox excavation depth. Clamp to the structural budget; preserve the
+    // previous value when the caller does not mention dig (so unrelated edits
+    // never accidentally fill a pit).
+    const newDig = (dig !== undefined) ? Math.max(0, Math.min(MAX_DIG, Math.round(dig) || 0)) : cellDigDepth(prev);
+    const digChanged = cellDigDepth(prev) !== newDig;
     // buildingType: when caller passes undefined, preserve previous unless the
     // kind is changing (a fresh kind clears any old building-type override).
     let newBType = (buildingType !== undefined) ? (buildingType || null)
@@ -531,7 +536,7 @@
     else newFenceSide = null;
     const fenceSideChanged = (prev.fenceSide || null) !== newFenceSide;
     const prevTileLevel = tileLevelForCell(prev);
-    const nextTileLevel = tileLevelForCell({ terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide });
+    const nextTileLevel = tileLevelForCell({ terrain: nextTerrain, terrainFloors: newTerrainFloors, dig: newDig, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide });
     const tileHeightChanged = prevTileLevel !== nextTileLevel;
     // Preserve `extras` (decorative tufts / fences sitting alongside the
     // main kind) across setCell unless the caller explicitly clears them.
@@ -559,7 +564,7 @@
       : 'auto';
     const waterFlowChanged = normalizeWaterFlow(prev.waterFlow) !== newWaterFlow;
     const userEdited = !!(prev.userEdited || (opts && opts.userEdited));
-    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, waterFlow: newWaterFlow };
+    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, dig: newDig, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, waterFlow: newWaterFlow };
     if (userEdited) world[x][z].userEdited = true;
     const vehicleDrivableChanged = prevVehicleDrivable !== isVehicleDrivableCell(world[x][z]);
     if (vehicleDrivableChanged) refreshVehiclesForWorldObstacleChange(x, z);
@@ -618,7 +623,7 @@
         && typeof scheduleHomeBorderEdgeRefresh === 'function') {
       scheduleHomeBorderEdgeRefresh();
     }
-    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !transformChanged && !waterFlowChanged) {
+    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !digChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !transformChanged && !waterFlowChanged) {
       if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
         const saveStart = repaintProfileBegin();
         saveState();

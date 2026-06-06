@@ -191,6 +191,15 @@
     if (selectedTool.select) {
       return;
     }
+    if (selectedTool.sculpt) {
+      // Sandbox terrain brush: lower (dig) by default, raise (mound) when the
+      // Raise variant is active. One step per click; drag carves/builds a run
+      // since each cell is visited once per stroke.
+      const variant = selectedTool.activeVariant;
+      const up = !!(variant && variant.mode === 'raise');
+      sculptCellElevation(x, z, up);
+      return;
+    }
     if (selectedTool.kind === 'asset-template') {
       const template = selectedTool.assetTemplate || assetTemplateById(selectedTool.assetTemplateId || selectedAssetTemplateId);
       const clipboard = normalizeClipboardPayload(template && template.clipboard);
@@ -576,6 +585,7 @@
     return !!(tool && !tool.auto && !tool.select && (
       tool.erase ||
       tool.terrain ||
+      tool.sculpt ||
       tool.kind === 'fence' ||
       tool.kind === 'bridge'
     ));
@@ -1938,26 +1948,44 @@
     setCameraMode(next);
   }
 
-  // Item 7 — raise/lower terrain at the hovered cell.  Acts on the
-  // current cell under the hover indicator, clamped 1..8 to match the
-  // schema's terrainFloors range.  No-op if nothing is hovered.
+  // Sandbox sculpt: one continuous control from a deep pit up to a tall column.
+  // Raising fills an excavation back in (dig -> 0) before stacking terrainFloors
+  // up; lowering drops terrainFloors down to the base, then DIGS below it (the
+  // UnrealSandboxTerrain "remove material" half). Returns true if it changed.
+  function sculptCellElevation(x, z, up) {
+    const cell = getWorldCell(x, z);
+    let tf = terrainLevelForCell(cell);
+    let dig = cellDigDepth(cell);
+    if (up) {
+      if (dig > 0) dig -= 1;
+      else if (tf < MAX_FLOORS) tf += 1;
+      else return false;
+    } else {
+      if (tf > 1) tf -= 1;
+      else if (dig < MAX_DIG) dig += 1;
+      else return false;
+    }
+    setCell(x, z, {
+      terrain: cell.terrain,
+      terrainFloors: tf,
+      dig,
+      kind: cell.kind || null,
+      floors: cell.floors || 1,
+      buildingType: cell.buildingType || null,
+      fenceSide: cell.fenceSide || null,
+      userEdited: isOutsideHomeGrid(x, z) || undefined,
+    });
+    return true;
+  }
+
+  // Item 7 — raise/lower (now sculpt) terrain at the hovered cell. Acts on the
+  // cell under the hover indicator. No-op if nothing is hovered.
   function adjustHoverTerrainHeight(delta) {
     if (window.__tinyworldIsPlayMode && window.__tinyworldIsPlayMode()) return;
     if (!currentHover) return;
     const x = currentHover.x + (currentHover.boardX || 0) * GRID;
     const z = currentHover.z + (currentHover.boardZ || 0) * GRID;
-    const cell = getWorldCell(x, z);
-    const prev = terrainLevelForCell(cell);
-    const next = Math.max(1, Math.min(8, prev + (delta > 0 ? 1 : -1)));
-    if (next === prev) return;
-    setCell(x, z, {
-      terrain: cell.terrain,
-      terrainFloors: next,
-      kind: cell.kind || null,
-      floors: cell.floors || 1,
-      buildingType: cell.buildingType || null,
-      fenceSide: cell.fenceSide || null,
-    });
+    sculptCellElevation(x, z, delta > 0);
   }
   // Expose for the command palette.
   window.__adjustHoverTerrainHeight = adjustHoverTerrainHeight;

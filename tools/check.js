@@ -392,7 +392,7 @@ const materialBootBody = sourceFunctionBody(html, 'applyPersistedMaterialSetting
 if (!/hasPersistedMaterialSettings\(\)/.test(materialBootBody) || !/commitPartMaterialAdjustments\(\)/.test(materialBootBody) || !/rebuildTerrainRender\(\)/.test(materialBootBody) || !/rebuildObjectsRender\(\)/.test(materialBootBody) || !/applyPersistedMaterialSettingsOnBoot\(\)/.test(html)) {
   fail('persisted material wear/adjustments must be applied at late boot without needing slider movement');
 }
-if (!/function addVoxelTerrainRiserBacking/.test(html) || !/addVoxelTerrainRiserBacking\(g, terrain, riserSize, DIRT_H \+ rise/.test(html)) {
+if (!/function addVoxelTerrainRiserBacking/.test(html) || !/addVoxelTerrainRiserBacking\(g, terrain, riserSize, riserHeight,/.test(html)) {
   fail('voxel terrain sides must include a solid backing behind detailed panels');
 }
 if (/addVoxelTerrainRiser\(g, terrain, x, z, rise, riserSize, DIRT_H \+ rise/.test(html)) {

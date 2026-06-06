@@ -41,7 +41,8 @@ netlify deploy --build
 | Orbit             | drag                                   |
 | Zoom              | scroll wheel                           |
 | Stack/enhance item | click the same object tool on an existing object (max 8) |
-| Raise/lower terrain | `R` / `F` over the hovered cell      |
+| Sculpt terrain    | `Sculpt` tool (`K`) — click/drag to dig a pit or raise a mound |
+| Raise/dig terrain | `R` / `F` over the hovered cell (lowers to base, then **digs** below, exposing strata) |
 | Switch tool       | `1`–`9`, then letter shortcuts shown in the toolbar |
 | Back to Select    | `Esc` (disarms any build/paint/erase tool)          |
 | Toggle camera     | `P` or `I` (isometric ⇄ soft ⇄ perspective) |
@@ -109,6 +110,7 @@ window.__getVehicleRuntimeSnapshot()
 ## Tools
 
 `Grass` · `Path` · `Dirt` · `Water` · `Stone` · `Lava` · `Sand` · `Snow` ·
+`Sculpt` (dig/raise) ·
 `House` · `Tree` · `Fence` · `Rock` · `Bridge` · `Crop` · `Corn` · `Wheat` ·
 `Pumpkin` · `Carrot` · `Sunflower` · `Tuft` · `Flower` · `Bush` · `Cow` ·
 `Sheep` · `Erase`.
@@ -126,7 +128,10 @@ outcrops.
 Single `<script>` block, currently ~29k lines of vanilla JS, organised by section
 comments (`// -------- xyz --------`). The model is split cleanly:
 
-- **`world[x][z]`** — intent: `{ terrain, kind, floors }` per cell.
+- **`world[x][z]`** — intent: `{ terrain, terrainFloors, dig, kind, floors }` per cell.
+  `terrainFloors` raises the ground (hills); `dig` carves it *below* the base
+  plane (sandbox excavation). A cell's signed render elevation is
+  `terrainFloors - dig`, and dug pit walls expose geological strata.
 - **`cellMeshes['x,z']`** — rendered Three.js groups for each cell.
 - **`setCell(x, z, opts)`** — single mutation entry point. Updates `world`,
   rebuilds the cell's tile/object meshes, and re-renders any neighbors that

@@ -234,6 +234,12 @@
   // objects at startup as the home board cap changes.
 
   const MAX_FLOORS = 8;
+  // Sandbox-terrain excavation depth (UnrealSandboxTerrain-style digging).
+  // A cell's signed render elevation is `terrainFloors - dig`; dig is how many
+  // levels the ground is carved *below* the board base plane. Tiles stay a grid
+  // — dig only lowers a cell's surface and exposes geological strata on the
+  // resulting pit walls. 0 means undug (default, byte-identical to old worlds).
+  const MAX_DIG = 6;
 
   const worldGroup = new THREE.Group();
   xrWorldRoot.add(worldGroup);

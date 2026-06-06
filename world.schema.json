@@ -252,6 +252,12 @@
           "maximum": 8,
           "description": "Ground height stack for the terrain layer only. Terrain repeat taps raise this value. Object repeat taps raise floors instead."
         },
+        "dig": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "Sandbox excavation depth: how many levels this cell's ground is carved BELOW the board base plane (0 = undug). The cell stays a grid tile; digging lowers its surface and exposes geological strata (soil/clay/rock) on the resulting pit walls. The cell's signed render elevation is terrainFloors - dig."
+        },
         "buildingType": { "$ref": "#/$defs/buildingType" },
         "fenceSide": { "$ref": "#/$defs/fenceSide" },
         "extras": { "$ref": "#/$defs/extras" },

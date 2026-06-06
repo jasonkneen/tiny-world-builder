@@ -3048,11 +3048,11 @@
       items.push({ group: 'Camera', label: 'Toggle perspective', hint: 'orbit vs orthographic', kbd: 'P', run: topBtnAction('persp') });
       items.push({ group: 'Camera', label: 'Pick camera view…', hint: 'top-down / perspective / first-person', run: topBtnAction('view-modes') });
       items.push({ group: 'Camera', label: 'Center on home grid', hint: 'frame the home board', kbd: 'H', run: topBtnAction('home') });
-      // Terrain — raise/lower the hovered cell
-      items.push({ group: 'Terrain', label: 'Raise terrain at cursor', hint: 'terrainFloors +1 (max 8)', kbd: 'R', run: () => {
+      // Terrain — sculpt (raise / dig) the hovered cell
+      items.push({ group: 'Terrain', label: 'Raise terrain at cursor', hint: 'fill any pit, then build up (max 8)', kbd: 'R', run: () => {
         if (typeof window.__adjustHoverTerrainHeight === 'function') window.__adjustHoverTerrainHeight(+1);
       } });
-      items.push({ group: 'Terrain', label: 'Lower terrain at cursor', hint: 'terrainFloors -1 (min 1)', kbd: 'F', run: () => {
+      items.push({ group: 'Terrain', label: 'Lower / dig terrain at cursor', hint: 'lower to base, then excavate a pit (reveals strata)', kbd: 'F', run: () => {
         if (typeof window.__adjustHoverTerrainHeight === 'function') window.__adjustHoverTerrainHeight(-1);
       } });
       // Scene

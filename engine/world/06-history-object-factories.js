@@ -168,7 +168,24 @@
     const kerbDrop = Math.abs(Math.min(0, terrainOffset));
     const visualRise = rise + terrainOffset;
     const positiveTerrainOffset = Math.max(0, terrainOffset);
-    const riserHeight = DIRT_H + rise + positiveTerrainOffset;
+    // Riser depth. Normally a tile's dirt cliff drops to the fixed board floor
+    // (-DIRT_H). Sandbox digging breaks that: an excavated cell (level < 1) gets
+    // its own dirt body below its lowered floor, and any neighbour that sits
+    // higher than this cell must extend its cliff DOWN to the deepest adjacent
+    // pit floor so the pit wall has no gap. For an undug grid every neighbour is
+    // equal-or-shallower so `cliffBottomY` resolves to -DIRT_H and the geometry
+    // is byte-identical to before.
+    const topOfRiser = rise + positiveTerrainOffset;
+    const RISER_SEAM = 0.02;
+    let cliffBottomY = Math.min(-DIRT_H, topOfRiser - DIRT_H);
+    let strataWall = level < 1;
+    for (const dir of ['n', 's', 'e', 'w']) {
+      const lv = levelN[dir];
+      if (typeof lv !== 'number') continue;
+      if (lv < 1) strataWall = true;
+      if (lv < level) cliffBottomY = Math.min(cliffBottomY, terrainRiseForLevel(lv) - RISER_SEAM);
+    }
+    const riserHeight = topOfRiser - cliffBottomY;
     const topY = visualRise + TOP_H;
     // Weather impact decals sit above the rounded/beveled slab, not at the
     // mathematical tile height, otherwise rain ripples and snow buildup hide
@@ -207,23 +224,23 @@
       if (hasVisibleRiser) {
         const riserMat = terrainRiserMaterial(terrain);
         if (useVoxelTerrainForTile) {
-          addVoxelTerrainRiserBacking(g, terrain, riserSize, DIRT_H + rise + positiveTerrainOffset, {
+          addVoxelTerrainRiserBacking(g, terrain, riserSize, riserHeight, {
             e: skipE,
             w: skipW,
             s: skipS,
             n: skipN,
-          });
+          }, cliffBottomY, strataWall);
           const bottom = new THREE.Mesh(getOpenBoxGeometry(riserSize, 0.012, riserSize, false, true, true, true, true, true), riserMat);
-          bottom.position.y = -DIRT_H - 0.006;
+          bottom.position.y = cliffBottomY - 0.006;
           bottom.userData.noShadow = true;
           g.add(bottom);
         } else {
           const riserGeo = getOpenBoxGeometry(riserSize, riserHeight, riserSize, true, true, skipE, skipW, skipS, skipN);
           const riser = new THREE.Mesh(riserGeo, riserMat);
-          riser.position.y = -DIRT_H + riserHeight * 0.5;
+          riser.position.y = cliffBottomY + riserHeight * 0.5;
           g.add(riser);
           const bottom = new THREE.Mesh(getOpenBoxGeometry(riserSize, 0.012, riserSize, false, true, true, true, true, true), riserMat);
-          bottom.position.y = -DIRT_H - 0.006;
+          bottom.position.y = cliffBottomY - 0.006;
           bottom.userData.noShadow = true;
           g.add(bottom);
         }

@@ -341,12 +341,12 @@
       // Accept either tuple form [x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide]
       // (storage / export) or object form {x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide}
       // (canonical schema, AI generation output).
-      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow;
+      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig;
       if (Array.isArray(entry)) {
         if (entry.length < 4) continue;
-        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow] = entry;
+        [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig] = entry;
       } else if (entry && typeof entry === 'object') {
-        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow } = entry);
+        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dig } = entry);
       } else {
         continue;
       }
@@ -397,9 +397,11 @@
         offsetZ   = +transform.offsetZ   || 0;
         offsetY   = +transform.offsetY   || 0;
       }
+      const normalizedDig = Math.max(0, Math.min(MAX_DIG, Math.round(+dig || 0)));
       overrides.set(x + ',' + z, {
         terrain: terrain || 'grass',
         terrainFloors: normalizedTerrainFloors,
+        dig: normalizedDig,
         kind: normalizedKind,
         floors: normalizedFloors,
         buildingType: buildingType || null,
@@ -425,6 +427,7 @@
         setCell(o.__x, o.__z, {
           terrain: o.terrain,
           terrainFloors: o.terrainFloors,
+          dig: o.dig,
           kind: o.kind,
           floors: o.floors,
           buildingType: o.buildingType,
@@ -514,6 +517,7 @@
       const base = {
         terrain: o ? o.terrain : 'grass',
         terrainFloors: o ? o.terrainFloors : 1,
+        dig: o ? o.dig : 0,
         tileDelay: (itemIndex % CHUNK) * TILE_STAGGER,
         objectDelay: (itemIndex % CHUNK) * TILE_STAGGER + 0.04,
         impactDust: false,

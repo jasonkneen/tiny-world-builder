@@ -10,6 +10,12 @@
     { id: 'lava',   label: 'Lava',   terrain: 'lava',  color: '#e7592b', group: 'terrain' },
     { id: 'sand',   label: 'Sand',   terrain: 'sand',  color: '#e6cc7c', group: 'terrain' },
     { id: 'snow',   label: 'Snow',   terrain: 'snow',  color: '#f2f5fa', group: 'terrain' },
+    { id: 'sculpt', label: 'Sculpt', sculpt: true, color: '#7a5a3c', shortcut: 'k', group: 'terrain',
+      variants: [
+        { id: 'sculpt-lower', label: 'Lower', mode: 'lower', hint: 'dig a pit / trench — reveals soil, clay and rock strata' },
+        { id: 'sculpt-raise', label: 'Raise', mode: 'raise', hint: 'build the ground up into a mound or hill' },
+      ],
+    },
     { id: 'new-island', label: 'Island', island: true, color: '#73a853', group: 'build' },
     { id: 'house',  label: 'House',  kind: 'house', color: '#3a72c8', shortcut: '5', group: 'build',
       variants: [
@@ -47,7 +53,7 @@
   ];
 
   const TOOL_GROUPS = [
-    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock'], iconTool: 'grass' },
+    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock', 'sculpt'], iconTool: 'grass' },
     { id: 'plants', label: 'Plants', toolIds: ['tree', 'tuft', 'flower', 'bush'], iconTool: 'tree' },
     { id: 'build', label: 'Build', toolIds: ['house', 'new-island'], iconTool: 'house' },
     { id: 'infra', label: 'Infra', toolIds: ['fence', 'bridge', 'lamp-post', 'spotlight', 'mooring'], iconTool: 'fence' },
@@ -1247,6 +1253,7 @@
     "lamp-post": "<svg viewBox=\"0 0 512 512\"><path d=\"M244 30h24v26h-24z\"/><path d=\"M256 52l66 104H190z\"/><path d=\"M186 156h140v34H186z\"/><path d=\"M240 190h32v266h-32z\"/><path d=\"M166 456h180v28H166z\"/></svg>",
     "spotlight": "<svg viewBox=\"0 0 512 512\"><path d=\"M104 122l152 70-36 78-152-70z\"/><path d=\"M230 178L470 270V152z\"/></svg>",
     "mooring": "<svg viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M128 96a64 64 0 1 0 0 128a64 64 0 0 0 0-128zm256 192a64 64 0 1 0 0 128a64 64 0 0 0 0-128zM166 238c44 70 106 116 191 138l10-36c-75-20-126-58-167-124zm162-112c-80 11-141 48-184 112l31 20c37-55 87-85 159-96zM318 54l128 54l-98 96l-17-74l-74-17z\"/></svg>",
+    "sculpt": "<svg viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M176 80h160v44h-58v160h-44V124h-58z M146 286h220v66l-110 114-110-114z\"/></svg>",
   };
   // tool id (or kind) -> glyph name
   const TOOL_GLYPH_NAME = {
@@ -1277,7 +1284,8 @@
       "sheep": "sheep",
       "lamp-post": "lamp-post",
       "spotlight": "spotlight",
-      "mooring": "mooring"
+      "mooring": "mooring",
+      "sculpt": "sculpt"
   };
   // House variants get distinct building glyphs so they stay easy to tell apart.
   const HOUSE_VARIANT_GLYPH = { cottage: 'house', manor: 'family-house', tower: 'watchtower', turret: 'castle', skyscraper: 'modern-city' };
@@ -1298,7 +1306,7 @@
   //  tertiary = overlays that stack onto a tile with a primary (fence/mooring)
   function posTypeForTool(t) {
     if (!t || t.select || t.erase || t.eraser || t.auto) return null;
-    if (t.terrain) return 'terrain';
+    if (t.terrain || t.sculpt) return 'terrain';
     if (t.id === 'fence' || t.kind === 'fence' || t.mooring) return 'tertiary';
     return 'primary';
   }

@@ -1,7 +1,16 @@
   // -------- tile factory --------
+  function terrainStepHeight() {
+    return useLandscapeEngine ? 1.12 : 0.20;
+  }
+  // Signed vertical offset of a cell's surface from the board base plane.
+  // Levels above 1 raise the ground (hills); levels below 1 are excavated
+  // (sandbox digging) and return a negative rise so the surface drops into a
+  // pit. Undug worlds only ever pass level >= 1, so the result is >= 0 and the
+  // classic terrain look is unchanged.
   function terrainRiseForLevel(level) {
-    const step = useLandscapeEngine ? 1.12 : 0.20;
-    return Math.max(0, (Math.min(MAX_FLOORS, level || 1) - 1) * step);
+    const step = terrainStepHeight();
+    const lv = (level === undefined || level === null) ? 1 : level;
+    return (Math.min(MAX_FLOORS, lv) - 1) * step;
   }
 
   const HEAVY_TERRAIN_KERB_DROP = 0.048;
@@ -33,8 +42,18 @@
     return cell.kind ? 1 : (cell.floors || 1);
   }
 
+  // How deep a cell is excavated below the base plane (0 = undug). Clamped so a
+  // pit can never punch through the world's structural depth budget.
+  function cellDigDepth(cell) {
+    if (!cell || !cell.dig) return 0;
+    return Math.max(0, Math.min(MAX_DIG, Math.round(cell.dig)));
+  }
+
+  // The signed render level used for tile geometry, riser side-culling, and
+  // every "sits on the surface" Y lookup (objects, hover, crowd, vehicles).
+  // = terrainFloors - dig, so digging lowers the cell and everything riding it.
   function tileLevelForCell(cell) {
-    return terrainLevelForCell(cell);
+    return terrainLevelForCell(cell) - cellDigDepth(cell);
   }
 
   function terrainVisualRiseForCell(cell) {
@@ -169,6 +188,54 @@
       low: terrainShadeMaterial(base, -12),
       edge: terrainShadeMaterial(base, -18),
     };
+  }
+
+  // Geological strata revealed on excavated (dug) pit walls — the
+  // UnrealSandboxTerrain "layers by depth" look, adapted to the tile grid.
+  // `depth` is how far below the board base plane (world y = 0) a wall panel
+  // sits. The shallowest band keeps the cell's own terrain so the lip under the
+  // surface still reads correctly; deeper bands transition soil → clay → rock →
+  // bedrock. Materials are all existing shared `M.*` (no new textures/loads).
+  const _strataBandCache = new Map();
+  function strataBandsForTerrain(terrain) {
+    if (_strataBandCache.has(terrain)) return _strataBandCache.get(terrain);
+    const top = terrainRiserMaterials(terrain);
+    const bands = [
+      { maxDepth: 0.16, mats: top },
+      { maxDepth: 0.52, mats: {
+        base: M.dirtRich,
+        hi: terrainShadeMaterial(M.dirtRich, 14),
+        low: terrainShadeMaterial(M.dirtRich, -14),
+        edge: terrainShadeMaterial(M.dirtRich, -8),
+      } },
+      { maxDepth: 0.98, mats: {
+        base: terrainShadeMaterial(M.dirtRich, -20),
+        hi: terrainShadeMaterial(M.sandDk, -6),
+        low: terrainShadeMaterial(M.dirtRich, -30),
+        edge: terrainShadeMaterial(M.dirtRich, -26),
+      } },
+      { maxDepth: 1.7, mats: {
+        base: M.stone,
+        hi: terrainShadeMaterial(M.stone, 12),
+        low: M.stoneDk,
+        edge: M.stoneDk,
+      } },
+      { maxDepth: Infinity, mats: {
+        base: M.stoneDk,
+        hi: terrainShadeMaterial(M.stone, -12),
+        low: terrainShadeMaterial(M.stoneDk, -18),
+        edge: terrainShadeMaterial(M.stoneDk, -22),
+      } },
+    ];
+    _strataBandCache.set(terrain, bands);
+    return bands;
+  }
+  function strataMatsForDepth(terrain, depth) {
+    const bands = strataBandsForTerrain(terrain);
+    for (const band of bands) {
+      if (depth <= band.maxDepth) return band.mats;
+    }
+    return bands[bands.length - 1].mats;
   }
 
   function terrainVoxelCellCount(terrain) {
@@ -421,7 +488,8 @@
     return buckets;
   }
 
-  function addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, riserHeight, hiddenSides) {
+  function addVoxelTerrainRiser(g, terrain, x, z, rise, riserSize, riserHeight, hiddenSides, bottomY, strata) {
+    if (bottomY === undefined) bottomY = -DIRT_H;
     const mats = terrainRiserMaterials(terrain);
     const cells = terrainVoxelCellCount(terrain);
     const cellSize = riserSize / cells;
@@ -431,8 +499,16 @@
     const sideDepth = Math.min(0.028, Math.max(0.016, cellSize * 0.12));
     const half = riserSize * 0.5;
     const buckets = new Map();
-    function pickMat(ix, iy, dir) {
+    function pickMat(ix, iy, dir, py) {
       const r = cellRand(x * cells + ix, z * verticalCells + iy, 180 + dir.charCodeAt(0));
+      // Excavated walls: pick the geological band for this panel's depth so a
+      // dug pit shows soil → clay → rock → bedrock instead of one flat colour.
+      if (strata && py < -0.02) {
+        const band = strataMatsForDepth(terrain, -py);
+        if (r > 0.82) return band.hi;
+        if (r < 0.20) return band.low;
+        return band.base;
+      }
       if (iy === verticalCells - 1 && terrain === 'grass' && r > 0.28) return mats.edge;
       if (r > 0.82) return mats.hi;
       if (r < 0.20) return mats.low;
@@ -460,8 +536,8 @@
         for (let j = 0; j < verticalCells; j++) {
           const px = alongX ? -half + cellSize * (i + 0.5) : (dir === 'w' ? -half : half);
           const pz = alongX ? (dir === 'n' ? -half : half) : -half + cellSize * (i + 0.5);
-          const py = -DIRT_H + panelH * 0.5 + (riserHeight / verticalCells) * j;
-          queuePanel(geo, pickMat(i, j, dir), px, py, pz);
+          const py = bottomY + panelH * 0.5 + (riserHeight / verticalCells) * j;
+          queuePanel(geo, pickMat(i, j, dir, py), px, py, pz);
         }
       }
     }
@@ -485,21 +561,49 @@
     }
   }
 
-  function addVoxelTerrainRiserBacking(g, terrain, riserSize, riserHeight, hiddenSides) {
+  function addVoxelTerrainRiserBacking(g, terrain, riserSize, riserHeight, hiddenSides, bottomY, strata) {
+    if (bottomY === undefined) bottomY = -DIRT_H;
     const solidSize = Math.max(0.05, riserSize);
+    const sideFlags = [
+      hiddenSides && hiddenSides.e,
+      hiddenSides && hiddenSides.w,
+      hiddenSides && hiddenSides.s,
+      hiddenSides && hiddenSides.n,
+    ];
+    const topY = bottomY + riserHeight;
+    // Excavated walls: stack thin per-band boxes so the exposed cliff reads as
+    // geological strata (soil → clay → rock → bedrock) by depth instead of one
+    // flat colour. Only side faces draw (top/bottom culled), so it stays cheap.
+    if (strata) {
+      const bands = strataBandsForTerrain(terrain);
+      let slabTop = topY;
+      for (let i = 0; i < bands.length && slabTop > bottomY + 1e-4; i++) {
+        const bandBottomY = (bands[i].maxDepth === Infinity) ? -Infinity : -bands[i].maxDepth;
+        const slabBottom = Math.max(bottomY, bandBottomY);
+        const h = slabTop - slabBottom;
+        if (h > 1e-4) {
+          const slabGeo = getOpenBoxGeometry(solidSize, h, solidSize, true, true, sideFlags[0], sideFlags[1], sideFlags[2], sideFlags[3]);
+          const slab = new THREE.Mesh(slabGeo, bands[i].mats.base);
+          slab.position.y = slabBottom + h * 0.5;
+          g.add(slab);
+        }
+        slabTop = slabBottom;
+      }
+      return;
+    }
     const geo = getOpenBoxGeometry(
       solidSize,
       riserHeight,
       solidSize,
       true,
       true,
-      hiddenSides && hiddenSides.e,
-      hiddenSides && hiddenSides.w,
-      hiddenSides && hiddenSides.s,
-      hiddenSides && hiddenSides.n
+      sideFlags[0],
+      sideFlags[1],
+      sideFlags[2],
+      sideFlags[3]
     );
     const mesh = new THREE.Mesh(geo, terrainRiserMaterial(terrain));
-    mesh.position.y = -DIRT_H + riserHeight * 0.5;
+    mesh.position.y = bottomY + riserHeight * 0.5;
     g.add(mesh);
   }
 
@@ -1235,14 +1339,19 @@
     const hasTransform = ry || ox || oz || oy;
     const appearance = normalizeAppearance(c.appearance);
     const wf = normalizeWaterFlow(c.waterFlow);
-    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance || wf !== 'auto') {
+    const dig = cellDigDepth(c);
+    if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance || wf !== 'auto' || dig) {
       const out = [x, z, c.terrain, c.kind, f, bt, tf, fs];
       // Always push extras (or null) before the transform / appearance so
       // tuple positions stay stable. Transform is [ry, ox, oz, oy].
+      // `dig` (sandbox excavation depth) is the last optional slot, so when it
+      // is present every earlier optional slot is materialised to keep the
+      // positions stable for the array parser.
       out.push(extras || null);
       out.push(hasTransform ? [ry, ox, oz, oy] : null);
-      if (appearance || wf !== 'auto') out.push(appearance || null);
-      if (wf !== 'auto') out.push(wf);
+      if (appearance || wf !== 'auto' || dig) out.push(appearance || null);
+      if (wf !== 'auto' || dig) out.push(wf);
+      if (dig) out.push(dig);
       return out;
     }
     return null;
