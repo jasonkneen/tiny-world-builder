@@ -47,6 +47,25 @@
     <span class="meta-owner" data-meta-owner></span>
     <span class="meta-actions" data-meta-actions></span>
   </div>
+
+  <!-- Battleworld arena HUD (shown only in tw-mode-battle) -->
+  <div id="battleworld-hud" class="battleworld-hud" aria-live="polite">
+    <div class="bw-side bw-home">
+      <div class="bw-side-head"><span class="bw-dot bw-dot-friendly" aria-hidden="true"></span><span data-i18n="battle.hud.yourIsland">Your island</span> <em class="bw-squad" data-bw-squad></em></div>
+      <div class="bw-bar bw-bar-hull" data-bw-home-hp><span class="bw-bar-fill"></span><span class="bw-bar-label"></span></div>
+      <div class="bw-bar bw-bar-shield" data-bw-home-shield><span class="bw-bar-fill"></span><span class="bw-bar-label"></span></div>
+      <div class="bw-status" data-bw-status></div>
+    </div>
+    <div class="bw-side bw-target">
+      <div class="bw-side-head bw-target-head">
+        <button class="bw-cycle" data-bw-prev type="button" aria-label="Previous target">◀</button>
+        <span class="bw-target-name" data-bw-target></span>
+        <button class="bw-cycle" data-bw-next type="button" aria-label="Next target">▶</button>
+      </div>
+      <div class="bw-bar bw-bar-capture" data-bw-target-hp><span class="bw-bar-fill"></span><span class="bw-bar-label"></span></div>
+      <button class="bw-fire" data-bw-fire type="button" data-i18n="battle.hud.fire">FIRE</button>
+    </div>
+  </div>
   <div id="cloud-layer"></div>
   <div id="under-occlusion-cloud-wipe" aria-hidden="true"></div>
   <div id="tod-tint" aria-hidden="true"></div>
@@ -1703,6 +1722,7 @@
   <script src="engine/world/44-sub-object-edit.js"></script>
   <script src="engine/world/45-shader-fx.js"></script>
   <script src="engine/world/46-land-ownership.js"></script>
+  <script src="engine/world/47-battleworld-arena.js"></script>
   <script src="engine/world/99-late-boot.js"></script>
 </body>
 </html>

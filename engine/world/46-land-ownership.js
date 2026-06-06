@@ -159,6 +159,15 @@
       toast(tt('meta.toast.income', 'Collected {n} ground rent.', { n: fmtCoins(amount) }), 'ok');
     }
 
+    // Force-assign a parcel to the local player. Used by Battleworld island
+    // capture so a conquered island's ownership persists in the registry.
+    function captureForMe(key) {
+      const r = recOf(key);
+      if (r) { r.owner = ME; r.forSale = false; r.renter = null; r.rentUntil = 0; }
+      else parcels[key] = { owner: ME, forSale: false, price: DEFAULT_BUY_PRICE, rent: DEFAULT_RENT_PRICE };
+      saveLand(); scheduleHud();
+    }
+
     // ---- public API ----
     window.__tinyworldLand = {
       me: () => ME,
@@ -171,6 +180,7 @@
       buy,
       listForSale,
       rent,
+      captureForMe,
       info: (key) => {
         const r = recOf(key);
         return r ? { owner: r.owner, mine: r.owner === ME, forSale: !!r.forSale, price: r.price | 0, rent: (r.rent | 0) || DEFAULT_RENT_PRICE, rented: rentActive(r) } : null;

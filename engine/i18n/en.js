@@ -186,6 +186,22 @@
     'meta.toast.blocked': "You don't own this land — claim it first.",
     'meta.toast.income': 'Collected {n} ground rent.',
 
+    // ---- Battleworld arena HUD ----
+    'battle.hud.yourIsland': 'Your island',
+    'battle.hud.fire': 'FIRE',
+    'battle.hud.hull': 'Hull',
+    'battle.hud.shield': 'Shield',
+    'battle.hud.respawning': 'Respawning…',
+    'battle.hud.victory': 'Victory',
+    'battle.hud.enemy': 'Enemy island',
+    'battle.hud.capture': 'Capture',
+    'battle.hud.cleared': 'No enemies left',
+    'battle.toast.noTarget': 'No enemy islands left — you win!',
+    'battle.toast.captured': 'Island captured!',
+    'battle.toast.win': 'All islands captured — you win!',
+    'battle.toast.downed': 'Home island down — respawning…',
+    'battle.toast.respawn': 'Respawned on your island.',
+
     // ---- settings: tabs + Workspace section (technical sliders stay English) ----
     'settings.tab.app': 'Workspace',
     'settings.tab.rendering': 'Rendering',

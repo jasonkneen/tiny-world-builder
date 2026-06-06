@@ -7788,6 +7788,67 @@
   body.ui-theme-dark .metaworld-hud .meta-action { background: rgba(255, 255, 255, 0.1); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.22); }
   @media (max-width: 600px) { .metaworld-hud { top: 56px; font-size: 12px; gap: 7px; } }
 
+  /* -------- Battleworld arena HUD -------- */
+  .battleworld-hud {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 45;
+    gap: 12px;
+    max-width: calc(100vw - 24px);
+    padding: 10px 12px;
+    border-radius: 16px;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 16px 42px -14px rgba(40, 50, 80, 0.28);
+  }
+  body.tw-mode-battle .battleworld-hud { display: flex; }
+  body.welcome-launch-open .battleworld-hud,
+  body.showcase .battleworld-hud { display: none !important; }
+  .battleworld-hud .bw-side { display: flex; flex-direction: column; gap: 6px; min-width: 188px; }
+  .battleworld-hud .bw-side-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; }
+  .battleworld-hud .bw-squad { color: var(--muted); font-style: normal; font-weight: 600; text-transform: capitalize; }
+  .battleworld-hud .bw-target-head { justify-content: space-between; }
+  .battleworld-hud .bw-target-name { flex: 1; text-align: center; font-size: 12px; font-weight: 800; }
+  .battleworld-hud .bw-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .battleworld-hud .bw-dot-friendly { background: #2bb3a3; }
+  .battleworld-hud .bw-cycle {
+    border: 1px solid rgba(47, 59, 87, 0.28); background: rgba(255, 255, 255, 0.55);
+    color: var(--ink); border-radius: 8px; width: 24px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
+  }
+  .battleworld-hud .bw-cycle:hover { background: rgba(255, 255, 255, 0.82); }
+  .battleworld-hud .bw-bar {
+    position: relative; height: 16px; border-radius: 999px; overflow: hidden;
+    background: rgba(47, 59, 87, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
+  .battleworld-hud .bw-bar-fill { position: absolute; inset: 0 auto 0 0; width: 100%; border-radius: 999px; transition: width 0.2s ease; }
+  .battleworld-hud .bw-bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; color: var(--ink); text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6); }
+  .battleworld-hud .bw-bar-hull .bw-bar-fill { background: linear-gradient(90deg, #2bb3a3, #38c7a0); }
+  .battleworld-hud .bw-bar-shield .bw-bar-fill { background: linear-gradient(90deg, #2f7fd6, #5aa0f0); }
+  .battleworld-hud .bw-bar-capture .bw-bar-fill { background: linear-gradient(90deg, #e0492f, #f08a5c); }
+  .battleworld-hud .bw-status { font-size: 11px; font-weight: 800; color: #8a2f1e; min-height: 13px; }
+  .battleworld-hud .bw-fire {
+    margin-top: 2px; border: 1.5px solid #8a2f1e; color: #fff; background: linear-gradient(180deg, #e0492f, #c23a22);
+    border-radius: 12px; padding: 8px 10px; font: inherit; font-size: 14px; font-weight: 900; letter-spacing: 0.04em; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 6px -2px rgba(20, 30, 50, 0.3);
+  }
+  .battleworld-hud .bw-fire:hover { filter: brightness(1.05); }
+  .battleworld-hud .bw-fire:active { transform: translateY(1px); }
+  .battleworld-hud .bw-fire:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.4); }
+  body.ui-theme-dark .battleworld-hud { background: rgba(16, 22, 33, 0.86); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.18); }
+  body.ui-theme-dark .battleworld-hud .bw-bar-label { color: #f4f7ff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5); }
+  body.ui-theme-dark .battleworld-hud .bw-squad { color: rgba(244, 247, 255, 0.76); }
+  body.ui-theme-dark .battleworld-hud .bw-cycle { background: rgba(255, 255, 255, 0.1); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.22); }
+  @media (max-width: 600px) {
+    .battleworld-hud { flex-direction: column; bottom: 12px; gap: 8px; }
+    .battleworld-hud .bw-side { min-width: min(78vw, 260px); }
+  }
+
   /* -------- auth modal -------- */
   .auth-modal {
     position: fixed; inset: 0;
