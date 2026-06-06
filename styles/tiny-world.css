@@ -7840,6 +7840,17 @@
   .battleworld-hud .bw-fire:hover { filter: brightness(1.05); }
   .battleworld-hud .bw-fire:active { transform: translateY(1px); }
   .battleworld-hud .bw-fire:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(0.4); }
+  .battleworld-hud .bw-buttons { display: flex; gap: 6px; margin-top: 2px; }
+  .battleworld-hud .bw-buttons .bw-fire { margin-top: 0; flex: 1; }
+  .battleworld-hud .bw-fly {
+    flex: 1; border: 1.5px solid #1e6e6a; color: #0c4a46; background: linear-gradient(180deg, #59d6c6, #2bb3a3);
+    border-radius: 12px; padding: 8px 10px; font: inherit; font-size: 13px; font-weight: 900; letter-spacing: 0.03em; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 3px 6px -2px rgba(20, 30, 50, 0.3);
+  }
+  .battleworld-hud .bw-fly:hover { filter: brightness(1.05); }
+  .battleworld-hud .bw-fly:active { transform: translateY(1px); }
+  .battleworld-hud .bw-fly:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
+  .battleworld-hud .bw-fly.is-active { background: linear-gradient(180deg, #ffd36b, #f0a93c); border-color: #8a5a1e; color: #5a3a0c; }
   body.ui-theme-dark .battleworld-hud { background: rgba(16, 22, 33, 0.86); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.18); }
   body.ui-theme-dark .battleworld-hud .bw-bar-label { color: #f4f7ff; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5); }
   body.ui-theme-dark .battleworld-hud .bw-squad { color: rgba(244, 247, 255, 0.76); }

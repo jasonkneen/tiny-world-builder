@@ -201,6 +201,14 @@
     'battle.toast.win': 'All islands captured — you win!',
     'battle.toast.downed': 'Home island down — respawning…',
     'battle.toast.respawn': 'Respawned on your island.',
+    'battle.hud.fly': 'FLY ISLAND',
+    'battle.hud.land': 'LAND',
+    'battle.hud.flyShield': 'Fly shield',
+    'battle.hud.piloting': 'Piloting island — WASD to move',
+    'battle.toast.flyUnlocked': 'Win bonus: you can now FLY YOUR ISLAND!',
+    'battle.toast.flyLocked': 'Capture an island first to unlock flight.',
+    'battle.toast.flying': 'Island airborne — pilot with WASD, FIRE to blast.',
+    'battle.toast.landed': 'Island landed.',
 
     // ---- settings: tabs + Workspace section (technical sliders stay English) ----
     'settings.tab.app': 'Workspace',
