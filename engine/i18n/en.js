@@ -165,6 +165,27 @@
     'lobby.role.commander': 'Commander',
     'lobby.deploy': 'DEPLOY',
 
+    // ---- Metaworld land / economy HUD ----
+    'meta.hud.parcel': 'Parcel',
+    'meta.hud.point': 'Point at a parcel',
+    'meta.hud.unclaimed': 'Unclaimed',
+    'meta.hud.you': 'You',
+    'meta.hud.someone': 'Another player',
+    'meta.hud.forSale': 'For sale',
+    'meta.hud.claim': 'Claim',
+    'meta.hud.buy': 'Buy',
+    'meta.hud.rent': 'Rent',
+    'meta.hud.list': 'List for sale',
+    'meta.hud.unlist': 'Unlist',
+    'meta.toast.claimed': 'Land claimed!',
+    'meta.toast.bought': 'Land purchased!',
+    'meta.toast.listed': 'Listed for sale.',
+    'meta.toast.unlisted': 'Removed from sale.',
+    'meta.toast.rented': 'Rented — you can build here for a while.',
+    'meta.toast.poor': 'Not enough coins.',
+    'meta.toast.blocked': "You don't own this land — claim it first.",
+    'meta.toast.income': 'Collected {n} ground rent.',
+
     // ---- settings: tabs + Workspace section (technical sliders stay English) ----
     'settings.tab.app': 'Workspace',
     'settings.tab.rendering': 'Rendering',

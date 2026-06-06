@@ -140,6 +140,9 @@
   xrWorldRoot.add(hoverMesh);
 
   let currentHover = null;
+  // Read-only accessor for the cell currently under the pointer. Consumed by
+  // the Metaworld land HUD (46-land-ownership.js) to show the hovered parcel.
+  window.__tinyworldGetHover = function () { return currentHover; };
 
   // -------- ghost placement preview --------
   // A translucent live preview of the object that would be placed on

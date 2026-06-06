@@ -38,6 +38,15 @@
 <body>
   <div id="app"></div>
   <div id="root" style="position:fixed;top:0;left:0;width:0;height:0;pointer-events:none;"></div>
+
+  <!-- Metaworld land/economy HUD (shown only in tw-mode-meta) -->
+  <div id="metaworld-hud" class="metaworld-hud" aria-live="polite">
+    <span class="meta-coins" data-meta-coins>⊙0</span>
+    <span class="meta-sep" aria-hidden="true"></span>
+    <span class="meta-parcel" data-meta-parcel></span>
+    <span class="meta-owner" data-meta-owner></span>
+    <span class="meta-actions" data-meta-actions></span>
+  </div>
   <div id="cloud-layer"></div>
   <div id="under-occlusion-cloud-wipe" aria-hidden="true"></div>
   <div id="tod-tint" aria-hidden="true"></div>
@@ -1693,6 +1702,7 @@
   <script src="engine/world/43-drag-drop-import.js"></script>
   <script src="engine/world/44-sub-object-edit.js"></script>
   <script src="engine/world/45-shader-fx.js"></script>
+  <script src="engine/world/46-land-ownership.js"></script>
   <script src="engine/world/99-late-boot.js"></script>
 </body>
 </html>

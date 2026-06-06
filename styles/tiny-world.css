@@ -7738,6 +7738,56 @@
     .mode-tile-title { font-size: 14px; }
   }
 
+  /* -------- Metaworld land / economy HUD -------- */
+  .metaworld-hud {
+    display: none;
+    position: fixed;
+    top: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 45;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 24px);
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset, 0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    flex-wrap: wrap;
+  }
+  body.tw-mode-meta .metaworld-hud { display: flex; }
+  body.welcome-launch-open .metaworld-hud,
+  body.showcase .metaworld-hud { display: none !important; }
+  .metaworld-hud .meta-coins { font-weight: 900; color: #1e6e6a; white-space: nowrap; }
+  .metaworld-hud .meta-sep { width: 1px; height: 16px; background: rgba(47, 59, 87, 0.18); }
+  .metaworld-hud .meta-parcel { font-weight: 700; white-space: nowrap; }
+  .metaworld-hud .meta-owner { color: var(--muted); white-space: nowrap; }
+  .metaworld-hud .meta-actions { display: inline-flex; gap: 6px; }
+  .metaworld-hud .meta-action {
+    border: 1.5px solid rgba(47, 59, 87, 0.28);
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 4px 11px;
+    font: inherit; font-size: 12px; font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .metaworld-hud .meta-action:hover { background: rgba(255, 255, 255, 0.85); }
+  .metaworld-hud .meta-action:active { transform: translateY(1px); }
+  .metaworld-hud .meta-action.is-claim { border-color: #1e6e6a; color: #1e6e6a; background: rgba(40, 170, 160, 0.14); }
+  .metaworld-hud .meta-action.is-buy { border-color: #1e428a; color: #1e428a; background: rgba(23, 107, 235, 0.13); }
+  .metaworld-hud .meta-action.is-rent { border-color: #8a5a1e; color: #8a5a1e; background: rgba(220, 150, 50, 0.14); }
+  body.ui-theme-dark .metaworld-hud { background: rgba(16, 22, 33, 0.86); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.18); }
+  body.ui-theme-dark .metaworld-hud .meta-owner { color: rgba(244, 247, 255, 0.76); }
+  body.ui-theme-dark .metaworld-hud .meta-action { background: rgba(255, 255, 255, 0.1); color: #f4f7ff; border-color: rgba(255, 255, 255, 0.22); }
+  @media (max-width: 600px) { .metaworld-hud { top: 56px; font-size: 12px; gap: 7px; } }
+
   /* -------- auth modal -------- */
   .auth-modal {
     position: fixed; inset: 0;

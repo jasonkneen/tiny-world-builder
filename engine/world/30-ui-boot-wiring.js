@@ -2574,7 +2574,9 @@
           twToast(base + ' — ' + squad + ' / ' + role, 'ok');
         }
       } else if (mode === 'meta') {
-        setPlayModeActive(true);
+        // Metaworld is build-capable: you build on land you own. The land gate
+        // (46-land-ownership.js) restricts edits to owned/rented parcels.
+        setPlayModeActive(false);
         if (typeof twToast === 'function') {
           twToast(window.tx ? window.tx('mode.meta.title', 'Metaworld') : 'Metaworld', 'ok');
         }

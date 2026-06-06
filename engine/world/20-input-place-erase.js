@@ -178,6 +178,13 @@
     // gate (canEdit returns true), so this is a no-op outside shared rooms.
     const mp = window.__tinyworldMultiplayer;
     if (mp && typeof mp.canEdit === 'function' && !mp.canEdit(x, z)) return;
+    // Metaworld land gate: building/erasing is confined to parcels you own or
+    // rent. A no-op outside Metaworld mode (canBuildCell returns true).
+    const land = window.__tinyworldLand;
+    if (land && typeof land.canBuildCell === 'function' && !land.canBuildCell(x, z)) {
+      if (typeof land.notifyBlocked === 'function') land.notifyBlocked();
+      return;
+    }
     if (selectedTool.mooring) return;
     if (selectedTool.island) {
       createEditableIsland(nextEditableIslandPosition(currentHover));
