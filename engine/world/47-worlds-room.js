@@ -393,15 +393,16 @@
     }
     WS.renderPreview = renderPreview;
 
-    // ---- in-world avatar (billboard built from the crowd character art) ----
+    // ---- in-world avatars: rigged 3D GLB model with a crowd-art sprite fallback ----
+    const AVATAR_MODEL_URL = 'models/people/stepan_hytale.glb';
     const AVATAR_SELF = 'man-dad';
     const AVATAR_PEERS = ['little-girl', 'man-grandfather', 'woman-grandmother'];
     const _texCache = {};
     let _texLoader = null;
-    let selfAvatar = null, selfDir = 'down';
-    let selfCell = { x: null, z: null };
-    const peerAvatars = new Map();
+    let selfEnt = null;
+    const peerEnts = new Map();
     let avatarRaf = null;
+
     function avatarParent() {
       if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
       if (typeof xrWorldRoot !== 'undefined' && xrWorldRoot) return xrWorldRoot;
@@ -422,24 +423,92 @@
       _texCache[key] = t;
       return t;
     }
-    function makeAvatarSprite(name) {
+    function makeSprite(name) {
       if (typeof THREE === 'undefined') return null;
       const mat = new THREE.SpriteMaterial({ map: charTex(name, 'down') || null, transparent: true, depthWrite: false });
-      const s = new THREE.Sprite(mat);
-      s.scale.set(0.95, 1.35, 1); s.renderOrder = 10;
+      const s = new THREE.Sprite(mat); s.scale.set(0.95, 1.35, 1); s.renderOrder = 10;
+      s.userData.charName = name;
       const par = avatarParent(); if (par) par.add(s);
       return s;
     }
-    function placeSprite(s, x, z, y) { if (!s || typeof tilePos !== 'function') return; const p = tilePos(x, z); s.position.set(p.x, y != null ? y : 0.9, p.z); }
-    function setSpriteDir(s, name, dir) { if (!s || !s.material) return; const t = charTex(name, dir); if (t) { s.material.map = t; s.material.needsUpdate = true; } }
     function dirFrom(dx, dz) { if (!dx && !dz) return null; if (Math.abs(dx) >= Math.abs(dz)) return dx < 0 ? 'left' : 'right'; return dz < 0 ? 'up' : 'down'; }
+    function dirYaw(dir) { return dir === 'up' ? Math.PI : dir === 'left' ? Math.PI / 2 : dir === 'right' ? -Math.PI / 2 : 0; }
     function hashId(s) { s = String(s); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
-    function ensureSelf() { if (!selfAvatar) selfAvatar = makeAvatarSprite(AVATAR_SELF); }
+
+    function configureGltf(loader) {
+      try {
+        if (THREE.DRACOLoader && typeof loader.setDRACOLoader === 'function') { const d = new THREE.DRACOLoader(); if (d.setDecoderPath) d.setDecoderPath('vendor/three/draco/'); loader.setDRACOLoader(d); }
+        if (typeof MeshoptDecoder !== 'undefined' && MeshoptDecoder && typeof loader.setMeshoptDecoder === 'function') loader.setMeshoptDecoder(MeshoptDecoder);
+      } catch (_) {}
+      return loader;
+    }
+    // Load a fresh GLB instance per avatar (no SkeletonUtils available to clone a
+    // skinned mesh). Upgrades the entity from its sprite placeholder to the model;
+    // on any failure the sprite stays as the fallback.
+    function loadModelInto(ent) {
+      if (typeof THREE === 'undefined' || !THREE.GLTFLoader) return;
+      let loader;
+      try { loader = configureGltf(new THREE.GLTFLoader()); } catch (_) { return; }
+      loader.load(AVATAR_MODEL_URL, (gltf) => {
+        try {
+          const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!root || ent.disposed) return;
+          const size = new THREE.Vector3(); new THREE.Box3().setFromObject(root).getSize(size);
+          root.scale.setScalar(1.7 / (size.y || 1));
+          ent.yOff = -new THREE.Box3().setFromObject(root).min.y;
+          root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; } });
+          const par = avatarParent(); if (par) par.add(root);
+          ent.model = root;
+          if (gltf.animations && gltf.animations.length) {
+            ent.mixer = new THREE.AnimationMixer(root);
+            const pick = (re) => gltf.animations.find((c) => re.test(c.name || ''));
+            const idle = pick(/idle|stand|breath/i) || gltf.animations[0];
+            const walk = pick(/walk|move/i) || pick(/run|jog/i) || idle;
+            if (idle) ent.actions.idle = ent.mixer.clipAction(idle);
+            if (walk) ent.actions.walk = ent.mixer.clipAction(walk);
+            playAction(ent, 'idle');
+          }
+          if (ent.sprite && ent.sprite.parent) ent.sprite.parent.remove(ent.sprite);
+          ent.sprite = null;
+          placeEntity(ent);
+        } catch (_) {}
+      }, undefined, () => { /* keep sprite fallback */ });
+    }
+    function createAvatar(spriteName) {
+      const ent = { x: 0, z: 0, dir: 'down', lastMove: 0, bobPhase: Math.random() * 6, sprite: null, model: null, mixer: null, actions: {}, current: null, yOff: 0, disposed: false };
+      ent.sprite = makeSprite(spriteName);
+      loadModelInto(ent);
+      return ent;
+    }
+    function playAction(ent, name) {
+      if (!ent.mixer) return; const a = ent.actions[name]; if (!a || ent.current === a) return;
+      if (ent.current) ent.current.fadeOut(0.18);
+      a.reset().fadeIn(0.18).play(); ent.current = a;
+    }
+    function placeEntity(ent) {
+      if (!ent || typeof tilePos !== 'function') return;
+      const p = tilePos(ent.x, ent.z);
+      if (ent.model) { ent.model.position.set(p.x, ent.yOff || 0, p.z); ent.model.rotation.y = dirYaw(ent.dir); }
+      else if (ent.sprite) {
+        ent.sprite.position.set(p.x, 0.9, p.z);
+        const t = charTex(ent.sprite.userData.charName, ent.dir); if (t) { ent.sprite.material.map = t; ent.sprite.material.needsUpdate = true; }
+      }
+    }
+    function moveEntity(ent, x, z) {
+      if (!ent) return;
+      const d = dirFrom(x - ent.x, z - ent.z); if (d) ent.dir = d;
+      if (x !== ent.x || z !== ent.z) ent.lastMove = Date.now();
+      ent.x = x; ent.z = z; placeEntity(ent);
+    }
+    function disposeEntity(ent) {
+      if (!ent) return; ent.disposed = true;
+      if (ent.model && ent.model.parent) ent.model.parent.remove(ent.model);
+      if (ent.sprite && ent.sprite.parent) ent.sprite.parent.remove(ent.sprite);
+    }
+
     function updateSelfAvatar() {
-      ensureSelf(); if (!selfAvatar) return;
-      if (selfCell.x != null) { const d = dirFrom(you.x - selfCell.x, you.z - selfCell.z); if (d) { selfDir = d; setSpriteDir(selfAvatar, AVATAR_SELF, d); } }
-      selfCell = { x: you.x, z: you.z };
-      placeSprite(selfAvatar, you.x, you.z);
+      if (!selfEnt) selfEnt = createAvatar(AVATAR_SELF);
+      moveEntity(selfEnt, you.x, you.z);
     }
     function updatePeerAvatars() {
       const seen = new Set();
@@ -447,30 +516,32 @@
         if (!p || p.id == null) return;
         const pos = p.cursor || p; if (pos.x == null) return;
         seen.add(p.id);
-        let a = peerAvatars.get(p.id);
-        if (!a) { const ch = AVATAR_PEERS[hashId(p.id) % AVATAR_PEERS.length]; a = { sprite: makeAvatarSprite(ch), char: ch, x: pos.x, z: pos.z }; peerAvatars.set(p.id, a); }
-        const d = dirFrom(pos.x - a.x, pos.z - a.z); if (d) setSpriteDir(a.sprite, a.char, d);
-        a.x = pos.x; a.z = pos.z; placeSprite(a.sprite, pos.x, pos.z);
+        let ent = peerEnts.get(p.id);
+        if (!ent) { ent = createAvatar(AVATAR_PEERS[hashId(p.id) % AVATAR_PEERS.length]); peerEnts.set(p.id, ent); }
+        moveEntity(ent, pos.x, pos.z);
       });
-      peerAvatars.forEach((a, id) => { if (!seen.has(id)) { if (a.sprite && a.sprite.parent) a.sprite.parent.remove(a.sprite); peerAvatars.delete(id); } });
+      peerEnts.forEach((ent, id) => { if (!seen.has(id)) { disposeEntity(ent); peerEnts.delete(id); } });
     }
     function startAvatars() {
       if (avatarRaf || typeof requestAnimationFrame !== 'function') return;
-      const t0 = Date.now();
+      let prev = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const tick = () => {
-        const t = (Date.now() - t0) / 1000;
-        if (selfAvatar) selfAvatar.position.y = 0.9 + Math.sin(t * 5) * 0.05;        // idle/walk bob
-        peerAvatars.forEach((a) => { if (a.sprite) a.sprite.position.y = 0.9 + Math.sin(t * 5 + (hashId(a.char) % 6)) * 0.04; });
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const dt = Math.min(0.05, (now - prev) / 1000); prev = now; const t = now / 1000;
+        const all = selfEnt ? [selfEnt] : [];
+        peerEnts.forEach((e) => all.push(e));
+        for (const ent of all) {
+          if (ent.mixer) { ent.mixer.update(dt); playAction(ent, (Date.now() - ent.lastMove) < 250 ? 'walk' : 'idle'); }
+          else if (ent.sprite) ent.sprite.position.y = 0.9 + Math.sin(t * 5 + ent.bobPhase) * 0.05;
+        }
         avatarRaf = requestAnimationFrame(tick);
       };
       avatarRaf = requestAnimationFrame(tick);
     }
     function stopAvatars() {
       if (avatarRaf) { cancelAnimationFrame(avatarRaf); avatarRaf = null; }
-      if (selfAvatar && selfAvatar.parent) selfAvatar.parent.remove(selfAvatar);
-      selfAvatar = null; selfCell = { x: null, z: null };
-      peerAvatars.forEach((a) => { if (a.sprite && a.sprite.parent) a.sprite.parent.remove(a.sprite); });
-      peerAvatars.clear();
+      disposeEntity(selfEnt); selfEnt = null;
+      peerEnts.forEach((e) => disposeEntity(e)); peerEnts.clear();
     }
 
     function drawMinimap() {
