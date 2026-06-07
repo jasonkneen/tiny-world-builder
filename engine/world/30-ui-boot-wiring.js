@@ -1021,6 +1021,36 @@
       }
     }
 
+    // AI interfaces are hidden on prod (the boot script adds html.ai-disabled
+    // unless local / ?ai=1 / stored flag). Unlock them live for allow-listed
+    // accounts when they sign in, and revert on sign-out, so the grant follows
+    // the account rather than the browser.
+    const AI_ACCOUNT_ALLOWLIST = ['jason@bouncingfish.com'];
+    const aiBaseEnabled = !!window.__TWB_AI_INTERFACES_ENABLED__;
+    let aiUnlockedByAccount = false;
+    function setAiInterfacesEnabled(on) {
+      window.__TWB_AI_INTERFACES_ENABLED__ = !!on;
+      document.documentElement.classList.toggle('ai-disabled', !on);
+    }
+    async function applyAccountAiEntitlement() {
+      if (aiBaseEnabled) return; // already enabled for everyone here (local/?ai=1/stored)
+      const A = window.TinyWorldAuth;
+      if (!A || typeof A.getUser !== 'function') return;
+      let email = '';
+      try { const u = await A.getUser(); email = ((u && u.email) || '').trim().toLowerCase(); } catch (_) { return; }
+      if (email && AI_ACCOUNT_ALLOWLIST.indexOf(email) !== -1) {
+        aiUnlockedByAccount = true;
+        setAiInterfacesEnabled(true);
+        setLoggedInState(!!window.__loggedIn); // refresh gated controls (Generate, etc.)
+      }
+    }
+    function revertAccountAiEntitlement() {
+      if (aiUnlockedByAccount && !aiBaseEnabled) {
+        aiUnlockedByAccount = false;
+        setAiInterfacesEnabled(false);
+      }
+    }
+
     function openLoginModal(reason) {
       clearMessages();
       const subtitle = modal.querySelector('.auth-subtitle');
@@ -1034,6 +1064,7 @@
     function enterApp() {
       closeTinyModal(modal);
       setLoggedInState(true);
+      applyAccountAiEntitlement();
       bootApp();
       initAccountModal();
       twCloudBootstrapSync().catch(err => console.warn('[cloud-sync] bootstrap failed:', err));
@@ -1147,6 +1178,7 @@
         await Auth.logout();
       } catch (_) {}
       setLoggedInState(false);
+      revertAccountAiEntitlement();
     });
 
     // Top-bar Sign In button opens the login modal.

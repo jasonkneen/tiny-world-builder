@@ -169,7 +169,11 @@ defaults — sets the welcome shot for new users.
 
 - `tinyworld:features:cluso` — legacy Cluso flag. The in-page Cluso embed has
   been removed, and no app runtime path reads this key.
-- `tinyworld:features:ai` — AI panel.
+- `tinyworld:features:ai` — AI panel. AI surfaces (`[data-ai-interface]`) are
+  hidden on prod via `html.ai-disabled`, enabled by local host / `?ai=1` / this
+  flag. Additionally, signed-in accounts whose email is in `AI_ACCOUNT_ALLOWLIST`
+  (in `30-ui-boot-wiring.js`) unlock AI live on login (`applyAccountAiEntitlement`)
+  and revert on logout — tied to the account, not persisted to this key.
 - `tinyworld:features:model-stamp-api` — stamp-defaults dev endpoint.
 
 ## Inline `<script>` gotcha (read this!)
