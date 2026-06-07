@@ -465,6 +465,9 @@
         initLandscapeMesh();
         rebuildTerrainRender();
         rebuildObjectsRender();
+      } else if (useLandscapeEngine && landscapeMeshStyle === 'realistic' && landscapeEngineInstance && typeof applyRealisticVoxelLandscape === 'function') {
+        // Tiles are already painted; the voxel overlay just hides them.
+        applyRealisticVoxelLandscape();
       }
       saveState();
       if (typeof opts.onDone === 'function') {
@@ -645,6 +648,9 @@
         initLandscapeMesh();
         rebuildTerrainRender();
         rebuildObjectsRender();
+      } else if (useLandscapeEngine && landscapeMeshStyle === 'realistic' && landscapeEngineInstance && typeof applyRealisticVoxelLandscape === 'function') {
+        // Tiles are already painted; the voxel overlay just hides them.
+        applyRealisticVoxelLandscape();
       }
       saveState();
       if (typeof syncControls === 'function') syncControls();

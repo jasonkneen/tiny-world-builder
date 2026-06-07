@@ -73,6 +73,31 @@ terrain instead of baking into per-tile `setCell`.
   (with delayed retries + a `tinyworld:world-changed` listener, because world
   tiles can render slightly after this module boots).
 
+## Programmatic generation (used by the "Realistic" landscape generator)
+
+- `window.__tinyworldMeshTerrain.generate(sample, opts)` fills the voxel grid from
+  an external per-voxel sampler and displays it as a **transient** block overlay
+  (hides the flat home tiles like an applied design, but does NOT persist unless
+  `opts.persist`). `sample(cellX, cellZ)` gets board-cell coords in `[0, gridAtEnter]`
+  and returns `{ material: 'grass'|'sand'|…, level: 1.. }` (level → `cellH = (level-1)*opts.levelStep`)
+  or `{ material, height }` (world-Y directly). It exits the manual editor if open.
+- `clearGenerated()` tears the transient overlay down and restores the flat tiles
+  (no-op if none, or if the user opened it for editing). `isGenerated()` reports state.
+- The Generate modal's **Realistic** landscape style routes here:
+  `applyRealisticVoxelLandscape()` (in `engine/world/27-landscape-engine.js`) samples
+  `sampleLandscapeCell()` (the same procedural height/biome the old realistic
+  LandscapeEngine used) at voxel resolution, with `levelStep = LANDSCAPE_VOXEL_LEVEL_STEP`
+  (1.12, matching the landscape-mode tile step so block tops align with the hidden
+  tiles objects sit on). It is driven from the generate handler (module 28) and the
+  reload path (module 29, when `useLandscapeEngine && landscapeMeshStyle==='realistic'`),
+  and torn down by `disposeLandscapeMesh()` → `clearGenerated()`. Realistic keeps
+  `landscapeMeshMode = false`; the world save (cells + seed + style) is the single
+  source of truth, so reload regenerates the blocks deterministically — the overlay
+  itself is not persisted in `tinyworld:meshTerrain:*`.
+- A generated overlay is editable: opening the editor on top of it lets the user
+  tweak and **Apply** (which turns it into a real persisted design; `generatedActive`
+  clears).
+
 ## Why it is structured this way (do not regress)
 
 - **One IIFE, no top-level names** → dodges the `tools/check.js` cross-file

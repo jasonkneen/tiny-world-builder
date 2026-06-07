@@ -52,6 +52,7 @@
     let editing = false;
     let applied = false;
     let appliedSnap = null;      // in-memory last-applied { vpt, cellH, mats } for revert
+    let generatedActive = false; // a transient design built programmatically (e.g. generated landscape)
     let gridAtEnter = 8;
     let half = 4;
     let N = 0;
@@ -145,6 +146,10 @@
       if (!tmpColor) tmpColor = new THREE.Color();
       tmpColor.setHex(MATERIALS[i] ? MATERIALS[i].color : 0x6fae4f);
       return tmpColor;
+    }
+    function matIndexById(id) {
+      for (let k = 0; k < MATERIALS.length; k++) if (MATERIALS[k].id === id) return k;
+      return -1;
     }
 
     // ---- material selection (real app terrain materials) ----
@@ -573,6 +578,7 @@
     }
     function applyDesign() {
       applied = true;
+      generatedActive = false;   // committing turns a generated overlay into a real design
       captureApplied();   // remember this as the revert target
       saveDesign();       // the only place that writes to storage
       setHomeMeshesVisible(false);
@@ -600,19 +606,72 @@
         // sure no uncommitted draft is left in storage
         leaveEditOnly(); disposeMeshes();
         cellH = mats = positions = colors = normals = null;
-        setHomeMeshesVisible(true); applied = false; clearDesign();
+        setHomeMeshesVisible(true); applied = false; generatedActive = false; clearDesign();
       }
       repaint();
     }
     function removeDesign() {
       leaveEditOnly(); disposeMeshes();
       cellH = mats = positions = colors = normals = null;
-      setHomeMeshesVisible(true); applied = false; appliedSnap = null; clearDesign(); repaint();
+      setHomeMeshesVisible(true); applied = false; appliedSnap = null; generatedActive = false; clearDesign(); repaint();
     }
     function flatten() {
       if (!cellH) return;
       // in-memory only; persisted on Apply
       cellH.fill(0); mats.fill(0); rebuildGeometry();
+    }
+
+    // ---- programmatic generation (e.g. AI/procedural landscape) ----
+    // Fill the voxel grid from an external per-voxel sampler. `sample(cellX, cellZ)`
+    // receives board-cell coordinates in [0, gridAtEnter] and returns
+    // { material: 'grass'|'sand'|..., level: 1..N } or { material, height: worldY }.
+    // Builds + displays the block terrain as a transient overlay that hides the
+    // flat home tiles (like an applied design) but is NOT persisted unless
+    // opts.persist is set — generated terrain is rebuilt from its source instead.
+    function generateFromSampler(sample, opts) {
+      if (typeof sample !== 'function') return false;
+      if (typeof scene === 'undefined' || typeof camera === 'undefined' || typeof renderer === 'undefined') return false;
+      opts = opts || {};
+      if (editing) {
+        detachPointer(); drag = null; hideBrush(); editing = false;
+        document.body.classList.remove('mesh-terrain-active');
+        if (panel) panel.hidden = true;
+        if (toggleBtn) toggleBtn.setAttribute('aria-pressed', 'false');
+      }
+      recomputeDims();
+      if (shown()) disposeMeshes();
+      allocBuffers();
+      const stepH = Number.isFinite(opts.levelStep) ? opts.levelStep : 1.0;
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          const cellX = (i + 0.5) * gridAtEnter / N;
+          const cellZ = (j + 0.5) * gridAtEnter / N;
+          const s = sample(cellX, cellZ) || {};
+          const mi = matIndexById(s.material);
+          mats[j * N + i] = mi >= 0 ? mi : 0;
+          const h = Number.isFinite(s.height) ? s.height
+                  : Number.isFinite(s.level) ? (s.level - 1) * stepH : 0;
+          cellH[j * N + i] = clamp(h, 0, MAX_HEIGHT);
+        }
+      }
+      buildSceneMeshes();
+      setHomeMeshesVisible(false);
+      generatedActive = true;
+      if (opts.persist) { applied = true; captureApplied(); saveDesign(); }
+      else { applied = false; appliedSnap = null; }
+      repaint();
+      return true;
+    }
+    // Tear down a transient generated terrain and restore the flat tiles. No-op
+    // if there is no generated terrain, or if the user has opened it for editing.
+    function clearGenerated() {
+      if (!generatedActive || editing) return;
+      generatedActive = false;
+      disposeMeshes();
+      cellH = mats = positions = colors = normals = null;
+      setHomeMeshesVisible(true);
+      applied = false; appliedSnap = null;
+      repaint();
     }
 
     function changeResolution(newVpt) {
@@ -801,7 +860,8 @@
 
     window.__tinyworldMeshTerrain = {
       open: openEditor, apply: applyDesign, cancel: cancelEdit, remove: removeDesign,
-      isEditing: () => editing, isApplied: () => applied,
+      generate: generateFromSampler, clearGenerated: clearGenerated,
+      isEditing: () => editing, isApplied: () => applied, isGenerated: () => generatedActive,
       setTool: (m) => { if (m === 'sculpt' || m === 'paint') { toolMode = m; if (modeSeg) syncSeg(modeSeg, () => toolMode); syncPaintVisibility(); } },
     };
   })();

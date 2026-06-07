@@ -564,11 +564,14 @@
         if (style === 'landscape') {
           disposePlanetLandscape();
           renderVoxelTerrain = false;
-          landscapeMeshMode = true;
-          // Store biome/render choices for initLandscapeMesh
+          // Realistic renders as voxel blocks (mesh terrain), not the continuous
+          // LandscapeEngine mesh — so it is a normal-tile world plus an overlay
+          // (landscapeMeshMode stays false). Low-poly keeps the continuous mesh.
+          landscapeMeshMode = (planetStyleMode !== 'realistic');
+          // Store biome/render choices for the landscape build below
           landscapeMeshBiome = planetBiome;
           landscapeMeshStyle = planetStyleMode;
-          // landscapeMeshMode is activated after applyState creates the engine instance
+          // The overlay is built after applyState creates the engine instance
         } else if (style === 'planet-underlay') {
           disposeLandscapeMesh({ rebuild: true });
           useLandscapeEngine = false;
@@ -618,10 +621,17 @@
           if (typeof applyState === 'function' && !applyState(data, { sliced: true })) {
             throw new Error('renderer rejected the procedural scene');
           }
-          // Activate landscape mesh after applyState created the engine
+          // Build the landscape overlay after applyState created the engine.
+          // Realistic -> voxel blocks; low-poly -> continuous LandscapeEngine mesh.
           if (landscapeStyleEl && landscapeStyleEl.value === 'landscape' && landscapeEngineInstance) {
-            initLandscapeMesh();
-            rebuildTerrainRender();
+            if (landscapeMeshStyle === 'realistic' && typeof applyRealisticVoxelLandscape === 'function') {
+              // Voxel overlay hides the (already-painted) tiles; no tile rebuild
+              // after, or it would re-show them.
+              applyRealisticVoxelLandscape();
+            } else {
+              initLandscapeMesh();
+              rebuildTerrainRender();
+            }
           }
           if (wantsPlanetLandscape && typeof setCameraMode === 'function') setCameraMode('perspective');
           setStatus('done · seed: ' + effectiveSeed + (wantsPlanetLandscape ? ' · planet ' + planetDrop + 'm below' : ''), '');

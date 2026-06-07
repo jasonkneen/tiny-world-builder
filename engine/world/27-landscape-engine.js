@@ -24,6 +24,28 @@
     return landscapeMeshEngine.getHeight(wx, wz) * LANDSCAPE_MESH_SCALE;
   }
 
+  // Per-terrace block height for generated voxel-block landscapes. Matches the
+  // landscape-mode tile step (terrainRiseForLevel uses 1.12 when useLandscapeEngine)
+  // so the voxel block tops line up with the hidden tiles objects sit on.
+  const LANDSCAPE_VOXEL_LEVEL_STEP = 1.12;
+
+  // The "realistic" landscape render no longer uses the flight-sim continuous
+  // LandscapeEngine mesh. Instead it samples the same procedural height/biome and
+  // builds flat-top voxel blocks through the mesh-terrain system. Low-poly still
+  // uses the LandscapeEngine via initLandscapeMesh().
+  function applyRealisticVoxelLandscape() {
+    const api = window.__tinyworldMeshTerrain;
+    const engine = landscapeEngineInstance;
+    if (!api || typeof api.generate !== 'function' || !engine) return false;
+    const built = api.generate(function (cellX, cellZ) {
+      const c = sampleLandscapeCell(0, 0, cellX, cellZ, engine, GRID);
+      return { material: c.terrain, level: c.terrainFloors };
+    }, { levelStep: LANDSCAPE_VOXEL_LEVEL_STEP });
+    if (built) landscapeMeshMode = false;
+    return built;
+  }
+  window.__applyRealisticVoxelLandscape = applyRealisticVoxelLandscape;
+
   function initLandscapeMesh() {
     disposeLandscapeMesh();
     disposePlanetLandscape();
@@ -919,6 +941,11 @@
   function disposeLandscapeMesh(opts) {
     clearGhostBoardsOnly();
     disposeLandscapeCutCaps();
+    // Also tear down a generated voxel-block landscape (realistic style) so
+    // switching styles / clearing restores the flat tiles.
+    if (window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.clearGenerated === 'function') {
+      window.__tinyworldMeshTerrain.clearGenerated();
+    }
     if (landscapeMeshEngine) {
       landscapeMeshEngine.dispose();
       landscapeMeshEngine = null;
