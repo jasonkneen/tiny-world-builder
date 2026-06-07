@@ -436,6 +436,14 @@
   </div>
 
   <div class="xr-panel" id="xr-panel" aria-label="XR modes" hidden>
+    <button class="btn icon xr-btn" id="xr-quicklook" type="button" title="View in AR (iOS / iPadOS) – Place the world on a real surface with Apple AR Quick Look" aria-label="View in AR (Apple)" hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 3 7v10l9 5 9-5V7z"/>
+        <path d="M3 7l9 5 9-5"/>
+        <path d="M12 12v10"/>
+      </svg>
+    </button>
+
     <button class="btn icon xr-btn" id="xr-surface" type="button" title="AR Desk – Pin the board to a real-world surface (TableTop AR)" aria-label="AR Desk">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -462,6 +470,8 @@
       </svg>
     </button>
   </div>
+
+  <p class="xr-status" id="xr-status" role="status" aria-live="polite" hidden></p>
 
   <section id="layers-panel" class="layers-panel" role="dialog" aria-modal="false" hidden>
     <div class="layers-panel-head" id="layers-panel-head" aria-label="Drag to move layers panel">
@@ -1502,6 +1512,7 @@
   <script src="vendor/three/meshopt_decoder.r128.js"></script>
   <script src="vendor/three/GLTFLoader.r128.js"></script>
   <script src="vendor/three/libs/fflate.min.js"></script>
+  <script src="vendor/three/USDZExporter.r128.js"></script>
   <script src="vendor/three/curves/NURBSUtils.r128.js"></script>
   <script src="vendor/three/curves/NURBSCurve.r128.js"></script>
   <script src="vendor/three/FBXLoader.r128.js"></script>

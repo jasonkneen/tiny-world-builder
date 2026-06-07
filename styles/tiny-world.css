@@ -1188,6 +1188,30 @@
     display: none !important;
   }
 
+  .xr-status {
+    position: fixed;
+    left: 74px;
+    bottom: 58px;
+    z-index: 16;
+    max-width: min(340px, calc(100vw - 90px));
+    margin: 0;
+    padding: 6px 11px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px -4px rgba(40, 50, 80, 0.18);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    pointer-events: none;
+  }
+
+  .xr-status[hidden] {
+    display: none !important;
+  }
+
   .xr-panel .xr-btn {
     width: 32px;
     height: 32px;
