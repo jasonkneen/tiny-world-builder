@@ -188,8 +188,14 @@
 
     }
 
+    // THREE.DoubleSide === 2. UsdPreviewSurface meshes are single-sided unless
+    // the prim declares this, so a DoubleSide material would still show back-face
+    // holes in AR Quick Look without it. (Local addition to the r128 exporter.)
+    const doubleSided = material && material.side === 2 ? 1 : 0;
+
     return `def Mesh "${ name }"
     {
+        uniform bool doubleSided = ${ doubleSided }
         int[] faceVertexCounts = [${ buildMeshVertexCount( geometry ) }]
         int[] faceVertexIndices = [${ buildMeshVertexIndices( geometry ) }]
         rel material:binding = </Materials/Material_${ material.id }>

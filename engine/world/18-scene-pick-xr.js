@@ -1206,63 +1206,113 @@
     }
   }
 
-  // USDZExporter only understands MeshStandardMaterial (color / emissive /
-  // roughness / metalness / map). The world is built from Lambert/Basic/Shader
-  // materials, so convert each source material once — keyed so identical
-  // materials collapse to a single USD material — into a Standard equivalent.
-  function quickLookStandardMaterial(src, cache) {
+  // USDZExporter only understands MeshStandardMaterial, and UsdPreviewSurface
+  // connects diffuseColor *directly* to any texture (ignoring the base color it
+  // is meant to multiply). TinyWorld paints flat-coloured Lambert materials and
+  // then layers a grayscale detail/noise map on top, so exporting the maps would
+  // wash every tinted surface (grass, paths, walls) to white. We therefore drop
+  // maps and export the flat base colour, which also matches the low-poly look.
+  // Colours are read once and cached so identical surfaces share one USD material.
+  function averageVertexColor(geom) {
+    const attr = geom && geom.attributes && geom.attributes.color;
+    if (!attr || !attr.array || !attr.count) return null;
+    const arr = attr.array, items = attr.itemSize || 3;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < attr.count; i++) {
+      r += arr[i * items]; g += arr[i * items + 1]; b += arr[i * items + 2];
+    }
+    return new THREE.Color(r / attr.count, g / attr.count, b / attr.count);
+  }
+
+  function quickLookResolveColors(src, geom) {
     const base = Array.isArray(src) ? src[0] : src;
-    let color = 0xffffff, emissive = 0x000000, opacity = 1, transparent = false, map = null;
+    let color = 0xffffff, emissive = 0x000000, opacity = 1, transparent = false;
     if (base) {
-      if (base.color && base.color.getHex) color = base.color.getHex();
-      else if (base.uniforms && base.uniforms.uColor && base.uniforms.uColor.value && base.uniforms.uColor.value.getHex) color = base.uniforms.uColor.value.getHex();
-      else if (base.uniforms && base.uniforms.diffuse && base.uniforms.diffuse.value && base.uniforms.diffuse.value.getHex) color = base.uniforms.diffuse.value.getHex();
+      if (base.vertexColors && geom) {
+        // Vertex-coloured meshes (model stamps, some voxel builds) carry colour
+        // in the geometry, not the material — average it so they aren't white.
+        const avg = averageVertexColor(geom);
+        if (avg) color = avg.getHex();
+        else if (base.color && base.color.getHex) color = base.color.getHex();
+      } else if (base.color && base.color.getHex) {
+        color = base.color.getHex();
+      } else if (base.uniforms) {
+        // ShaderMaterials (water, sky): pull the first colour-valued uniform.
+        const u = base.uniforms;
+        const pick = (u.uColor && u.uColor.value) || (u.diffuse && u.diffuse.value) || (u.color && u.color.value);
+        if (pick && pick.isColor) color = pick.getHex();
+        else for (const k in u) { const v = u[k] && u[k].value; if (v && v.isColor) { color = v.getHex(); break; } }
+      }
       if (base.emissive && base.emissive.getHex) emissive = base.emissive.getHex();
       if (typeof base.opacity === 'number') opacity = base.opacity;
       transparent = !!base.transparent;
-      if (base.map && base.map.image) map = base.map;
     }
-    const key = color + '|' + emissive + '|' + opacity + '|' + (transparent ? 1 : 0) + '|' + (map ? map.uuid : '');
+    return { color, emissive, opacity, transparent };
+  }
+
+  function quickLookStandardMaterial(src, geom, cache) {
+    const { color, emissive, opacity, transparent } = quickLookResolveColors(src, geom);
+    const key = color + '|' + emissive + '|' + opacity + '|' + (transparent ? 1 : 0);
     if (cache.has(key)) return cache.get(key);
     const mat = new THREE.MeshStandardMaterial({
       color: color,
       emissive: emissive,
-      roughness: 0.85,
+      roughness: 0.9,
       metalness: 0.0,
-      map: map || null,
       transparent: transparent,
       opacity: opacity,
-      side: THREE.FrontSide,
+      // Double-sided so single-sided board/wall faces don't read as holes when
+      // AR Quick Look's camera sees their back.
+      side: THREE.DoubleSide,
     });
     cache.set(key, mat);
     return mat;
   }
 
   // Snapshot worldGroup into a fresh, self-contained group with USD-friendly
-  // materials, then recentre it on the origin (base at y=0) and scale it to a
-  // tabletop size so the first AR placement reads well. Source geometry is
-  // shared (not cloned) and never disposed; only the temp materials are ours.
+  // materials, expanding InstancedMeshes (batched voxel builds / crops / fences,
+  // which the r128 exporter can't read) into individual meshes so nothing goes
+  // missing. Then recentre on the origin (base at y=0) and scale to a tabletop
+  // size. Source geometry is shared (not cloned) and never disposed; only the
+  // temporary Standard materials are ours to free afterwards.
+  const QUICKLOOK_MAX_MESHES = 24000; // safety cap so a huge world can't hang the export
   function buildQuickLookExportRoot() {
     if (typeof worldGroup === 'undefined' || !worldGroup) return null;
     const root = new THREE.Group();
     const matCache = new Map();
+    const instMatrix = new THREE.Matrix4();
+    const worldMatrix = new THREE.Matrix4();
+    let truncated = false;
     worldGroup.updateMatrixWorld(true);
+    const addClone = (geom, mat, matrix) => {
+      const m = new THREE.Mesh(geom, mat);
+      matrix.decompose(m.position, m.quaternion, m.scale);
+      m.matrixAutoUpdate = false;
+      m.updateMatrix();
+      root.add(m);
+    };
     worldGroup.traverse(obj => {
-      if (!obj.isMesh || obj.isInstancedMesh) return;            // r128 USDZ exporter can't expand instances
-      if (!obj.visible) return;
+      if (truncated || !obj.visible || !obj.isMesh) return;
       const geom = obj.geometry;
       if (!geom || !geom.attributes || !geom.attributes.position) return;
       if (geom.attributes.position.isInterleavedBufferAttribute) return;
       if (obj.userData && (obj.userData.ghostPreview || obj.userData.noPointerPick)) return;
       const src = obj.material;
       const baseForAlpha = Array.isArray(src) ? src[0] : src;
-      // Drop near-invisible helper overlays (selection hulls, faint holos).
-      if (baseForAlpha && baseForAlpha.transparent && typeof baseForAlpha.opacity === 'number' && baseForAlpha.opacity < 0.25) return;
-      const clone = new THREE.Mesh(geom, quickLookStandardMaterial(src, matCache));
-      obj.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
-      clone.matrixAutoUpdate = false;
-      clone.updateMatrix();
-      root.add(clone);
+      // Drop near-invisible helper overlays (selection hulls, faint holos, glow cones).
+      if (baseForAlpha && baseForAlpha.transparent && typeof baseForAlpha.opacity === 'number' && baseForAlpha.opacity < 0.2) return;
+      const mat = quickLookStandardMaterial(src, geom, matCache);
+      if (obj.isInstancedMesh) {
+        for (let i = 0; i < obj.count; i++) {
+          if (root.children.length >= QUICKLOOK_MAX_MESHES) { truncated = true; break; }
+          obj.getMatrixAt(i, instMatrix);
+          worldMatrix.multiplyMatrices(obj.matrixWorld, instMatrix);
+          addClone(geom, mat, worldMatrix);
+        }
+      } else {
+        if (root.children.length >= QUICKLOOK_MAX_MESHES) { truncated = true; return; }
+        addClone(geom, mat, obj.matrixWorld);
+      }
     });
     if (!root.children.length) return null;
     root.updateMatrixWorld(true);
@@ -1277,6 +1327,7 @@
     wrapper.scale.setScalar(QUICKLOOK_TARGET_SIZE / span);
     wrapper.updateMatrixWorld(true);
     wrapper.userData.__matCache = matCache;
+    wrapper.userData.__truncated = truncated;
     return wrapper;
   }
 
@@ -1316,7 +1367,9 @@
       const blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
       const url = URL.createObjectURL(blob);
       openARQuickLookAnchor(url);
-      setXRStatus('Opening AR — point your device at a floor or table, tap to place, then walk around your world.');
+      setXRStatus(wrapper.userData.__truncated
+        ? 'Opening AR (large world — showing the first part). Point at a floor or table, tap to place, then walk around it.'
+        : 'Opening AR — point your device at a floor or table, tap to place, then walk around your world.');
       setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 60000);
     } catch (err) {
       console.error('AR Quick Look export failed:', err);
