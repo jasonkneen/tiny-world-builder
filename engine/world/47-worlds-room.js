@@ -393,91 +393,87 @@
     }
     WS.renderPreview = renderPreview;
 
-    // ---- in-world avatars: the GLB model ONLY. No fallback — if the model fails
-    // to load we surface an error and render nothing. (The uploaded GLBs are static
-    // meshes with no skeleton/animations, so movement uses a procedural hop until a
-    // rigged model with idle/walk clips is provided — clip detection is wired below.)
-    const AVATAR_MODEL_URL = 'models/people/stepan_hytale.glb';
+    // ---- in-world avatars: 2.5D animated sprite-sheet billboards (models/people/25D) ----
+    // Each sheet is 8 direction-rows x N frame-cols of 64x64 cells. Facing comes from
+    // the movement direction (8-way); state is idle vs walk. No fallback — if a sheet
+    // fails to load we surface an error.
+    const SHEET = {
+      idle: { url: 'models/people/25D/idle/Sprite Sheet/idle full sprite sheet (transparent BG).png', sw: 768, sh: 512, frame: 64, cols: 12, fps: 8 },
+      walk: { url: 'models/people/25D/walk/Sprite Sheet/walk complete sprite sheet (transparent BG).png', sw: 512, sh: 512, frame: 64, cols: 8, fps: 12 },
+    };
+    // Sheet row (top->bottom) for each movement sector. Sectors: 0=S 1=SE 2=E 3=NE
+    // 4=N 5=NW 6=W 7=SW. If a character faces the wrong way, reorder this array.
+    const SECTOR_TO_ROW = [0, 1, 2, 3, 4, 5, 6, 7];
     let selfEnt = null;
     const peerEnts = new Map();
     let avatarRaf = null;
     let avatarErrored = false;
+    let _texLoader = null;
 
     function avatarParent() {
       if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
       if (typeof xrWorldRoot !== 'undefined' && xrWorldRoot) return xrWorldRoot;
       return (typeof scene !== 'undefined') ? scene : null;
     }
-    function dirFrom(dx, dz) { if (!dx && !dz) return null; if (Math.abs(dx) >= Math.abs(dz)) return dx < 0 ? 'left' : 'right'; return dz < 0 ? 'up' : 'down'; }
-    function dirYaw(dir) { return dir === 'up' ? Math.PI : dir === 'left' ? Math.PI / 2 : dir === 'right' ? -Math.PI / 2 : 0; }
     function hashId(s) { s = String(s); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
-
-    function configureGltf(loader) {
-      try {
-        if (THREE.DRACOLoader && typeof loader.setDRACOLoader === 'function') { const d = new THREE.DRACOLoader(); if (d.setDecoderPath) d.setDecoderPath('vendor/three/draco/'); loader.setDRACOLoader(d); }
-        if (typeof MeshoptDecoder !== 'undefined' && MeshoptDecoder && typeof loader.setMeshoptDecoder === 'function') loader.setMeshoptDecoder(MeshoptDecoder);
-      } catch (_) {}
-      return loader;
-    }
+    function dirSector(dx, dz) { if (!dx && !dz) return null; return ((Math.round(Math.atan2(dx, dz) / (Math.PI / 4)) % 8) + 8) % 8; }
     function avatarError(msg) {
       if (avatarErrored) return; avatarErrored = true;
-      try { console.error('[worlds] avatar model failed:', AVATAR_MODEL_URL, msg); } catch (_) {}
-      toast('Avatar failed to load: ' + AVATAR_MODEL_URL);
+      try { console.error('[worlds] avatar sprite failed:', msg); } catch (_) {}
+      toast('Avatar sprites failed to load');
     }
-    // GLB only — a fresh instance per avatar (no SkeletonUtils to clone). No
-    // fallback: any failure calls avatarError() and the avatar simply isn't shown.
-    function loadModelInto(ent) {
-      if (typeof THREE === 'undefined' || !THREE.GLTFLoader) { avatarError('GLTFLoader unavailable'); return; }
-      let loader;
-      try { loader = configureGltf(new THREE.GLTFLoader()); } catch (e) { avatarError(e && e.message); return; }
-      loader.load(AVATAR_MODEL_URL, (gltf) => {
-        try {
-          const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-          if (!root || ent.disposed) return;
-          const size = new THREE.Vector3(); new THREE.Box3().setFromObject(root).getSize(size);
-          root.scale.setScalar(1.7 / (size.y || 1));
-          ent.yOff = -new THREE.Box3().setFromObject(root).min.y;
-          root.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) { o.castShadow = true; o.frustumCulled = false; } });
-          const par = avatarParent(); if (par) par.add(root);
-          ent.model = root;
-          if (gltf.animations && gltf.animations.length) {
-            ent.mixer = new THREE.AnimationMixer(root);
-            const pick = (re) => gltf.animations.find((c) => re.test(c.name || ''));
-            const idle = pick(/idle|stand|breath/i) || gltf.animations[0];
-            const walk = pick(/walk|move/i) || pick(/run|jog/i) || idle;
-            if (idle) ent.actions.idle = ent.mixer.clipAction(idle);
-            if (walk) ent.actions.walk = ent.mixer.clipAction(walk);
-            playAction(ent, 'idle');
-          }
-          placeEntity(ent);
-        } catch (e) { avatarError(e && e.message); }
-      }, undefined, (err) => { avatarError((err && (err.message || err.type)) || 'load failed'); });
+    function loadSheetTexture(url) {
+      _texLoader = _texLoader || new THREE.TextureLoader();
+      const t = _texLoader.load(url, undefined, undefined, () => avatarError(url));
+      t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+      if ('colorSpace' in t && THREE.SRGBColorSpace) t.colorSpace = THREE.SRGBColorSpace;
+      else if ('encoding' in t && THREE.sRGBEncoding) t.encoding = THREE.sRGBEncoding;
+      return t;
     }
+    // A fresh texture per avatar+sheet so each can hold its own frame/row offset.
     function createAvatar() {
-      const ent = { x: 0, z: 0, dir: 'down', lastMove: 0, model: null, mixer: null, actions: {}, current: null, yOff: 0, disposed: false };
-      loadModelInto(ent);
+      const ent = { x: 0, z: 0, sector: 0, lastMove: 0, state: 'idle', frame: 0, frameTime: 0, tex: {}, sprite: null, disposed: false };
+      if (typeof THREE === 'undefined') { avatarError('THREE unavailable'); return ent; }
+      for (const k of Object.keys(SHEET)) {
+        const s = SHEET[k];
+        const t = loadSheetTexture(s.url);
+        t.repeat.set(s.frame / s.sw, s.frame / s.sh);
+        t.offset.set(0, 1 - s.frame / s.sh);
+        ent.tex[k] = t;
+      }
+      const mat = new THREE.SpriteMaterial({ map: ent.tex.idle, transparent: true, depthWrite: false, alphaTest: 0.2 });
+      ent.sprite = new THREE.Sprite(mat);
+      ent.sprite.center.set(0.5, 0);     // anchor at the feet
+      ent.sprite.scale.set(1.7, 1.7, 1);
+      ent.sprite.renderOrder = 10;
+      const par = avatarParent(); if (par) par.add(ent.sprite);
       return ent;
     }
-    function playAction(ent, name) {
-      if (!ent.mixer) return; const a = ent.actions[name]; if (!a || ent.current === a) return;
-      if (ent.current) ent.current.fadeOut(0.18);
-      a.reset().fadeIn(0.18).play(); ent.current = a;
-    }
     function placeEntity(ent) {
-      if (!ent || !ent.model || typeof tilePos !== 'function') return;
+      if (!ent || !ent.sprite || typeof tilePos !== 'function') return;
       const p = tilePos(ent.x, ent.z);
-      ent.model.position.set(p.x, ent.yOff || 0, p.z);
-      ent.model.rotation.y = dirYaw(ent.dir);
+      ent.sprite.position.set(p.x, 0.02, p.z);
     }
     function moveEntity(ent, x, z) {
       if (!ent) return;
-      const d = dirFrom(x - ent.x, z - ent.z); if (d) ent.dir = d;
+      const s = dirSector(x - ent.x, z - ent.z); if (s != null) ent.sector = s;
       if (x !== ent.x || z !== ent.z) ent.lastMove = Date.now();
       ent.x = x; ent.z = z; placeEntity(ent);
     }
     function disposeEntity(ent) {
       if (!ent) return; ent.disposed = true;
-      if (ent.model && ent.model.parent) ent.model.parent.remove(ent.model);
+      if (ent.sprite && ent.sprite.parent) ent.sprite.parent.remove(ent.sprite);
+    }
+    function animEntity(ent, dt) {
+      if (!ent.sprite) return;
+      const state = (Date.now() - ent.lastMove) < 200 ? 'walk' : 'idle';
+      if (state !== ent.state) { ent.state = state; ent.frame = 0; ent.frameTime = 0; ent.sprite.material.map = ent.tex[state]; }
+      const sh = SHEET[state];
+      ent.frameTime += dt;
+      const fdur = 1 / sh.fps;
+      while (ent.frameTime >= fdur) { ent.frameTime -= fdur; ent.frame = (ent.frame + 1) % sh.cols; }
+      const row = SECTOR_TO_ROW[ent.sector] || 0;
+      ent.tex[state].offset.set(ent.frame * (sh.frame / sh.sw), 1 - (row + 1) * (sh.frame / sh.sh));
     }
 
     function updateSelfAvatar() {
@@ -501,15 +497,9 @@
       let prev = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const tick = () => {
         const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        const dt = Math.min(0.05, (now - prev) / 1000); prev = now; const t = now / 1000;
-        const all = selfEnt ? [selfEnt] : [];
-        peerEnts.forEach((e) => all.push(e));
-        for (const ent of all) {
-          if (!ent.model) continue;
-          const moving = (Date.now() - ent.lastMove) < 250;
-          if (ent.mixer) { ent.mixer.update(dt); playAction(ent, moving ? 'walk' : 'idle'); }
-          else ent.model.position.y = (ent.yOff || 0) + (moving ? Math.abs(Math.sin(t * 9)) * 0.12 : 0);  // static GLB: hop while moving
-        }
+        const dt = Math.min(0.05, (now - prev) / 1000); prev = now;
+        if (selfEnt) animEntity(selfEnt, dt);
+        peerEnts.forEach((e) => animEntity(e, dt));
         avatarRaf = requestAnimationFrame(tick);
       };
       avatarRaf = requestAnimationFrame(tick);
