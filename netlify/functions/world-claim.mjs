@@ -16,6 +16,18 @@ async function loadEconomy(sql) {
   return rows[0] || {};
 }
 
+// Test mode: claim works for real (ownership flip, claim record, economy bump)
+// but skips the wallet/payment/on-chain steps. Enable with WORLDS_TEST_BYPASS_PAYMENT=1.
+function testBypassPayment() {
+  try {
+    if (globalThis.Netlify && Netlify.env && typeof Netlify.env.get === 'function') {
+      const v = Netlify.env.get('WORLDS_TEST_BYPASS_PAYMENT');
+      if (v != null && v !== '') return v === '1' || v === 'true';
+    }
+  } catch (_) {}
+  return process.env.WORLDS_TEST_BYPASS_PAYMENT === '1' || process.env.WORLDS_TEST_BYPASS_PAYMENT === 'true';
+}
+
 async function linkedWallet(sql, profileId) {
   const rows = await sql`
     SELECT public_key FROM wallet_accounts
@@ -55,11 +67,30 @@ export default async function worldClaimFunction(request) {
         priceUsdc: String(price),
         recipientWallet: process.env.TINYWORLD_PAYMENT_WALLET || '',
         tokenMint: worldsUsdcMint(),
+        bypass: testBypassPayment(),
       }, origin);
     }
 
     if (action !== 'confirm') return errorResponse('Unknown claim action', 400, origin);
     if (world.status !== 'unclaimed') return errorResponse('World is no longer for sale', 409, origin);
+
+    // Test bypass: real ownership flip + full records, no wallet/payment required.
+    if (testBypassPayment()) {
+      const claimed = await sql`
+        UPDATE worlds
+        SET status = 'draft', owner_profile_id = ${profile.id}, price_usdc = ${price}, updated_at = NOW()
+        WHERE id = ${worldId} AND status = 'unclaimed'
+        RETURNING *
+      `;
+      if (!claimed.length) return errorResponse('World was just claimed by someone else', 409, origin);
+      await sql`
+        INSERT INTO world_claims (world_id, buyer_profile_id, seller_profile_id, payment_intent_id, price_usdc, signature, status)
+        VALUES (${worldId}, ${profile.id}, NULL, NULL, ${price}, 'test-bypass', 'completed')
+      `;
+      await sql`UPDATE world_economy_state SET claimed_count = claimed_count + 1, updated_at = NOW() WHERE id = 1`;
+      await sql`INSERT INTO player_resources (profile_id) VALUES (${profile.id}) ON CONFLICT (profile_id) DO NOTHING`;
+      return jsonResponse({ world: worldDto(claimed[0], { includeData: true }), verified: false, bypass: true }, origin, 201);
+    }
 
     const paymentIntentId = Number(body && body.paymentIntentId);
     const signature = String((body && body.signature) || '').trim().slice(0, 120);

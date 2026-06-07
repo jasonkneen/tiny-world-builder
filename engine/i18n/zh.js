@@ -46,6 +46,11 @@
     'worlds.noHearts': '体力耗尽 — 会随时间恢复。',
     'worlds.cooldown': '冷却中…',
     'worlds.serverOld': '该世界的服务器需要最新部署 — 采集和聊天暂不可用。',
+    'worlds.roleOwner': '拥有者 · 全额保留',
+    'worlds.roleVisitor': '访客',
+    'worlds.roleObserver': '观察者',
+    'worlds.help': '玩法',
+    'worlds.helpBody': '用 WASD/方向键移动，或点击地块前往。站在节点旁选择动作：钓鱼（3 秒）、采矿（5 秒）、采集（3 秒）、狩猎（1 秒）。每次采集消耗 1 颗心（上限 10，每分钟 +1），产出 3 份资源。访客按税率与世界拥有者分成；拥有者全额保留。节点的可采次数有限，会随时间恢复。',
 
     'brand.sub': '点击放置 · 拖动旋转 · 捏合或滚动缩放',
     'minimap.fps': '每秒帧数',

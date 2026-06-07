@@ -21,7 +21,51 @@
     function T(key, params) { return typeof window.t === 'function' ? window.t(key, params) : key; }
     function toast(msg) { if (typeof twToast === 'function') twToast(msg); else console.log('[worlds]', msg); }
     function loggedIn() { return !!(window.__loggedIn || (window.TinyWorldAuth && window.TinyWorldAuth.currentUser && window.TinyWorldAuth.currentUser())); }
-  
+
+    // Shared SVG icon set for the whole Worlds UI (NO emoji). Stroke icons use
+    // currentColor; a few are filled. Exposed on WS so 47/48 reuse one source.
+    const ICONS = {
+      globe: { p: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M2 12h20', 'M12 2c3.4 2.6 3.4 17.4 0 20', 'M12 2c-3.4 2.6-3.4 17.4 0 20'] },
+      heart: { fill: true, p: ['M12 20.7l-1.5-1.4C5.3 14.6 2 11.6 2 7.9 2 5.1 4.1 3 6.8 3c1.6 0 3.1.7 4 1.9.9-1.2 2.4-1.9 4-1.9C21.4 3 23.5 5.1 23.5 7.9c0 .1 0 .1 0 0z'] },
+      fish: { fill: true, p: ['M2 12c4-5 10-5 14 0-4 5-10 5-14 0z', 'M16 12l5-3v6l-5-3z'] },
+      ore: { p: ['M12 2l8 6-8 14-8-14 8-6z', 'M4 8h16', 'M12 2v20'] },
+      plant: { p: ['M12 22V9', 'M12 13C9 13 6 11 6 6c4 0 6 2 6 7z', 'M12 11c2.6 0 5-1.6 5-6-3.6 0-5 1.6-5 6z'] },
+      meat: { fill: true, p: ['M14.6 8.4a4.5 4.5 0 1 0-6.3 6.3L4 19l1.5.4.4 1.5 4.4-4.4a4.5 4.5 0 0 0 6.3-6.3z'] },
+      coin: { p: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 6v12', 'M14.6 8.6A3 3 0 0 0 11.6 7c-1.7 0-3 1-3 2.3 0 3 6 1.7 6 4.7 0 1.3-1.3 2.3-3 2.3a3 3 0 0 1-3-1.6'] },
+      send: { p: ['M22 2 11 13', 'M22 2 15 22 11 13 2 9z'] },
+      chat: { p: ['M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z'] },
+      close: { p: ['M6 6l12 12', 'M18 6 6 18'] },
+      leave: { p: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'] },
+      help: { p: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M9.5 9.2A2.5 2.5 0 0 1 14 10.5c0 1.6-2 2-2 3.5', 'M12 17h.01'] },
+      person: { p: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M5 21a7 7 0 0 1 14 0'] },
+    };
+    function makeIcon(name, size) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', String(size || 16));
+      svg.setAttribute('height', String(size || 16));
+      svg.setAttribute('aria-hidden', 'true');
+      svg.style.flex = '0 0 auto';
+      const def = ICONS[name] || { p: [] };
+      (def.p || []).forEach(d => {
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', d);
+        p.setAttribute('fill', def.fill ? 'currentColor' : 'none');
+        p.setAttribute('stroke', 'currentColor');
+        p.setAttribute('stroke-width', def.fill ? '0' : '2');
+        p.setAttribute('stroke-linecap', 'round');
+        p.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(p);
+      });
+      return svg;
+    }
+    WS.icon = makeIcon;
+
+    // Toggle builder chrome off while playing/observing a world so visitors can't
+    // place/erase tiles. Owners editing a draft use the real builder (chrome on).
+    WS.setPlayChrome = function (on) { document.body.classList.toggle('tw-worlds-play', !!on); };
+
     function el(tag, attrs, kids) {
       const node = document.createElement(tag);
       if (attrs) for (const k of Object.keys(attrs)) {
@@ -80,6 +124,7 @@
   body.tw-worlds-embed .tool-palette{bottom:calc(28px + var(--tw-worlds-bottom-inset,0px)) !important}
   body.tw-worlds-embed .mp-chat-toggle{bottom:calc(24px + var(--tw-worlds-bottom-inset,0px)) !important}
   body.tw-worlds-embed .mp-chat-panel{bottom:calc(78px + var(--tw-worlds-bottom-inset,0px)) !important}
+  body.tw-worlds-play .toolbar,body.tw-worlds-play .tool-palette,body.tw-worlds-play #raise-terrain,body.tw-worlds-play #lower-terrain{display:none !important}
   `;
       document.head.appendChild(el('style', { id: 'tw-worlds-style', text: css }));
     }
@@ -169,6 +214,21 @@
       if (!loggedIn()) { toast(T('worlds.loginNeeded')); return; }
       const quote = await api('/api/worlds/claim', 'POST', { action: 'quote', worldId: w.id });
       if (!quote || quote.error) { toast(quote && quote.error ? quote.error : T('worlds.error')); return; }
+      // Test mode: claim for real (records + ownership) without wallet/payment.
+      if (quote.bypass) {
+        modal(T('worlds.buy') + ' · ' + (w.name || w.slug), [
+          el('p', { text: quote.priceUsdc + ' USDC', style: 'font-size:22px;font-weight:700;margin:0' }),
+          el('p', { style: 'font-size:12px;opacity:.7;margin:8px 0', text: 'Test mode — payment is bypassed; ownership and records are written for real.' }),
+        ], [
+          { label: 'Claim (test — no payment)', cls: 'go', onClick: async (done) => {
+              const res = await api('/api/worlds/claim', 'POST', { action: 'confirm', worldId: w.id });
+              if (!res || res.error) { toast(res && res.error ? res.error : T('worlds.error')); return; }
+              toast(T('worlds.bought')); done(); loadWorlds();
+            } },
+          { label: T('worlds.close'), cls: 'alt', onClick: (done) => done() },
+        ]);
+        return;
+      }
       const info = el('p', { text: quote.priceUsdc + ' USDC', style: 'font-size:22px;font-weight:700;margin:0' });
       const linkWrap = el('div', { style: 'margin-top:12px;font-size:12px;opacity:.85' });
       const sig = el('input', { placeholder: 'Transaction signature (for verification)' });
@@ -302,7 +362,7 @@
       if (document.querySelector('.tw-worlds-launch')) return;
       injectStyles();
       applyBottomInset();
-      document.body.appendChild(el('button', { class: 'tw-worlds-launch', title: T('worlds.launch'), onclick: openOverlay }, ['🌍 ', T('worlds.launch')]));
+      document.body.appendChild(el('button', { class: 'tw-worlds-launch', title: T('worlds.launch'), onclick: openOverlay }, [makeIcon('globe', 16), T('worlds.launch')]));
     }
   
     WS.open = openOverlay;

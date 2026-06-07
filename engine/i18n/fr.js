@@ -46,6 +46,11 @@
     'worlds.noHearts': 'Plus de cœurs — ils se rechargent avec le temps.',
     'worlds.cooldown': 'Récupération…',
     'worlds.serverOld': 'Le serveur de ce monde doit être redéployé — récolte et chat indisponibles.',
+    'worlds.roleOwner': 'Propriétaire · 100 %',
+    'worlds.roleVisitor': 'Visiteur',
+    'worlds.roleObserver': 'Observateur',
+    'worlds.help': 'Comment jouer',
+    'worlds.helpBody': 'Déplacez-vous avec ZQSD/flèches ou cliquez une tuile pour vous y rendre. Tenez-vous près d’un nœud et choisissez une action — Pêcher l’eau (3 s), Miner le minerai (5 s), Récolter les plantes (3 s), Chasser les animaux (1 s). Chaque récolte coûte 1 cœur (max 10, +1 par minute) et donne 3 ressources. Les visiteurs partagent la récompense avec le propriétaire selon la taxe ; les propriétaires gardent tout. Les nœuds ont des charges limitées qui se rechargent avec le temps.',
 
     'brand.sub': 'Touchez pour placer · glissez pour pivoter · pincez ou défilez pour zoomer',
     'minimap.fps': 'Images par seconde',

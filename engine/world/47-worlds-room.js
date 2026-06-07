@@ -76,7 +76,11 @@
       world = w; token = joinToken || ''; role = joinRole || 'observe';
       gridSize = w.gridSize || 8; taxPercent = w.taxPercent != null ? w.taxPercent : null;
       cells = w.data && Array.isArray(w.data.cells) ? w.data.cells : [];
+      rebuildBlocked();
       if (w.data && typeof applyState === 'function') { try { applyState(w.data); } catch (_) {} }
+      // One map: hide the builder's own minimap, and lock out builder tools.
+      hideBaseMinimap(true);
+      if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(true);
       emit('enter', { world: w, role });
       const roomId = 'world-' + w.slug;
       const url = host() + '/party/' + encodeURIComponent(roomId) + '?_pk=' + encodeURIComponent(connToken());
@@ -98,14 +102,28 @@
       socket.addEventListener('message', (e) => { const d = safeParse(e.data); if (d) onMessage(d); });
       bindInput();
       showMinimap();
+      startAvatars();
     }
     WS.enterRoom = enterRoom;
   
     function leaveRoom() {
+      cancelWalk();
+      stopAvatars();
       if (socket) { try { socket.close(); } catch (_) {} socket = null; }
       connected = false; peers.clear(); nodes = {}; animals = [];
       unbindInput(); hideMinimap();
+      hideBaseMinimap(false);
+      if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(false);
       emit('leave', {});
+    }
+
+    // Hide/restore the builder's own minimap so there's a single in-world map.
+    let baseMapEl = null, baseMapPrevDisplay = '';
+    function hideBaseMinimap(hide) {
+      baseMapEl = baseMapEl || document.getElementById('minimap-wrap');
+      if (!baseMapEl) return;
+      if (hide) { baseMapPrevDisplay = baseMapEl.style.display; baseMapEl.style.display = 'none'; }
+      else { baseMapEl.style.display = baseMapPrevDisplay || ''; }
     }
     WS.leaveRoom = function () {
       leaveRoom();
@@ -129,21 +147,21 @@
           nodes = d.nodes || {}; animals = d.animals || [];
           peers.clear(); (d.peers || []).forEach(p => { if (p.id) peers.set(p.id, p); });
           role = (d.you && d.you.role) || role;
-          emit('state', snapshot()); drawMinimap(); break;
+          emit('state', snapshot()); drawMinimap(); updateSelfAvatar(); updatePeerAvatars(); break;
         case 'presence': {
           const p = d.presence; if (!p || !p.id) break;
           if (p.id === myId) {
             // Our own presence echo carries the authoritative position + hearts.
             if (p.cursor) { you.x = p.cursor.x; you.z = p.cursor.z; }
             if (p.hearts != null) you.hearts = p.hearts;
-            emit('you', you);
+            emit('you', you); updateSelfAvatar();
           } else {
             peers.set(p.id, p);
-            emit('peers', Array.from(peers.values()));
+            emit('peers', Array.from(peers.values())); updatePeerAvatars();
           }
           drawMinimap(); break;
         }
-        case 'leave': peers.delete(d.id); emit('peers', Array.from(peers.values())); drawMinimap(); break;
+        case 'leave': peers.delete(d.id); emit('peers', Array.from(peers.values())); updatePeerAvatars(); drawMinimap(); break;
         case 'node.update': if (d.node && d.node.id) { if (d.node.gone) delete nodes[d.node.id]; else nodes[d.node.id] = d.node; emit('nodes', nodes); drawMinimap(); } break;
         case 'animal.spawn': if (d.animal) { animals.push(d.animal); drawMinimap(); } break;
         case 'animal.remove': animals = animals.filter(a => a.id !== d.id); drawMinimap(); break;
@@ -178,14 +196,64 @@
     }
     WS.getState = snapshot;
   
-    // ---- movement ----
+    // ---- movement + click-to-walk pathfinding ----
+    const BLOCKED_KINDS = new Set(['house', 'tree', 'rock', 'fence', 'bush', 'voxel-build', 'model-stamp']);
+    let blocked = new Set();   // 'x,z' cells you cannot stand on (mirrors server)
+    function rebuildBlocked() {
+      blocked = new Set();
+      for (const c of cells) {
+        const x = Array.isArray(c) ? c[0] : c.x, z = Array.isArray(c) ? c[1] : c.z;
+        if (x == null || z == null) continue;
+        const ter = Array.isArray(c) ? c[2] : c.terrain, k = Array.isArray(c) ? c[3] : c.kind;
+        if (ter === 'water' || ter === 'lava' || ter === 'stone' || (k && BLOCKED_KINDS.has(k))) blocked.add(x + ',' + z);
+      }
+    }
+    function standable(x, z) { return x >= 0 && z >= 0 && x < gridSize && z < gridSize && !blocked.has(x + ',' + z); }
+
     function step(dx, dz) {
       const nx = Math.max(0, Math.min(gridSize - 1, you.x + dx));
       const nz = Math.max(0, Math.min(gridSize - 1, you.z + dz));
       if (nx === you.x && nz === you.z) return;
+      if (!standable(nx, nz)) return;
       you.x = nx; you.z = nz;       // optimistic; server presence will correct
       send({ type: 'move', x: nx, z: nz });
-      emit('you', you); drawMinimap();
+      emit('you', you); drawMinimap(); updateSelfAvatar();
+    }
+
+    // BFS over standable cells; returns the ordered list of steps to (tx,tz).
+    function findPath(tx, tz) {
+      if (!standable(tx, tz)) return null;
+      const start = you.x + ',' + you.z, goal = tx + ',' + tz;
+      if (start === goal) return [];
+      const q = [[you.x, you.z]]; const prev = new Map([[start, null]]); let head = 0;
+      while (head < q.length) {
+        const [x, z] = q[head++];
+        if (x + ',' + z === goal) break;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, nz = z + dz, nk = nx + ',' + nz;
+          if (prev.has(nk) || !standable(nx, nz)) continue;
+          prev.set(nk, x + ',' + z); q.push([nx, nz]);
+        }
+      }
+      if (!prev.has(goal)) return null;
+      const path = []; let cur = goal;
+      while (cur && cur !== start) { const [x, z] = cur.split(',').map(Number); path.push([x, z]); cur = prev.get(cur); }
+      return path.reverse();
+    }
+    let walkTimer = null;
+    function cancelWalk() { if (walkTimer) { clearTimeout(walkTimer); walkTimer = null; } }
+    function walkTo(tx, tz) {
+      cancelWalk();
+      const path = findPath(tx, tz);
+      if (!path || !path.length) return;
+      let i = 0;
+      const next = () => {
+        if (i >= path.length) { walkTimer = null; return; }
+        const [nx, nz] = path[i++];
+        you.x = nx; you.z = nz; send({ type: 'move', x: nx, z: nz }); emit('you', you); drawMinimap(); updateSelfAvatar();
+        walkTimer = setTimeout(next, 170);
+      };
+      next();
     }
   
     // ---- harvest ----
@@ -195,6 +263,7 @@
   
     // Find an in-reach node/animal that matches `action` and request a harvest.
     function harvest(action) {
+      cancelWalk();
       if (role !== 'play') { toast(T('worlds.observing')); return; }
       if (action === 'hunt') {
         const a = animals.find(an => reach(you, an));
@@ -220,6 +289,7 @@
       const tag = (e.target && e.target.tagName) || '';
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       let handled = true;
+      cancelWalk();   // manual key interrupts any auto-walk
       if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') step(0, -1);
       else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') step(0, 1);
       else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') step(-1, 0);
@@ -236,8 +306,9 @@
     function showMinimap() {
       if (mapWrap) { mapWrap.style.display = 'block'; drawMinimap(); return; }
       if (!document.getElementById('tw-worlds-map-style')) {
-        const css = '.tw-worlds-map{position:fixed;left:12px;bottom:calc(86px + var(--tw-worlds-bottom-inset,0px));z-index:65;background:#0c1424cc;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:8px}'
-          + '.tw-worlds-map h4{margin:0 0 6px;font:600 11px system-ui;color:#cfe0ff;text-transform:uppercase;letter-spacing:.05em}'
+        const css = '.tw-worlds-map{position:fixed;right:12px;top:72px;z-index:65;background:#0c1424dd;border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:8px;box-shadow:0 10px 28px -10px rgba(0,0,0,.5)}'
+          + '.tw-worlds-map h4{margin:0 0 6px;font:600 11px system-ui;color:#cfe0ff;text-transform:uppercase;letter-spacing:.05em;cursor:grab;user-select:none;display:flex;align-items:center;gap:6px}'
+          + '.tw-worlds-map.dragging h4{cursor:grabbing}'
           + '.tw-worlds-map canvas{display:block;border-radius:6px;cursor:pointer;background:#13243f}';
         document.head.appendChild(Object.assign(document.createElement('style'), { id: 'tw-worlds-map-style', textContent: css }));
       }
@@ -247,19 +318,50 @@
       canvas.addEventListener('click', onMapClick);
       mapWrap.appendChild(h); mapWrap.appendChild(canvas);
       document.body.appendChild(mapWrap);
+      restoreMapPos();
+      makeMapDraggable(h);
       ctx = canvas.getContext('2d');
       drawMinimap();
     }
     function hideMinimap() { if (mapWrap) mapWrap.style.display = 'none'; }
+
+    function restoreMapPos() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('tinyworld:worlds.map.pos') || 'null');
+        if (saved && saved.left && saved.top) { mapWrap.style.left = saved.left; mapWrap.style.top = saved.top; mapWrap.style.right = 'auto'; mapWrap.style.bottom = 'auto'; }
+      } catch (_) {}
+    }
+    function makeMapDraggable(handle) {
+      let sx = 0, sy = 0, ox = 0, oy = 0, drag = false;
+      handle.addEventListener('pointerdown', (e) => {
+        drag = true; mapWrap.classList.add('dragging');
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const r = mapWrap.getBoundingClientRect(); ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+        mapWrap.style.right = 'auto'; mapWrap.style.bottom = 'auto'; mapWrap.style.left = ox + 'px'; mapWrap.style.top = oy + 'px';
+        e.preventDefault();
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const nx = Math.max(0, Math.min(window.innerWidth - 60, ox + e.clientX - sx));
+        const ny = Math.max(0, Math.min(window.innerHeight - 40, oy + e.clientY - sy));
+        mapWrap.style.left = nx + 'px'; mapWrap.style.top = ny + 'px';
+      });
+      const end = () => {
+        if (!drag) return; drag = false; mapWrap.classList.remove('dragging');
+        try { localStorage.setItem('tinyworld:worlds.map.pos', JSON.stringify({ left: mapWrap.style.left, top: mapWrap.style.top })); } catch (_) {}
+      };
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    }
   
     function onMapClick(e) {
       const rect = canvas.getBoundingClientRect();
       const cx = Math.floor((e.clientX - rect.left) / CELL);
       const cz = Math.floor((e.clientY - rect.top) / CELL);
       if (cx < 0 || cz < 0 || cx >= gridSize || cz >= gridSize) return;
-      // One step toward the clicked cell (server enforces single-cell moves).
-      const dx = Math.sign(cx - you.x), dz = Math.sign(cz - you.z);
-      if (dx || dz) step(dx, dz);
+      // Walk (auto-path) to the clicked tile; the server still validates each
+      // one-cell step. Arrow/WASD keys interrupt the walk.
+      walkTo(cx, cz);
     }
   
     function terrainColor(t) {
@@ -290,6 +392,87 @@
       }
     }
     WS.renderPreview = renderPreview;
+
+    // ---- in-world avatar (billboard built from the crowd character art) ----
+    const AVATAR_SELF = 'man-dad';
+    const AVATAR_PEERS = ['little-girl', 'man-grandfather', 'woman-grandmother'];
+    const _texCache = {};
+    let _texLoader = null;
+    let selfAvatar = null, selfDir = 'down';
+    let selfCell = { x: null, z: null };
+    const peerAvatars = new Map();
+    let avatarRaf = null;
+    function avatarParent() {
+      if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
+      if (typeof xrWorldRoot !== 'undefined' && xrWorldRoot) return xrWorldRoot;
+      return (typeof scene !== 'undefined') ? scene : null;
+    }
+    function charTex(name, dir) {
+      const key = name + '-' + dir;
+      if (_texCache[key]) return _texCache[key];
+      if (typeof THREE === 'undefined') return null;
+      _texLoader = _texLoader || new THREE.TextureLoader();
+      let t = null;
+      try {
+        t = _texLoader.load('crowd/charachters/' + name + '/' + name + '-' + dir + '.png');
+        if ('colorSpace' in t && THREE.SRGBColorSpace) t.colorSpace = THREE.SRGBColorSpace;
+        else if ('encoding' in t && THREE.sRGBEncoding) t.encoding = THREE.sRGBEncoding;
+        t.magFilter = THREE.NearestFilter;
+      } catch (_) { t = null; }
+      _texCache[key] = t;
+      return t;
+    }
+    function makeAvatarSprite(name) {
+      if (typeof THREE === 'undefined') return null;
+      const mat = new THREE.SpriteMaterial({ map: charTex(name, 'down') || null, transparent: true, depthWrite: false });
+      const s = new THREE.Sprite(mat);
+      s.scale.set(0.95, 1.35, 1); s.renderOrder = 10;
+      const par = avatarParent(); if (par) par.add(s);
+      return s;
+    }
+    function placeSprite(s, x, z, y) { if (!s || typeof tilePos !== 'function') return; const p = tilePos(x, z); s.position.set(p.x, y != null ? y : 0.9, p.z); }
+    function setSpriteDir(s, name, dir) { if (!s || !s.material) return; const t = charTex(name, dir); if (t) { s.material.map = t; s.material.needsUpdate = true; } }
+    function dirFrom(dx, dz) { if (!dx && !dz) return null; if (Math.abs(dx) >= Math.abs(dz)) return dx < 0 ? 'left' : 'right'; return dz < 0 ? 'up' : 'down'; }
+    function hashId(s) { s = String(s); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+    function ensureSelf() { if (!selfAvatar) selfAvatar = makeAvatarSprite(AVATAR_SELF); }
+    function updateSelfAvatar() {
+      ensureSelf(); if (!selfAvatar) return;
+      if (selfCell.x != null) { const d = dirFrom(you.x - selfCell.x, you.z - selfCell.z); if (d) { selfDir = d; setSpriteDir(selfAvatar, AVATAR_SELF, d); } }
+      selfCell = { x: you.x, z: you.z };
+      placeSprite(selfAvatar, you.x, you.z);
+    }
+    function updatePeerAvatars() {
+      const seen = new Set();
+      peers.forEach((p) => {
+        if (!p || p.id == null) return;
+        const pos = p.cursor || p; if (pos.x == null) return;
+        seen.add(p.id);
+        let a = peerAvatars.get(p.id);
+        if (!a) { const ch = AVATAR_PEERS[hashId(p.id) % AVATAR_PEERS.length]; a = { sprite: makeAvatarSprite(ch), char: ch, x: pos.x, z: pos.z }; peerAvatars.set(p.id, a); }
+        const d = dirFrom(pos.x - a.x, pos.z - a.z); if (d) setSpriteDir(a.sprite, a.char, d);
+        a.x = pos.x; a.z = pos.z; placeSprite(a.sprite, pos.x, pos.z);
+      });
+      peerAvatars.forEach((a, id) => { if (!seen.has(id)) { if (a.sprite && a.sprite.parent) a.sprite.parent.remove(a.sprite); peerAvatars.delete(id); } });
+    }
+    function startAvatars() {
+      if (avatarRaf || typeof requestAnimationFrame !== 'function') return;
+      const t0 = Date.now();
+      const tick = () => {
+        const t = (Date.now() - t0) / 1000;
+        if (selfAvatar) selfAvatar.position.y = 0.9 + Math.sin(t * 5) * 0.05;        // idle/walk bob
+        peerAvatars.forEach((a) => { if (a.sprite) a.sprite.position.y = 0.9 + Math.sin(t * 5 + (hashId(a.char) % 6)) * 0.04; });
+        avatarRaf = requestAnimationFrame(tick);
+      };
+      avatarRaf = requestAnimationFrame(tick);
+    }
+    function stopAvatars() {
+      if (avatarRaf) { cancelAnimationFrame(avatarRaf); avatarRaf = null; }
+      if (selfAvatar && selfAvatar.parent) selfAvatar.parent.remove(selfAvatar);
+      selfAvatar = null; selfCell = { x: null, z: null };
+      peerAvatars.forEach((a) => { if (a.sprite && a.sprite.parent) a.sprite.parent.remove(a.sprite); });
+      peerAvatars.clear();
+    }
+
     function drawMinimap() {
       if (!ctx || !canvas) return;
       canvas.width = gridSize * CELL; canvas.height = gridSize * CELL;

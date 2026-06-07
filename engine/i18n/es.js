@@ -46,6 +46,11 @@
     'worlds.noHearts': 'Sin corazones: se recargan con el tiempo.',
     'worlds.cooldown': 'Enfriando…',
     'worlds.serverOld': 'El servidor de este mundo necesita el último despliegue: recolección y chat no disponibles.',
+    'worlds.roleOwner': 'Propietario · 100 %',
+    'worlds.roleVisitor': 'Visitante',
+    'worlds.roleObserver': 'Observador',
+    'worlds.help': 'Cómo jugar',
+    'worlds.helpBody': 'Muévete con WASD/flechas o haz clic en una casilla para ir allí. Colócate junto a un nodo y elige una acción: Pescar agua (3 s), Minar mineral (5 s), Recolectar plantas (3 s), Cazar animales (1 s). Cada recolección cuesta 1 corazón (máx. 10, +1 por minuto) y da 3 recursos. Los visitantes reparten la recompensa con el propietario según el impuesto; los propietarios se quedan con todo. Los nodos tienen cargas limitadas que se recargan con el tiempo.',
 
     'brand.sub': 'Toca para colocar · arrastra para orbitar · pellizca o desplázate para acercar',
     'minimap.fps': 'Fotogramas por segundo',
