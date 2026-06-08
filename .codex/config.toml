@@ -1,3 +1,8 @@
 sandbox_mode = "danger-full-access"
-
 approval_policy = "never"
+
+[mcp_servers.contex]
+url = "http://127.0.0.1:54620/mcp"
+
+[mcp_servers.contex.http_headers]
+Authorization = "Bearer 53949871-12fb-426e-993a-619f3d718db5"

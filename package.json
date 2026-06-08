@@ -11,6 +11,7 @@
     "i18n:report": "node tools/i18n-check.js --report",
     "smoke": "node tools/smoke-static.js",
     "perf": "node tools/perf-probe.js",
+    "db:local": "tools/db-local.sh",
     "party:dev": "partykit dev party/index.js --port 1999",
     "dev:party": "partykit dev party/index.js --port 1999",
     "demo:vehicles": "node plugins/examples/vehicle-road-demo.js",
