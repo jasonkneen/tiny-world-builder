@@ -6,7 +6,7 @@ Generated: 2026-06-09
 
 ## Overview
 
-Tiny World Builder is a vanilla ES6, no-bundler 3D world editor built on Three.js r128. The app shell lives in `tiny-world-builder.html` (~1.4k lines); business logic is split across 53+ `.js` modules under `engine/world/` plus `flight-combat-math.mjs` (ES module companion). Styles in `styles/tiny-world.css` (~5.2k lines). Deployed via Vercel and Netlify from `dist/` produced by `publish.sh`.
+Tiny World Builder is a vanilla ES6, no-bundler 3D world editor built on Three.js r128. The app shell lives in `tiny-world-builder.html` (~1.4k lines); business logic is split across 53+ `.js` modules under `engine/world/` plus `flight-combat-math.mjs` (ES module companion). Styles in `styles/tiny-world.css` (~5.2k lines). Deployed via Vercel and Netlify from `dist/` produced by `./publish.sh`.
 
 ---
 
@@ -14,19 +14,20 @@ Tiny World Builder is a vanilla ES6, no-bundler 3D world editor built on Three.j
 
 **Architecture**
 - Primary file: `tiny-world-builder.html` — HTML shell, boot config, ordered `<script src>` tags only
-- Engine modules: 53 numbered `.js` files sharing one global scope + `flight-combat-math.mjs` (ES module, not a classic script)
-- Two modules share the `46-` prefix: `46-mesh-terrain.js` and `46-worlds-universe.js` — load order between them not yet formally documented
+- Engine modules: 53+ numbered `.js` files sharing one global scope + `flight-combat-math.mjs` (ES module, not a classic script)
+- Two modules share the `46-` prefix: `46-mesh-terrain.js` and `46-worlds-universe.js` — load order between them not formally documented
 - Duplicate top-level identifiers silently kill the declaring module without affecting others; prefix module-local scratch globals (e.g. `_fl…` for flight)
 - Three.js pinned to r128; `MeshLambertMaterial`, `ExtrudeGeometry`, shadows assume r128 semantics
 - Materials in `M.*` are shared across meshes — clone before mutating color; `disposeGroup` disposes geometries but not materials
 - `setCell(x, z, opts)` is the only sanctioned way to mutate world state; never write `world[x][z]` directly outside init
-- No bundler, no npm runtime dependencies; `npm test` for static checks, `npm run build` (`./publish.sh`) for dist
+- No bundler, no npm runtime dependencies; `npm test` for static checks, `./publish.sh` for dist
 - Netlify dev runs on port 8888; `NETLIFY_DATABASE_URL` must point to local `tinyworld` Postgres database
+- Edits auto-commit to main and Netlify prod deploys immediately — branches do not guarantee isolation
 
 **Module reference — modules 34 and above**
-- `34-flight-sim.js` — flyable plane via existing `stunt-plane` model-stamp; click-to-Enter/Fly, rear chase-cam, Escape exits; `flight-combat-math.mjs` is its companion
+- `34-flight-sim.js` — flyable plane via existing `stunt-plane` model-stamp; click-to-Enter/Fly, rear chase-cam, Escape exits; `flight-combat-math.mjs` is its ES module companion
 - `38-multiplayer-partykit.js` — multiplayer via PartyKit
-- `39-atmosphere-effects.js` — atmosphere/day-night effects; time-progression not yet wired to any UI
+- `39-atmosphere-effects.js` — atmosphere/day-night effects; time-progression not wired to any UI control
 - `40-shield-system.js` / `41-flight-combat.js` — shield and combat systems
 - `42-account-wallet-players.js` — JWT/cloud-save; subscription system fully removed 2026-05-31
 - `43-drag-drop-import.js` — GLB/FBX/OBJ/VOX/VDB drag-drop pipeline
@@ -46,9 +47,9 @@ Tiny World Builder is a vanilla ES6, no-bundler 3D world editor built on Three.j
 ## Shipped Features
 
 **Welcome dialog 4-mode rewrite (2026-06-09)**
-- `tiny-world-builder.html` line 765: four mode buttons added in order — Tinyverse, Battleworlds, Build, Play
-- `engine/world/30-ui-boot-wiring.js` line 5: wiring — Tinyverse opens the Worlds overlay; Build/Play use existing mode API; Battleworlds calls `window.__tinyworldBattleworlds.open()` if it exists
-- `window.__tinyworldBattleworlds` namespace referenced but no dedicated module confirmed yet; guard on `.open()` existence suggests it may be a future or optional module
+- `tiny-world-builder.html` line 765: four mode buttons — Tinyverse, Battleworlds, Build, Play
+- `engine/world/30-ui-boot-wiring.js` line 5: Tinyverse opens the Worlds overlay; Build/Play use existing mode API; Battleworlds calls `window.__tinyworldBattleworlds.open()` if it exists
+- `window.__tinyworldBattleworlds` namespace referenced but no dedicated module confirmed; guard on `.open()` presence suggests it may be a future or optional module
 
 **Voxel window interior-mapping glass (2026-06-06, PRs #24–#29)**
 - `M.windowInterior` — `ShaderMaterial` parallax interior; per-pane uniforms `uTint/uDark/uBright/uReflect/uInteriorBright/uLit`
@@ -63,22 +64,25 @@ Tiny World Builder is a vanilla ES6, no-bundler 3D world editor built on Three.j
 
 ## Active Workflows
 
-**Boot sequence pattern (CodeSurf sessions)**
+**Boot sequence (CodeSurf sessions)**
 - `mcp__contex__peer_set_state` then `mcp__contex__peer_get_state` must be called before any work; Contex MCP tools may be absent in Codex sub-sessions (gracefully skip)
-- Edits auto-commit to main and Netlify prod deploys immediately — branches do not guarantee isolation
 
 **UI wiring convention**
 - New top-level mode entry points go through `30-ui-boot-wiring.js`; keep the boot file thin (delegation only, not logic)
+
+**Pre-merge checklist**
+- `npm test` passes; no console errors on load; keyboard shortcuts `1`–`9`, `E`, `R`, `F`, `C` work; perspective toggle; fence neighbor geometry updates; house cluster shapes; smoke from chimneys after landing
 
 ---
 
 ## Open Threads
 
-- `window.__tinyworldBattleworlds` referenced from `30-ui-boot-wiring.js` but no corresponding module confirmed; guard is in place but the system may be a stub or future module
+- `window.__tinyworldBattleworlds` referenced from `30-ui-boot-wiring.js` but no corresponding module confirmed; guard is in place but system may be a stub
 - AGENTS.md skill routing stale: modules 38–45, `46-worlds-universe`, `47-worlds-room`, `48-worlds-harvest-hud`, `49-worlds-avatar-picker` have no `.codex/skills/` routing entries
 - `tinyworld-ghost-world-gen` and `threejs-primitive-reconstructor` skills exist on disk but absent from AGENTS.md routing
 - Four liftable fork items remain unapplied: schema validation, URL param world loading, minimap touch-action, `publish.sh` data copy
 - `39-atmosphere-effects.js` — day-night time-progression not wired to any UI control
 - Window interior system has no `.codex/skills/` entry yet
 - `49-worlds-avatar-picker.js` planned `@open-pets/client` provider integration not yet started
-- OpenClaw gateway agent (`mc-gateway-894a3d5b`) is failing every heartbeat with connection refused — may need env/port check
+- OpenClaw gateway agent (`mc-gateway-894a3d5b`) is failing every heartbeat with connection refused — persistent across recent sessions; needs env/port check
+- OpenClaw cron jobs (VibeClaw wallpaper/article/skills-scout generators, urgent-email-alert, Tom Doerr tweet tracker) are producing `[assistant turn failed before producing content]` on multiple consecutive runs — infrastructure issue unrelated to tinyworld codebase
