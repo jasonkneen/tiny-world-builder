@@ -146,6 +146,10 @@
       transformGizmoGroup.visible = false;
       return;
     }
+    if (typeof selectedEditableIslandPyramidTarget === 'function' && selectedEditableIslandPyramidTarget()) {
+      transformGizmoGroup.visible = false;
+      return;
+    }
     if (!selectedTransformGizmoTarget) {
       const island = typeof selectedEditableIsland === 'function' ? selectedEditableIsland() : null;
       // The home island is never moved: its editable surface lives in the
@@ -352,9 +356,10 @@
   }
   function clearSelection() {
     const selectedIsland = (typeof selectedEditableIsland === 'function') ? selectedEditableIsland() : null;
-    if (!selectedCells.size && !selectedEditableIslandEngineRef && !selectedIsland) return;
+    if (!selectedCells.size && !selectedEditableIslandEngineRef && !selectedEditableIslandPyramidRef && !selectedIsland) return;
     selectedCells.clear();
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     if (typeof selectEditableIsland === 'function') selectEditableIsland(null);
     else if (typeof setIslandSelectionOutline === 'function') setIslandSelectionOutline(null);
     notifySelectionChanged();
@@ -370,6 +375,7 @@
     // shift-clicks.
     if (mode !== 'add') selectedCells.clear();
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     const ax = aHit.x, az = aHit.z;
     const abx = aHit.boardX || 0, abz = aHit.boardZ || 0;
     const bx = bHit.x, bz = bHit.z;
@@ -392,6 +398,7 @@
   }
   function toggleCellSelection(hit) {
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     const key = makeKey(hit.boardX, hit.boardZ, hit.x, hit.z);
     if (selectedCells.has(key)) selectedCells.delete(key);
     else selectedCells.add(key);
@@ -408,6 +415,7 @@
   function replaceSelectionWithWorldCoords(coords) {
     selectedCells.clear();
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     (coords || []).forEach(({ x, z }) => {
       if (!Number.isFinite(x) || !Number.isFinite(z)) return;
       const gx = Math.round(x);
@@ -424,6 +432,16 @@
     selectedCells.clear();
     selectedEditableIslandId = engineTarget.island.id;
     selectedEditableIslandEngineRef = { islandId: engineTarget.island.id, engineId: engineTarget.engine.id };
+    selectedEditableIslandPyramidRef = null;
+    notifySelectionChanged();
+  }
+
+  function selectEditableIslandPyramid(pyramidTarget) {
+    if (!pyramidTarget || !pyramidTarget.island || !pyramidTarget.pyramid) return;
+    selectedCells.clear();
+    selectedEditableIslandId = pyramidTarget.island.id;
+    selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = { islandId: pyramidTarget.island.id, pyramidId: pyramidTarget.pyramid.id };
     notifySelectionChanged();
   }
   function materializeSelectedCells() {

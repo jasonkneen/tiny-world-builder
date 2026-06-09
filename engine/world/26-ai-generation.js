@@ -358,12 +358,12 @@
         islandBoards.add(key);
         if (island.engines !== undefined) {
           if (!Array.isArray(island.engines)) return 'islands[' + i + '] engines invalid';
-          if (island.engines.length > 4) return 'islands[' + i + '] too many engines';
+          if (island.engines.length > 8) return 'islands[' + i + '] too many engines';
           for (let j = 0; j < island.engines.length; j++) {
             const engine = island.engines[j];
             if (!engine || typeof engine !== 'object') return 'islands[' + i + '].engines[' + j + '] not object';
             if (engine.type !== undefined && !EDITABLE_ISLAND_ENGINE_TYPES.has(String(engine.type))) return 'islands[' + i + '].engines[' + j + '] type invalid';
-            if (engine.slot !== undefined && (!Number.isInteger(engine.slot) || engine.slot < 0 || engine.slot > 3)) return 'islands[' + i + '].engines[' + j + '] slot invalid';
+            if (engine.slot !== undefined && (!Number.isInteger(engine.slot) || engine.slot < 0 || engine.slot > 7)) return 'islands[' + i + '].engines[' + j + '] slot invalid';
             if (engine.level !== undefined && (!Number.isInteger(engine.level) || engine.level < 1 || engine.level > 3)) return 'islands[' + i + '].engines[' + j + '] level invalid';
           }
         }

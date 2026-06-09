@@ -7,7 +7,9 @@
   const editableIslandByBoardKey = new Map();
   let selectedEditableIslandId = null;
   let selectedEditableIslandEngineRef = null;
+  let selectedEditableIslandPyramidRef = null;
   let editableIslandSerial = 1;
+  let editableIslandPyramidSerial = 1;
 
   function editableIslandBoardKey(boardX, boardZ) {
     return boardX + ',' + boardZ;
@@ -55,6 +57,19 @@
       : null;
   }
 
+  function editableIslandPyramidTarget(islandId, pyramidId) {
+    const island = islandId ? editableIslandById.get(islandId) : null;
+    if (!island || !Array.isArray(island.pyramids)) return null;
+    const pyramid = island.pyramids.find(item => item && item.id === pyramidId) || null;
+    return pyramid ? { island, pyramid } : null;
+  }
+
+  function selectedEditableIslandPyramidTarget() {
+    return selectedEditableIslandPyramidRef
+      ? editableIslandPyramidTarget(selectedEditableIslandPyramidRef.islandId, selectedEditableIslandPyramidRef.pyramidId)
+      : null;
+  }
+
   // The HOME world is an island too (just flagged __home). It gets the SAME
   // engine system as editable islands so its engines are selectable + upgradeable
   // (propeller default -> jet). It lives ONLY in editableIslandById (so engine
@@ -68,6 +83,7 @@
       boardX: 0, boardZ: 0,
       positionX: 0, positionY: 0, positionZ: 0, rotationY: 0,
       engines: (typeof defaultEditableIslandEngineStates === 'function') ? defaultEditableIslandEngineStates() : [],
+      pyramids: (typeof defaultEditableIslandPyramidStates === 'function') ? defaultEditableIslandPyramidStates() : [],
       baseGroup: null, group: null, contentGroup: null, lod: 'full',
     };
     editableIslandById.set('home', homeIslandRef);
@@ -166,7 +182,7 @@
   function makeEditableIslandBase(island) {
     const g = new THREE.Group();
     vbox(g, GRID * TILE, 0.10, GRID * TILE, 0, -DIRT_H - 0.055, 0, M.islandUnderD, { noGap: true, skipTop: true });
-    voxelInvertedSteppedRoof(g, GRID * TILE, GRID * TILE, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
+    addEditableIslandPyramids(g, island);  // editable underside pyramid(s) — fixed minimum platform is the slab above
     addIslandUtilityUnderside(g);
     addEditableIslandLiftEngines(g, island);
     addIslandEdgeDressing(g);
@@ -632,6 +648,7 @@
   function selectEditableIsland(island) {
     selectedEditableIslandId = island ? island.id : null;
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     updateTransformGizmo(null);
     updateEditableIslandLods(true);
     setIslandSelectionOutline(island && !island.__home ? island : null);
@@ -709,6 +726,7 @@
       break;
     }
     const engines = defaultEditableIslandEngineStates(opts.engines);
+    const pyramids = defaultEditableIslandPyramidStates(opts.pyramids);
     const island = {
       id,
       boardX: board.boardX,
@@ -720,6 +738,7 @@
       proxyGroup: null,
       lod: 'full',
       engines,
+      pyramids,
       positionX: Number.isFinite(opts.positionX) ? opts.positionX : GRID + 1 + editableIslands.length * (GRID + 1),
       positionY: Number.isFinite(opts.positionY) ? opts.positionY : 0,
       positionZ: Number.isFinite(opts.positionZ) ? opts.positionZ : 0,
@@ -772,9 +791,97 @@
     const engine = engineTarget.engine;
     if (patch.type !== undefined) engine.type = normalizeEditableIslandEngineType(patch.type);
     if (patch.level !== undefined) engine.level = Math.max(1, Math.min(3, Math.round(Number(patch.level) || 1)));
+    if (patch.sizeScale !== undefined) engine.sizeScale = Math.max(0.4, Math.min(3, Number(patch.sizeScale) || 1));
     if (patch.installed !== undefined) engine.installed = patch.installed !== false;
     rebuildEditableIslandEngine(engineTarget.island, engine);
     saveState();
+  }
+
+  function addEditableIslandEngine(island) {
+    if (!island || !Array.isArray(island.engines)) return null;
+    const MAX = (typeof EDITABLE_ISLAND_ENGINE_MAX !== 'undefined') ? EDITABLE_ISLAND_ENGINE_MAX : 8;
+    if (island.engines.length >= MAX) return null;
+    const used = new Set(island.engines.map(e => e.slot));
+    let slot = 0;
+    while (slot < MAX && used.has(slot)) slot++;
+    const state = normalizeEditableIslandEngineState({ type: 'lift', level: 1, installed: true }, slot);
+    island.engines.push(state);
+    if (island.baseGroup) {
+      const mesh = buildEditableIslandEngineMesh(island, state);
+      if (mesh) island.baseGroup.add(mesh);
+    }
+    saveState();
+    return { island, engine: state };
+  }
+
+  function rebuildEditableIslandPyramid(island, pyramidState) {
+    if (!island || !pyramidState || !island.baseGroup) return;
+    if (pyramidState.mesh && pyramidState.mesh.parent) pyramidState.mesh.parent.remove(pyramidState.mesh);
+    if (pyramidState.mesh) disposeGroup(pyramidState.mesh);
+    pyramidState.mesh = null;
+    const mesh = buildEditableIslandPyramidMesh(island, pyramidState);
+    if (mesh) island.baseGroup.add(mesh);
+    if (selectedEditableIslandPyramidRef && selectedEditableIslandPyramidRef.islandId === island.id && selectedEditableIslandPyramidRef.pyramidId === pyramidState.id) {
+      notifySelectionChanged();
+    }
+  }
+
+  function updateEditableIslandPyramid(pyramidTarget, patch = {}) {
+    if (!pyramidTarget || !pyramidTarget.island || !pyramidTarget.pyramid) return;
+    const p = pyramidTarget.pyramid;
+    const clampScale = (v) => Math.max(0.2, Math.min(3, Number(v) || 1));
+    const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    if (patch.scaleX !== undefined) p.scaleX = clampScale(patch.scaleX);
+    if (patch.scaleY !== undefined) p.scaleY = clampScale(patch.scaleY);
+    if (patch.scaleZ !== undefined) p.scaleZ = clampScale(patch.scaleZ);
+    if (patch.offsetX !== undefined) p.offsetX = num(patch.offsetX, p.offsetX);
+    if (patch.offsetY !== undefined) p.offsetY = num(patch.offsetY, p.offsetY);
+    if (patch.offsetZ !== undefined) p.offsetZ = num(patch.offsetZ, p.offsetZ);
+    if (patch.rotationY !== undefined) p.rotationY = num(patch.rotationY, p.rotationY);
+    rebuildEditableIslandPyramid(pyramidTarget.island, p);
+    saveState();
+  }
+
+  function removeEditableIslandPyramid(pyramidTarget) {
+    if (!pyramidTarget || !pyramidTarget.island || !pyramidTarget.pyramid) return;
+    const island = pyramidTarget.island;
+    const p = pyramidTarget.pyramid;
+    const idx = Array.isArray(island.pyramids) ? island.pyramids.indexOf(p) : -1;
+    if (idx < 0) return;
+    if (p.mesh && p.mesh.parent) p.mesh.parent.remove(p.mesh);
+    if (p.mesh) disposeGroup(p.mesh);
+    p.mesh = null;
+    island.pyramids.splice(idx, 1);
+    if (selectedEditableIslandPyramidRef && selectedEditableIslandPyramidRef.pyramidId === p.id) {
+      selectedEditableIslandPyramidRef = null;
+      if (typeof notifySelectionChanged === 'function') notifySelectionChanged();
+    }
+    saveState();
+  }
+
+  function duplicateEditableIslandPyramid(pyramidTarget) {
+    if (!pyramidTarget || !pyramidTarget.island || !pyramidTarget.pyramid) return null;
+    const island = pyramidTarget.island;
+    const src = pyramidTarget.pyramid;
+    if (!Array.isArray(island.pyramids)) island.pyramids = [];
+    const span = (typeof GRID !== 'undefined' && typeof TILE !== 'undefined') ? GRID * TILE : 8;
+    const copy = normalizeEditableIslandPyramidState({
+      offsetX: (src.offsetX || 0) + span * 0.18,
+      offsetY: (src.offsetY || 0),
+      offsetZ: (src.offsetZ || 0) + span * 0.18,
+      rotationY: src.rotationY || 0,
+      scaleX: Math.max(0.2, (src.scaleX || 1) * 0.7),
+      scaleY: Math.max(0.2, (src.scaleY || 1) * 0.7),
+      scaleZ: Math.max(0.2, (src.scaleZ || 1) * 0.7),
+      width: src.width || 0,
+      depth: src.depth || 0,
+    }, island.pyramids.length);
+    copy.id = 'pyramid-' + (editableIslandPyramidSerial++);
+    island.pyramids.push(copy);
+    const mesh = buildEditableIslandPyramidMesh(island, copy);
+    if (mesh && island.baseGroup) island.baseGroup.add(mesh);
+    saveState();
+    return { island, pyramid: copy };
   }
 
   function serializeEditableIslands() {
@@ -791,7 +898,20 @@
         slot: engine.slot,
         type: normalizeEditableIslandEngineType(engine.type),
         level: Math.max(1, Math.min(3, Math.round(Number(engine.level) || 1))),
+        sizeScale: Math.max(0.4, Math.min(3, Number(engine.sizeScale) || 1)),
         installed: engine.installed !== false,
+      })),
+      pyramids: (island.pyramids || []).map(p => ({
+        id: p.id,
+        offsetX: p.offsetX || 0,
+        offsetY: p.offsetY || 0,
+        offsetZ: p.offsetZ || 0,
+        rotationY: p.rotationY || 0,
+        scaleX: p.scaleX || 1,
+        scaleY: p.scaleY || 1,
+        scaleZ: p.scaleZ || 1,
+        width: p.width || 0,
+        depth: p.depth || 0,
       })),
     }));
   }
@@ -1288,6 +1408,7 @@
     if (typeof clearMooringsAnchoredToEditableIslands === 'function') clearMooringsAnchoredToEditableIslands();
     selectedEditableIslandId = null;
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     selectedTransformGizmoIsland = null;
     if (!selectedTransformGizmoTarget) transformGizmoGroup.visible = false;
     for (const island of editableIslands) {

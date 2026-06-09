@@ -533,7 +533,7 @@ const clearSelectionBody = sourceFunctionBody(html, 'clearSelection');
 if (!/selectedEditableIsland\(\)/.test(clearSelectionBody) || !/selectEditableIsland\(null\)/.test(clearSelectionBody) || !/notifySelectionChanged\(\)/.test(clearSelectionBody)) {
   fail('selection clear must deselect whole editable islands as well as selected cells');
 }
-if (!/Esc first closes\/deselects the active edit target/.test(html) || !/if \(e\.key === 'Escape' && !\(typeof fp !== 'undefined' && fp\.active\)\) \{[\s\S]*const selApi = window\.__tinyworldSelection;[\s\S]*if \(hasSelectedCells \|\| selectedIsland \|\| selectedEditableIslandEngineRef\) \{[\s\S]*selApi\.clear\(\);[\s\S]*lastSelectionAnchor = null;[\s\S]*selectTool\(selTool\);/.test(html)) {
+if (!/Esc first closes\/deselects the active edit target/.test(html) || !/if \(e\.key === 'Escape' && !\(typeof fp !== 'undefined' && fp\.active\)\) \{[\s\S]*const selApi = window\.__tinyworldSelection;[\s\S]*if \(hasSelectedCells \|\| selectedIsland \|\| selectedEditableIslandEngineRef[^)]*\) \{[\s\S]*selApi\.clear\(\);[\s\S]*lastSelectionAnchor = null;[\s\S]*selectTool\(selTool\);/.test(html)) {
   fail('Escape must close/deselect active selection before or while disarming tools');
 }
 if (!/if \(typeof clearSelection === 'function'\) clearSelection\(\);[\s\S]*root\.hidden = true;[\s\S]*currentLevel = 'root';/.test(html)) {

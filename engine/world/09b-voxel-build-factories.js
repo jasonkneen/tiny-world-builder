@@ -1071,6 +1071,9 @@
       slot,
       type: normalizeEditableIslandEngineType(src.type),
       level: Math.max(1, Math.min(3, Math.round(Number(src.level) || 1))),
+      // Uniform resize for jets + propellers. Applied via a single setScalar so
+      // aspect ratio is locked by construction (no per-axis path exists).
+      sizeScale: Math.max(0.4, Math.min(3, Number(src.sizeScale) || 1)),
       installed: src.installed !== false,
       mesh: null,
       propeller: null,
@@ -1315,18 +1318,26 @@
     });
   }
 
+  const EDITABLE_ISLAND_ENGINE_MAX = 8;
   function editableIslandEnginePlacement(slot) {
     const span = GRID * TILE;
     const half = span * 0.5;
     const inset = Math.max(0.95, Math.min(1.55, span * 0.15));
+    const edge = half - inset * 0.5;
     const y = -DIRT_H - 0.74;
+    // First 4: the original corner slots. Next 4: edge midpoints, so up to 8
+    // engines spread along the underside.
     const placements = [
       [-half + inset, -half + inset],
       [ half - inset, -half + inset],
       [ half - inset,  half - inset],
       [-half + inset,  half - inset],
+      [ 0,            -edge],
+      [ edge,          0],
+      [ 0,             edge],
+      [-edge,          0],
     ];
-    const [x, z] = placements[slot] || placements[0];
+    const [x, z] = placements[slot] || placements[slot % placements.length] || placements[0];
     return { x, y, z, rotationY: Math.atan2(x, z) };
   }
 
@@ -1342,6 +1353,12 @@
     } else {
       engine = makeVoxelLiftEngine(seed, engineState);
     }
+    // Uniform aspect-locked resize: composes with the lift engine's internal
+    // level scale (a setScalar) and sets the rocket's (which has none). Children
+    // (propeller, plume) inherit it, so the mooring hazard radius — read from
+    // getWorldScale (14) — scales with it automatically.
+    const sizeScale = Math.max(0.4, Math.min(3, Number(engineState.sizeScale) || 1));
+    if (sizeScale !== 1) engine.scale.multiplyScalar(sizeScale);
     engine.position.set(placement.x, placement.y, placement.z);
     engine.rotation.y = placement.rotationY;
     stampEditableIslandEngineMesh(engine, island, engineState);
@@ -1356,6 +1373,85 @@
     island.engines.forEach(engineState => {
       const engine = buildEditableIslandEngineMesh(island, engineState);
       if (engine) parent.add(engine);
+    });
+  }
+
+  // -------- editable underside pyramid --------
+  // The inverted stepped "pyramid" under the island becomes a first-class
+  // editable object (select / move / squash-stretch / duplicate / remove),
+  // mirroring the editable-engine subsystem. The fixed minimum platform — the
+  // per-cell terrain top + stone/dirt riser + the single dark M.islandUnderD
+  // slab — is built elsewhere and always remains; only the pyramid lives here.
+  const EDITABLE_ISLAND_PYRAMID_BASE_TOP_Y = -DIRT_H - 0.020; // where the pyramid hangs off the slab
+  function clampPyramidScale(v) { const n = Number(v); return Math.max(0.2, Math.min(3, Number.isFinite(n) ? n : 1)); }
+
+  function normalizeEditableIslandPyramidState(raw, index = 0) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+    return {
+      id: typeof src.id === 'string' && src.id ? src.id : 'pyramid-' + index,
+      offsetX: num(src.offsetX, 0),
+      offsetY: num(src.offsetY, 0),
+      offsetZ: num(src.offsetZ, 0),
+      rotationY: num(src.rotationY, 0),
+      scaleX: clampPyramidScale(src.scaleX),
+      scaleY: clampPyramidScale(src.scaleY),
+      scaleZ: clampPyramidScale(src.scaleZ),
+      width: Math.max(0, num(src.width, 0)),   // 0 => full board span (tracks GRID)
+      depth: Math.max(0, num(src.depth, 0)),
+      mesh: null,
+    };
+  }
+
+  // Default = one pyramid reproducing today's baked underside. Old saves with no
+  // `pyramids` array land here too (migration: the island keeps its underside).
+  function defaultEditableIslandPyramidStates(rawPyramids = null) {
+    if (Array.isArray(rawPyramids) && rawPyramids.length) {
+      return rawPyramids.map((p, i) => normalizeEditableIslandPyramidState(p, i));
+    }
+    return [normalizeEditableIslandPyramidState(null, 0)];
+  }
+
+  function stampEditableIslandPyramidMesh(mesh, island, pyramidState) {
+    if (!mesh || !island || !pyramidState) return;
+    const data = {
+      kind: 'editable-island-pyramid',
+      noStaticBaseMerge: true,                 // survive mergeStaticBaseMeshesByMaterial so it stays pickable
+      editableIslandId: island.id,
+      editableIslandPyramidId: pyramidState.id,
+    };
+    mesh.traverse(node => { node.userData = Object.assign({}, node.userData || {}, data); });
+  }
+
+  function buildEditableIslandPyramidMesh(island, pyramidState) {
+    if (!island || !pyramidState) return null;
+    const span = GRID * TILE;
+    const width = pyramidState.width > 0 ? pyramidState.width : span;
+    const depth = pyramidState.depth > 0 ? pyramidState.depth : span;
+    const group = new THREE.Group();
+    // Build with the pyramid TOP at local y=0 so scaling squashes/stretches from
+    // the attachment point (not around an arbitrary origin); the group position
+    // then drops it to the real underside Y. With unit scale + zero offset this
+    // is pixel-identical to the old inline voxelInvertedSteppedRoof call.
+    voxelInvertedSteppedRoof(group, width, depth, 0, M.islandUnder, M.islandUnderD);
+    group.position.set(
+      pyramidState.offsetX || 0,
+      EDITABLE_ISLAND_PYRAMID_BASE_TOP_Y + (pyramidState.offsetY || 0),
+      pyramidState.offsetZ || 0
+    );
+    group.rotation.y = pyramidState.rotationY || 0;
+    group.scale.set(clampPyramidScale(pyramidState.scaleX), clampPyramidScale(pyramidState.scaleY), clampPyramidScale(pyramidState.scaleZ));
+    optimizeVoxelObjectGroup(group, { reason: 'editable-island-pyramid' });
+    stampEditableIslandPyramidMesh(group, island, pyramidState);
+    pyramidState.mesh = group;
+    return group;
+  }
+
+  function addEditableIslandPyramids(parent, island) {
+    if (!parent || !island || !Array.isArray(island.pyramids)) return;
+    island.pyramids.forEach(pyramidState => {
+      const mesh = buildEditableIslandPyramidMesh(island, pyramidState);
+      if (mesh) parent.add(mesh);
     });
   }
 

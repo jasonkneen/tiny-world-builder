@@ -26,6 +26,7 @@
       updateEditableIslandLods(true);
     }
     selectedEditableIslandEngineRef = null;
+    selectedEditableIslandPyramidRef = null;
     if (selectedTool && selectedTool.mooring) return;
     if (selectedTool && selectedTool.island) {
       if (hitIsland) {
@@ -779,6 +780,23 @@
     if (engineHit) {
       selectEditableIslandEngine(engineHit);
       dragMode = 'engine-select';
+      pointerDown = { x: e.clientX, y: e.clientY };
+      lastPointer = { x: e.clientX, y: e.clientY };
+      didDrag = false;
+      hoverMesh.visible = false;
+      currentHover = null;
+      renderer.domElement.classList.add('dragging');
+      e.preventDefault();
+      return;
+    }
+
+    const pyramidHit = e.button === 0 && !spaceDown && !e.shiftKey && !e.metaKey && !e.ctrlKey && mpEditAllowed()
+      && typeof pickEditableIslandPyramid === 'function'
+      ? pickEditableIslandPyramid(e.clientX, e.clientY)
+      : null;
+    if (pyramidHit) {
+      selectEditableIslandPyramid(pyramidHit);
+      dragMode = 'engine-select';   // passive selection mode (no drag action), same as engines
       pointerDown = { x: e.clientX, y: e.clientY };
       lastPointer = { x: e.clientX, y: e.clientY };
       didDrag = false;
@@ -1622,7 +1640,7 @@
       const selApi = window.__tinyworldSelection;
       const hasSelectedCells = !!(selApi && selApi.cells && selApi.cells.size);
       const selectedIsland = (typeof selectedEditableIsland === 'function') ? selectedEditableIsland() : null;
-      if (hasSelectedCells || selectedIsland || selectedEditableIslandEngineRef) {
+      if (hasSelectedCells || selectedIsland || selectedEditableIslandEngineRef || selectedEditableIslandPyramidRef) {
         if (selApi && typeof selApi.clear === 'function') selApi.clear();
         else if (typeof clearSelection === 'function') clearSelection();
         lastSelectionAnchor = null;

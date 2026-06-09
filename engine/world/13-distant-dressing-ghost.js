@@ -482,7 +482,13 @@
       disposeGroup(c);
     }
     vbox(homeBorderGroup, GRID * TILE, 0.10, GRID * TILE, 0, -DIRT_H - 0.055, 0, M.islandUnderD, { noGap: true, skipTop: true });
-    voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE, GRID * TILE, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
+    // Editable underside pyramid(s) — the fixed minimum platform is the per-cell
+    // terrain + the dark slab above; the pyramid is now a selectable object.
+    if (typeof addEditableIslandPyramids === 'function' && typeof ensureHomeIslandObject === 'function') {
+      addEditableIslandPyramids(homeBorderGroup, ensureHomeIslandObject());
+    } else {
+      voxelInvertedSteppedRoof(homeBorderGroup, GRID * TILE, GRID * TILE, -DIRT_H - 0.020, M.islandUnder, M.islandUnderD);
+    }
     addIslandUtilityUnderside(homeBorderGroup);
     addIslandRocketEngines(homeBorderGroup);
     addIslandEdgeDressing(homeBorderGroup);

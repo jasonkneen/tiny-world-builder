@@ -331,6 +331,7 @@
           positionZ: +spec.positionZ || 0,
           rotationY: +spec.rotationY || 0,
           engines: Array.isArray(spec.engines) ? spec.engines : null,
+          pyramids: Array.isArray(spec.pyramids) ? spec.pyramids : null,
           skipSave: true,
         });
       }

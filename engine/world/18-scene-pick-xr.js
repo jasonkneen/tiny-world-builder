@@ -723,6 +723,15 @@
     return editableIslandEngineTarget(n.userData.editableIslandId, n.userData.editableIslandEngineId);
   }
 
+  function resolveRaycastEditableIslandPyramid(h) {
+    let n = h && h.object;
+    while (n && !(n.userData && n.userData.editableIslandPyramidId)) n = n.parent;
+    if (!n || !n.userData || !n.userData.editableIslandPyramidId) return null;
+    return (typeof editableIslandPyramidTarget === 'function')
+      ? editableIslandPyramidTarget(n.userData.editableIslandId, n.userData.editableIslandPyramidId)
+      : null;
+  }
+
   // Resolve the whole sky-island under the cursor (its base/side or surface),
   // walking up to the group that carries editableIslandId. Excludes the home
   // island. Used to select an island by clicking its side.
@@ -785,6 +794,21 @@
     return null;
   }
 
+  function pickEditableIslandPyramid(clientX, clientY) {
+    // The pyramid hangs under the island, so (like engines) it is only pickable
+    // from below — refuse picks unless the camera is under the playable surface.
+    if (camera.position.y >= 0) return null;
+    ndc.x = (clientX / window.innerWidth) * 2 - 1;
+    ndc.y = -(clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(getPickRaycastRoots(), true);
+    for (const h of hits) {
+      const target = resolveRaycastEditableIslandPyramid(h);
+      if (target) return target;
+    }
+    return null;
+  }
+
   function pickTile(clientX, clientY) {
     // If the camera is below the playable surface (i.e. looking up at the
     // underside of the island), refuse all picks. Clicking on tops of cells
@@ -801,14 +825,16 @@
       }
       const cellHit = resolveRaycastCell(h);
       if (cellHit) {
-        // Only accept hits whose top is visible from the camera. If the ray
-        // is travelling upward at the hit point, the camera is looking at
-        // the underside — reject so we don't paint through the island.
+        // Only accept hits whose surface FACES the camera. If the ray is
+        // travelling upward, the camera is below the island looking up — so a
+        // top-surface tile is being hit on the BACK of its top face (the click
+        // is passing through the island) and an underside face is its own
+        // surface. Reject both: you can never select top tiles from below.
         if (h.face && h.face.normal && raycaster.ray.direction.y > 0) {
-          // World-space normal Y; underside faces have normal.y < 0
+          // World-space normal Y: top faces have normal.y > 0, undersides < 0.
           const obj = h.object;
           const nWorld = h.face.normal.clone().transformDirection(obj.matrixWorld);
-          if (nWorld.y < -0.2) continue;
+          if (nWorld.y > 0.2 || nWorld.y < -0.2) continue;
         }
         return cellHit;
       }

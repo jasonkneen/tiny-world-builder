@@ -1477,6 +1477,10 @@
       return typeof selectedEditableIslandEngineTarget === 'function' ? selectedEditableIslandEngineTarget() : null;
     }
 
+    function selectedPyramidUiTarget() {
+      return typeof selectedEditableIslandPyramidTarget === 'function' ? selectedEditableIslandPyramidTarget() : null;
+    }
+
     function applyEditableIslandEngineProperty(rowKey, value) {
       const target = selectedEngineUiTarget();
       if (!target) return false;
@@ -1487,8 +1491,16 @@
         const current = Math.max(1, Math.min(3, Number(target.engine.level) || 1));
         const next = value === 'down' ? current - 1 : value === 'up' ? current + 1 : Number(value);
         updateEditableIslandEngine(target, { level: Math.max(1, Math.min(3, Math.round(next || current))), installed: true });
+      } else if (rowKey === 'islandEngineSize') {
+        const current = Math.max(0.4, Math.min(3, Number(target.engine.sizeScale) || 1));
+        const step = 0.15;
+        const next = value === 'down' ? current - step : value === 'up' ? current + step : Number(value);
+        updateEditableIslandEngine(target, { sizeScale: Math.max(0.4, Math.min(3, Number.isFinite(next) ? next : current)) });
       } else if (rowKey === 'islandEngineAction') {
         updateEditableIslandEngine(target, { installed: value !== 'remove' });
+      } else if (rowKey === 'islandEngineAdd') {
+        const made = (typeof addEditableIslandEngine === 'function') ? addEditableIslandEngine(target.island) : null;
+        if (made && typeof selectEditableIslandEngine === 'function') selectEditableIslandEngine(made);
       } else {
         return false;
       }
@@ -1515,9 +1527,16 @@
           { label: 'Down', value: 'down', disabled: (engine.level || 1) <= 1 },
           { label: 'Up', value: 'up', disabled: (engine.level || 1) >= 3 },
         ] },
+        { key: 'islandEngineSize', label: 'Size', control: 'stepper', options: [
+          { label: 'Down', value: 'down', disabled: (Number(engine.sizeScale) || 1) <= 0.4 + 1e-6 },
+          { label: 'Up', value: 'up', disabled: (Number(engine.sizeScale) || 1) >= 3 - 1e-6 },
+        ] },
         { key: 'islandEngineAction', label: 'Mount', options: [
           { label: 'Restore', value: 'restore', disabled: engine.installed !== false },
           { label: 'Remove', value: 'remove', disabled: engine.installed === false },
+        ] },
+        { key: 'islandEngineAdd', label: 'Engines ' + ((target.island.engines || []).length) + '/' + ((typeof EDITABLE_ISLAND_ENGINE_MAX !== 'undefined') ? EDITABLE_ISLAND_ENGINE_MAX : 8), options: [
+          { label: 'Add', value: 'add', disabled: (target.island.engines || []).length >= ((typeof EDITABLE_ISLAND_ENGINE_MAX !== 'undefined') ? EDITABLE_ISLAND_ENGINE_MAX : 8) },
         ] },
       ];
       const section = document.createElement('section');
@@ -1564,8 +1583,124 @@
       notifySelectionPropertiesRendered();
     }
 
+    function applyEditableIslandPyramidProperty(rowKey, value) {
+      const target = selectedPyramidUiTarget();
+      if (!target || !target.pyramid) return false;
+      const p = target.pyramid;
+      const stepScale = (axisKey) => {
+        const cur = Math.max(0.2, Math.min(3, Number(p[axisKey]) || 1));
+        const next = value === 'down' ? cur - 0.15 : value === 'up' ? cur + 0.15 : Number(value);
+        return Math.max(0.2, Math.min(3, Number.isFinite(next) ? next : cur));
+      };
+      const stepOffset = (axisKey) => {
+        const cur = Number(p[axisKey]) || 0;
+        const next = value === 'down' ? cur - 0.4 : value === 'up' ? cur + 0.4 : Number(value);
+        return Number.isFinite(next) ? next : cur;
+      };
+      if (rowKey === 'islandPyramidAction') {
+        if (value === 'remove') {
+          if (typeof pushWorldHistorySnapshot === 'function') pushWorldHistorySnapshot();
+          removeEditableIslandPyramid(target);
+        } else if (value === 'duplicate') {
+          if (typeof pushWorldHistorySnapshot === 'function') pushWorldHistorySnapshot();
+          const made = (typeof duplicateEditableIslandPyramid === 'function') ? duplicateEditableIslandPyramid(target) : null;
+          if (made && typeof selectEditableIslandPyramid === 'function') selectEditableIslandPyramid(made);
+        } else return false;
+        renderSelection();
+        return true;
+      }
+      if (typeof pushWorldHistorySnapshot === 'function') pushWorldHistorySnapshot();
+      if (rowKey === 'islandPyramidScaleAll') {
+        const cur = Math.max(0.2, Math.min(3, Number(p.scaleX) || 1));
+        const next = Math.max(0.2, Math.min(3, value === 'down' ? cur - 0.15 : cur + 0.15));
+        updateEditableIslandPyramid(target, { scaleX: next, scaleY: next, scaleZ: next });
+      } else if (rowKey === 'islandPyramidScaleX') updateEditableIslandPyramid(target, { scaleX: stepScale('scaleX') });
+      else if (rowKey === 'islandPyramidScaleY') updateEditableIslandPyramid(target, { scaleY: stepScale('scaleY') });
+      else if (rowKey === 'islandPyramidScaleZ') updateEditableIslandPyramid(target, { scaleZ: stepScale('scaleZ') });
+      else if (rowKey === 'islandPyramidOffsetX') updateEditableIslandPyramid(target, { offsetX: stepOffset('offsetX') });
+      else if (rowKey === 'islandPyramidOffsetZ') updateEditableIslandPyramid(target, { offsetZ: stepOffset('offsetZ') });
+      else return false;
+      renderSelection();
+      return true;
+    }
+
+    function renderEditableIslandPyramidProperties(target) {
+      if (!previewProps || !target || !target.pyramid) return;
+      previewProps.innerHTML = '';
+      const p = target.pyramid;
+      const island = target.island;
+      const fmt = (v) => (Math.round((Number(v) || 1) * 100) / 100).toFixed(2);
+      const sMin = (v) => (Number(v) || 1) <= 0.2 + 1e-6;
+      const sMax = (v) => (Number(v) || 1) >= 3 - 1e-6;
+      const rows = [
+        { key: 'islandPyramidScaleAll', label: 'Size', control: 'stepper', options: [
+          { label: 'Down', value: 'down', disabled: sMin(p.scaleX) && sMin(p.scaleY) && sMin(p.scaleZ) },
+          { label: 'Up', value: 'up', disabled: sMax(p.scaleX) && sMax(p.scaleY) && sMax(p.scaleZ) },
+        ] },
+        { key: 'islandPyramidScaleX', label: 'Width ' + fmt(p.scaleX), control: 'stepper', options: [
+          { label: 'Down', value: 'down', disabled: sMin(p.scaleX) }, { label: 'Up', value: 'up', disabled: sMax(p.scaleX) },
+        ] },
+        { key: 'islandPyramidScaleY', label: 'Height ' + fmt(p.scaleY), control: 'stepper', options: [
+          { label: 'Down', value: 'down', disabled: sMin(p.scaleY) }, { label: 'Up', value: 'up', disabled: sMax(p.scaleY) },
+        ] },
+        { key: 'islandPyramidScaleZ', label: 'Depth ' + fmt(p.scaleZ), control: 'stepper', options: [
+          { label: 'Down', value: 'down', disabled: sMin(p.scaleZ) }, { label: 'Up', value: 'up', disabled: sMax(p.scaleZ) },
+        ] },
+        { key: 'islandPyramidOffsetX', label: 'Move X', control: 'stepper', options: [
+          { label: 'Down', value: 'down' }, { label: 'Up', value: 'up' },
+        ] },
+        { key: 'islandPyramidOffsetZ', label: 'Move Z', control: 'stepper', options: [
+          { label: 'Down', value: 'down' }, { label: 'Up', value: 'up' },
+        ] },
+        { key: 'islandPyramidAction', label: 'Pyramid', options: [
+          { label: 'Duplicate', value: 'duplicate' },
+          { label: 'Remove', value: 'remove' },
+        ] },
+      ];
+      const section = document.createElement('section');
+      section.className = 'selection-prop-section';
+      section.setAttribute('aria-label', 'Pyramid properties');
+      const title = document.createElement('button');
+      title.type = 'button';
+      title.className = 'selection-prop-section-title';
+      title.setAttribute('aria-expanded', 'true');
+      title.innerHTML = '<span>Pyramid</span><span class="selection-prop-section-meta">' + rows.length + ' rows</span>';
+      section.appendChild(title);
+      rows.forEach(row => {
+        const wrap = document.createElement('div');
+        wrap.className = 'selection-prop-row';
+        const label = document.createElement('div');
+        label.className = 'selection-prop-label';
+        label.textContent = row.label;
+        const options = document.createElement('div');
+        options.className = 'selection-prop-options';
+        if (row.control === 'stepper') options.classList.add('control-stepper');
+        row.options.forEach(opt => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'selection-prop-chip' + (row.control === 'stepper' ? ' icon-chip round-chip' : '');
+          chip.dataset.action = String(opt.value);
+          if (opt.disabled) chip.disabled = true;
+          chip.title = row.label + ': ' + opt.label;
+          chip.setAttribute('aria-label', chip.title);
+          chip.textContent = row.control === 'stepper' ? (opt.value === 'down' ? '-' : '+') : opt.label;
+          chip.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!opt.disabled) applySelectionProperty(row.key, opt.value);
+          });
+          options.appendChild(chip);
+        });
+        wrap.append(label, options);
+        section.appendChild(wrap);
+      });
+      previewProps.appendChild(section);
+      previewProps.hidden = false;
+      notifySelectionPropertiesRendered();
+    }
+
     function applySelectionProperty(rowKey, value) {
       if (rowKey.indexOf('islandEngine') === 0 && applyEditableIslandEngineProperty(rowKey, value)) return;
+      if (rowKey.indexOf('islandPyramid') === 0 && applyEditableIslandPyramidProperty(rowKey, value)) return;
       if (rowKey === 'historyAction') {
         if (value === 'undo') undoWorldEdit();
         else if (value === 'redo') redoWorldEdit();
@@ -2367,6 +2502,35 @@
             previewList.appendChild(li);
           });
           renderEditableIslandEngineProperties(engineTarget);
+          updateSelectionPreview(null);
+          updateTransformGizmo(null);
+          if (panelTitle) panelTitle.textContent = 'AI chat';
+          openSelectionPropertiesInLayers();
+          return;
+        }
+        const pyramidTarget = selectedPyramidUiTarget();
+        if (pyramidTarget) {
+          panel.classList.remove('has-selection');
+          previewBox.hidden = true;
+          syncAgentTargetChip(null, { cellCount: 1, kinds: { pyramid: 1 }, terrains: {} });
+          const pc = (pyramidTarget.island.pyramids || []).length;
+          previewCount.textContent = 'Selected: underside pyramid' + (pc > 1 ? ' (' + pc + ' total)' : '');
+          previewList.innerHTML = '';
+          [
+            ['Island', pyramidTarget.island.id],
+            ['Width', (Math.round((pyramidTarget.pyramid.scaleX || 1) * 100) / 100).toFixed(2) + 'x'],
+            ['Height', (Math.round((pyramidTarget.pyramid.scaleY || 1) * 100) / 100).toFixed(2) + 'x'],
+          ].forEach(([nameValue, countValue]) => {
+            const li = document.createElement('li');
+            const name = document.createElement('span');
+            name.textContent = nameValue;
+            const count = document.createElement('span');
+            count.className = 'count';
+            count.textContent = countValue;
+            li.append(name, count);
+            previewList.appendChild(li);
+          });
+          renderEditableIslandPyramidProperties(pyramidTarget);
           updateSelectionPreview(null);
           updateTransformGizmo(null);
           if (panelTitle) panelTitle.textContent = 'AI chat';
