@@ -938,15 +938,24 @@
       }
 
       destroy() {
-        // NOTE: disposeGroup frees geometries but deliberately NOT materials (shared-material contract).
+        // disposeGroup frees geometries but deliberately NOT materials (shared-material contract).
         // The glow cubes carry per-mesh .clone()d MeshStandardMaterials (marked noBatch, see glowCube ~:116)
-        // that are NOT shared, so they leak on destroy. Harmless today: no engine caller invokes destroy()/
-        // rebuildVoxelShield() (the toolbar is toggle-only), so this path is dormant. IF a GRID-resize rebuild
-        // is ever wired, add a material-dispose pass here that traverses and disposes only the non-shared,
-        // non-cached glow clones before disposeGroup.
+        // that are NOT shared — dispose them explicitly before disposeGroup runs. This path is still
+        // dormant today (no engine caller invokes destroy()/rebuildVoxelShield(); the toolbar is toggle-
+        // only), but the dispose pass makes the leak safe if a resize-rebuild caller is ever wired.
         this.isRunning = false;
-        if (this.shield && this.shield.parent) this.shield.parent.remove(this.shield);
-        if (this.shield && typeof disposeGroup === 'function') disposeGroup(this.shield);
+        if (this.shield) {
+          this.shield.traverse(obj => {
+            if (obj.isMesh && obj.userData && obj.userData.isShieldLight && obj.material && typeof obj.material.dispose === 'function') {
+              obj.material.dispose();
+            }
+          });
+          if (this.shield.parent) this.shield.parent.remove(this.shield);
+          if (typeof disposeGroup === 'function') disposeGroup(this.shield);
+        }
+        if (this.kit) {
+          Object.values(this.kit.materials).forEach(mat => { if (mat && typeof mat.dispose === 'function') mat.dispose(); });
+        }
       }
 
       runSmokeTests() {
