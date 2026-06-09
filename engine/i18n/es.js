@@ -3,8 +3,8 @@
   var g = (window.TWI18N_DATA = window.TWI18N_DATA || {});
   g.es = {
     // ---- worlds (modo MMO on-chain) ----
-    'worlds.launch': 'Mundos',
-    'worlds.title': 'Universo',
+    'worlds.launch': 'Tinyverse',
+    'worlds.title': 'Tinyverse',
     'worlds.subtitle': 'Posee tierra · construye · cobra impuestos',
     'worlds.close': 'Cerrar',
     'worlds.loading': 'Cargando mundos…',

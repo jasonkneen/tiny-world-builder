@@ -3,8 +3,8 @@
   var g = (window.TWI18N_DATA = window.TWI18N_DATA || {});
   g.zh = {
     // ---- worlds (链上 MMO 模式) ----
-    'worlds.launch': '世界',
-    'worlds.title': '宇宙',
+    'worlds.launch': 'Tinyverse',
+    'worlds.title': 'Tinyverse',
     'worlds.subtitle': '拥有土地 · 建造 · 收取税收',
     'worlds.close': '关闭',
     'worlds.loading': '正在加载世界…',

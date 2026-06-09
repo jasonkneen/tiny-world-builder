@@ -358,11 +358,33 @@
     }
 
     // ---- launcher button ----
+    // The Tinyverse entry lives inside the established bottom-left app chrome
+    // (the .appbar icon pill) rather than as a separate floating button, so it
+    // matches the other tools and doesn't stack a second pill in the corner.
     function addLauncher() {
-      if (document.querySelector('.tw-worlds-launch')) return;
+      if (document.getElementById('tw-worlds-launch')) return;
       injectStyles();
       applyBottomInset();
-      document.body.appendChild(el('button', { class: 'tw-worlds-launch', title: T('worlds.launch'), onclick: openOverlay }, [makeIcon('globe', 16), T('worlds.launch')]));
+      const label = T('worlds.launch');
+      const appbar = document.querySelector('.appbar');
+      if (appbar) {
+        const btn = el('button', {
+          type: 'button',
+          id: 'tw-worlds-launch',
+          class: 'btn icon',
+          'data-pos-type': 'neutral',
+          'data-tooltip': label,
+          'data-i18n-tooltip': 'worlds.launch',
+          'aria-label': label,
+          onclick: openOverlay,
+        }, [makeIcon('globe', 15)]);
+        appbar.insertBefore(btn, appbar.firstChild);
+      } else {
+        // Fallback only if the app chrome isn't present (embeds/tests).
+        document.body.appendChild(el('button', {
+          id: 'tw-worlds-launch', class: 'tw-worlds-launch', title: label, onclick: openOverlay,
+        }, [makeIcon('globe', 16), label]));
+      }
     }
   
     WS.open = openOverlay;
