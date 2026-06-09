@@ -1,3 +1,14 @@
+  /* 8-bit pixel font for in-world dialog / speech bubbles (SIL OFL 1.1 —
+     see vendor/fonts/OFL.txt). Path is relative to this stylesheet's location. */
+  @font-face {
+    font-family: 'Press Start 2P';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../vendor/fonts/press-start-2p.woff2') format('woff2');
+  }
+  .tw-pixel-font { font-family: 'Press Start 2P', 'Courier New', monospace; }
+
   :root {
     --bg: #f4ede0;
     --panel: #ffffff;
