@@ -89,7 +89,7 @@
       socket.addEventListener('open', () => {
         connected = true;
         send({
-          type: 'world.join', token, worldId: w.id, name: playerName(),
+          type: 'world.join', token, worldId: w.id, name: playerName(), avatarId: myAvatarId(),
           role, profileId: (WS.myProfileId != null ? WS.myProfileId : null),
           gridSize, cells: compactCells(w.data), taxPercent: w.taxPercent, ownerProfileId: w.ownerProfileId,
         });
@@ -103,6 +103,7 @@
       bindInput();
       showMinimap();
       startAvatars();
+      maybePromptAvatar();
     }
     WS.enterRoom = enterRoom;
   
@@ -396,24 +397,29 @@
     }
     WS.renderPreview = renderPreview;
 
-    // ---- in-world avatars: 2.5D animated sprite-sheet billboards (models/people/25D) ----
-    // Each sheet is 8 direction-rows x N frame-cols of 64x64 cells. Facing comes from
-    // the movement direction (8-way); state is idle vs walk. No fallback — if a sheet
-    // fails to load we surface an error.
-    const SHEET = {
-      idle: { url: 'models/people/25D/idle/Sprite Sheet/idle full sprite sheet (transparent BG).png', sw: 768, sh: 512, frame: 64, cols: 12, fps: 8 },
-      walk: { url: 'models/people/25D/walk/Sprite Sheet/walk complete sprite sheet (transparent BG).png', sw: 512, sh: 512, frame: 64, cols: 8, fps: 12 },
-      attack: { url: 'models/people/25D/attack/Sprite Sheet/attack full sprite sheet (transparent BG).png', sw: 672, sh: 768, frame: 96, cols: 7, fps: 16 },
-    };
+    // ---- in-world avatars: 3D character models (models/people/*.glb) ----
+    // Each player picks a character; the choice is remembered. The models carry no
+    // animation clips, so motion (facing, walk bob, idle breathe, jump) is procedural.
+    // Every model is normalized to one height so different characters read at a
+    // consistent size regardless of their source scale.
+    const AVATARS = [
+      { id: 'warrior', label: 'Warrior', url: 'models/people/warrior_hytale.glb' },
+      { id: 'kozak',   label: 'Kozak',   url: 'models/people/kozak_hytale.glb' },
+      { id: 'stepan',  label: 'Stepan',  url: 'models/people/stepan_hytale.glb' },
+      { id: 'cartoon', label: 'Hero',    url: 'models/people/cartoon_guy.glb' },
+      { id: 'optimus', label: 'Optimus', url: 'models/people/optimus.glb' },
+      { id: 'robot',   label: 'Robot',   url: 'models/people/robot.glb' },
+    ];
+    const DEFAULT_AVATAR = 'warrior';
+    const AVATAR_LS = 'tinyworld:worlds:avatarId';
+    const AVATAR_TARGET_H = 1.7;      // world-units; all avatars normalized to this height
+    const AVATAR_FORWARD_OFFSET = 0;  // radians — adjust if a model faces the wrong way
     const JUMP_MS = 460, ATTACK_KEY = 'f';
-    // Sheet row (top->bottom) for each movement sector. Sectors: 0=S 1=SE 2=E 3=NE
-    // 4=N 5=NW 6=W 7=SW. If a character faces the wrong way, reorder this array.
-    const SECTOR_TO_ROW = [0, 1, 2, 3, 4, 5, 6, 7];
     let selfEnt = null;
     const peerEnts = new Map();
     let avatarRaf = null;
-    let avatarErrored = false;
-    let _texLoader = null;
+    let _gltfLoader = null;
+    const _modelCache = new Map();    // url -> Promise<Object3D template>
 
     function avatarParent() {
       if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
@@ -439,72 +445,103 @@
       const wx = r.x * sxi + f.x * syi, wz = r.z * sxi + f.z * syi;
       return (Math.abs(wx) >= Math.abs(wz)) ? [Math.sign(wx), 0] : [0, Math.sign(wz)];
     }
-    function startAttack() { if (selfEnt && selfEnt.sprite && !selfEnt.attacking) { selfEnt.attacking = true; selfEnt.state = 'attack'; selfEnt.frame = 0; selfEnt.frameTime = 0; selfEnt.sprite.material.map = selfEnt.tex.attack; } }
     function startJump() { if (selfEnt && !selfEnt.jumpStart) selfEnt.jumpStart = Date.now(); }
-    function avatarError(msg) {
-      if (avatarErrored) return; avatarErrored = true;
-      try { console.error('[worlds] avatar sprite failed:', msg); } catch (_) {}
-      toast('Avatar sprites failed to load');
+    function startAttack() { startJump(); }  // models carry no attack clip; the hop is the action feedback
+
+    function avatarById(id) { return AVATARS.find(a => a.id === id) || AVATARS[0]; }
+    function myAvatarId() { try { return localStorage.getItem(AVATAR_LS) || DEFAULT_AVATAR; } catch (_) { return DEFAULT_AVATAR; } }
+    function setMyAvatarId(id) { try { localStorage.setItem(AVATAR_LS, id); } catch (_) {} }
+    // Until the server relays each peer's choice, give every peer a stable model by id.
+    function peerAvatarId(p) {
+      if (p && typeof p.avatarId === 'string' && AVATARS.some(a => a.id === p.avatarId)) return p.avatarId;
+      return AVATARS[hashId(String((p && p.id) || '')) % AVATARS.length].id;
     }
-    function loadSheetTexture(url) {
-      _texLoader = _texLoader || new THREE.TextureLoader();
-      const t = _texLoader.load(url, undefined, undefined, () => avatarError(url));
-      t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
-      if ('colorSpace' in t && THREE.SRGBColorSpace) t.colorSpace = THREE.SRGBColorSpace;
-      else if ('encoding' in t && THREE.sRGBEncoding) t.encoding = THREE.sRGBEncoding;
-      return t;
-    }
-    // A fresh texture per avatar+sheet so each can hold its own frame/row offset.
-    function createAvatar() {
-      const ent = { x: 0, z: 0, sector: 0, lastMove: 0, state: 'idle', frame: 0, frameTime: 0, tex: {}, sprite: null, disposed: false };
-      if (typeof THREE === 'undefined') { avatarError('THREE unavailable'); return ent; }
-      for (const k of Object.keys(SHEET)) {
-        const s = SHEET[k];
-        const t = loadSheetTexture(s.url);
-        t.repeat.set(s.frame / s.sw, s.frame / s.sh);
-        t.offset.set(0, 1 - s.frame / s.sh);
-        ent.tex[k] = t;
+    function gltfLoader() {
+      if (_gltfLoader) return _gltfLoader;
+      if (typeof THREE === 'undefined' || !THREE.GLTFLoader) return null;
+      _gltfLoader = new THREE.GLTFLoader();
+      if (THREE.DRACOLoader && typeof _gltfLoader.setDRACOLoader === 'function') {
+        const d = new THREE.DRACOLoader(); d.setDecoderPath('vendor/three/draco/');
+        _gltfLoader.setDRACOLoader(d);
       }
-      const mat = new THREE.SpriteMaterial({ map: ent.tex.idle, transparent: true, depthWrite: false, alphaTest: 0.2 });
-      ent.sprite = new THREE.Sprite(mat);
-      ent.sprite.center.set(0.5, 0.12);  // anchor near the feet (cells have transparent padding below)
-      ent.sprite.scale.set(1.7, 1.7, 1);
-      ent.sprite.renderOrder = 10;
-      const par = avatarParent(); if (par) par.add(ent.sprite);
+      return _gltfLoader;
+    }
+    function loadAvatarTemplate(url) {
+      if (_modelCache.has(url)) return _modelCache.get(url);
+      const p = new Promise((resolve) => {
+        const loader = gltfLoader();
+        if (!loader) { resolve(null); return; }
+        loader.load(url, (gltf) => {
+          resolve((gltf && (gltf.scene || (gltf.scenes && gltf.scenes[0]))) || null);
+        }, undefined, () => { try { console.error('[worlds] avatar model failed:', url); } catch (_) {} resolve(null); });
+      });
+      _modelCache.set(url, p);
+      return p;
+    }
+    // Clone a template and normalize it: base at y=0, centered in x/z, scaled so its
+    // height is AVATAR_TARGET_H. This is the per-character size normalization.
+    function buildAvatarObject(template) {
+      const inner = template.clone(true);
+      inner.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(inner);
+      const size = new THREE.Vector3(); box.getSize(size);
+      const center = new THREE.Vector3(); box.getCenter(center);
+      const scale = AVATAR_TARGET_H / Math.max(size.y, 0.01);
+      inner.position.set(-center.x, -box.min.y, -center.z);
+      const scaler = new THREE.Group(); scaler.add(inner); scaler.scale.setScalar(scale);
+      const obj = new THREE.Group(); obj.add(scaler);
+      obj.traverse((n) => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } });
+      return obj;
+    }
+    function createAvatar(avatarId) {
+      const ent = {
+        x: 0, z: 0, lastMove: 0, jumpStart: 0, bobT: 0,
+        yaw: 0, targetYaw: 0, height: AVATAR_TARGET_H,
+        avatarId: avatarId || DEFAULT_AVATAR, obj: null, disposed: false, bubble: null,
+      };
+      if (typeof THREE === 'undefined') return ent;
+      loadAvatarTemplate(avatarById(ent.avatarId).url).then((tpl) => {
+        if (ent.disposed || !tpl) return;
+        ent.obj = buildAvatarObject(tpl);
+        ent.obj.rotation.y = ent.yaw;
+        const par = avatarParent(); if (par) par.add(ent.obj);
+        placeEntity(ent);
+      });
       return ent;
     }
     function placeEntity(ent) {
-      if (!ent || !ent.sprite || typeof tilePos !== 'function') return;
+      if (!ent || !ent.obj || typeof tilePos !== 'function') return;
       const p = tilePos(ent.x, ent.z);
-      ent.sprite.position.set(p.x, 0.02, p.z);
+      ent.obj.position.set(p.x, ent.obj.position.y || 0, p.z);
     }
     function moveEntity(ent, x, z) {
       if (!ent) return;
-      const s = screenSector(x - ent.x, z - ent.z); if (s != null) ent.sector = s;
-      if (x !== ent.x || z !== ent.z) ent.lastMove = Date.now();
+      const dx = x - ent.x, dz = z - ent.z;
+      if (dx || dz) { ent.lastMove = Date.now(); ent.targetYaw = Math.atan2(dx, dz) + AVATAR_FORWARD_OFFSET; }
       ent.x = x; ent.z = z; placeEntity(ent);
     }
     function disposeEntity(ent) {
       if (!ent) return; ent.disposed = true;
       removeBubble(ent);
-      if (ent.sprite && ent.sprite.parent) ent.sprite.parent.remove(ent.sprite);
+      // Clones share geometry/materials with the cached template — just detach.
+      if (ent.obj && ent.obj.parent) ent.obj.parent.remove(ent.obj);
     }
     function animEntity(ent, dt) {
-      if (!ent.sprite) return;
-      const state = ent.attacking ? 'attack' : ((Date.now() - ent.lastMove) < 200 ? 'walk' : 'idle');
-      if (state !== ent.state) { ent.state = state; ent.frame = 0; ent.frameTime = 0; ent.sprite.material.map = ent.tex[state]; }
-      const sh = SHEET[state];
-      ent.frameTime += dt;
-      const fdur = 1 / sh.fps;
-      while (ent.frameTime >= fdur) {
-        ent.frameTime -= fdur; ent.frame += 1;
-        if (ent.frame >= sh.cols) { ent.frame = 0; if (ent.attacking) ent.attacking = false; }   // attack plays once
-      }
-      const row = SECTOR_TO_ROW[ent.sector] || 0;
-      ent.tex[ent.state].offset.set(ent.frame * (sh.frame / sh.sw), 1 - (row + 1) * (sh.frame / sh.sh));
-      let y = 0.02;
+      if (!ent.obj) { updateBubble(ent); return; }
+      // Smoothly turn to face the last movement direction.
+      let dyaw = ent.targetYaw - ent.yaw;
+      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      ent.yaw += dyaw * Math.min(1, dt * 12);
+      ent.obj.rotation.y = ent.yaw;
+      // Procedural motion (no animation clips in the models): walk bob or idle breathe.
+      const moving = (Date.now() - ent.lastMove) < 240;
+      ent.bobT += dt * (moving ? 9 : 2.2);
+      let y = moving ? Math.abs(Math.sin(ent.bobT)) * 0.12 : Math.sin(ent.bobT) * 0.03;
       if (ent.jumpStart) { const jt = (Date.now() - ent.jumpStart) / JUMP_MS; if (jt >= 1) ent.jumpStart = 0; else y += Math.sin(jt * Math.PI) * 0.8; }
-      ent.sprite.position.y = y;
+      ent.obj.position.y = y;
+      const scaler = ent.obj.children[0];
+      if (scaler) scaler.rotation.x = moving ? Math.sin(ent.bobT * 2) * 0.035 : 0;
       updateBubble(ent);
     }
 
@@ -599,7 +636,7 @@
       if (!text) return;
       if (text.length > BUBBLE_MAX_CHARS) text = text.slice(0, BUBBLE_MAX_CHARS - 1).trimEnd() + '…';
       const ent = (id != null && id === myId) ? selfEnt : (peerEnts ? peerEnts.get(id) : null);
-      if (!ent || !ent.sprite) return;  // avatar not spawned yet — drop silently
+      if (!ent) return;  // no such avatar — drop silently
       if (!ent.bubble) {
         if (typeof THREE === 'undefined') return;
         const canvas = document.createElement('canvas');
@@ -621,7 +658,10 @@
       const b = ent.bubble;
       const age = Date.now() - b.start;
       if (age >= BUBBLE_MS) { removeBubble(ent); return; }
-      if (ent.sprite) b.sprite.position.set(ent.sprite.position.x, ent.sprite.position.y + BUBBLE_HEAD_Y, ent.sprite.position.z);
+      if (ent.obj) {
+        const hy = (ent.height || AVATAR_TARGET_H) + 0.25;
+        b.sprite.position.set(ent.obj.position.x, ent.obj.position.y + hy, ent.obj.position.z);
+      }
       const fadeIn = age > (BUBBLE_MS - BUBBLE_FADE_MS) ? Math.max(0, (BUBBLE_MS - age) / BUBBLE_FADE_MS) : 1;
       b.sprite.material.opacity = fadeIn;
     }
@@ -635,7 +675,9 @@
     WS.showChatBubble = showChatBubble;
 
     function updateSelfAvatar() {
-      if (!selfEnt) selfEnt = createAvatar();
+      const id = myAvatarId();
+      if (!selfEnt) selfEnt = createAvatar(id);
+      else if (selfEnt.avatarId !== id) { disposeEntity(selfEnt); selfEnt = createAvatar(id); }
       moveEntity(selfEnt, you.x, you.z);
     }
     function updatePeerAvatars() {
@@ -644,8 +686,9 @@
         if (!p || p.id == null || p.id === myId) return;   // never draw yourself as a peer
         const pos = p.cursor || p; if (pos.x == null) return;
         seen.add(p.id);
+        const wantId = peerAvatarId(p);
         let ent = peerEnts.get(p.id);
-        if (!ent) { ent = createAvatar(); peerEnts.set(p.id, ent); }
+        if (!ent || ent.avatarId !== wantId) { if (ent) disposeEntity(ent); ent = createAvatar(wantId); peerEnts.set(p.id, ent); }
         moveEntity(ent, pos.x, pos.z);
       });
       peerEnts.forEach((ent, id) => { if (!seen.has(id)) { disposeEntity(ent); peerEnts.delete(id); } });
@@ -659,7 +702,7 @@
         if (selfEnt) animEntity(selfEnt, dt);
         peerEnts.forEach((e) => animEntity(e, dt));
         // Follow camera: ease the orbit target onto the player so he stays centered.
-        if (selfEnt && selfEnt.sprite && typeof tilePos === 'function' && typeof updateCamera === 'function' && typeof target !== 'undefined' && target) {
+        if (selfEnt && typeof tilePos === 'function' && typeof updateCamera === 'function' && typeof target !== 'undefined' && target) {
           const p = tilePos(selfEnt.x, selfEnt.z);
           target.x += (p.x - target.x) * 0.15;
           target.z += (p.z - target.z) * 0.15;
@@ -673,8 +716,67 @@
       if (avatarRaf) { cancelAnimationFrame(avatarRaf); avatarRaf = null; }
       disposeEntity(selfEnt); selfEnt = null;
       peerEnts.forEach((e) => disposeEntity(e)); peerEnts.clear();
-      avatarErrored = false;
     }
+
+    // ---- avatar picker (shown once on first entry; choice remembered) ----
+    function mkEl(tag, attrs, kids) {
+      const n = document.createElement(tag);
+      if (attrs) for (const k in attrs) {
+        if (k === 'class') n.className = attrs[k];
+        else if (k === 'text') n.textContent = attrs[k];
+        else if (k.slice(0, 2) === 'on' && typeof attrs[k] === 'function') n.addEventListener(k.slice(2), attrs[k]);
+        else n.setAttribute(k, attrs[k]);
+      }
+      if (kids) for (const c of [].concat(kids)) { if (c) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); }
+      return n;
+    }
+    function injectAvatarStyles() {
+      if (document.getElementById('tw-avatar-style')) return;
+      const css = ''
+        + '.tw-avatar-back{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;background:rgba(6,10,20,.72);backdrop-filter:blur(5px)}'
+        + '.tw-avatar-modal{background:#10182b;border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:20px;width:min(520px,92vw);color:#eef3ff;font-family:system-ui,sans-serif}'
+        + '.tw-avatar-modal h3{margin:0 0 4px;font-size:18px}'
+        + '.tw-avatar-sub{margin:0 0 14px;opacity:.7;font-size:13px}'
+        + '.tw-avatar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}'
+        + '.tw-avatar-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px;border-radius:12px;cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#eef3ff;font:600 12px system-ui}'
+        + '.tw-avatar-card:hover{background:rgba(255,255,255,.12)}'
+        + '.tw-avatar-card.sel{border-color:#4f8cff;box-shadow:0 0 0 2px rgba(79,140,255,.33)}'
+        + '.tw-avatar-thumb{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 22px system-ui;color:#fff;background:linear-gradient(135deg,#3a72c8,#7a4fd0)}';
+      document.head.appendChild(mkEl('style', { id: 'tw-avatar-style', text: css }));
+    }
+    function pickAvatar(id) {
+      setMyAvatarId(id);
+      updateSelfAvatar();
+      send({ type: 'avatar', avatarId: id });  // forward-compat: lets a future server relay tell peers
+    }
+    function showAvatarPicker() {
+      if (document.getElementById('tw-avatar-picker')) return;
+      injectAvatarStyles();
+      const cur = myAvatarId();
+      const grid = mkEl('div', { class: 'tw-avatar-grid' });
+      let back = null;
+      AVATARS.forEach((a) => {
+        const card = mkEl('button', {
+          type: 'button', class: 'tw-avatar-card' + (a.id === cur ? ' sel' : ''),
+          onclick: () => { pickAvatar(a.id); if (back) back.remove(); },
+        }, [mkEl('div', { class: 'tw-avatar-thumb', text: a.label.charAt(0) }), mkEl('div', { text: a.label })]);
+        grid.appendChild(card);
+      });
+      back = mkEl('div', { class: 'tw-avatar-back', id: 'tw-avatar-picker' }, [
+        mkEl('div', { class: 'tw-avatar-modal' }, [
+          mkEl('h3', { text: T('worlds.avatarTitle') }),
+          mkEl('p', { class: 'tw-avatar-sub', text: T('worlds.avatarSub') }),
+          grid,
+        ]),
+      ]);
+      back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
+      document.body.appendChild(back);
+    }
+    function maybePromptAvatar() {
+      let chosen = false; try { chosen = !!localStorage.getItem(AVATAR_LS); } catch (_) {}
+      if (!chosen) showAvatarPicker();
+    }
+    WS.chooseAvatar = showAvatarPicker;
 
     function drawMinimap() {
       if (!ctx || !canvas) return;
