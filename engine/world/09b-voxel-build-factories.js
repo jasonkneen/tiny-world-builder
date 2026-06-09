@@ -1083,6 +1083,7 @@
       posX: Number.isFinite(Number(src.posX)) ? Number(src.posX) : null,
       posZ: Number.isFinite(Number(src.posZ)) ? Number(src.posZ) : null,
       mount: src.mount === 'side' ? 'side' : 'under',
+      flipped: !!src.flipped, // reverse a side engine's thrust direction (steering)
       installed: src.installed !== false,
       mesh: null,
       propeller: null,
@@ -1353,12 +1354,16 @@
     if (engineState && Number.isFinite(engineState.posZ)) z = Math.max(-lim, Math.min(lim, engineState.posZ));
     const mount = engineState && engineState.mount === 'side' ? 'side' : 'under';
     if (mount === 'side') {
-      // Seat on the rim, push to the nearest edge, thrust axis horizontal/outward.
+      // Seat on the nearest rim edge, thrust axis horizontal and facing OUTWARD
+      // (so it pushes the island the other way). The engine's forward is -Z in
+      // its holder, so yaw must map -Z onto the outward edge normal. `flipped`
+      // reverses it (thrust the other way) for steering.
       const y = -DIRT_H * 0.5;
       const ax = Math.abs(x), az = Math.abs(z);
       let outX = x, outZ = z, yaw;
-      if (ax >= az) { outX = Math.sign(x || 1) * (half + 0.18); yaw = x >= 0 ? Math.PI / 2 : -Math.PI / 2; }
-      else { outZ = Math.sign(z || 1) * (half + 0.18); yaw = z >= 0 ? 0 : Math.PI; }
+      if (ax >= az) { outX = Math.sign(x || 1) * (half + 0.18); yaw = x >= 0 ? -Math.PI / 2 : Math.PI / 2; }
+      else { outZ = Math.sign(z || 1) * (half + 0.18); yaw = z >= 0 ? Math.PI : 0; }
+      if (engineState && engineState.flipped) yaw += Math.PI;
       return { x: outX, y, z: outZ, rotationY: yaw, mount: 'side' };
     }
     return { x, y: -DIRT_H - 0.74, z, rotationY: Math.atan2(x, z), mount: 'under' };

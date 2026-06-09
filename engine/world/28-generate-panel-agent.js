@@ -1503,6 +1503,8 @@
         if (made && typeof selectEditableIslandEngine === 'function') selectEditableIslandEngine(made);
       } else if (rowKey === 'islandEngineMount') {
         updateEditableIslandEngine(target, { mount: value, installed: true });
+      } else if (rowKey === 'islandEngineFlip') {
+        updateEditableIslandEngine(target, { flipped: value === 'flip', installed: true });
       } else if (rowKey === 'islandEngineMoveX' || rowKey === 'islandEngineMoveZ') {
         const axis = rowKey === 'islandEngineMoveX' ? 'posX' : 'posZ';
         const base = (typeof editableIslandEnginePlacement === 'function')
@@ -1543,6 +1545,10 @@
         { key: 'islandEngineMount', label: 'Facing', currentValue: (engine.mount === 'side' ? 'side' : 'under'), options: [
           { label: 'Under', value: 'under' },
           { label: 'Side', value: 'side' },
+        ] },
+        { key: 'islandEngineFlip', label: 'Thrust', currentValue: (engine.flipped ? 'flip' : 'out'), options: [
+          { label: 'Out', value: 'out', disabled: engine.mount !== 'side' },
+          { label: 'Flip', value: 'flip', disabled: engine.mount !== 'side' },
         ] },
         { key: 'islandEngineMoveX', label: 'Move X', control: 'stepper', options: [
           { label: 'Down', value: 'down' }, { label: 'Up', value: 'up' },
