@@ -58,6 +58,17 @@
     const profileStart = repaintProfileBegin();
     const { animate = true, delay = 0 } = opts || {};
     const key = x + ',' + z;
+    // If this cell is currently baked, drop the entire bake so the cell can be
+    // rebuilt live. terrainBakeBusy guards against re-entrancy: unbakeAllTerrain
+    // calls renderCellTile for each formerly-baked cell, but with the set already
+    // cleared, so this branch is never re-entered.
+    if (!terrainBakeBusy && bakedTerrainCells.has(key)) {
+      unbakeAllTerrain();
+      // unbakeAllTerrain already re-rendered every baked cell (including x,z)
+      // from the current world data, so the current call is redundant — skip.
+      repaintProfileEnd('tile.total', profileStart);
+      return;
+    }
     const entry = getOrCreateCellMeshEntry(x, z);
     if (entry.tile) {
       const disposeStart = repaintProfileBegin();
@@ -106,6 +117,9 @@
   }
 
   function rebuildTerrainRender() {
+    // Drop any active bake before rebuilding; the settle timer will re-bake
+    // after the rebuild completes.
+    if (bakedTerrainCells.size > 0) unbakeAllTerrain();
     for (const key in cellMeshes) {
       const parts = key.split(',');
       const x = parseInt(parts[0], 10);
@@ -758,4 +772,174 @@
       // cachedFade flag now that prepareFadeable no longer clones.
     });
     repaintProfileEnd('dispose.traverse', profileStart);
+  }
+
+  // -------- home-grid terrain mesh bake --------
+  // Merges the static base terrain tiles of the home grid into per-material
+  // meshes at rest, dropping draw calls from ~400 to ~120 on a 20x20 world
+  // (measured: -70% draws). Individual cells unbake back to live tiles when
+  // edited, then re-bake after the world settles.
+  //
+  // Feature flag: ON iff localStorage 'tinyworld:renderTerrainBake' === '1'
+  // OR URL param ?meshbake=1. Default OFF for safe rollout.
+
+  const terrainBakeEnabled = (function () {
+    try {
+      const ls = localStorage.getItem('tinyworld:renderTerrainBake') === '1';
+      const url = typeof location !== 'undefined' && new URLSearchParams(location.search).get('meshbake') === '1';
+      return ls || url;
+    } catch (_) { return false; }
+  }());
+
+  const bakedTerrainCells = new Set();   // Set<'x,z'> of currently-baked home-grid cells
+  let terrainBakeRoot = null;            // THREE.Group holding merged bake meshes
+  let terrainBakeSettleTimer = null;     // debounce handle
+  let terrainBakeBusy = false;           // re-entrancy guard for renderCellTile hook
+
+  function terrainCellBakeEligible(x, z, entry) {
+    if (!entry || !entry.tile) return false;
+    if (x < 0 || x >= GRID || z < 0 || z >= GRID) return false;
+    if (typeof isEditableIslandCell === 'function' && isEditableIslandCell(x, z)) return false;
+    // Check that every mesh in the tile would pass canMergeStaticBaseMesh
+    // after swapping to its preserved baseMat. A cell with any un-mergeable
+    // mesh (water overlay, weather FX, animated part) stays live.
+    //
+    // Distinguishing the TWO kinds of transparent material on home tiles:
+    //   1. prepareFadeable fade wrapper: o.userData.baseMat exists AND
+    //      o.material !== o.userData.baseMat. The home tile is opaque but the
+    //      fade system keeps a transparent wrapper (keepFadeAtOpaque). We swap
+    //      back to baseMat at bake time — safe.
+    //   2. Live animated/tinted material (water, weather FX): either no baseMat,
+    //      or baseMat === current material. These must stay live.
+    let allMergeable = false; // must have at least one mesh
+    let anyUnmergeable = false;
+    entry.tile.traverse(o => {
+      if (!o.isMesh) return;
+      const u = o.userData || {};
+      const currentMat = o.material;
+      const baseMat = u.baseMat;
+      // Reject FX-flagged meshes regardless of material
+      if (u.noBatch || u.noStaticBaseMerge || u.waterfall || u.weatherFx ||
+          u.rocketPlumeSheet || u.rocketFlame || u.propellerBlurDisc) {
+        anyUnmergeable = true; return;
+      }
+      // Determine the effective material we would use when baking
+      const isFadeWrapper = baseMat && currentMat !== baseMat && currentMat && currentMat.transparent;
+      const effectiveMat = isFadeWrapper ? baseMat : currentMat;
+      if (!effectiveMat || effectiveMat.transparent || Array.isArray(effectiveMat)) {
+        anyUnmergeable = true; return;
+      }
+      allMergeable = true;
+    });
+    return allMergeable && !anyUnmergeable;
+  }
+
+  function bakeHomeTerrainNow() {
+    if (!terrainBakeEnabled) return;
+    if (bakedTerrainCells.size > 0) return; // already baked
+    if (typeof isLandscapeMeshActive === 'function' && isLandscapeMeshActive()) return;
+    // Suppress during applyState bulk load (suppressSave flag from 29-persistence-api.js)
+    if (typeof suppressSave !== 'undefined' && suppressSave) return;
+    if (typeof worldGroup === 'undefined' || !worldGroup) return;
+    if (typeof mergeStaticBaseMeshesByMaterial !== 'function') return;
+
+    const t0 = performance.now();
+
+    // Collect eligible cells
+    const toAttach = [];
+    for (let x = 0; x < GRID; x++) {
+      for (let z = 0; z < GRID; z++) {
+        const entry = cellMeshesGrid[x] && cellMeshesGrid[x][z];
+        if (!entry || !entry.tile) continue;
+        const key = x + ',' + z;
+        if (!terrainCellBakeEligible(x, z, entry)) continue;
+        toAttach.push({ x, z, key, entry });
+      }
+    }
+
+    if (toAttach.length < 2) return; // not worth baking
+
+    // Create bake root
+    terrainBakeRoot = new THREE.Group();
+    terrainBakeRoot.name = 'home-terrain-bake';
+    terrainBakeRoot.userData.homeTerrainBake = true;
+    worldGroup.add(terrainBakeRoot);
+
+    // attach() reparents each tile group into bakeRoot while preserving world
+    // transform — the merge then bakes world positions directly.
+    for (const { x, z, key, entry } of toAttach) {
+      terrainBakeRoot.attach(entry.tile);
+      // Swap transparent fade materials back to their preserved opaque baseMat.
+      // prepareFadeable (15-ghost-generation-fade.js) sets keepFadeAtOpaque on
+      // home tiles, meaning the material is transparent even at opacity 1.
+      // canMergeStaticBaseMesh rejects transparent, so this swap is required.
+      entry.tile.traverse(o => {
+        if (o.isMesh && o.userData && o.userData.baseMat && o.material !== o.userData.baseMat) {
+          o.material = o.userData.baseMat;
+        }
+      });
+    }
+
+    mergeStaticBaseMeshesByMaterial(terrainBakeRoot, { reason: 'home-terrain-bake' });
+
+    // Dispose the now-empty original tile groups and null out entry.tile
+    for (const { x, z, key, entry } of toAttach) {
+      const tileGroup = entry.tile;
+      if (tileGroup && tileGroup.parent === terrainBakeRoot) {
+        terrainBakeRoot.remove(tileGroup);
+        disposeGroup(tileGroup);
+      }
+      entry.tile = null;
+      bakedTerrainCells.add(key);
+    }
+
+    if (typeof requestShadowMapUpdate === 'function') requestShadowMapUpdate();
+
+    const ms = Math.round(performance.now() - t0);
+    console.log('[terrain-bake] baked', bakedTerrainCells.size, 'cells in', ms + 'ms');
+    if (ms > 50) console.warn('[terrain-bake] bake took', ms + 'ms (>50ms threshold; consider chunked v2)');
+  }
+
+  function unbakeAllTerrain() {
+    if (bakedTerrainCells.size === 0) return;
+
+    // Dispose merged bake meshes (geometries only — materials are shared)
+    if (terrainBakeRoot) {
+      terrainBakeRoot.traverse(o => {
+        if (o.isMesh && o.userData && o.userData.staticBaseMerged && o.geometry) {
+          o.geometry.dispose();
+        }
+      });
+      worldGroup.remove(terrainBakeRoot);
+      terrainBakeRoot = null;
+    }
+
+    // Copy and clear the set BEFORE re-rendering to prevent re-entrancy
+    const cells = Array.from(bakedTerrainCells);
+    bakedTerrainCells.clear();
+
+    // Rebuild each formerly-baked cell as a live tile
+    terrainBakeBusy = true;
+    try {
+      for (const key of cells) {
+        const [x, z] = key.split(',').map(Number);
+        renderCellTile(x, z, { animate: false });
+      }
+    } finally {
+      terrainBakeBusy = false;
+    }
+
+    if (typeof requestShadowMapUpdate === 'function') requestShadowMapUpdate();
+
+    // Schedule a re-bake after the world settles
+    scheduleTerrainBakeOnSettle();
+  }
+
+  function scheduleTerrainBakeOnSettle() {
+    if (!terrainBakeEnabled) return;
+    if (terrainBakeSettleTimer !== null) clearTimeout(terrainBakeSettleTimer);
+    terrainBakeSettleTimer = setTimeout(function () {
+      terrainBakeSettleTimer = null;
+      bakeHomeTerrainNow();
+    }, 1200);
   }

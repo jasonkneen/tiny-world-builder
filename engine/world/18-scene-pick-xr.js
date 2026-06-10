@@ -675,6 +675,30 @@
       }
     }
 
+    // Merged terrain-bake meshes carry no gx/gz userData. Derive the cell from
+    // the world-space hit point — same approach as the landscape virtual-cell path.
+    let bakeMeshNode = h.object;
+    while (bakeMeshNode && !(bakeMeshNode.userData && bakeMeshNode.userData.homeTerrainBake)) {
+      bakeMeshNode = bakeMeshNode.parent;
+    }
+    if (bakeMeshNode && bakeMeshNode.userData && bakeMeshNode.userData.homeTerrainBake) {
+      const gx = Math.floor(localHitPoint.x + GRID / 2);
+      const gz = Math.floor(localHitPoint.z + GRID / 2);
+      if (gx >= 0 && gx < GRID && gz >= 0 && gz < GRID) {
+        const p = tilePos(gx, gz);
+        return {
+          x: gx,
+          z: gz,
+          boardX: 0,
+          boardZ: 0,
+          worldX: p.x,
+          worldZ: p.z,
+          localX: localHitPoint.x - p.x,
+          localZ: localHitPoint.z - p.z,
+        };
+      }
+    }
+
     while (n && n.userData.gx === undefined) n = n.parent;
     if (n && n.userData.gx !== undefined) {
       if (!n.visible) return null;
