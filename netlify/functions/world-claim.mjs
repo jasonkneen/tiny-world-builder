@@ -67,7 +67,6 @@ export default async function worldClaimFunction(request) {
         priceUsdc: String(price),
         recipientWallet: process.env.TINYWORLD_PAYMENT_WALLET || '',
         tokenMint: worldsUsdcMint(),
-        bypass: testBypassPayment(),
       }, origin);
     }
 
@@ -89,7 +88,7 @@ export default async function worldClaimFunction(request) {
       `;
       await sql`UPDATE world_economy_state SET claimed_count = claimed_count + 1, updated_at = NOW() WHERE id = 1`;
       await sql`INSERT INTO player_resources (profile_id) VALUES (${profile.id}) ON CONFLICT (profile_id) DO NOTHING`;
-      return jsonResponse({ world: worldDto(claimed[0], { includeData: true }), verified: false, bypass: true }, origin, 201);
+      return jsonResponse({ world: worldDto(claimed[0], { includeData: true }), verified: false }, origin, 201);
     }
 
     const paymentIntentId = Number(body && body.paymentIntentId);
