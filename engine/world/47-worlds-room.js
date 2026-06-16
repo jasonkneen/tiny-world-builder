@@ -119,7 +119,12 @@
       } catch (_) { return 'u_' + Math.random().toString(36).slice(2, 10); }
     }
     function playerName() {
-      try { return (localStorage.getItem('tinyworld:multiplayer:name') || '').slice(0, 48) || 'Player'; } catch (_) { return 'Player'; }
+      try {
+        const account = window.__tinyworldAccount || null;
+        const profile = account && typeof account.profile === 'function' ? account.profile() : null;
+        const profileName = profile && (profile.displayName || profile.username);
+        return (profileName || localStorage.getItem('tinyworld:multiplayer:name') || '').slice(0, 48) || 'Player';
+      } catch (_) { return 'Player'; }
     }
     const PLAYER_COLORS = ['#e05c5c','#e08c3c','#d4c040','#5ac44e','#40b8d0','#5a78e0','#b060e0','#e060a0'];
     function playerColor() {
@@ -285,10 +290,13 @@
         case 'presence': {
           const p = d.presence; if (!p || !p.id) break;
           if (p.id === myId) {
-            // Our own presence echo carries the authoritative position + hearts.
-            if (p.cursor) { you.x = p.cursor.x; you.z = p.cursor.z; }
-            if (p.hearts != null) you.hearts = p.hearts;
-            emit('you', you); updateSelfAvatar();
+            // Our own presence echo carries authoritative grid state, except while
+            // surface roam owns the avatar's free-world position.
+            if (!selfEnt || !selfEnt._srActive) {
+              if (p.cursor) { you.x = p.cursor.x; you.z = p.cursor.z; }
+              if (p.hearts != null) you.hearts = p.hearts;
+              emit('you', you); updateSelfAvatar();
+            }
           } else {
             p._t = Date.now(); peers.set(p.id, p);
             // Joins are implicit (no join message) — a peer id we haven't seen, once
@@ -919,8 +927,8 @@
         // Through-the-eyes: camera at the head, looking along yaw/pitch (positive pitch = down).
         const eyeY = sp.y + _srEyeH;
         const dir = _srTmp.set(sinY * cosP, -sinP, cosY * cosP);
-        camera.position.set(sp.x, eyeY, sp.z);
-        camera.lookAt(sp.x + dir.x, eyeY + dir.y, sp.z + dir.z);
+        camera.position.set(sp.x + dir.x * 0.18, eyeY, sp.z + dir.z * 0.18);
+        camera.lookAt(camera.position.x + dir.x, eyeY + dir.y, camera.position.z + dir.z);
       } else {
         // Chase cam: behind + above the avatar; wheel adjusts _srCamDist.
         const back = _srCamDist * cosP;
