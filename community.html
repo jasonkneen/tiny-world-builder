@@ -48,30 +48,52 @@
     font-family: var(--display-font);
     font-size: clamp(30px, 4vw, 44px);
     margin: 0 0 4px;
-    color: var(--ink);
+    color: #1c2533;
   }
-  .community-headline p { margin: 0; color: var(--muted); font-size: 15px; max-width: 52ch; }
-  .community-headline .me-chip {
-    display: inline-flex; align-items: center; gap: 10px;
-    padding: 7px 14px 7px 7px; border-radius: var(--radius-xl);
+  .community-headline p { margin: 0; color: #404a5c; font-size: 15px; max-width: 52ch; }
+  .me-chip {
+    display: inline-flex; align-items: center; gap: 9px;
+    height: 42px; padding: 0 14px 0 6px; border-radius: var(--radius-md);
     background: rgba(255,255,255,0.66); border: 1px solid rgba(255,255,255,0.55);
-    box-shadow: var(--shadow); backdrop-filter: blur(18px) saturate(180%);
-    -webkit-backdrop-filter: blur(18px) saturate(180%); font-size: 13px; font-weight: 600;
-    cursor: pointer; color: var(--ink); font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; color: var(--ink); font-family: inherit; white-space: nowrap;
   }
-  .community-headline .me-chip:hover { filter: brightness(0.97); }
+  .me-chip:hover { background: rgba(255,255,255,0.85); }
+  .me-chip .avatar { width: 28px; height: 28px; font-size: 11px; }
+  /* auth controls living inside the nav pill */
+  .site-nav .nav-auth { flex: 0 0 auto; margin-left: 2px; }
+  /* [hidden] must beat the display rules below (author .btn/.icon-btn display
+     overrides the UA [hidden]{display:none}, otherwise signed-in users still
+     see "Sign in" and signed-out users see the edit/chip controls). */
+  .site-nav .nav-auth[hidden] { display: none !important; }
+  .site-nav .btn.primary.nav-auth {
+    height: 42px; border-radius: var(--radius-md); padding: 0 16px;
+    font-weight: 750; font-size: 13px;
+    background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -4px 0 rgba(17,51,128,0.22), 0 12px 24px -14px rgba(22,76,170,0.68);
+  }
+  .site-nav .icon-btn.nav-auth {
+    width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-md); background: rgba(255,255,255,0.66);
+    border: 1px solid rgba(255,255,255,0.55); color: var(--ink); cursor: pointer; padding: 0;
+  }
+  .site-nav .icon-btn.nav-auth:hover { background: rgba(255,255,255,0.85); }
+  .site-nav .icon-btn.nav-auth svg { width: 16px; height: 16px; }
 
   /* human verification banner */
   .verify-banner {
     display: flex; align-items: center; gap: 14px;
     margin: 0 0 14px; padding: 12px 14px;
-    border: 1px solid var(--line); border-radius: var(--radius-lg);
-    background: linear-gradient(180deg, rgba(58,114,200,0.10), rgba(58,114,200,0.04));
+    border: 1px solid rgba(255,255,255,0.55); border-radius: var(--radius-lg);
+    background: rgba(255,255,255,0.72);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
   }
   .verify-banner svg { width: 26px; height: 26px; flex: 0 0 auto; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .verify-banner .vb-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
-  .verify-banner .vb-text strong { font-size: 14px; color: var(--ink); }
-  .verify-banner .vb-text span { font-size: 12.5px; color: var(--muted); }
+  .verify-banner .vb-text strong { font-size: 14px; color: #1c2533; }
+  .verify-banner .vb-text span { font-size: 12.5px; color: #404a5c; }
 
   /* shell: 3 columns */
   .community-shell {
@@ -239,10 +261,30 @@
   .handle-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
   .handle-input .handle-at { padding: 0 4px 0 12px; color: var(--muted); font-weight: 600; }
   .handle-input input { border: none; outline: none; flex: 1 1 auto; padding: 10px 12px 10px 2px; font-family: inherit; font-size: 14px; color: var(--ink); background: transparent; }
+  #profile-edit-modal { max-height: 88vh; overflow-y: auto; }
+  #profile-edit-modal textarea { width: 100%; resize: vertical; min-height: 64px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--line); font-family: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+  #profile-edit-modal textarea:focus, #profile-edit-modal input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
+  .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .avatar-opt { padding: 0; border: 2px solid var(--line); border-radius: var(--radius-md); background: #fff; cursor: pointer; overflow: hidden; aspect-ratio: 1; transition: border-color .15s, transform .15s; }
+  .avatar-opt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .avatar-opt:hover { transform: translateY(-1px); border-color: rgba(58,114,200,0.5); }
+  .avatar-opt.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.18); }
   .modal-error { background: #fbecec; color: #c0392b; border-radius: var(--radius-md); padding: 9px 12px; font-size: 13px; }
   .modal-ok { background: #e9f6ef; color: #1d7a4d; border-radius: var(--radius-md); padding: 9px 12px; font-size: 13px; word-break: break-all; }
   .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
   .pill.role { background: rgba(58,114,200,0.12); color: var(--accent); }
+  .pill.role-admin { background: rgba(200,58,90,0.12); color: #c0392b; }
+  .pill.role-moderator { background: rgba(58,114,200,0.14); color: var(--accent); }
+  .pill.role-channel_creator { background: rgba(46,160,110,0.14); color: #1d7a4d; }
+  #pc-role-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pc-roles-admin { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .pc-roles-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .pc-roles-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .role-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: var(--radius-md); border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: inherit; font-size: 13px; color: var(--ink); }
+  .role-toggle:hover { filter: brightness(0.97); }
+  .role-toggle.on { border-color: var(--accent); background: rgba(58,114,200,0.10); font-weight: 600; }
+  .role-toggle .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .role-toggle.on .dot { background: var(--accent); }
 
   /* sign-in / empty gate */
   .gate {
@@ -284,6 +326,11 @@
       <a href="/community" aria-current="page">Community</a>
       <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
       <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+      <button class="btn primary nav-auth" id="headline-login-btn" hidden>Sign in</button>
+      <button class="icon-btn nav-auth" id="edit-profile-btn" title="Edit profile" aria-label="Edit profile" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </button>
+      <button id="me-chip" class="me-chip nav-auth" title="Sign out" hidden></button>
     </nav>
   </header>
 
@@ -292,10 +339,6 @@
       <div>
         <h1>Community</h1>
         <p>Rooms, direct messages, and the people of the tinyverse. Chat with other builders, share worlds, and get help.</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <button class="btn primary" id="headline-login-btn" hidden>Sign in</button>
-        <button id="me-chip" class="me-chip" title="Sign out" hidden></button>
       </div>
     </div>
 
@@ -384,6 +427,10 @@
         </button>
         <button class="btn" id="pc-block-btn">Block</button>
         <button class="btn danger" id="pc-ban-btn" hidden>Ban…</button>
+      </div>
+      <div id="pc-roles-admin" class="pc-roles-admin" hidden>
+        <div class="pc-roles-label">Roles</div>
+        <div id="pc-roles-toggles" class="pc-roles-toggles"></div>
       </div>
       <div id="pc-ban-form" hidden>
         <div class="row">
@@ -521,11 +568,26 @@
     </div>
   </div>
 
-  <!-- Complete-profile modal (Twitter mandatory, GitHub optional) -->
+  <!-- Edit-profile modal (display name, bio, avatar, handles) -->
   <div class="c-modal-back" id="socials-modal-back" role="dialog" aria-modal="true" aria-labelledby="socials-modal-title">
-    <div class="c-modal">
-      <h2 id="socials-modal-title">Complete your profile</h2>
-      <p style="margin:0;color:var(--muted);font-size:13.5px" id="socials-sub">Add your handles so other builders know who you are. A Twitter/X handle is required to post and chat.</p>
+    <div class="c-modal" id="profile-edit-modal">
+      <h2 id="socials-modal-title">Edit your profile</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px" id="socials-sub">Set how you appear to other builders. A Twitter/X handle is required to post and chat.</p>
+
+      <div class="field">
+        <label>Avatar</label>
+        <div id="avatar-grid" class="avatar-grid" role="radiogroup" aria-label="Choose an avatar"></div>
+      </div>
+
+      <div class="field">
+        <label for="profile-displayname">Display name</label>
+        <input type="text" id="profile-displayname" maxlength="80" placeholder="Your name in the community" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="profile-about">About <span style="color:var(--muted)">(optional)</span></label>
+        <textarea id="profile-about" rows="3" maxlength="1000" placeholder="A short bio — keep it friendly."></textarea>
+      </div>
+
       <div class="field">
         <label for="socials-twitter">Twitter / X handle <span style="color:#c0392b">*</span></label>
         <div class="handle-input"><span class="handle-at">@</span><input type="text" id="socials-twitter" maxlength="40" placeholder="yourhandle" autocomplete="off" /></div>
@@ -534,6 +596,7 @@
         <label for="socials-github">GitHub username <span style="color:var(--muted)">(optional)</span></label>
         <div class="handle-input"><span class="handle-at">@</span><input type="text" id="socials-github" maxlength="40" placeholder="yourhandle" autocomplete="off" /></div>
       </div>
+      <div style="font-size:11.5px;color:var(--muted)">Names and bios are filtered — no sexual, nude, or abusive content.</div>
       <div class="modal-error" id="socials-error" hidden></div>
       <div class="modal-ok" id="socials-ok" hidden></div>
       <div class="modal-actions">
@@ -934,17 +997,35 @@
       el.style.display = parts.length ? 'flex' : 'none';
     }
 
-    // ---- complete-profile (socials) modal ----
+    // ---- edit-profile modal (avatar / name / about / handles) ----
+    let selectedAvatar = '';
+    function renderAvatarGrid() {
+      const grid = byId('avatar-grid');
+      const keys = (state.avatars && state.avatars.length) ? state.avatars : ['knight','wizard','builder','explorer','knave','robot','fox','cat'];
+      grid.innerHTML = keys.map(k =>
+        '<button type="button" class="avatar-opt' + (k === selectedAvatar ? ' selected' : '') + '" data-avatar="' + esc(k) + '" role="radio" aria-checked="' + (k === selectedAvatar) + '" title="' + esc(k) + '">' +
+        '<img src="/assets/avatars/' + esc(k) + '.png" alt="' + esc(k) + '" loading="lazy" /></button>'
+      ).join('');
+      grid.querySelectorAll('[data-avatar]').forEach(b => b.addEventListener('click', () => {
+        selectedAvatar = b.dataset.avatar;
+        grid.querySelectorAll('.avatar-opt').forEach(x => { const on = x.dataset.avatar === selectedAvatar; x.classList.toggle('selected', on); x.setAttribute('aria-checked', on); });
+      }));
+    }
     function openSocials(force) {
       const me = state.me || {};
+      selectedAvatar = me.avatar || '';
+      renderAvatarGrid();
+      byId('profile-displayname').value = me.displayName || '';
+      byId('profile-about').value = me.about || '';
       byId('socials-twitter').value = me.twitter || '';
       byId('socials-github').value = me.github || '';
       byId('socials-error').hidden = true; byId('socials-ok').hidden = true;
+      byId('socials-modal-title').textContent = force ? 'Complete your profile' : 'Edit your profile';
       // When forced (mandatory, Twitter missing) hide the "Later" escape hatch.
       byId('socials-cancel').style.display = force ? 'none' : '';
       byId('socials-sub').textContent = force
-        ? 'Before you can post or chat, add your Twitter/X handle. GitHub is optional.'
-        : 'Add your handles so other builders know who you are. A Twitter/X handle is required to post and chat.';
+        ? 'Before you can post or chat, add your Twitter/X handle. You can also pick an avatar and set your name.'
+        : 'Set how you appear to other builders. A Twitter/X handle is required to post and chat.';
       openModal('socials-modal-back');
     }
     byId('socials-cancel').addEventListener('click', () => closeModal('socials-modal-back'));
@@ -954,16 +1035,23 @@
     byId('socials-save').addEventListener('click', async () => {
       const twitter = byId('socials-twitter').value.trim().replace(/^@+/, '');
       const github = byId('socials-github').value.trim().replace(/^@+/, '');
+      const displayName = byId('profile-displayname').value.trim();
+      const about = byId('profile-about').value.trim();
       const err = byId('socials-error'); const ok = byId('socials-ok');
       err.hidden = true; ok.hidden = true;
       if (!twitter) { err.textContent = 'A Twitter/X handle is required.'; err.hidden = false; return; }
+      if (!displayName) { err.textContent = 'A display name is required.'; err.hidden = false; return; }
       const btn = byId('socials-save'); btn.disabled = true;
       try {
-        const d = await api('/api/community', 'POST', { action: 'saveSocials', twitter, github });
+        const payload = { action: 'saveProfile', twitter, github, displayName, about };
+        if (selectedAvatar) payload.avatar = selectedAvatar;
+        const d = await api('/api/community', 'POST', payload);
         if (d.me) state.me = Object.assign({}, state.me, d.me);
         ok.textContent = 'Saved. Thanks!'; ok.hidden = false;
-        // Reflect on the headline chip and unlock the composer if a channel is open.
+        // Reflect the new identity: chip, composer, members list.
+        if (typeof renderMeChip === 'function') renderMeChip();
         if (state.sel) showComposer(true);
+        refresh(true).catch(() => {});
         setTimeout(() => closeModal('socials-modal-back'), 600);
       } catch (e2) {
         err.textContent = (e2 && (e2.error || e2.message)) || 'Could not save. Please try again.';
@@ -1197,6 +1285,7 @@
       try {
         const d = await api('/api/community?resource=bootstrap', 'GET');
         state.me = d.me; state.admin = !!d.admin; state.verified = !!d.verified;
+        state.avatars = d.avatars || state.avatars || [];
         state.rooms = d.rooms || []; state.members = d.members || []; state.dms = d.dms || []; state.blocks = d.blocks || [];
         const chip = byId('me-chip');
         if (state.me) {
@@ -1204,6 +1293,7 @@
           chip.innerHTML = avatarHTML(state.me, 'sm') + '<span>' + esc(state.me.displayName || state.me.username) + (state.admin ? ' · staff' : '') + '</span>';
         } else { chip.hidden = true; }
         byId('headline-login-btn').hidden = !!state.me;
+        byId('edit-profile-btn').hidden = !state.me;
         // Only users with management permission can add channels.
         byId('create-room-btn').hidden = !state.admin;
         renderVerifyBanner();
@@ -1224,14 +1314,8 @@
       try { const A = window.TinyWorldAuth; if (A && typeof A.logout === 'function') await A.logout(); } catch (_) {}
       location.reload();
     }
-    byId('me-chip').addEventListener('click', () => {
-      if (!state.me) return;
-      const choice = window.prompt('Type "profile" to edit your Twitter/GitHub, or "signout" to sign out.', 'profile');
-      if (choice == null) return;
-      const c = choice.trim().toLowerCase();
-      if (c === 'signout' || c === 'sign out' || c === 'logout') signOut();
-      else if (c === 'profile' || c === 'edit') openSocials(false);
-    });
+    byId('me-chip').addEventListener('click', () => { if (state.me && window.confirm('Sign out?')) signOut(); });
+    byId('edit-profile-btn').addEventListener('click', () => { if (state.me) openSocials(false); });
     byId('headline-login-btn').addEventListener('click', () => openLogin());
 
     // ---- boot ----

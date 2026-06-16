@@ -2,6 +2,7 @@ import { getAuthUser } from './lib/auth.mjs';
 import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
 import { ensureProfile, profileDto } from './lib/profiles.mjs';
+import { activeSuspension } from './lib/community-moderation.mjs';
 import {
   cleanWorldName, cleanTaxPercent, computeWorldPrice, deriveTerrainCounts,
   worldDto, worldPreview, signJoinToken,
@@ -97,12 +98,23 @@ export default async function worldsFunction(request) {
         }
         const includeData = world.status === 'published' || isOwner;
         const dto = withLivePrice(worldDto(world, { includeData }), economy);
-        const role = roleFor(world, profile && profile.id);
+        let role = roleFor(world, profile && profile.id);
+        // Community suspensions lock the player out of the game for their duration.
+        let suspendedUntil = null;
+        if (profile) {
+          const susp = await activeSuspension(sql, profile.id);
+          if (susp) {
+            suspendedUntil = susp.expires_at;
+            // Owners can still load their own draft to look, but cannot get a
+            // play/build join token while suspended.
+            role = null;
+          }
+        }
         let token = '';
         if (role && joinSecret()) {
           token = signJoinToken({ w: dto.id, slug: dto.slug, p: profile ? Number(profile.id) : null, r: role }, joinSecret());
         }
-        return jsonResponse({ world: dto, role, token, me: profile ? profileDto(profile) : null }, origin);
+        return jsonResponse({ world: dto, role, token, suspendedUntil, me: profile ? profileDto(profile) : null }, origin);
       }
 
       const rows = await sql`

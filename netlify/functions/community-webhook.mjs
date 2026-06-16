@@ -26,6 +26,9 @@ import {
   deleteMessage,
   purgeMemberMessages,
   deleteRoom,
+  suspendMember,
+  unsuspendMember,
+  SUSPENSION_HOURS,
 } from './lib/community-moderation.mjs';
 
 export const config = { path: '/api/community/webhook' };
@@ -126,6 +129,22 @@ async function dispatchAction(sql, action, body) {
 
     case 'deleteRoom':
       return deleteRoom(sql, { roomId: body.roomId });
+
+    case 'suspend': {
+      const target = await resolveProfile(sql, body.target);
+      if (!target) return { ok: false, error: 'Member not found', status: 404 };
+      const row = await suspendMember(sql, {
+        profileId: target.id,
+        hours: Number(body.hours) || SUSPENSION_HOURS,
+        reason: body.reason || '',
+        category: body.category || 'manual',
+        actorProfileId: await moderatorProfileId(sql),
+      });
+      return { ok: true, action: 'suspend', profileId: target.id, username: target.username, expiresAt: row.expires_at };
+    }
+
+    case 'unsuspend':
+      return unsuspendMember(sql, { target: body.target });
 
     default:
       return { ok: false, error: 'Unknown action: ' + action, status: 400 };

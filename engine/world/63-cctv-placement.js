@@ -131,53 +131,73 @@
       if (!parentRef) return;
 
       const g = gridSize();
-      const anchor = lobbyScreenAnchor();           // screen centre, north edge
-      const screenY = groundY(Math.round(g / 2), 1) ;
-
-      // --- two lobby cams flanking BOTH sides of the presentation screen ---
-      // They sit on short poles either side of the screen, angled inward+down at
-      // the crowd that gathers in front (toward +z, the board centre). Monitors are
-      // mounted right beside the screen frame, facing the audience.
-      const sideX = 3.6, camY = screenY + 2.6, monY = screenY + 2.2;
+      const anchor = lobbyScreenAnchor();                 // screen centre, north edge
+      const screenY = groundY(Math.round(g / 2), 1);
       const crowd = new THREE.Vector3(0, screenY + 0.7, anchor.z + 3.0);  // where people gather
-      for (const sx of [-1, 1]) {
-        const camPos = new THREE.Vector3(sx * sideX, camY, anchor.z + 0.2);
-        const monPos = new THREE.Vector3(sx * (sideX + 0.2), monY, anchor.z + 0.15);
-        const monLook = new THREE.Vector3(0, monY, anchor.z + 4.0);       // face the audience
-        mount(
-          sx < 0 ? 'lobby-l' : 'lobby-r',
-          sx < 0 ? 'LOBBY CAM L' : 'LOBBY CAM R',
-          camPos, crowd, monPos, monLook,
-          { width: 1.25, fov: 54, sweep: { yaw: 0.45, pitch: 0.07, speed: 0.28 } }
-        );
-      }
 
-      // --- PUMPKINCAM over the biggest pumpkin patch (fallback to board centre) ---
-      const pumpkins = findKind('pumpkin');
-      if (pumpkins.length) {
-        const p = pumpkins[0];
-        const wp = cellWorld(p.x, p.z); const gy = groundY(p.x, p.z);
-        const camPos = new THREE.Vector3(wp.x + 1.6, gy + 2.2, wp.z + 1.6);
-        const look = new THREE.Vector3(wp.x, gy + 0.4, wp.z);
-        // Monitor goes up on the lobby screen's left, stacked above the side cam.
-        const monPos = new THREE.Vector3(-(sideX + 0.2), monY + 1.5, anchor.z + 0.15);
-        const monLook = new THREE.Vector3(0, monY + 1.5, anchor.z + 4.0);
-        mount('pumpkincam', 'PUMPKINCAM', camPos, look, monPos, monLook,
-          { width: 1.1, fov: 46, sweep: { yaw: 0.6, pitch: 0.12, speed: 0.4 } });
-      }
+      // --- two crowd cams on poles either side of the screen (still aim at the
+      //     audience to produce a useful feed; only the MONITORS are flat) ---
+      const lobbyL = {
+        id: 'lobby-l', name: 'LOBBY CAM L',
+        camPos: new THREE.Vector3(-3.6, screenY + 2.6, anchor.z + 0.2), look: crowd,
+        opts: { fov: 54, sweep: { yaw: 0.45, pitch: 0.07, speed: 0.28 } },
+      };
+      const lobbyR = {
+        id: 'lobby-r', name: 'LOBBY CAM R',
+        camPos: new THREE.Vector3(3.6, screenY + 2.6, anchor.z + 0.2), look: crowd,
+        opts: { fov: 54, sweep: { yaw: 0.45, pitch: 0.07, speed: 0.28 } },
+      };
 
-      // --- TREECAMs over the tallest trees (up to 2) ---
-      const trees = findKind('tree');
-      const treeCount = Math.min(2, trees.length);
-      for (let i = 0; i < treeCount; i++) {
-        const tcell = trees[i];
-        const wp = cellWorld(tcell.x, tcell.z); const gy = groundY(tcell.x, tcell.z);
-        const camPos = new THREE.Vector3(wp.x - 1.6, gy + 2.8, wp.z + 1.6);
-        const look = new THREE.Vector3(wp.x, gy + 0.6, wp.z);
-        const monPos = new THREE.Vector3((sideX + 0.2), monY + 1.5 + i * 1.4, anchor.z + 0.15);
-        const monLook = new THREE.Vector3(0, monY + 1.5 + i * 1.4, anchor.z + 4.0);
-        mount('treecam-' + (i + 1), 'TREECAM 0' + (i + 1), camPos, look, monPos, monLook,
-          { width: 1.1, fov: 48, sweep: { yaw: 0.55, pitch: 0.1, speed: 0.34 } });
+      // --- 4 world-feature cams (pumpkins, trees, houses), padded with AREA CAMs
+      //     so we always have exactly 6 monitors (3 per side) ---
+      const feats = [];
+      const grab = (kind, base, offX) => {
+        for (const c of findKind(kind)) {
+          if (feats.length >= 4) break;
+          feats.push(cellCamSpec(base, c, offX));
+        }
+      };
+      grab('pumpkin', 'PUMPKINCAM', 1.6);
+      grab('tree', 'TREECAM', -1.6);
+      grab('house', 'HOUSECAM', 1.8);
+      while (feats.length < 4) {
+        const i = feats.length;
+        const ax = (i % 2 === 0 ? -1 : 1) * (g * 0.3);
+        const az = anchor.z + g * (0.42 + 0.14 * Math.floor(i / 2));
+        const agy = groundY(Math.round(ax + g / 2 - 0.5), Math.round(az + g / 2 - 0.5));
+        // Same low, looking-out-and-up Truman framing as the feature cams.
+        feats.push({
+          base: 'AREA CAM',
+          camPos: new THREE.Vector3(ax, agy + 0.35, az),
+          look: new THREE.Vector3(ax * 0.2, agy + 2.6, az + g * 0.4),
+          opts: { fov: 58, sweep: { yaw: 0.4, pitch: 0.14, speed: 0.3 } },
+        });
+      }
+      // Number names that repeat (TREECAM 01/02, AREA CAM 01/02, …).
+      const baseTotals = {};
+      feats.forEach((f) => { baseTotals[f.base] = (baseTotals[f.base] || 0) + 1; });
+      const baseSeen = {};
+      feats.forEach((f, i) => {
+        baseSeen[f.base] = (baseSeen[f.base] || 0) + 1;
+        f.id = 'featcam-' + (i + 1);
+        f.name = baseTotals[f.base] > 1 ? f.base + ' 0' + baseSeen[f.base] : f.base;
+      });
+
+      // --- lay them out: 3 in the left column, 3 in the right, all flat (rotY 0,
+      //     no lookAt) and the same width; vertically centred on the screen ---
+      const rows = [SCREEN_CY + ROW_STEP, SCREEN_CY, SCREEN_CY - ROW_STEP];
+      const columns = [
+        { sx: -1, specs: [lobbyL, feats[0], feats[1]] },
+        { sx: 1, specs: [lobbyR, feats[2], feats[3]] },
+      ];
+      for (const col of columns) {
+        for (let r = 0; r < 3; r++) {
+          const spec = col.specs[r];
+          if (!spec) continue;
+          const monPos = new THREE.Vector3(col.sx * COL_X, screenY + rows[r], anchor.z + 0.15);
+          mount(spec.id, spec.name, spec.camPos, spec.look, monPos, null,
+            Object.assign({ width: MON_W, rotY: 0 }, spec.opts));
+        }
       }
 
       // --- low-impact cable conduit linking the monitor columns + into the screen ---

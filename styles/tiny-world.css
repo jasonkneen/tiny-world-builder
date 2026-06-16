@@ -503,7 +503,10 @@
   .token-corner {
     position: fixed;
     top: 18px;
-    right: 24px;
+    /* Clear the top-corner-chrome cluster (home / sign-out buttons) parked at
+       right:18px — two 44px buttons + gaps ≈ 100px — so the long CA string never
+       runs underneath them. */
+    right: 124px;
     z-index: 14;
     display: inline-flex;
     align-items: center;

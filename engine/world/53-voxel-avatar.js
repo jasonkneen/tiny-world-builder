@@ -177,6 +177,18 @@
       Mage: { shirt: '#47306f', sleeve: 'long', pants: '#281b43', shoes: '#211630', belt: '#d2ad54', collar: '#e8d993', tie: '#5aa6ff', skirt: '#2f1f55' },
       Miner: { shirt: '#c58a39', sleeve: 'long', pants: '#345064', shoes: '#2b2925', belt: '#53361e', boots: true, brace: '#6d7781' },
       Skyfarer: { shirt: '#5f86b6', sleeve: 'long', pants: '#6d4a34', shoes: '#2d2a28', belt: '#7c512d', boots: true, harness: '#dbc17a', emblem: '#f3e5a2', brace: '#c9a86a' },
+      // Hooded rogue — a leather-tunic adventurer under a black hood + cloak.
+      // `hood`/`cloak` are bespoke wardrobe layers (built in buildHeadMap / buildParts,
+      // gated on these colors). `lace` draws a pale V at the neckline. `facePreset`
+      // is applied in deriveCfg so the cheeky grin / brows / blush travel WITH the
+      // outfit over the wire (the networked descriptor only carries `fit`, not the
+      // local eyes/mouth), making every client render the same hooded look.
+      HoodedRogue: {
+        shirt: '#8a5a32', sleeve: 'long', pants: '#3a2c1d', shoes: '#2c2c2c',
+        belt: '#4a3526', boots: true,
+        hood: '#2b2d33', cloak: '#26282e', lace: '#cdbb94',
+        facePreset: { eyes: 'Happy', mouth: 'Grin', brows: true, blush: true, hair: 'Short', hairC: 1, head: 'Wide' },
+      },
     };
     const OUTFIT_KEYS = Object.keys(OUTFITS);
     const GEARS = ['None', 'Sword', 'Bow', 'Shield', 'SwordShield', 'Axe', 'Staff', 'Pickaxe'];
@@ -276,10 +288,35 @@
         }
       })();
       for (const [c, y] of pup) H.set(c + ',' + y + ',7', DARK);
+      // ----- eyebrows: a dark brow bar one row above each eye (gated cfg.brows).
+      // Tinted from the hair color so brows match the fringe. The outer voxel sits
+      // one row higher than the inner, giving the slightly angled, characterful brow
+      // from the reference art.
+      if (cfg.brows) {
+        const BROW = shade(hair, 0.62);
+        const brow = (c, y) => H.set(c + ',' + y + ',7', BROW);
+        brow(ex[0] - 1, 6); brow(ex[0], 6);            // left brow (inner pair)
+        brow(ex[1], 6); brow(ex[1] + 1, 6);            // right brow (inner pair)
+        brow(ex[0] - 1, 7); brow(ex[1] + 1, 7);        // outer ends lifted a row
+      }
+      // ----- blush: two warm cheek voxels low on the face, outside the mouth (gated cfg.blush)
+      if (cfg.blush) {
+        const BLUSH = '#e58a86';
+        H.set((ex[0] - 1) + ',2,7', BLUSH);
+        H.set((ex[1] + 1) + ',2,7', BLUSH);
+      }
       fill(H, ca, cb, 3, 3, 8, 8, shade(skin, 0.97));              // nose
       const m0 = ca - 1, m1 = cb + 1;
       const mouth = (x, y) => H.set(x + ',' + y + ',7', DARK);
-      if (cfg.mouth === 'Smile') { mouth(m0, 2); mouth(m1, 2); for (let x = ca; x <= cb; x++) mouth(x, 1); }
+      if (cfg.mouth === 'Grin') {
+        // big toothy grin: a dark upper-lip line with lifted corners, a pale tooth
+        // band below it, and a single dark gap voxel to read as separated teeth.
+        const TEETH = '#f4f1e8';
+        for (let x = m0; x <= m1; x++) mouth(x, 2);                // upper lip line
+        mouth(m0, 3); mouth(m1, 3);                                // corners curl up
+        for (let x = ca - 1; x <= cb + 1; x++) H.set(x + ',1,7', TEETH); // tooth band
+        H.set(ca + ',1,7', DARK);                                  // center gap
+      } else if (cfg.mouth === 'Smile') { mouth(m0, 2); mouth(m1, 2); for (let x = ca; x <= cb; x++) mouth(x, 1); }
       else if (cfg.mouth === 'Frown') { mouth(m0, 1); mouth(m1, 1); for (let x = ca; x <= cb; x++) mouth(x, 2); }
       else { for (let x = m0; x <= m1; x++) mouth(x, 2); for (let x = ca; x <= cb; x++) mouth(x, 1); } // Open/default
       // hair
@@ -316,6 +353,27 @@
         fill(H, -1, -1, 3, 8, -1, 7, hair); fill(H, HW, HW, 3, 8, -1, 7, hair);
         fill(H, 0, X1, 2, 8, -1, -1, hair); fill(H, -1, HW, 8, 8, -1, 7, hair);
       }
+      // ----- hood: a black cowl shell around the head, framing an open face (gated
+      // by the outfit's `hood` color). Built as side walls + back + a domed top that
+      // overhangs the brow, with the front (z>=6) left open so the face shows through.
+      // Drawn LAST so it sits over hair. Uses negative/over-range coords (the voxGeo
+      // mesher and bb handle them) to stand the cowl proud of the skin.
+      const hoodC = (OUTFITS[cfg.fit] && OUTFITS[cfg.fit].hood) || null;
+      if (hoodC) {
+        const hShade = shade(hoodC, 0.86);
+        // side walls (left at x=-2, right at x=HW+1) from cheek to crown, front-to-back
+        for (const sx of [-2, HW + 1]) fill(H, sx, sx, 1, 9, -2, 6, hoodC);
+        // inner side lining one column in, so the opening reads as thickness, not paper
+        for (const sx of [-1, HW]) fill(H, sx, sx, 1, 8, -2, 1, hShade);
+        // back wall behind the head
+        fill(H, -2, HW + 1, 1, 9, -2, -2, hoodC);
+        // domed top: two stacked caps, the upper one pulled back a row (the peak)
+        fill(H, -2, HW + 1, 9, 9, -2, 6, hoodC);
+        fill(H, -1, HW, 10, 10, -1, 4, hoodC);
+        fill(H, 0, X1, 11, 11, -1, 2, hShade);
+        // brow overhang: a short lip of hood reaching forward over the forehead
+        fill(H, -1, HW, 8, 9, 6, 6, hoodC);
+      }
       return [H, (HW - 1) / 2, -0.5, 3.5];
     }
 
@@ -350,12 +408,43 @@
         pc(3, 5, 3, fit.emblem); pc(4, 5, 3, fit.emblem); pc(3, 4, 3, fit.emblem); pc(4, 4, 3, fit.emblem);
         pc(3, 3, 3, fit.emblem); pc(4, 3, 3, fit.emblem); pc(2, 4, 3, fit.emblem); pc(5, 4, 3, fit.emblem);
       }
+      // ----- cloak: a dark mantle over the shoulders and back, draping down the
+      // sides (gated by the outfit's `cloak` color). Built proud of the shirt at the
+      // back (z=-1) and wrapping the shoulder tops, with the chest front left open so
+      // the leather tunic + laced collar show. `lace` draws a pale V at the neckline.
+      if (fit.cloak) {
+        const clShade = shade(fit.cloak, 0.88);
+        // back panel behind the torso, full width, hanging the length of the chest
+        fill(C, topX0, topX1, 0, 7, -1, -1, fit.cloak);
+        // shoulder caps wrapping over the top, fore-and-aft
+        fill(C, topX0, topX1, 7, 8, -1, 3, fit.cloak);
+        // side drapes down the outer edges
+        fill(C, topX0 - 1, topX0 - 1, 1, 7, -1, 3, clShade);
+        fill(C, topX1 + 1, topX1 + 1, 1, 7, -1, 3, clShade);
+      }
+      if (fit.lace) {
+        // pale laced collar: a shallow V opening at the chest front (z=3)
+        const lc = (x, y) => { const k = x + ',' + y + ',3'; if (C.has(k)) C.set(k, fit.lace); };
+        lc(3, 6); lc(4, 6); lc(2, 5); lc(5, 5); lc(3, 4); lc(4, 4); lc(3, 3); lc(4, 3);
+      }
       maps.chest = [C, 3.5, -0.5, 1.5];
 
       // pelvis
       const P = new Map();
       const pw = fem ? 9 : 8, px1 = pw - 1;
       fill(P, 0, px1, 0, 3, 0, 3, fit.pants);
+      // ----- butt: a small rounded seat at the lower rear of the pelvis. The pelvis
+      // back face is z=0 (front/face side is +z); this stands one voxel proud at
+      // z=-1 across the lower two rows (y=0..1), inset on x so it reads as a rounded
+      // seat rather than a flat slab. Tinted a touch darker than the pants for a soft
+      // shaded cheek. Skipped under a skirt (which buries it). Shape pass: applies to
+      // every avatar. Fem pelvis is one voxel wider (px1=8) so the seat is a touch fuller.
+      if (!fit.skirt) {
+        const seatC = shade(fit.pants, 0.92);
+        fill(P, 1, px1 - 1, 0, 1, -1, -1, seatC);
+        // top row pulled in a column more so the cheek crowns/rounds at the top
+        fill(P, 2, px1 - 2, 1, 1, -1, -1, shade(fit.pants, 0.97));
+      }
       if (fit.fur) { fill(P, 0, px1, 0, 2, 0, 3, fit.fur); for (let x = 0; x <= px1; x++) for (let z = 0; z < 4; z++) if ((x + z) & 1) P.set(x + ',0,' + z, fit.fur2); }
       for (let x = 0; x <= px1; x++) for (let z = 0; z < 4; z++) P.set(x + ',3,' + z, fit.belt);
       if (fit.skirt) { for (let x = -1; x <= px1 + 1; x++) for (let z = -1; z <= 4; z++) { if (x > -1 && x < px1 + 1 && z > -1 && z < 4) continue; fill(P, x, x, -3, -1, z, z, fit.skirt); } }
@@ -384,10 +473,13 @@
       maps.thighL = [TH, 1.5, -0.5, 1.5]; maps.thighR = [new Map(TH), 1.5, -0.5, 1.5];
       maps.shinL = [SH, 1, -0.5, 1.5]; maps.shinR = [new Map(SH), 1, -0.5, 1.5];
 
-      // feet (origin: ankle, toe +z)
+      // feet (origin: ankle, toe +z). Shifted FORWARD a voxel — heel pulled in to
+      // z=-1 and toe pushed out to z=+4 (was -2..+3) so the foot sits ahead of the
+      // ankle and the stance reads as planted/stepping forward rather than balanced
+      // on a board centered under the leg. The dark sole underside follows the new span.
       const F = new Map();
-      fill(F, 0, 3, -2, -1, -2, 3, fit.shoes);
-      for (let x = 0; x < 4; x++) for (let z = -2; z <= 3; z++) F.set(x + ',-2,' + z, shade(fit.shoes, 0.7));
+      fill(F, 0, 3, -2, -1, -1, 4, fit.shoes);
+      for (let x = 0; x < 4; x++) for (let z = -1; z <= 4; z++) F.set(x + ',-2,' + z, shade(fit.shoes, 0.7));
       maps.footL = [F, 1.5, -0.5, 0.5]; maps.footR = [new Map(F), 1.5, -0.5, 0.5];
 
       // survivor grime — deterministic per-seed so distinct avatars weather differently
@@ -426,18 +518,27 @@
       const pick = (arr) => arr[(r() * arr.length) | 0];
       const body = (opts.body === 'Masc' || opts.body === 'Fem') ? opts.body : (r() < 0.5 ? 'Masc' : 'Fem');
       const skin = opts.skin != null ? clampInt(opts.skin, 0, 0, SKINS.length - 1) : ((r() * SKINS.length) | 0);
-      const hairC = opts.hairC != null ? clampInt(opts.hairC, 0, 0, HAIRC.length - 1) : ((r() * HAIRC.length) | 0);
-      const hair = HAIRS.includes(opts.hair) ? opts.hair : pick(HAIRS);
       const fit = OUTFIT_KEYS.includes(opts.fit) ? opts.fit : pick(OUTFIT_KEYS);
-      const head = (opts.head === 'Wide' || opts.head === 'Slim') ? opts.head : (r() < 0.5 ? 'Wide' : 'Slim');
+      // Outfit-bound face/hair preset (e.g. HoodedRogue's grin+brows+blush). Explicit
+      // opts always win; otherwise the preset supplies the look, then the seed. Read
+      // BEFORE hair/hairC/head so the preset can pin them (keeps the resolved descriptor
+      // — which carries only `fit` over the wire — rendering identically on every peer).
+      const preset = (OUTFITS[fit] && OUTFITS[fit].facePreset) || {};
+      const hairC = opts.hairC != null ? clampInt(opts.hairC, 0, 0, HAIRC.length - 1)
+        : (preset.hairC != null ? clampInt(preset.hairC, 0, 0, HAIRC.length - 1) : ((r() * HAIRC.length) | 0));
+      const hair = HAIRS.includes(opts.hair) ? opts.hair : (HAIRS.includes(preset.hair) ? preset.hair : pick(HAIRS));
+      const head = (opts.head === 'Wide' || opts.head === 'Slim') ? opts.head
+        : ((preset.head === 'Wide' || preset.head === 'Slim') ? preset.head : (r() < 0.5 ? 'Wide' : 'Slim'));
       const height = Math.round((opts.height != null ? clampNum(opts.height, 1, 0.84, 1.22) : (0.88 + r() * 0.31)) * 100) / 100;
       const build = opts.build != null ? clampInt(opts.build, 0, -2, 2) : (((r() * 5) | 0) - 2);
       const gear = GEARS.includes(opts.gear) ? opts.gear : (r() < 0.42 ? 'None' : GEARS[1 + ((r() * (GEARS.length - 1)) | 0)]);
       return {
         body, skin, hairC, hair, fit, head, height, build, gear,
         bevel: opts.bevel != null ? opts.bevel : false,   // flat voxels: fewer verts, render-budget friendly
-        eyes: opts.eyes || 'Focus',
-        mouth: opts.mouth || 'Smile',
+        eyes: opts.eyes || preset.eyes || 'Focus',
+        mouth: opts.mouth || preset.mouth || 'Smile',
+        brows: opts.brows != null ? !!opts.brows : !!preset.brows,
+        blush: opts.blush != null ? !!opts.blush : !!preset.blush,
         seed,
       };
     }
@@ -698,6 +799,9 @@
         _t: 0, _phase: 0, _state: 'idle', _attackT: 0, _swingType: -1, _jumpT: 0, _poseT: 0, _heading: 0, _bobBase: bobBase,
         // strideCore gait phase + weight-sway tracker (mirrors voxel-poser st.gph/gswx)
         _gph: 0, _gswx: 0, _walkSpd: 0,
+        // idle weight-shift desync: a random phase so a crowd of idle avatars rock on
+        // their feet out of sync with each other (purely cosmetic, no wire impact).
+        _idlePhase: Math.random() * Math.PI * 2,
         // ---- climb cycle ----
         // The climb is hand-over-hand and is driven by VERTICAL PROGRESS, not dt: the 47
         // mechanic calls climbAdvance(dPhase) each frame with an amount proportional to
@@ -810,6 +914,7 @@
             const swayA = 0.8 * spdF;
             const sway = Math.cos(gph) * swayA;
             chest.position.x = BASE.chestX + sway;
+            chest.position.z = BASE.chestZ;     // clear any idle fore/aft rock leftover
             this._gswx = sway;
             // forward spine lean: realized by shifting the foot anchor BACK (poser does
             // az -= lean); the leg IK then angles the body forward. chest stays put.
@@ -1100,19 +1205,34 @@
             legR.hip.rotation.x = 0.2 * u; legL.hip.rotation.x = 0.2 * u;       // legs trail slightly
             legR.knee.rotation.x = 0.35 * u; legL.knee.rotation.x = 0.35 * u;
             chest.rotation.x = -0.1 * u;
-          } else {                                             // idle: gentle breathing sway
-            const b = Math.sin(this._t * 1.6);
-            armL.sh.rotation.x = b * A.idleArm; armR.sh.rotation.x = -b * A.idleArm;
-            // hard-clear the slash-only axes so no torso twist / arm abduction can leak
-            // into idle (the swing eases these to 0 and zeroes them on finish, but idle
-            // is the resume state — keep it the single source of truth for "rest").
+          } else {                                             // idle: breathing + weight-shift / rock on feet
+            // A relaxed standing idle: the body's mass shifts laterally from one foot to
+            // the other (chest x + a slight roll toward the weighted foot), rocks a hair
+            // fore/aft (chest z + tiny pitch), dips a touch as the weight rolls over a
+            // foot, and breathes (vertical rise + soft arm sway). The head rides along via
+            // its chest parenting. Periods are long (~6-10s) and desynced per avatar
+            // (_idlePhase) so a crowd reads as people idly settling, never a metronome.
+            // Feet stay planted: knees only WHISPER (too small to lift a heel), so nothing
+            // floats — the read is "shifting weight", not "marching in place".
+            const breath = Math.sin(this._t * 1.6);
+            const ph = this._t * 0.66 + this._idlePhase;
+            const shift = Math.sin(ph) + 0.18 * Math.sin(ph * 2.7 + 1.1);   // lateral weight (~-1.2..1.2)
+            const rock = Math.sin(this._t * 0.9 + this._idlePhase * 1.7);    // gentle fore/aft
+            armL.sh.rotation.x = breath * A.idleArm; armR.sh.rotation.x = -breath * A.idleArm;
+            // hard-clear the slash-only axes so no torso twist / arm abduction leaks in.
             armL.sh.rotation.y = 0; armL.sh.rotation.z = 0;
             armR.sh.rotation.y = 0; armR.sh.rotation.z = 0;
-            chest.rotation.set(0, 0, 0);
+            // torso leans/rolls toward the weighted foot and rocks a touch fore/aft
+            chest.rotation.set(rock * 0.018, 0, -shift * 0.05);
+            chest.position.x = BASE.chestX + shift * 0.32;
+            chest.position.z = BASE.chestZ + rock * 0.10;
             legL.hip.rotation.x = 0; legR.hip.rotation.x = 0;
-            legL.knee.rotation.x = 0; legR.knee.rotation.x = 0;
+            // a whisper of knee softening on the UNWEIGHTED side — small enough that the
+            // sole stays on the ground (no visible heel lift), just enough to feel alive.
+            legL.knee.rotation.x = Math.max(0, -shift) * 0.05;
+            legR.knee.rotation.x = Math.max(0, shift) * 0.05;
             armL.elbow.rotation.x = 0; armR.elbow.rotation.x = 0;
-            body.position.y = bobBase + b * 0.04;
+            body.position.y = bobBase + breath * 0.04 - Math.abs(shift) * 0.04;
           }
         },
         dispose() {

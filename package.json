@@ -40,6 +40,7 @@
     "@netlify/database": "^1.0.0",
     "@netlify/identity": "^1.2.0",
     "@open-pets/client": "^2.1.1",
+    "netlify-cli": "^26.1.0",
     "postgres": "^3.4.9"
   },
   "devDependencies": {

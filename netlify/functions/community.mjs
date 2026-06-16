@@ -3,7 +3,7 @@ import { requireAuthUser } from './lib/auth.mjs';
 import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
 import { ensureProfile, profileDto } from './lib/profiles.mjs';
-import { emitCommunityEvent } from './lib/community-moderation.mjs';
+import { emitCommunityEvent, screenMessage, suspendMember, activeSuspension, ensureSuspensionTable, unsuspendMember, SUSPENSION_HOURS, POLICY_NOTICE } from './lib/community-moderation.mjs';
 import { issueChallenge, verifySubmission, HONEYPOT_FIELD } from './lib/human-verification.mjs';
 
 export const config = { path: '/api/community' };
@@ -27,10 +27,14 @@ const STAFF_USERNAMES = new Set(
     .filter(Boolean),
 );
 const DEFAULT_ROOMS = [
+  { slug: 'lobby',    name: 'lobby',    topic: 'Live with the in-game lobby — chat here or in the game, it is the same room.' },
   { slug: 'general',  name: 'general',  topic: 'Open chat for the whole tinyverse community.' },
   { slug: 'builders', name: 'builders', topic: 'Share builds, techniques, and works in progress.' },
   { slug: 'help',     name: 'help',     topic: 'Ask questions and help other builders out.' },
 ];
+// The bridged room slug: messages in this community room and the in-game lobby
+// chat are relayed to each other (see engine/world/64-lobby-chat-bridge.js).
+const LOBBY_ROOM_SLUG = 'lobby';
 
 const COMMUNITY_RELATIONS = [
   'community_rooms',
@@ -119,6 +123,80 @@ const GITHUB_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 export function isValidTwitter(handle) { return TWITTER_RE.test(String(handle || '')); }
 export function isValidGithub(handle) { return GITHUB_RE.test(String(handle || '')); }
 
+// -------- preset avatars (allowlist; no user uploads => no NSFW image risk) --------
+// Keys map to same-origin PNGs under assets/avatars/. Editing the profile can
+// only ever select one of these — arbitrary image URLs are rejected.
+export const AVATAR_KEYS = ['knight', 'wizard', 'builder', 'explorer', 'knave', 'robot', 'fox', 'cat'];
+const AVATAR_BASE = '/assets/avatars/';
+export function avatarUrlForKey(key) {
+  const k = String(key || '').trim().toLowerCase();
+  return AVATAR_KEYS.includes(k) ? AVATAR_BASE + k + '.png' : '';
+}
+// Reverse-map a stored image URL back to a preset key (for pre-selecting in UI).
+export function avatarKeyForUrl(url) {
+  const m = String(url || '').match(/\/assets\/avatars\/([a-z]+)\.png$/i);
+  return m && AVATAR_KEYS.includes(m[1].toLowerCase()) ? m[1].toLowerCase() : '';
+}
+
+// -------- content safety (pure, unit-testable) --------
+// Block sexual, nudity, and abusive/hateful content in user-authored profile
+// text (display name + about). Two-layer match to balance evasion-resistance
+// against false positives. This is a first-line filter, not a guarantee — the
+// moderation webhook + bans handle anything that slips through.
+
+// Layer 1 — HARD substrings: terms that essentially never appear inside
+// innocent English, so we can match them even across collapsed/leet/spacing
+// evasion ("p0 r n" -> "porn"). Kept deliberately unambiguous.
+const HARD_SUBSTRINGS = [
+  'childporn', 'porn', 'pormo', 'hentai', 'masturbat', 'blowjob', 'handjob',
+  'creampie', 'cumshot', 'cumming', 'dildo', 'onlyfans', 'jailbait', 'upskirt',
+  'molest', 'bestiality', 'pedophile', 'pedophilia', 'nigger', 'faggot',
+  'motherfucker', 'fuckyou', 'fuckme', 'incest', 'rapist',
+];
+
+// Layer 2 — WHOLE-WORD terms: short/ambiguous words that DO occur inside
+// innocent words (sex/Essex, anal/analysis, tit/title, cum/document, cp/cpu),
+// so they must match as standalone words only.
+const WORD_BANNED = [
+  'sex', 'xxx', 'nsfw', 'nude', 'nudes', 'naked', 'boob', 'boobs', 'tit', 'tits',
+  'titty', 'cock', 'dick', 'penis', 'pussy', 'vagina', 'cum', 'orgasm', 'anal',
+  'anus', 'cunt', 'clit', 'rape', 'fellatio', 'pedo', 'loli', 'lolita',
+  'jailbait', 'escort', 'camgirl', 'fuck', 'shit', 'bitch', 'asshole', 'bastard',
+  'whore', 'slut', 'fag', 'faggot', 'retard', 'kike', 'spic', 'chink', 'coon',
+  'dyke', 'tranny', 'wetback', 'cp',
+];
+const WORD_BANNED_SET = new Set(WORD_BANNED);
+
+const LEET_MAP = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's' };
+function deLeet(s) {
+  return String(s).toLowerCase().replace(/[013457 8@$]/g, ch => (LEET_MAP[ch] !== undefined ? LEET_MAP[ch] : ch));
+}
+
+// Fully collapse to a-z only (defeats spacing/punctuation evasion).
+export function normalizeForSafety(text) {
+  return deLeet(text).replace(/[^a-z]/g, '');
+}
+
+// Returns { ok: true } or { ok: false, reason }. `field` is for the message.
+export function checkTextSafety(text, field = 'text') {
+  const raw = String(text == null ? '' : text);
+  // Layer 1: hard substrings against the fully-collapsed string.
+  const collapsed = normalizeForSafety(raw);
+  for (const bad of HARD_SUBSTRINGS) {
+    if (collapsed.includes(bad)) {
+      return { ok: false, reason: 'Your ' + field + ' contains content that is not allowed (sexual, abusive, or hateful).' };
+    }
+  }
+  // Layer 2: whole-word match on de-leeted text (keeps word boundaries).
+  const words = deLeet(raw).replace(/[^a-z]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  for (const w of words) {
+    if (WORD_BANNED_SET.has(w)) {
+      return { ok: false, reason: 'Your ' + field + ' contains language that is not allowed here.' };
+    }
+  }
+  return { ok: true };
+}
+
 // -------- dtos --------
 function memberDto(row) {
   if (!row) return null;
@@ -130,6 +208,7 @@ function memberDto(row) {
     image: row.image || '',
     twitter: row.twitter || '',
     github: row.github || '',
+    roles: Array.isArray(row.roles) ? row.roles : [],
     online: !!row.online,
     lastSeenAt: row.last_seen_at || null,
   };
@@ -145,6 +224,7 @@ function meDto(row) {
     displayName: row.display_name,
     about: row.about || '',
     image: row.image || '',
+    avatar: avatarKeyForUrl(row.image),
     twitter: row.twitter || '',
     github: row.github || '',
     profileComplete: !!(row.twitter && String(row.twitter).trim()),
@@ -284,6 +364,33 @@ async function ensureTables(sql) {
   // Idempotent so the community page works even before the SQL migration runs.
   await sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS twitter TEXT NOT NULL DEFAULT ''`;
   await sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS github  TEXT NOT NULL DEFAULT ''`;
+  // Global community roles granted to a profile by an admin (distinct from the
+  // per-room community_memberships.role). One row per (profile, role).
+  await sql`
+    CREATE TABLE IF NOT EXISTS community_roles (
+      profile_id  INT  NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      role        TEXT NOT NULL CHECK (role IN ('admin','moderator','channel_creator')),
+      granted_by  INT  REFERENCES profiles(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (profile_id, role)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS community_roles_role_idx ON community_roles (role)`;
+  // Suspensions (community + game access) and self-reports.
+  await ensureSuspensionTable(sql);
+  await sql`
+    CREATE TABLE IF NOT EXISTS community_reports (
+      id           SERIAL PRIMARY KEY,
+      message_id   INT REFERENCES community_messages(id) ON DELETE CASCADE,
+      reporter_id  INT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      author_id    INT REFERENCES profiles(id) ON DELETE SET NULL,
+      kind         TEXT NOT NULL DEFAULT 'report' CHECK (kind IN ('report','downvote')),
+      reason       TEXT NOT NULL DEFAULT '',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (message_id, reporter_id, kind)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS community_reports_msg_idx ON community_reports (message_id)`;
 }
 
 // Additive seeding of the default public rooms — only inserts rooms whose slug
@@ -379,6 +486,34 @@ function isStaffProfile(profile) {
   return STAFF_USERNAMES.has(uname) || STAFF_USERNAMES.has(dname);
 }
 
+// -------- roles & capabilities --------
+// Assignable global roles (admin can grant/revoke these from the UI).
+export const COMMUNITY_ROLES = ['admin', 'moderator', 'channel_creator'];
+
+// Map a set of held roles (+ super-admin flag) to a capability object. Pure and
+// unit-testable. `isSuperAdmin` is true for env-staff / the local admin secret,
+// who implicitly hold every capability.
+export function capabilitiesFor(roles, isSuperAdmin = false) {
+  const has = new Set(Array.isArray(roles) ? roles : []);
+  const admin = isSuperAdmin || has.has('admin');
+  const moderator = admin || has.has('moderator');
+  const channelCreator = admin || moderator || has.has('channel_creator');
+  return {
+    isAdmin: admin,            // full control, incl. granting roles & global bans
+    canModerate: moderator,    // ban / unban / block / delete messages & rooms
+    canCreateChannels: channelCreator,
+    canManageRoles: admin,     // only admins grant/revoke roles
+    roles: Array.from(has),
+  };
+}
+
+// Load the global roles a profile holds (DB-backed grants).
+async function loadRoles(sql, profileId) {
+  const rows = await sql`SELECT role FROM community_roles WHERE profile_id = ${profileId}`;
+  return rows.map(r => r.role);
+}
+
+
 // -------- data access --------
 async function listRooms(sql, profileId) {
   const rows = await sql`
@@ -397,7 +532,11 @@ async function listMembers(sql, selfId) {
   const rows = await sql`
     SELECT p.id, p.username, p.display_name, p.about, p.image, p.twitter, p.github,
            pr.last_seen_at,
-           (pr.last_seen_at > NOW() - INTERVAL '5 minutes') AS online
+           (pr.last_seen_at > NOW() - INTERVAL '5 minutes') AS online,
+           COALESCE(
+             (SELECT array_agg(cr.role) FROM community_roles cr WHERE cr.profile_id = p.id),
+             ARRAY[]::text[]
+           ) AS roles
     FROM profiles p
     LEFT JOIN player_presence pr ON pr.profile_id = p.id
     WHERE p.id NOT IN (
@@ -568,12 +707,15 @@ export default async function communityFunction(request) {
     const profile = await ensureProfile(auth.user);
     await ensureCommunityDefaults(sql);
     const url = new URL(request.url);
-    // `admin` grants global community-management rights. It's true for either the
-    // local-dev admin secret OR a staff profile (super-owner / configured staff).
-    // Every privileged check below (createRoom, deleteRoom, ban, invites,
-    // private-room access) keys off this single flag.
-    const staff = isStaffProfile(profile);
-    const admin = isAdmin(request) || staff;
+    // Capability model. `superAdmin` = env-staff / local admin secret (implicit
+    // full control). DB-granted roles (community_roles) layer on top. `caps`
+    // resolves the effective permissions; `admin` stays true for any full admin
+    // (super OR granted 'admin' role) so existing checks keep working.
+    const superAdmin = isAdmin(request) || isStaffProfile(profile);
+    const myRoles = await loadRoles(sql, profile.id);
+    const caps = capabilitiesFor(myRoles, superAdmin);
+    const staff = superAdmin;
+    const admin = caps.isAdmin;
     // Staff are implicitly trusted; everyone else must clear the human-safe
     // anti-AI questionnaire before they can post / DM / join / create.
     const verified = admin || await isMemberVerified(sql, profile.id);
@@ -584,14 +726,21 @@ export default async function communityFunction(request) {
       await touchPresence(sql, profile.id);
 
       if (resource === 'bootstrap') {
-        const [me, rooms, members, dms, blocks] = await Promise.all([
+        const [me, rooms, members, dms, blocks, suspension] = await Promise.all([
           loadMe(sql, profile.id),
           listRooms(sql, profile.id),
           listMembers(sql, profile.id),
           listDmConversations(sql, profile.id),
           listBlocks(sql, profile.id),
+          activeSuspension(sql, profile.id),
         ]);
-        return jsonResponse({ me, rooms, members, dms, blocks, admin, verified }, origin);
+        return jsonResponse({
+          me, rooms, members, dms, blocks, admin, verified,
+          avatars: AVATAR_KEYS, caps, roleOptions: COMMUNITY_ROLES,
+          policyNotice: POLICY_NOTICE,
+          suspendedUntil: suspension ? suspension.expires_at : null,
+          suspensionReason: suspension ? suspension.reason : '',
+        }, origin);
       }
       if (resource === 'verifyChallenge') {
         // Already-verified members don't need a challenge.
@@ -674,27 +823,66 @@ export default async function communityFunction(request) {
     const GATED_ACTIONS = new Set([
       'postMessage', 'joinRoom', 'leaveRoom', 'createRoom', 'deleteRoom',
       'createInvite', 'redeemInvite', 'block', 'unblock', 'ban', 'unban',
+      'reportMessage', 'downvoteMessage',
     ]);
     if (GATED_ACTIONS.has(action) && !verified) {
       return errorResponse('Please complete the human verification questionnaire before participating.', 403, origin);
     }
 
-    // Save your social handles. Twitter/X is mandatory; GitHub is optional.
-    // NOT gated on profile-completeness (this is the action that completes it),
-    // but still requires a verified human like everything else.
-    if (action === 'saveSocials') {
+    // Edit your profile: display name, about/bio, preset avatar, and social
+    // handles. Twitter/X is mandatory; GitHub optional. All user text is safety-
+    // checked (no sexual / nudity / abusive / hateful content). Avatar is an
+    // allowlisted preset key — no arbitrary image URLs. NOT gated on
+    // profile-completeness (this is the action that completes it), but still
+    // requires a verified human. `saveSocials` kept as a back-compat alias.
+    if (action === 'saveProfile' || action === 'saveSocials') {
       if (!verified) return errorResponse('Please complete the human verification questionnaire first.', 403, origin);
+
+      // Load current row so partial updates keep existing values.
+      const cur = await sql`SELECT display_name, about, image, twitter, github FROM profiles WHERE id = ${profile.id} LIMIT 1`;
+      if (!cur.length) return errorResponse('Profile not found', 404, origin);
+      const row = cur[0];
+
+      // ---- handles (twitter mandatory, github optional) ----
       const twitter = normalizeHandle(body && (body.twitter ?? body.twitterId));
       const github = normalizeHandle(body && (body.github ?? body.githubId));
       if (!twitter) return errorResponse('A Twitter/X handle is required.', 400, origin);
       if (!isValidTwitter(twitter)) return errorResponse('That Twitter/X handle is not valid (letters, numbers, underscore; up to 15 characters).', 400, origin);
       if (github && !isValidGithub(github)) return errorResponse('That GitHub username is not valid.', 400, origin);
-      const rows = await sql`
-        UPDATE profiles SET twitter = ${twitter}, github = ${github}, updated_at = NOW()
+
+      // ---- display name (optional update, safety-checked) ----
+      let displayName = row.display_name;
+      if (body && body.displayName != null) {
+        displayName = cleanText(body.displayName, 80);
+        if (!displayName) return errorResponse('Display name cannot be empty.', 400, origin);
+        const safe = checkTextSafety(displayName, 'display name');
+        if (!safe.ok) return errorResponse(safe.reason, 400, origin);
+      }
+
+      // ---- about / bio (optional update, safety-checked) ----
+      let about = row.about || '';
+      if (body && body.about != null) {
+        about = cleanText(body.about, 1000);
+        const safe = checkTextSafety(about, 'bio');
+        if (!safe.ok) return errorResponse(safe.reason, 400, origin);
+      }
+
+      // ---- avatar (optional; preset allowlist only) ----
+      let image = row.image || '';
+      if (body && body.avatar != null) {
+        const url = avatarUrlForKey(body.avatar);
+        if (!url) return errorResponse('Pick one of the available avatars.', 400, origin);
+        image = url;
+      }
+
+      const out = await sql`
+        UPDATE profiles
+        SET display_name = ${displayName}, about = ${about}, image = ${image},
+            twitter = ${twitter}, github = ${github}, updated_at = NOW()
         WHERE id = ${profile.id}
         RETURNING id, username, display_name, about, image, twitter, github
       `;
-      return jsonResponse({ me: rows.length ? meDto(rows[0]) : null }, origin);
+      return jsonResponse({ me: out.length ? meDto(out[0]) : null }, origin);
     }
 
     // Mandatory-profile gate: members must have a Twitter/X handle on file before
@@ -720,6 +908,33 @@ export default async function communityFunction(request) {
       const recent = await rateLimitCount(sql, profile.id);
       if (isRateLimited(recent, RATE_LIMIT_MAX)) {
         return errorResponse('You are sending messages too quickly. Slow down and try again.', 429, origin);
+      }
+
+      // Already-suspended members cannot post (community + game lockout).
+      const susp = await activeSuspension(sql, profile.id);
+      if (susp) {
+        return jsonResponse({
+          error: 'You are suspended until ' + new Date(susp.expires_at).toISOString() + '. ' + POLICY_NOTICE,
+          suspendedUntil: susp.expires_at, reason: susp.reason, category: susp.category,
+        }, origin, 403);
+      }
+
+      // Content policy: no coin/CA shilling, abuse, foul language, or hostile
+      // negativity. A violation rejects the message AND suspends the author for
+      // SUSPENSION_HOURS (community + game access). Staff/admins are exempt.
+      if (!admin) {
+        const verdict = screenMessage(text);
+        if (!verdict.ok) {
+          const s = await suspendMember(sql, { profileId: profile.id, hours: SUSPENSION_HOURS, reason: verdict.reason, category: verdict.category, actorProfileId: null });
+          emitCommunityEvent('member.suspended', {
+            profileId: profile.id, username: profile.username, category: verdict.category,
+            reason: verdict.reason, expiresAt: s.expires_at, sample: text.slice(0, 280),
+          }).catch(() => {});
+          return jsonResponse({
+            error: verdict.reason + ' You are suspended for ' + SUSPENSION_HOURS + ' hours, including game access. ' + POLICY_NOTICE,
+            suspended: true, suspendedUntil: s.expires_at, category: verdict.category,
+          }, origin, 403);
+        }
       }
 
       const roomId = cleanProfileId(body && body.roomId);
@@ -822,8 +1037,9 @@ export default async function communityFunction(request) {
     }
 
     if (action === 'createRoom') {
-      // Only users with management permission can add channels.
-      if (!admin) return errorResponse('You do not have permission to create channels', 403, origin);
+      // Channel creation requires the channel-creator capability (admins,
+      // moderators, and channel_creators have it).
+      if (!caps.canCreateChannels) return errorResponse('You do not have permission to create channels', 403, origin);
       const name = cleanText(body && body.name, 80).toLowerCase();
       if (!name) return errorResponse('Room name is required', 400, origin);
       const isPrivate = !!(body && body.isPrivate);
@@ -848,9 +1064,9 @@ export default async function communityFunction(request) {
     if (action === 'deleteRoom') {
       const roomId = cleanProfileId(body && body.roomId);
       if (!roomId) return errorResponse('roomId is required', 400, origin);
-      // Permission: community staff/admin, OR the room's owner.
+      // Permission: community moderators/admins, OR the room's owner.
       const role = await roomRole(sql, roomId, profile.id);
-      if (!admin && role !== 'owner') {
+      if (!caps.canModerate && role !== 'owner') {
         return errorResponse('You do not have permission to delete this channel', 403, origin);
       }
       // Cascades to memberships, messages, bans, and invites via ON DELETE CASCADE.
@@ -935,15 +1151,15 @@ export default async function communityFunction(request) {
       const targetId = cleanProfileId(body && body.profileId);
       if (!targetId || targetId === Number(profile.id)) return errorResponse('Invalid ban target', 400, origin);
       const roomId = cleanProfileId(body && body.roomId); // null => global ban
-      // Authorisation: a global ban needs admin; a room ban needs admin OR an
-      // owner/mod role in that room.
+      // Authorisation: a global ban needs the moderate capability; a room ban
+      // needs that OR an owner/mod role in that room.
       if (roomId) {
         const role = await roomRole(sql, roomId, profile.id);
-        if (!admin && role !== 'owner' && role !== 'mod') {
-          return errorResponse('Only room owners, mods, or admins can ban here', 403, origin);
+        if (!caps.canModerate && role !== 'owner' && role !== 'mod') {
+          return errorResponse('Only room owners, moderators, or admins can ban here', 403, origin);
         }
-      } else if (!admin) {
-        return errorResponse('Only admins can issue a global ban', 403, origin);
+      } else if (!caps.canModerate) {
+        return errorResponse('Only moderators or admins can issue a global ban', 403, origin);
       }
       const expires = banExpiry(Date.now(), Number(body && body.durationHours));
       const reason = cleanText(body && body.reason, 200);
@@ -961,17 +1177,93 @@ export default async function communityFunction(request) {
       const roomId = cleanProfileId(body && body.roomId);
       if (roomId) {
         const role = await roomRole(sql, roomId, profile.id);
-        if (!admin && role !== 'owner' && role !== 'mod') {
-          return errorResponse('Only room owners, mods, or admins can unban here', 403, origin);
+        if (!caps.canModerate && role !== 'owner' && role !== 'mod') {
+          return errorResponse('Only room owners, moderators, or admins can unban here', 403, origin);
         }
-      } else if (!admin) {
-        return errorResponse('Only admins can lift a global ban', 403, origin);
+      } else if (!caps.canModerate) {
+        return errorResponse('Only moderators or admins can lift a global ban', 403, origin);
       }
       await sql`
         DELETE FROM community_bans
         WHERE profile_id = ${targetId} AND (room_id IS NOT DISTINCT FROM ${roomId || null})
       `;
       return jsonResponse({ ok: true }, origin);
+    }
+
+    // ---- role management (admins only) ----
+    if (action === 'grantRole' || action === 'revokeRole') {
+      if (!caps.canManageRoles) return errorResponse('Only admins can manage roles', 403, origin);
+      const targetId = cleanProfileId(body && body.profileId);
+      const role = String(body && body.role || '').trim().toLowerCase();
+      if (!targetId) return errorResponse('A target member is required', 400, origin);
+      if (!COMMUNITY_ROLES.includes(role)) return errorResponse('Unknown role', 400, origin);
+      const exists = await sql`SELECT id FROM profiles WHERE id = ${targetId} LIMIT 1`;
+      if (!exists.length) return errorResponse('Member not found', 404, origin);
+
+      if (action === 'grantRole') {
+        await sql`
+          INSERT INTO community_roles (profile_id, role, granted_by)
+          VALUES (${targetId}, ${role}, ${profile.id})
+          ON CONFLICT (profile_id, role) DO NOTHING
+        `;
+      } else {
+        // Don't let an admin strip their OWN last admin role (avoid lockout);
+        // env/staff super-admins are unaffected since their power isn't DB-based.
+        if (role === 'admin' && targetId === Number(profile.id) && !superAdmin) {
+          const others = await sql`SELECT COUNT(*)::int AS n FROM community_roles WHERE role = 'admin' AND profile_id <> ${profile.id}`;
+          if (Number(others[0].n) === 0) return errorResponse('You are the only admin — promote someone else first.', 400, origin);
+        }
+        await sql`DELETE FROM community_roles WHERE profile_id = ${targetId} AND role = ${role}`;
+      }
+      const roles = await loadRoles(sql, targetId);
+      return jsonResponse({ ok: true, profileId: targetId, roles }, origin);
+    }
+
+    // Self-reporting: members flag a message (report) or downvote it. Persists a
+    // row and fires a webhook so the moderation agent (Hermes) can pick it up.
+    if (action === 'reportMessage' || action === 'downvoteMessage') {
+      const kind = action === 'downvoteMessage' ? 'downvote' : 'report';
+      const messageId = cleanProfileId(body && body.messageId);
+      if (!messageId) return errorResponse('messageId is required', 400, origin);
+      const reason = cleanText(body && body.reason, 300);
+      const msg = await sql`SELECT id, author_profile_id, room_id, dm_key, body FROM community_messages WHERE id = ${messageId} LIMIT 1`;
+      if (!msg.length) return errorResponse('Message not found', 404, origin);
+      const m = msg[0];
+      await sql`
+        INSERT INTO community_reports (message_id, reporter_id, author_id, kind, reason)
+        VALUES (${messageId}, ${profile.id}, ${m.author_profile_id}, ${kind}, ${reason})
+        ON CONFLICT (message_id, reporter_id, kind) DO UPDATE SET reason = EXCLUDED.reason, created_at = NOW()
+      `;
+      // Tally so the agent can act on thresholds.
+      const counts = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE kind = 'report')::int   AS reports,
+          COUNT(*) FILTER (WHERE kind = 'downvote')::int AS downvotes
+        FROM community_reports WHERE message_id = ${messageId}
+      `;
+      const tally = counts[0] || { reports: 0, downvotes: 0 };
+      emitCommunityEvent('message.reported', {
+        kind,
+        messageId,
+        reason,
+        reporter: { id: profile.id, username: profile.username },
+        author: { id: m.author_profile_id },
+        roomId: m.room_id || null,
+        dm: !!m.dm_key,
+        sample: String(m.body || '').slice(0, 280),
+        totals: { reports: Number(tally.reports) || 0, downvotes: Number(tally.downvotes) || 0 },
+      }).catch(() => {});
+      return jsonResponse({ ok: true, kind, messageId, totals: { reports: Number(tally.reports) || 0, downvotes: Number(tally.downvotes) || 0 } }, origin);
+    }
+
+    // Moderators/admins can lift a suspension.
+    if (action === 'unsuspend') {
+      if (!caps.canModerate) return errorResponse('Only moderators or admins can lift suspensions', 403, origin);
+      const targetId = cleanProfileId(body && body.profileId);
+      if (!targetId) return errorResponse('A target member is required', 400, origin);
+      const r = await unsuspendMember(sql, { target: { profileId: targetId } });
+      if (!r.ok) return errorResponse(r.error || 'Could not lift suspension', 400, origin);
+      return jsonResponse(r, origin);
     }
 
     return errorResponse('Unknown community action', 400, origin);

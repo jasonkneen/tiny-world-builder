@@ -156,6 +156,9 @@
       { id: 'vx-rogue', displayName: 'Rogue', spec: { seed: 66, body: 'Fem', fit: 'Rogue', skin: 3, hairC: 0, head: 'Wide', hair: 'Bob', height: 0.98, build: -1, gear: 'Sword' }, swatch: '#3f4b4e' },
       { id: 'vx-barb', displayName: 'Barbarian', spec: { seed: 77, body: 'Masc', fit: 'Barbarian', skin: 4, hairC: 4, head: 'Wide', hair: 'Mohawk', height: 1.16, build: 2, gear: 'Axe' }, swatch: '#8a4b2a' },
       { id: 'vx-sky', displayName: 'Skyfarer', spec: { seed: 88, body: 'Masc', fit: 'Skyfarer', skin: 1, hairC: 6, head: 'Slim', hair: 'Curls', height: 1.04, build: 0, gear: 'Shield' }, swatch: '#5f86b6' },
+      // Hooded rogue — the cheeky cowled adventurer (grin + brows + blush ride on the
+      // HoodedRogue outfit's facePreset, so just naming the fit reproduces the look).
+      { id: 'vx-hooded', displayName: 'Hooded Rogue', spec: { seed: 99, body: 'Masc', fit: 'HoodedRogue', skin: 1, height: 1, build: 0, gear: 'None' }, swatch: '#2b2d33' },
       { id: 'vx-random', displayName: 'Randomize', random: true, swatch: '#7bdc2e' },
     ];
     function voxelDesc(spec) {

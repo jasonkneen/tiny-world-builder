@@ -18,6 +18,9 @@
     function on(ev, cb) { (listeners[ev] = listeners[ev] || []).push(cb); }
     function emit(ev, data) { (listeners[ev] || []).forEach(cb => { try { cb(data); } catch (_) {} }); }
     WS.on = on;
+    // Expose emit so sibling modules (e.g. 64-lobby-chat-bridge) can inject
+    // synthetic events like a bridged 'chat' line into the same render path.
+    WS.__emit = emit;
   
     // ---- room state ----
     let socket = null;

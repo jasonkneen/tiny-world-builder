@@ -28,6 +28,104 @@ export function banExpiry(nowMs, durationHours) {
   return new Date(Number(nowMs) + h * 3600 * 1000);
 }
 
+// -------- content policy screening (pure, unit-testable) --------
+// Community rules enforced on every posted message:
+//   1. No promoting / selling other coins, contract addresses (CAs), or memecoins.
+//   2. No abuse, threats, or harassment.
+//   3. No foul / hateful language.
+//   4. No hostile negative-sentiment attacks on people.
+// A violation => the message is rejected AND the author is suspended for
+// SUSPENSION_HOURS (community + game access) so the consequence is real and
+// immediate. Returns { ok: true } or { ok: false, category, reason }.
+export const SUSPENSION_HOURS = 4;
+
+// Collapse leet + spacing so "f u c k" / "sh1t" / "p.u.m.p" normalize.
+const POLICY_LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '@': 'a', '$': 's' };
+function policyCollapse(text) {
+  return String(text == null ? '' : text).toLowerCase().replace(/[013457 8@$]/g, c => (POLICY_LEET[c] !== undefined ? POLICY_LEET[c] : c)).replace(/[^a-z]/g, '');
+}
+function policyWords(text) {
+  return String(text == null ? '' : text).toLowerCase().replace(/[013457 8@$]/g, c => (POLICY_LEET[c] !== undefined ? POLICY_LEET[c] : c)).replace(/[^a-z\s]+/g, ' ').split(/\s+/).filter(Boolean);
+}
+
+// 1) Crypto shilling / other coins / contract addresses.
+const COIN_WORD = new Set([
+  'memecoin', 'memecoins', 'shitcoin', 'altcoin', 'altcoins', 'presale', 'airdrop',
+  'tokenomics', 'rugpull', 'degen', 'shill', 'shilling', 'pumpit', 'mooning',
+]);
+const COIN_PHRASES = [
+  'buy my coin', 'buy this coin', 'my token', 'our token', 'new token', 'new coin',
+  'contract address', 'pump and dump', 'to the moon', 'next 1000x', 'next 100x',
+  '1000x gem', '100x gem', 'low cap gem', 'apein', 'aping in', 'dont miss out',
+  'get in early', 'launching on pump', 'pumpfun', 'dexscreener', 'dextools',
+];
+// Solana-style base58 contract address (32-44 chars), or 0x EVM address.
+const SOL_CA_RE = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/;
+const EVM_CA_RE = /\b0x[a-fA-F0-9]{40}\b/;
+const TICKER_RE = /\$[A-Za-z]{2,15}\b/; // $DOGE, $WIF, etc. ($TINY-adjacent is fine to flag; team posts bypass screening)
+
+// 2/3) Abuse, threats, slurs, foul language.
+const ABUSE_WORDS = new Set([
+  'fuck', 'fucker', 'fucking', 'motherfucker', 'shit', 'bullshit', 'bitch', 'cunt',
+  'asshole', 'dickhead', 'bastard', 'retard', 'retarded', 'idiot', 'moron', 'stupid',
+  'loser', 'pathetic', 'scum', 'trash', 'garbage', 'kys', 'nigger', 'nigga', 'faggot',
+  'fag', 'kike', 'spic', 'chink', 'tranny', 'whore', 'slut', 'dumbass',
+]);
+const ABUSE_PHRASES = [
+  'kill yourself', 'kill urself', 'you suck', 'u suck', 'shut up', 'shut the',
+  'i hate you', 'i hate this', 'you are worthless', 'youre worthless', 'go die',
+  'piece of shit', 'hate this game', 'this game sucks', 'worst game', 'this is garbage',
+  'this is trash', 'you people', 'screw you', 'screw this',
+];
+
+// 4) Hostile negative sentiment: a negativity signal AND a target/insult signal.
+const NEGATIVE_TOKENS = ['hate', 'awful', 'terrible', 'worst', 'sucks', 'suck', 'horrible', 'disgusting', 'pathetic', 'useless', 'garbage', 'trash', 'lame', 'boring', 'broken', 'scam', 'ripoff'];
+const TARGET_TOKENS = ['you', 'youre', 'u', 'ur', 'this', 'game', 'everyone', 'devs', 'team', 'mods', 'admin', 'people'];
+
+export function screenMessage(text) {
+  const raw = String(text == null ? '' : text);
+  const collapsed = policyCollapse(raw);
+  const words = policyWords(raw);
+  const wordSet = new Set(words);
+  const lower = raw.toLowerCase();
+
+  // 1) Coin / CA / shilling.
+  if (SOL_CA_RE.test(raw) || EVM_CA_RE.test(raw)) {
+    return { ok: false, category: 'crypto', reason: 'Posting contract addresses or promoting other coins is not allowed.' };
+  }
+  if (TICKER_RE.test(raw)) {
+    return { ok: false, category: 'crypto', reason: 'Promoting or selling other coins / tickers is not allowed.' };
+  }
+  for (const w of COIN_WORD) if (wordSet.has(w) || collapsed.includes(w)) {
+    return { ok: false, category: 'crypto', reason: 'Promoting or selling other coins / memecoins is not allowed.' };
+  }
+  for (const p of COIN_PHRASES) if (lower.includes(p) || collapsed.includes(p.replace(/[^a-z]/g, ''))) {
+    return { ok: false, category: 'crypto', reason: 'Shilling other coins or projects is not allowed.' };
+  }
+
+  // 2/3) Abuse / foul language / slurs.
+  for (const w of ABUSE_WORDS) if (wordSet.has(w) || collapsed.includes(w)) {
+    return { ok: false, category: 'abuse', reason: 'Abusive or foul language is not allowed.' };
+  }
+  for (const p of ABUSE_PHRASES) if (lower.includes(p) || collapsed.includes(p.replace(/[^a-z]/g, ''))) {
+    return { ok: false, category: 'abuse', reason: 'Abuse, threats, or harassment are not allowed.' };
+  }
+
+  // 4) Hostile negative sentiment (needs both a negativity word and a target).
+  const hasNeg = NEGATIVE_TOKENS.some(t => wordSet.has(t));
+  const hasTarget = TARGET_TOKENS.some(t => wordSet.has(t));
+  if (hasNeg && hasTarget) {
+    return { ok: false, category: 'negativity', reason: 'Hostile or negative attacks on people or the game are not allowed.' };
+  }
+
+  return { ok: true };
+}
+
+// The exact, user-facing policy text shown in the UI and on suspension so
+// members always know the rule and the consequence.
+export const POLICY_NOTICE = 'Community rules: no selling or promoting other coins / contract addresses, no abuse, no foul language, no hostile negativity. Breaking these suspends you for ' + SUSPENSION_HOURS + ' hours — including game access.';
+
+
 // -------- webhook auth --------
 export function webhookSecret() {
   return envValue('TINYWORLD_COMMUNITY_WEBHOOK_SECRET');
@@ -198,6 +296,62 @@ export async function deleteRoom(sql, { roomId }) {
   if (!rows.length) return { ok: false, error: 'Room not found' };
   return { ok: true, action: 'deleteRoom', room: rows[0] };
 }
+
+// -------- suspensions (community + game access) --------
+// A suspension blocks BOTH community posting and game/world access until it
+// expires. Used by the content-policy enforcer and callable by the agent.
+export async function ensureSuspensionTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS community_suspensions (
+      id          SERIAL PRIMARY KEY,
+      profile_id  INT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      reason      TEXT NOT NULL DEFAULT '',
+      category    TEXT NOT NULL DEFAULT '',
+      created_by  INT REFERENCES profiles(id) ON DELETE SET NULL,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS community_suspensions_active_idx ON community_suspensions (profile_id, expires_at)`;
+}
+
+// Returns the active suspension row for a profile, or null. Safe if the table
+// doesn't exist yet (returns null) so it can be called from the game path.
+export async function activeSuspension(sql, profileId) {
+  try {
+    const rows = await sql`
+      SELECT id, reason, category, expires_at
+      FROM community_suspensions
+      WHERE profile_id = ${profileId} AND expires_at > NOW()
+      ORDER BY expires_at DESC
+      LIMIT 1
+    `;
+    return rows[0] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Create a suspension lasting `hours` (default SUSPENSION_HOURS). Returns the row.
+export async function suspendMember(sql, { profileId, hours = SUSPENSION_HOURS, reason = '', category = '', actorProfileId = null }) {
+  await ensureSuspensionTable(sql);
+  const expires = banExpiry(Date.now(), hours) || new Date(Date.now() + SUSPENSION_HOURS * 3600 * 1000);
+  const rows = await sql`
+    INSERT INTO community_suspensions (profile_id, reason, category, created_by, expires_at)
+    VALUES (${profileId}, ${String(reason || '').slice(0, 300)}, ${String(category || '').slice(0, 40)}, ${actorProfileId}, ${expires})
+    RETURNING id, profile_id, reason, category, expires_at, created_at
+  `;
+  return rows[0];
+}
+
+// Lift all active suspensions for a profile (agent/admin action).
+export async function unsuspendMember(sql, { target }) {
+  const profile = await resolveProfile(sql, target);
+  if (!profile) return { ok: false, error: 'Member not found' };
+  await sql`UPDATE community_suspensions SET expires_at = NOW() WHERE profile_id = ${profile.id} AND expires_at > NOW()`;
+  return { ok: true, action: 'unsuspend', profileId: profile.id, username: profile.username };
+}
+
 
 // -------- outbound: notify Hermes of community events --------
 // Fire-and-forget POST to the configured Hermes webhook URL. Never throws — a

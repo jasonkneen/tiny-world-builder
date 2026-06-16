@@ -32,7 +32,14 @@ backend:
   in `ensureTables`; migration `20260615020000_add_profile_socials.sql`).
   Bootstrap returns `me.profileComplete`; the page shows a forced
   "Complete your profile" modal until Twitter is set and renders both handles on
-  profile cards. `community.html` signs users in **in-page** (no bounce to the
+  profile cards. Members can fully **edit their profile** (display name, bio,
+  avatar, handles) via `saveProfile` (alias `saveSocials`). Avatars are an
+  **allowlisted preset set** under `assets/avatars/*.png` (keys in
+  `AVATAR_KEYS`) — no user image uploads, so no NSFW image risk. All
+  user-authored text (display name + bio) is run through `checkTextSafety`,
+  a two-layer filter (hard substrings + whole-word, leet/spacing-normalized)
+  that rejects sexual / nudity / abusive / hateful content. Tested in
+  `tests/community-profile.test.mjs`. `community.html` signs users in **in-page** (no bounce to the
   builder): it loads `vendor/tinyworld-auth.js` via the import map for Netlify
   Identity email login/signup and calls `/api/wallet` for Phantom login, storing
   the session under the shared `tinyworld:auth:wallet-session.v1` key.
