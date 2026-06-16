@@ -998,6 +998,38 @@
   // can drive even an unattended browser.
   setTimeout(connectSseRelay, 0);
 
+  const TINYVERSE_DEFAULT_SLUG = 'mixed-hollow';
+
+  // True when ?world= names a Tinyverse published-world slug (e.g. mixed-hollow)
+  // rather than a freeform JSON URL/path or inline world blob.
+  function isTinyverseSlugParam(raw) {
+    return typeof raw === 'string' && /^[a-z0-9][a-z0-9-]{0,47}$/.test(raw.trim().toLowerCase());
+  }
+
+  // Slug for ?world=<slug> demo entry into Tinyverse. Returns null when the
+  // param is absent or reserved for freeform world loading.
+  function getTinyverseSlugParam() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      if (!params.has('world')) {
+        const hash = String(window.location.hash || '').replace(/^#\??/, '');
+        if (!hash || !hash.includes('=')) return null;
+        const hashParams = new URLSearchParams(hash);
+        if (!hashParams.has('world')) return null;
+        const hashWorld = hashParams.get('world');
+        if (hashWorld == null || !String(hashWorld).trim()) return TINYVERSE_DEFAULT_SLUG;
+        const trimmed = String(hashWorld).trim();
+        if (isInlineWorldParam(trimmed) || !isTinyverseSlugParam(trimmed)) return null;
+        return trimmed.toLowerCase();
+      }
+      const raw = params.get('world');
+      if (raw == null || !String(raw).trim()) return TINYVERSE_DEFAULT_SLUG;
+      const trimmed = String(raw).trim();
+      if (isInlineWorldParam(trimmed) || !isTinyverseSlugParam(trimmed)) return null;
+      return trimmed.toLowerCase();
+    } catch (_) { return null; }
+  }
+
   // Raw ?world= value (query string, falling back to hash). Lifted from fork
   // yuxiaoli (60d6e89/b8c3364) and reshaped for our async-safe boot.
   function getWorldUrlParam() {
@@ -1019,9 +1051,14 @@
           world = hashParams.get('world');
         }
       }
+      if (world != null && (isTinyverseSlugParam(world) || !String(world).trim())) {
+        return null;
+      }
       return world;
     } catch (_) { return null; }
   }
+
+  window.__tinyworldTinyverseSlugParam = getTinyverseSlugParam;
 
   // True when ?world= holds inline JSON rather than a URL to fetch.
   function isInlineWorldParam(raw) {

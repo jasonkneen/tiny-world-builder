@@ -63,6 +63,7 @@
 
     tickStart = repaintProfileBegin();
     tickVehicles(dt);
+    if (window.__tinyworldRaceTrack && typeof window.__tinyworldRaceTrack._tick === 'function') window.__tinyworldRaceTrack._tick(dt);
     repaintProfileEnd('tick.vehicles', tickStart);
 
     tickStart = repaintProfileBegin();
@@ -157,6 +158,15 @@
     repaintProfileEnd('tick.runtime', tickStart);
 
     if (window.tickFlight) window.tickFlight(dt);
+    // CCTV/Truman feeds capture to their render targets BEFORE the main render so
+    // the freshly-captured surveillance picture appears in the same frame.
+    if (window.__tinyworldCCTV && typeof window.__tinyworldCCTV.tick === 'function') {
+      try { window.__tinyworldCCTV.tick(t, dt); } catch (_) {}
+    }
+    // Lobby presentation screen: auto-advance slides and cut to the hottest cam feed.
+    if (window.__tinyworldLobby && typeof window.__tinyworldLobby.tick === 'function') {
+      try { window.__tinyworldLobby.tick(t, dt); } catch (_) {}
+    }
     renderScene();
   }
 

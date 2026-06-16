@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><title>hooded proof</title>
+<style>html,body{margin:0;background:#9aa7b8}#row{display:flex;gap:0;flex-wrap:nowrap}canvas{display:block}span.lbl{position:absolute;color:#fff;font:bold 13px monospace;padding:4px;text-shadow:0 1px 2px #000}</style></head>
+<body><div id="row"></div>
+<script src="vendor/three/three.r128.min.js"></script>
+<script src="engine/world/53-voxel-avatar.js"></script>
+<script>
+const W=320,H=560, DPR=1;
+const VIEWS=[
+  {name:'front', ang:0},
+  {name:'3q', ang:Math.PI*0.22},
+  {name:'back', ang:Math.PI},
+  {name:'left-profile', ang:-Math.PI/2},
+];
+const row=document.getElementById('row');
+const diag={threeLoaded: typeof THREE!=='undefined', avatarFn: typeof window.makeVoxelAvatar==='function', views:[]};
+for(const v of VIEWS){
+  const wrap=document.createElement('div'); wrap.style.position='relative'; row.appendChild(wrap);
+  const cv=document.createElement('canvas');
+  cv.width=W*DPR; cv.height=H*DPR; cv.style.width=W+'px'; cv.style.height=H+'px';
+  wrap.appendChild(cv);
+  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+  renderer.setPixelRatio(DPR); renderer.setSize(W,H,false); renderer.setClearColor(0x9aa7b8,1);
+  const scene=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(30,W/H,0.01,100);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x5a6680,1.15));
+  const dir=new THREE.DirectionalLight(0xffffff,1.05); dir.position.set(2,4,3); scene.add(dir);
+  const av=window.makeVoxelAvatar({fit:'HoodedRogue',seed:99,body:'Masc',skin:1,height:1,build:0,gear:'None'});
+  scene.add(av.group);
+  const box=new THREE.Box3().setFromObject(av.group);
+  const c=box.getCenter(new THREE.Vector3());
+  const r=0.6, midY=c.y;
+  cam.position.set(Math.sin(v.ang)*r, midY*1.05, Math.cos(v.ang)*r);
+  cam.lookAt(0, midY*0.9, 0);
+  for(let i=0;i<16;i++) av.update(0.05);
+  renderer.render(scene,cam);
+  // pixel readback: count non-background pixels to prove geometry rendered
+  const gl=renderer.getContext();
+  const px=new Uint8Array(W*H*4);
+  gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,px);
+  let nonBg=0, darkHood=0, brownTunic=0;
+  for(let i=0;i<px.length;i+=4){
+    const rr=px[i],gg=px[i+1],bb=px[i+2];
+    // background is ~ (154,167,184)
+    if(Math.abs(rr-154)>16||Math.abs(gg-167)>16||Math.abs(bb-184)>16) nonBg++;
+    if(rr<70&&gg<70&&bb<80) darkHood++;            // near-black hood/cloak
+    if(rr>110&&rr<170&&gg>70&&gg<120&&bb<90) brownTunic++; // leather tunic browns
+  }
+  diag.views.push({name:v.name, nonBg, darkHood, brownTunic, total:W*H});
+  const lbl=document.createElement('span'); lbl.className='lbl'; lbl.textContent=v.name; wrap.appendChild(lbl);
+}
+window.__diag=diag;
+document.title='DIAG '+JSON.stringify(diag);
+window.__ready=true;
+</script></body></html>

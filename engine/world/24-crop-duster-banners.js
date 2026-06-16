@@ -309,6 +309,7 @@
       /^tinyworld:auth:/,                // account/session credentials
       /^tinyworld:ai:prompt$/,           // user prompt text
       /^tinyworld:vehicle-demo:/,        // session-only demo state
+      /^tinyworld:multiplayer:avatar-voxel/, // per-user Tinyverse voxel avatar identity
       /^tinyworld:audio:music-track$/,   // per-user manual music choice
       /^tinyworld:audio:music-mode$/,    // random vs manual music mode
       /^tinyworld:welcome:dismissedId$/, // per-user welcome dismissal

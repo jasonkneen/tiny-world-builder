@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
   <link rel="stylesheet" href="styles/tiny-world.css">
+<script src="engine/world/00-custom-confirm.js"></script>
 <script type="text/javascript">
   // AI interfaces are a dev/flagged feature. Production hosts default to no
   // prompt boxes, Generate buttons, Auto/AI settings, or floating agent UI.
@@ -244,6 +245,16 @@
   <div class="unsaved-banner" id="unsaved-banner" hidden>
     <span class="dot" aria-hidden="true"></span>
     <span id="unsaved-banner-text" data-i18n="unsaved.banner">Areas outside your home grid aren't saved</span>
+  </div>
+
+  <!-- Top-right chrome: sign out + back to the marketing landing page. -->
+  <div id="top-corner-chrome" class="top-corner-chrome">
+    <button type="button" id="auth-logout-btn" class="corner-chrome-btn" data-pos-type="neutral" data-tooltip="Sign out" aria-label="Sign out" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+    </button>
+    <button type="button" id="landing-home-btn" class="corner-chrome-btn" data-pos-type="neutral" data-tooltip="Home" aria-label="Back to the home page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>
+    </button>
   </div>
 
   <button type="button" id="sound-icon" class="sound-icon" data-pos-type="neutral" data-tooltip="Sound" data-i18n-tooltip="sound.toggle" aria-label="Sound controls" aria-expanded="false" aria-controls="sound-panel">
@@ -776,7 +787,7 @@
       <h1 class="sr-only" id="welcome-title">Tiny World Builder</h1>
       <img class="welcome-logo" src="assets/twlogo.png" alt="Tiny World Builder" width="1254" height="1254">
       <div class="welcome-actions" aria-label="Choose mode">
-        <button class="welcome-mode-btn welcome-tinyverse is-soon" id="welcome-tinyverse" type="button" data-pos-type="primary" disabled aria-disabled="true">Tinyverse</button>
+        <button class="welcome-mode-btn welcome-tinyverse" id="welcome-tinyverse" type="button" data-pos-type="primary">Tinyverse</button>
         <button class="welcome-mode-btn welcome-battleworlds is-soon" id="welcome-battleworlds" type="button" data-pos-type="shield" disabled aria-disabled="true">Battleworlds</button>
         <button class="welcome-mode-btn welcome-build" id="welcome-build" type="button" data-pos-type="tertiary">Build</button>
         <button class="welcome-mode-btn welcome-play" id="welcome-play" type="button" data-pos-type="terrain">Play</button>
@@ -1678,6 +1689,20 @@
   <script defer src="engine/world/50-worlds-play-chat.js"></script>
   <script defer src="engine/world/51-worlds-bots.js"></script>
   <script defer src="engine/world/52-worlds-demo-seed.js"></script>
+  <script defer src="engine/world/53-voxel-avatar.js"></script>
+  <script defer src="engine/world/54-fly-down.js"></script>
+  <script defer src="engine/world/55-stargate.js"></script>
+  <script defer src="engine/world/56-gate-transit.js"></script>
+  <script defer src="engine/world/57-poser-surface.js"></script>
+  <script defer src="engine/world/58-lobby-presentation.js"></script>
+  <script defer src="engine/world/59-gate-travel-fx.js"></script>
+  <script defer src="engine/world/60-skyfall.js"></script>
+  <!-- 61-tinyverse-race-track.js intentionally not loaded: rally disabled, focus on core multiplayer -->
+  <script defer src="engine/world/62-cctv-truman.js"></script>
+  <script defer src="engine/world/63-cctv-placement.js"></script>
+  <script defer src="engine/world/64-lobby-chat-bridge.js"></script>
+  <script defer src="engine/world/65-lobby-benches.js"></script>
+  <script defer src="engine/world/66-lobby-admin.js"></script>
   <script defer src="engine/world/99-late-boot.js"></script>
 </body>
 </html>

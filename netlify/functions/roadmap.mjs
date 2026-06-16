@@ -11,12 +11,21 @@ const FALLBACK_MILESTONES = [
   { id: 4, status: 'done',    title: '3D model import',      description: 'Drag-drop GLB, FBX, OBJ, MagicaVoxel VOX, and VDB frame-sequence files directly into the scene.', sort_order: 40 },
   { id: 5, status: 'done',    title: 'Multiplayer rooms',    description: 'Join a world room via PartyKit. See other players as sprites and chat in real time.', sort_order: 50 },
   { id: 6, status: 'done',    title: 'Performance pass',     description: 'Shadow cadence at 30 Hz, scoped frustum culling, and static engine batching cut draw calls by 42%.', sort_order: 60 },
+  { id: 13, status: 'done',   title: 'Voxel avatars',        description: 'Per-player humanoid voxel characters with a procedural walk cycle replace the old 2.5D sprite billboards in worlds rooms.', sort_order: 65 },
   { id: 7, status: 'active',  title: 'Battleworlds',         description: 'PvP arena mode built on top of the Tinyverse infrastructure.', sort_order: 70 },
   { id: 8, status: 'active',  title: 'Mesh bake',            description: 'Merge static ground tiles into region draw calls for a further 70% reduction in render overhead.', sort_order: 80 },
   { id: 9, status: 'active',  title: 'Day / night cycle',    description: 'Wire atmosphere time-progression to a UI scrubber and real-time sky colour transitions.', sort_order: 90 },
+  { id: 14, status: 'active', title: 'Networked avatar identity', description: 'Send a per-player voxel avatar descriptor through join + presence so peers and bots render their own skin instead of the local default.', sort_order: 95 },
   { id: 10, status: 'planned', title: 'Pets',                description: 'Companion animals that follow your avatar and can be customised via the open-pets provider system.', sort_order: 100 },
   { id: 11, status: 'planned', title: 'World marketplace',   description: 'Browse, buy, and remix worlds created by the community directly from the tinyverse map.', sort_order: 110 },
   { id: 12, status: 'planned', title: 'Mobile',              description: 'Touch-first controls and a responsive layout so worlds can be built on any device.', sort_order: 120 },
+  { id: 15, status: 'planned', title: 'Fly down to the surface', description: 'Descend from the floating islands to the sea-covered planet below — planet-aware flight collision, altitude-scaled camera, and a cloud-sea transition to land and splash down.', sort_order: 130 },
+  { id: 16, status: 'planned', title: 'Settlements & voxel NPCs', description: 'Procedural land-island settlements on the planet surface populated with wandering voxel survivors who offer scavenge, trade, and artifact quests.', sort_order: 140 },
+  { id: 17, status: 'planned', title: 'Crafting & inventory', description: 'An inventory item table, recipes, and an atomic resource-spend path so gathered resources can be crafted and spent on resource-gated building.', sort_order: 150 },
+  { id: 18, status: 'planned', title: 'Server-authoritative battles', description: 'A dedicated battle-room type with server-owned HP, hit validation, kills, respawn, scoring, teams, and match lifecycle.', sort_order: 160 },
+  { id: 19, status: 'planned', title: 'Community hub',       description: 'A lightweight Discord-style space: text rooms, direct messages, a member directory with profiles and avatars, invites, and moderation (rate limiting, blocking, timed bans).', sort_order: 170 },
+  { id: 20, status: 'planned', title: 'Voice chat',          description: 'Proximity and party voice chat inside world rooms, built on the existing LiveKit token infrastructure.', sort_order: 180 },
+  { id: 21, status: 'planned', title: 'Multi-agentic NPCs',  description: 'AI-driven agents inhabiting settlements and worlds as first-class voxel actors with their own behaviour, via the existing agent-generation seam.', sort_order: 190 },
 ];
 
 function envValue(name) {
@@ -58,16 +67,33 @@ async function ensureTable(sql) {
 }
 
 async function seedTable(sql) {
-  const existing = await sql`SELECT COUNT(*)::int AS n FROM roadmap_milestones`;
-  if (Number(existing[0].n) > 0) return;
+  // Additive seeding: insert any fallback milestone whose title is not already
+  // present (case-insensitive). On a fresh table this seeds the full set with
+  // their canonical ids; on an already-populated table it only adds the
+  // newly-harvested milestones, leaving curated/edited rows untouched.
+  const existing = await sql`SELECT LOWER(title) AS title FROM roadmap_milestones`;
+  const have = new Set(existing.map(r => r.title));
+  const fresh = existing.length === 0;
   for (const m of FALLBACK_MILESTONES) {
-    await sql`
-      INSERT INTO roadmap_milestones (id, status, title, description, sort_order)
-      VALUES (${m.id}, ${m.status}, ${m.title}, ${m.description}, ${m.sort_order})
-      ON CONFLICT DO NOTHING
-    `;
+    if (have.has(m.title.toLowerCase())) continue;
+    if (fresh) {
+      await sql`
+        INSERT INTO roadmap_milestones (id, status, title, description, sort_order)
+        VALUES (${m.id}, ${m.status}, ${m.title}, ${m.description}, ${m.sort_order})
+        ON CONFLICT DO NOTHING
+      `;
+    } else {
+      // Let the sequence assign a fresh id so we never collide with an
+      // existing curated row that happens to occupy this fallback id.
+      await sql`
+        INSERT INTO roadmap_milestones (status, title, description, sort_order)
+        VALUES (${m.status}, ${m.title}, ${m.description}, ${m.sort_order})
+        ON CONFLICT DO NOTHING
+      `;
+    }
   }
-  await sql`SELECT setval('roadmap_milestones_id_seq', (SELECT MAX(id) FROM roadmap_milestones))`;
+  // Keep the sequence ahead of any explicitly-inserted ids.
+  await sql`SELECT setval('roadmap_milestones_id_seq', GREATEST((SELECT COALESCE(MAX(id), 1) FROM roadmap_milestones), 1))`;
 }
 
 function milestoneDto(row) {

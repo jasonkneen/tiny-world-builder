@@ -159,6 +159,42 @@
     return _flSurfaceCandidates;
   }
 
+  // Planet (sea+land) surface height in SCENE space at a scene XZ. The planet
+  // underlay (module 27) is a worldGroup child scaled 1/25 and dropped by
+  // planetLandscapeConfig.drop, sampled by the streaming LandscapeEngine. We map
+  // scenePos -> engine world coords with the SAME formula as landscapeMeshFocusPos
+  // (the focus mapping, NOT landscapeHeightAtCell's cell mapping), then back to
+  // scene Y. Returns { surfaceY, isWater } or null when no planet is active.
+  // WATER_LEVEL is an instance property on the engine, not a shared global.
+  const _flPlanetSurface = { surfaceY: 0, isWater: false };
+  function flightPlanetSurfaceAtScene(scenePos) {
+    if (typeof isPlanetLandscapeActive !== 'function' || !isPlanetLandscapeActive()) return null;
+    if (typeof planetLandscapeEngine === 'undefined' || !planetLandscapeEngine) return null;
+    if (typeof LANDSCAPE_MESH_SCALE !== 'number' || typeof LANDSCAPE_MESH_OFFSET !== 'number') return null;
+    const drop = (planetLandscapeConfig && Number.isFinite(Number(planetLandscapeConfig.drop)))
+      ? Number(planetLandscapeConfig.drop)
+      : (typeof PLANET_LANDSCAPE_DROP === 'number' ? PLANET_LANDSCAPE_DROP : 100);
+    const engineX = (scenePos.x + LANDSCAPE_MESH_OFFSET + GRID / 2 - 0.5) * 25;
+    const engineZ = (scenePos.z + LANDSCAPE_MESH_OFFSET + GRID / 2 - 0.5) * 25;
+    const eh = planetLandscapeEngine.getHeight(engineX, engineZ);
+    if (!Number.isFinite(eh)) return null;
+    const terrainSceneY = eh * LANDSCAPE_MESH_SCALE - drop;
+    const waterLevel = Number.isFinite(planetLandscapeEngine.WATER_LEVEL) ? planetLandscapeEngine.WATER_LEVEL : 4.0;
+    const waterSceneY = waterLevel * LANDSCAPE_MESH_SCALE - drop;
+    if (waterSceneY >= terrainSceneY) {
+      _flPlanetSurface.surfaceY = waterSceneY;
+      _flPlanetSurface.isWater = true;
+    } else {
+      _flPlanetSurface.surfaceY = terrainSceneY;
+      _flPlanetSurface.isWater = false;
+    }
+    return _flPlanetSurface;
+  }
+
+  // Below this scene-Y the plane has dropped past the island layer and the
+  // planet surface (if active) becomes the relevant ground/sea to test.
+  const FLIGHT_PLANET_LAYER_Y = -2;
+
   function flightSurfaceAtScene(scenePos) {
     if (typeof cellMeshes === 'undefined' || typeof getWorldCell !== 'function') return null;
     let hit = null;
@@ -185,6 +221,28 @@
       if (scenePos.z < _flcolBox.min.z - 0.08 || scenePos.z > _flcolBox.max.z + 0.08) continue;
       if (_flcolBox.max.y > (hit ? hit.surfaceY : -Infinity)) {
         hit = { surfaceY: _flcolBox.max.y, terrainY, objectY: _flcolBox.max.y, objectKind: cell.kind || 'object', x, z };
+      }
+    }
+    // Planet surface: when the plane has dropped below the island layer and the
+    // planet underlay is active, fold in the procedural sea/land height so the
+    // plane can fly low over, land on, or splash into the planet. The planet
+    // sits well below the islands, so it only becomes the effective ground when
+    // it is the highest surface under the plane (i.e. over open planet, not when
+    // a home/island cell or object is directly above it).
+    if (scenePos.y < FLIGHT_PLANET_LAYER_Y) {
+      const planet = flightPlanetSurfaceAtScene(scenePos);
+      if (planet && planet.surfaceY > (hit ? hit.surfaceY : -Infinity)) {
+        hit = {
+          surfaceY: planet.surfaceY,
+          terrainY: planet.surfaceY,
+          objectY: -Infinity,
+          // Water is a soft splash (not a hard object collision); land is plain
+          // terrain so normal landing/rolling logic applies.
+          objectKind: null,
+          isPlanetWater: planet.isWater,
+          x: null,
+          z: null,
+        };
       }
     }
     return hit;

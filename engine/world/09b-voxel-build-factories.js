@@ -835,22 +835,24 @@
   }
 
   function voxelInvertedSteppedRoof(parent, width, depth, topY, roofMat = M.islandUnder, trimMat = M.islandUnderD, layersOverride = 0) {
-    const autoLayers = Math.max(7, Math.min(14, Math.round(Math.max(width, depth) * 0.65)));
-    const autoDrop = Math.max(1.85, Math.min(6.2, Math.max(width, depth) * 0.30));
-    const yStepBase = autoDrop / autoLayers; // per-row height, kept constant so fewer rows = shorter pyramid
+    const autoLayers = 7;
+    const autoDrop = Math.max(1.65, Math.min(4.2, Math.max(width, depth) * 0.20));
+    const yStepBase = autoDrop / autoLayers; // per-row height; explicit rows add/remove rows without stretching
     const layers = (layersOverride && layersOverride >= 2) ? Math.max(2, Math.min(20, Math.round(layersOverride))) : autoLayers;
-    const totalDrop = yStepBase * layers;
     const yStep = yStepBase;
     const layerH = yStep * 1.08;
     for (let i = 0; i < layers; i++) {
       const t = i / Math.max(1, layers - 1);
-      const w = Math.max(0.36, width * (1 - t * 0.78));
-      const d = Math.max(0.36, depth * (1 - t * 0.78));
+      const taper = 0.56; // full-width top → broad 44% bottom; never a point
+      const w = Math.max(0.36, width * (1 - t * taper));
+      const d = Math.max(0.36, depth * (1 - t * taper));
       const y = topY - i * yStep - layerH * 0.5;
       const mat = i % 3 === 0 ? trimMat : roofMat;
       vbox(parent, w, layerH, d, 0, y, 0, mat, { noGap: true, skipTop: true });
     }
-    vbox(parent, Math.max(0.30, width * 0.10), layerH * 1.1, Math.max(0.30, depth * 0.10), 0, topY - totalDrop - layerH * 0.55, 0, trimMat, { noGap: true, skipTop: true });
+    // No tiny terminal nub: the loop above is the complete stepped underside, so
+    // a 7-row lobby island visibly has exactly seven broad steps instead of
+    // tapering into an extra sharp point.
   }
 
   function makeBlankIsland() {
@@ -1505,14 +1507,11 @@
     };
   }
 
-  // Effective step/layer count for a pyramid: the explicit `rows` if set, else
-  // the count auto-derived from its footprint (matching the original look).
+  // Effective step/layer count for a pyramid: explicit `rows` if set, otherwise
+  // the new lobby default of seven broad underside steps.
   function editableIslandPyramidEffectiveRows(pyramidState) {
     if (pyramidState && pyramidState.rows >= 2) return Math.max(2, Math.min(20, Math.round(pyramidState.rows)));
-    const span = GRID * TILE;
-    const w = (pyramidState && pyramidState.width > 0) ? pyramidState.width : span;
-    const d = (pyramidState && pyramidState.depth > 0) ? pyramidState.depth : span;
-    return Math.max(7, Math.min(14, Math.round(Math.max(w, d) * 0.65)));
+    return 7;
   }
 
   // Default = one pyramid reproducing today's baked underside. Old saves with no

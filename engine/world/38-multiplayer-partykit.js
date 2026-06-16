@@ -7,6 +7,7 @@
     if (!roomId) return;
 
     const MP_CLIENT_ID_LS = 'tinyworld:multiplayer:client-id';
+    const MP_CONN_SS_PREFIX = 'tinyworld:multiplayer:conn:';
     const MP_NAME_LS = 'tinyworld:multiplayer:name';
     const MP_HOST_LS = 'tinyworld:multiplayer:party-host';
     const peers = new Map();
@@ -126,10 +127,22 @@
       }
     })();
 
-    // Stable per-page connection token. Passed as PartyKit's _pk so conn.id is
-    // reused across WS reconnects (server re-admits a returning member from its
-    // seat memory). Unique per tab (random suffix) so two tabs don't collide.
-    const connToken = localClientId + '-' + Math.random().toString(36).slice(2, 8);
+    // Stable per-tab connection token keyed by roomId. Passed as PartyKit's _pk
+    // so conn.id is reused across WS reconnects AND page reloads (server re-admits
+    // a returning member from its seat memory). sessionStorage keeps it for this
+    // tab+room without colliding across rooms or other tabs.
+    const connToken = (() => {
+      const key = MP_CONN_SS_PREFIX + roomId;
+      try {
+        const existing = sessionStorage.getItem(key);
+        if (existing) return existing;
+        const next = localClientId + '-' + Math.random().toString(36).slice(2, 8);
+        sessionStorage.setItem(key, next);
+        return next;
+      } catch (_) {
+        return localClientId + '-' + Math.random().toString(36).slice(2, 8);
+      }
+    })();
 
     function sanitizeMultiplayerId(value) {
       return String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -185,6 +198,17 @@
       } catch (_) {}
       if (window.TinyWorldAuth && window.__loggedIn) return 'Builder';
       return 'Guest ' + localClientId.slice(-4).toUpperCase();
+    }
+
+    function ensureLocalName() {
+      try {
+        if ((localStorage.getItem(MP_NAME_LS) || '').trim()) return;
+      } catch (_) {}
+      const entered = window.prompt('Your name in this shared room:', '');
+      if (!entered) return;
+      const name = String(entered).trim().slice(0, 48);
+      if (!name) return;
+      try { localStorage.setItem(MP_NAME_LS, name); } catch (_) {}
     }
 
     function ensureStatus() {
@@ -1893,5 +1917,6 @@
       sendChat,
     };
 
+    ensureLocalName();
     connect();
   })();

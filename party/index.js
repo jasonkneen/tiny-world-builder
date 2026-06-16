@@ -68,6 +68,9 @@ const RATE_LIMITS = {
   'harvest.start': { refill: 3, burst: 6 },
   'harvest.cancel': { refill: 3, burst: 6 },
   'world.join': { refill: 2, burst: 4 },
+  'world.avatar': { refill: 2, burst: 4 },
+  // Lobby presentation: a presenter advancing slides is human-paced, like chat.
+  present: { refill: 4, burst: 10 },
 };
 
 function takeToken(buckets, type, now) {
@@ -131,6 +134,86 @@ function cleanSelection(value) {
       z: Math.round(cleanNumber(cell.z)),
     };
   }).filter(Boolean);
+}
+
+// Validate an UNTRUSTED networked voxel-avatar descriptor (client -> server ->
+// other clients). Security boundary: whitelist fields, clamp the seed, reject
+// anything not a 'voxel' descriptor or with any out-of-domain look field.
+//
+// Contract: PASS-THROUGH-VALID or NULL — never keep-some-drop-others. The client's
+// deriveCfg (engine/world/53-voxel-avatar.js) fills unset look fields from the seed
+// via SHORT-CIRCUIT PRNG calls, so a partially-stripped descriptor would RESHUFFLE
+// every later field and make a peer render a coherent-but-WRONG look. Returning null
+// instead lets the peer fall back to its id-seed (a clean, distinct look).
+//
+// Field domains MUST mirror 53-voxel-avatar.js (no shared import across client/server):
+//   body  : 'Masc' | 'Fem'
+//   skin  : int 0..4   (SKINS.length === 5)
+//   hairC : int 0..6   (HAIRC.length === 7)
+//   hair  : one of HAIRS
+//   fit   : one of OUTFIT_KEYS
+//   head  : 'Wide' | 'Slim'
+//   height: number 0.84..1.22
+//   build : int -2..2
+//   gear  : one of GEARS
+const VOXEL_HAIRS = ['Buzz', 'Short', 'Spike', 'Mohawk', 'Curls', 'Page', 'Bob', 'Tail', 'Knot', 'Bald'];
+const VOXEL_OUTFITS = ['Casual', 'Formal', 'Scout', 'Sport', 'Rogue', 'Barbarian', 'Knight', 'Archer', 'Mage', 'Miner', 'Skyfarer', 'HoodedRogue'];
+const VOXEL_GEARS = ['None', 'Sword', 'Bow', 'Shield', 'SwordShield', 'Axe', 'Staff', 'Pickaxe'];
+function avatarSeedFromId(id) {
+  const s = String(id == null ? 'player' : id);
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+function defaultAvatarForId(id) {
+  return { kind: 'voxel', seed: avatarSeedFromId(id) };
+}
+function cleanAvatar(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  if (input.kind !== 'voxel') return null;
+  // Cap object size — an honest descriptor has <= 11 keys; reject obvious bloat.
+  if (Object.keys(input).length > 12) return null;
+  const out = { kind: 'voxel' };
+  // seed: always keep, coerced to a finite non-negative int (uint32).
+  const seedN = Number(input.seed);
+  out.seed = Number.isFinite(seedN) ? (seedN >>> 0) : 0;
+  // Each optional look field: validate IF PRESENT; any present-and-invalid => reject whole.
+  const intInRange = (v, max) => { const n = Number(v); return Number.isInteger(n) && n >= 0 && n < max ? n : undefined; };
+  const signedIntInRange = (v, min, max) => { const n = Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : undefined; };
+  if (Object.prototype.hasOwnProperty.call(input, 'body')) {
+    if (input.body !== 'Masc' && input.body !== 'Fem') return null;
+    out.body = input.body;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'skin')) {
+    const v = intInRange(input.skin, 5); if (v === undefined) return null; out.skin = v;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'hairC')) {
+    const v = intInRange(input.hairC, 7); if (v === undefined) return null; out.hairC = v;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'hair')) {
+    if (!VOXEL_HAIRS.includes(input.hair)) return null; out.hair = input.hair;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'fit')) {
+    if (!VOXEL_OUTFITS.includes(input.fit)) return null; out.fit = input.fit;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'head')) {
+    if (input.head !== 'Wide' && input.head !== 'Slim') return null; out.head = input.head;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'height')) {
+    const n = Number(input.height);
+    if (!Number.isFinite(n) || n < 0.84 || n > 1.22) return null;
+    out.height = Math.round(n * 100) / 100;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'build')) {
+    const v = signedIntInRange(input.build, -2, 2); if (v === undefined) return null; out.build = v;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'gear')) {
+    if (!VOXEL_GEARS.includes(input.gear)) return null; out.gear = input.gear;
+  }
+  return out;
 }
 
 function cleanPresence(input, fallbackId) {
@@ -375,7 +458,7 @@ function deriveWorldState(data, rng = Math.random) {
       const c = byXZ.get(x + ',' + z);
       const terrain = c ? cellTerrain(c) : 'grass';
       const kind = c ? cellKind(c) : null;
-      if (terrain === 'water' || terrain === 'lava' || terrain === 'stone') continue;
+      if (terrain === 'lava' || terrain === 'stone') continue;   // water is now walkable (players cross it)
       if (kind && blockedKinds.has(kind)) continue;
       grassCells.push(x + ',' + z);
     }
@@ -889,7 +972,7 @@ export default class TinyWorldParty {
     let p = this.players.get(id);
     if (!p) {
       const spawn = this.safeSpawn();
-      p = { x: spawn.x, z: spawn.z, hearts: HEART_MAX, lastRegenAt: Date.now(), cooldowns: {}, profileId: null, role: 'observe', name: 'Builder', color: '#3c82f7', busyUntil: 0, busyNode: null, busyAction: null, busySeq: 0 };
+      p = { x: spawn.x, z: spawn.z, hearts: HEART_MAX, lastRegenAt: Date.now(), cooldowns: {}, profileId: null, role: 'observe', name: 'Builder', color: '#3c82f7', avatar: defaultAvatarForId(id), busyUntil: 0, busyNode: null, busyAction: null, busySeq: 0 };
       this.players.set(id, p);
     }
     const reg = heartsNow(p.hearts, p.lastRegenAt, Date.now());
@@ -900,7 +983,7 @@ export default class TinyWorldParty {
 
   presenceFor(id) {
     const p = this.getPlayer(id);
-    return { id, name: p.name, color: p.color, cursor: { x: p.x, y: 0, z: p.z }, hearts: p.hearts, role: p.role };
+    return { id, name: p.name, color: p.color, cursor: { x: p.x, y: 0, z: p.z }, hearts: p.hearts, role: p.role, avatar: p.avatar || null };
   }
 
   nodeWire(nodeId) {
@@ -917,10 +1000,13 @@ export default class TinyWorldParty {
       type: 'world.state',
       gridSize: this.worldState ? this.worldState.gridSize : 8,
       taxPercent: this.world ? this.world.taxPercent : null,
-      you: { x: p.x, z: p.z, hearts: p.hearts, role: p.role },
+      you: { x: p.x, z: p.z, hearts: p.hearts, role: p.role, avatar: p.avatar || null },
       nodes,
       animals: this.animals,
       peers: Array.from(this.presence.values()).filter(pr => pr.id !== id),
+      // Standable cells, so any joiner (incl. the AI bot-runner) knows where it can
+      // walk without trial-and-error against the move validator. Bounded by grid size.
+      grassCells: this.worldState ? this.worldState.grassCells : [],
     };
   }
 
@@ -931,6 +1017,7 @@ export default class TinyWorldParty {
     if (type === 'world.join') {
       let role = 'observe';
       let profileId = null;
+      let isAdmin = false;
       const secret = this.env.WORLDS_JOIN_SECRET || this.env.WORLDS_SERVICE_TOKEN || '';
       const slug = String(this.room.id || '').slice(WORLD_ROOM_PREFIX.length);
       if (secret) {
@@ -940,8 +1027,11 @@ export default class TinyWorldParty {
         // Fail closed: a signed token must name THIS world. (Previously a
         // slug-less token was accepted on any world — a latent cross-world replay.)
         if (payload && payload.slug === slug) {
-          role = payload.r === 'play' ? 'play' : 'observe';
-          profileId = payload.r === 'play' ? (payload.p || null) : null;
+          // A signed 'build' token = a god-admin granted live-edit by the site
+          // (email-verified in /api/worlds). They move like a player AND may push
+          // live world refreshes. 'play' = a logged-in player; anything else observes.
+          if (payload.r === 'build') { role = 'play'; isAdmin = true; profileId = payload.p || null; }
+          else { role = payload.r === 'play' ? 'play' : 'observe'; profileId = payload.r === 'play' ? (payload.p || null) : null; }
           if (payload.w) await this.ensureWorldLoaded(payload.w);
         }
         if (!this.worldState && data.worldId) await this.ensureWorldLoaded(data.worldId);
@@ -951,7 +1041,8 @@ export default class TinyWorldParty {
         // No durable economy is engaged here — flushPending() is disabled in this
         // mode — so a spoofed profile only affects this room's local tallies.
         this.openMode = true;
-        role = data.role === 'observe' ? 'observe' : 'play';
+        if (data.role === 'build') { role = 'play'; isAdmin = true; }
+        else role = data.role === 'observe' ? 'observe' : 'play';
         profileId = data.profileId != null ? data.profileId : ('guest:' + id);
         if (this.siteBase() && data.worldId) await this.ensureWorldLoaded(data.worldId);
         if (!this.worldState) {
@@ -964,12 +1055,18 @@ export default class TinyWorldParty {
       const seat = this.admitted.get(id) || { role: 'observe', island: null };
       seat.role = role;
       seat.profileId = profileId;
+      seat.isAdmin = isAdmin;
       this.admitted.set(id, seat);
       const p = this.getPlayer(id);
       p.role = role;
       p.profileId = profileId;
       p.name = cleanText(data.name, 48) || p.name;
       if (/^#[0-9a-f]{6}$/i.test(String(data.color || ''))) p.color = data.color;
+      // Networked avatar identity: validate the untrusted descriptor. If a fresh
+      // visitor has not picked one yet, keep a deterministic non-null voxel default
+      // so the lobby always renders a visible player avatar immediately.
+      const av = cleanAvatar(data.avatar);
+      p.avatar = av || p.avatar || defaultAvatarForId(profileId || id);
       const spawn = this.safeSpawn();
       p.x = spawn.x; p.z = spawn.z;
       this.presence.set(id, this.presenceFor(id));
@@ -984,6 +1081,17 @@ export default class TinyWorldParty {
       const p = this.getPlayer(id);
       const nm = cleanText(data.presence && data.presence.name, 48);
       if (nm) p.name = nm;
+      this.presence.set(id, this.presenceFor(id));
+      this.broadcastToAdmitted({ type: 'presence', presence: this.presenceFor(id) }, id);
+      return;
+    }
+
+    if (type === 'world.avatar') {
+      if (!this.admitted.has(id)) return;
+      const av = cleanAvatar(data.avatar);
+      if (!av) return;
+      const p = this.getPlayer(id);
+      p.avatar = av;
       this.presence.set(id, this.presenceFor(id));
       this.broadcastToAdmitted({ type: 'presence', presence: this.presenceFor(id) }, id);
       return;
@@ -1007,11 +1115,51 @@ export default class TinyWorldParty {
       this.broadcastToAdmitted({ type: 'chat.typing', id, name: p.name, typing: data.typing === true }, id);
       return;
     }
+    if (type === 'present') {
+      // Lobby presentation control: an admitted peer advances the shared slide and
+      // the server relays the index to EVERYONE (incl. sender) so all clients show
+      // the same slide, server-ordered like chat. Just a clamped integer — no
+      // economy state — so a guest presenting only changes what's on the screen.
+      if (!this.admitted.has(id)) return;
+      const slide = Math.round(Number(data.slide));
+      if (!Number.isFinite(slide) || slide < 0 || slide > 999) return;
+      const p = this.getPlayer(id);
+      this.broadcastToAdmitted({ type: 'present', slide, id, name: p.name });
+      return;
+    }
+    if (type === 'world.refresh') {
+      // God-admin pushed a fresh live board after an authoritative adminSave. ONLY
+      // an admin seat may do this. We re-derive the room's world state from the
+      // relayed compact cells (so new harvest nodes / standable tiles take effect)
+      // and relay the cells to every OTHER client so they re-render without a
+      // reload. The DB write already happened client-side via /api/worlds adminSave;
+      // this is the live propagation channel, not the durable store.
+      const seat = this.admitted.get(id);
+      if (!seat || !seat.isAdmin) return;
+      const incoming = Array.isArray(data.cells) ? data.cells : null;
+      if (!incoming) return;
+      const gridSize = (this.worldState && this.worldState.gridSize) || Math.round(Number(data.gridSize)) || 8;
+      // Re-derive authoritative state (nodes, grass/standable, animals) from the
+      // new board, preserving world meta (id/tax/owner) already on this.world.
+      this.setWorldStateFromData({ v: 4, gridSize, cells: incoming }, this.world);
+      // Re-seat every player on a standable cell in case their tile changed.
+      for (const [, pl] of this.players) {
+        if (this.worldState.grassCells.indexOf(pl.x + ',' + pl.z) < 0) {
+          const sp = this.safeSpawn(); pl.x = sp.x; pl.z = sp.z;
+        }
+      }
+      const p = this.getPlayer(id);
+      this.broadcastToAdmitted({ type: 'world.refresh', cells: incoming, gridSize, id, name: p.name }, id);
+      // Push a fresh snapshot to everyone so nodes/presence reflect the new world.
+      for (const [pid] of this.players) this.sendTo(pid, this.worldSnapshotFor(pid));
+      return;
+    }
   }
 
   handleMove(id, data) {
     const p = this.getPlayer(id);
-    if (p.role !== 'play' || !p.profileId) return;    // observers/guests can't roam the board
+    if (p.role !== 'play' && p.role !== 'observe') return;
+    if (p.role === 'play' && !p.profileId) return;    // play requires a logged-in profile; observe guests may roam
     if (Date.now() < p.busyUntil) return;             // movement locked during a harvest
     if (!this.worldState) return;
     const to = { x: Math.round(Number(data.x)), z: Math.round(Number(data.z)) };
@@ -1280,7 +1428,7 @@ export default class TinyWorldParty {
 // tests/party.test.mjs exercise the validation / gating logic directly.
 export {
   cleanText, cleanNumber, cleanVec3, cleanCursor, cleanSelection,
-  cleanPresence, cleanCell, cleanCellSet, cleanRole, cleanIsland,
+  cleanPresence, cleanAvatar, cleanCell, cleanCellSet, cleanRole, cleanIsland,
   clampFloors, inIsland, takeToken, safeJson, RATE_LIMITS, MAX_CELL_COORD, MAX_FLOORS,
   // Worlds MMO pure helpers (authoritative game rules).
   cleanHarvestAction, actionDurationMs, isAdjacentStep, withinReach, taxSplit,

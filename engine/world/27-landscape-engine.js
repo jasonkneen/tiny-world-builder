@@ -361,6 +361,24 @@
     return !!(a && b && a.seed === b.seed && a.biome === b.biome && a.styleMode === b.styleMode);
   }
 
+  // When the player descends to the surface, drop the distant-backdrop desaturation/dim/
+  // fog so the flooded ocean + islands read crisp and colourful (voxel-poser look). On
+  // ascent, restore the backdrop look via syncPlanetAtmosphereColors().
+  function setPlanetLandscapeNearView(on) {
+    if (!planetLandscapeEngine) return;
+    if (on) {
+      const crisp = { color: planetUnderlayDistanceColor(planetLandscapeEngine), effect: 0.04, desaturate: 0.0, dim: 1.0, propOpacity: 1.0 };
+      [planetLandscapeEngine.sandMat, planetLandscapeEngine.sandMatLowPoly, planetLandscapeEngine.waterMat].forEach(mat => applyPlanetShaderDistanceMaterial(mat, crisp));
+      [planetLandscapeEngine.rockMat, planetLandscapeEngine.rockMatLowPoly, planetLandscapeEngine.floraMat, planetLandscapeEngine.floraMatLow].forEach(mat => applyPlanetBuiltInDistanceMaterial(mat, crisp));
+      if (typeof planetLandscapeEngine.setPlanetFog === 'function') planetLandscapeEngine.setPlanetFog({ enabled: false });
+      if (planetAtmosphereGroup) planetAtmosphereGroup.visible = false;
+    } else {
+      if (planetAtmosphereGroup) planetAtmosphereGroup.visible = true;
+      syncPlanetAtmosphereColors();
+    }
+  }
+  window.__setPlanetLandscapeNearView = setPlanetLandscapeNearView;
+
   function syncPlanetAtmosphereColors() {
     if (!planetAtmosphereGroup) return;
     const colors = planetAtmosphereColors();
@@ -489,6 +507,9 @@
 
   function tickPlanetLandscapeStream(dt) {
     if (!planetLandscapeEngine) return;
+    // Voxel terrain retired (poser surface replaces it): never stream chunks
+    // while the underlay group is hidden.
+    if (planetLandscapeGroup && planetLandscapeGroup.visible === false) return;
     const focus = landscapeMeshFocusPos(planetLandscapeFocusScratch);
     planetLandscapeStreamElapsed += dt;
     const nearPending = planetLandscapeEngine.pendingChunkBuilds ? planetLandscapeEngine.pendingChunkBuilds.length : 0;
@@ -558,6 +579,11 @@
       -next.drop,
       -LANDSCAPE_MESH_OFFSET - GRID / 2 + 0.5
     );
+    // The old streaming voxel terrain is retired: the planet surface is now the
+    // actual voxel-poser island/sea system (engine/world/57-poser-surface.js).
+    // We keep the engine object (atmosphere/fog code references it) but its group
+    // never renders and it never streams chunks (see tickPlanetLandscapeStream).
+    planetLandscapeGroup.visible = false;
     worldGroup.add(planetLandscapeGroup);
     planetLandscapeEngine = new window.LandscapeEngine({
       scene: planetLandscapeGroup,
@@ -565,16 +591,15 @@
       initialBiome: next.biome,
       styleMode: next.styleMode,
       airfield: false,
+      flood: { waterLevel: 150, heightScale: 0.45, freqScale: 6.0, voxel: true },   // mostly ocean + small scattered sandy islands, rendered as voxel blocks
     });
     configurePlanetLandscapeEngine(planetLandscapeEngine, next);
     resetPlanetLandscapeStreamState();
     initPlanetAtmosphere(next);
     planetLandscapeEngine.clearClipBounds();
-    // Kick enough near/far chunks to establish a broad horizon immediately,
-    // then let the normal frame loop keep streaming around camera movement.
-    for (let i = 0; i < PLANET_LANDSCAPE_PRIME_TICKS; i++) {
-      planetLandscapeEngine.update(landscapeMeshFocusPos(), 0);
-    }
+    // (No chunk priming — the voxel terrain is retired; the poser surface is the
+    // visible planet. tickPlanetLandscapeStream() also early-returns while the
+    // underlay group is hidden, so no chunks are built.)
     schedulePlanetLandscapeWarmup();
     if (document.body.classList.contains('planet-proof-active')) enablePlanetLandscapeProofChrome(next);
     lastPlanetLandscapeConfig = next;

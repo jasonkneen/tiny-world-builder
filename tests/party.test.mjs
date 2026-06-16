@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import TinyWorldParty, {
-  cleanText, cleanNumber, cleanVec3, cleanPresence, cleanCell, cleanCellSet,
+  cleanText, cleanNumber, cleanVec3, cleanPresence, cleanAvatar, cleanCell, cleanCellSet,
   cleanRole, cleanIsland, clampFloors, inIsland, takeToken, safeJson,
   RATE_LIMITS, MAX_CELL_COORD,
   cleanHarvestAction, actionDurationMs, isAdjacentStep, withinReach, taxSplit,
@@ -129,6 +129,20 @@ test('cleanPresence sanitizes name/color', () => {
   assert.equal(cleanPresence({}, 'fb').name, 'Builder', 'name defaults');
   assert.equal(cleanPresence({ color: 'red' }, 'fb').color, '#3c82f7', 'invalid color falls back');
   assert.equal(cleanPresence(null, 'fb'), null);
+});
+
+test('cleanAvatar preserves resolved voxel avatar customization fields', () => {
+  const av = cleanAvatar({
+    kind: 'voxel', seed: 123, body: 'Fem', skin: 2, hairC: 4, hair: 'Bald',
+    fit: 'Archer', head: 'Slim', height: 1.13, build: -2, gear: 'Bow',
+  });
+  assert.deepEqual(av, {
+    kind: 'voxel', seed: 123, body: 'Fem', skin: 2, hairC: 4, hair: 'Bald',
+    fit: 'Archer', head: 'Slim', height: 1.13, build: -2, gear: 'Bow',
+  });
+  assert.equal(cleanAvatar({ kind: 'voxel', seed: 1, height: 1.4 }), null, 'height range enforced');
+  assert.equal(cleanAvatar({ kind: 'voxel', seed: 1, build: 3 }), null, 'build range enforced');
+  assert.equal(cleanAvatar({ kind: 'voxel', seed: 1, gear: 'Laser' }), null, 'gear allowlist enforced');
 });
 
 test('cleanVec3 coerces to finite numbers', () => {
@@ -388,7 +402,7 @@ test('deriveWorldState: connected water => one shared fish body, ore/plant nodes
   assert.equal(state.nodes[state.cellIndex['4,2']].type, 'plant');
   assert.equal(state.stoneCount, 1);
   assert.equal(state.grassCells.indexOf('5,5'), -1, 'stone is not standable');
-  assert.equal(state.grassCells.indexOf('1,1'), -1, 'water is not standable');
+  assert.ok(state.grassCells.indexOf('1,1') >= 0, 'water is standable');
   assert.equal(state.grassCells.indexOf('3,3'), -1, 'tree blocks standing');
   assert.ok(state.grassCells.indexOf('0,0') >= 0, 'empty cells are standable grass');
 });
@@ -428,6 +442,23 @@ test('world room admits connections directly as observers (no host/lobby)', () =
   assert.equal(w.role, 'observe');
   assert.equal(w.admitted, true);
   assert.equal(party.hostId, null, 'world rooms have no host');
+});
+
+test('world.avatar updates the live presence descriptor', async () => {
+  const { party, connect } = worldSetup();
+  const p1 = connect('p1');
+  const p2 = connect('p2');
+  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 7, avatar: { kind: 'voxel', seed: 11, fit: 'Scout', gear: 'Sword' } }, p1);
+  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 8 }, p2);
+  const initial = p2.received.find(m => m.type === 'world.state');
+  assert.ok(initial.you.avatar && initial.you.avatar.kind === 'voxel', 'join with no explicit avatar still gets a visible default voxel avatar');
+  assert.equal(typeof initial.you.avatar.seed, 'number', 'default avatar seed is numeric for the voxel rig');
+  p2.received.length = 0;
+  const avatar = { kind: 'voxel', seed: 22, body: 'Fem', skin: 2, hairC: 4, hair: 'Bald', fit: 'Archer', head: 'Slim', height: 1.13, build: -2, gear: 'Bow' };
+  await party.onWorldMessage({ type: 'world.avatar', avatar }, p1);
+  const presence = p2.received.find(m => m.type === 'presence' && m.presence && m.presence.id === 'p1');
+  assert.ok(presence, 'peer receives updated presence');
+  assert.deepEqual(presence.presence.avatar, avatar);
 });
 
 test('a play harvest mines ore: heart spent, node decremented, tax-split credited', () => {
@@ -486,6 +517,49 @@ test('worldPreview emits sparse terrain/kind tuples for the card minimap', () =>
   assert.equal(worldPreview({ cells: [] }).length, 0);
 });
 
+test('god-admin world.refresh re-derives state and relays the fresh board to peers', async () => {
+  // Open mode (no WORLDS_JOIN_SECRET): a client declaring role 'build' is seated
+  // as an admin. The admin pushes a new board; the server re-derives nodes and
+  // standable tiles and relays world.refresh to every OTHER client.
+  const room = makeRoom();
+  room.id = 'world-lobby';
+  const party = new TinyWorldParty(room);
+  const admin = room.addConn('admin'); party.onConnect(admin);
+  const peer = room.addConn('peer'); party.onConnect(peer);
+  await party.onWorldMessage({ type: 'world.join', role: 'build', profileId: 1, gridSize: 8, cells: [[2, 2, 'stone']] }, admin);
+  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 2, gridSize: 8, cells: [[2, 2, 'stone']] }, peer);
+  assert.equal(party.admitted.get('admin').isAdmin, true, 'build token seats an admin');
+  assert.equal(party.admitted.get('peer').isAdmin, false, 'a plain player is not admin');
+
+  peer.received.length = 0;
+  // Admin replaces the board: move the ore to 4,4 and add a water cell at 1,1.
+  await party.onWorldMessage({ type: 'world.refresh', gridSize: 8, cells: [[4, 4, 'stone'], [1, 1, 'water']] }, admin);
+
+  // The room's authoritative world state now reflects the new board.
+  assert.ok(party.worldState.cellIndex['4,4'], 'new ore node indexed at 4,4');
+  assert.ok(!party.worldState.cellIndex['2,2'], 'old ore node at 2,2 is gone');
+  // The peer received a world.refresh carrying the new cells, then a fresh snapshot.
+  const refresh = peer.received.find(m => m.type === 'world.refresh');
+  assert.ok(refresh, 'peer receives the live world.refresh');
+  assert.deepEqual(refresh.cells, [[4, 4, 'stone'], [1, 1, 'water']]);
+  assert.ok(peer.received.some(m => m.type === 'world.state'), 'peer gets a fresh snapshot');
+});
+
+test('a non-admin world.refresh is ignored (no state change, no relay)', async () => {
+  const room = makeRoom();
+  room.id = 'world-lobby2';
+  const party = new TinyWorldParty(room);
+  const player = room.addConn('p1'); party.onConnect(player);
+  const peer = room.addConn('p2'); party.onConnect(peer);
+  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 1, gridSize: 8, cells: [[2, 2, 'stone']] }, player);
+  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 2, gridSize: 8, cells: [[2, 2, 'stone']] }, peer);
+  peer.received.length = 0;
+  await party.onWorldMessage({ type: 'world.refresh', gridSize: 8, cells: [[4, 4, 'stone']] }, player);
+  assert.ok(party.worldState.cellIndex['2,2'], 'original ore node untouched');
+  assert.ok(!party.worldState.cellIndex['4,4'], 'spoofed board NOT applied');
+  assert.equal(peer.received.some(m => m.type === 'world.refresh'), false, 'no relay to peers');
+});
+
 test('open testing mode (no join secret) seeds from client cells and lets a declared player harvest', async () => {
   const room = makeRoom();
   room.id = 'world-open';            // env has no WORLDS_JOIN_SECRET => open mode
@@ -513,19 +587,21 @@ test('movement is one standable cell at a time and locked during a harvest', () 
   assert.deepEqual({ x: party.getPlayer('p1').x, z: party.getPlayer('p1').z }, { x: 4, z: 3 }, 'one step accepted');
   party.handleMove('p1', { x: 7, z: 3 });
   assert.deepEqual({ x: party.getPlayer('p1').x, z: party.getPlayer('p1').z }, { x: 4, z: 3 }, 'two-cell jump rejected');
+  // Water is walkable: one adjacent step onto a water cell (not a multi-cell leap).
+  party.getPlayer('p1').x = 0; party.getPlayer('p1').z = 1;
   party.handleMove('p1', { x: 1, z: 1 });
-  assert.deepEqual({ x: party.getPlayer('p1').x, z: party.getPlayer('p1').z }, { x: 4, z: 3 }, 'water is not standable');
+  assert.deepEqual({ x: party.getPlayer('p1').x, z: party.getPlayer('p1').z }, { x: 1, z: 1 }, 'water is standable');
 });
 
-test('observers and guests cannot move (role/profile gate)', () => {
+test('observe role can move; play-without-profile cannot', () => {
   const { party, connect } = worldSetup();
   connect('obs');
   // A provisional observer (the default role after onConnect on a world room).
   const obs = party.getPlayer('obs'); obs.x = 3; obs.z = 3;
   party.handleMove('obs', { x: 4, z: 3 });
-  assert.deepEqual({ x: party.getPlayer('obs').x, z: party.getPlayer('obs').z }, { x: 3, z: 3 }, 'observer move rejected');
+  assert.deepEqual({ x: party.getPlayer('obs').x, z: party.getPlayer('obs').z }, { x: 4, z: 3 }, 'observer move accepted');
   // role=play but no profileId (an un-upgraded/guest seat) is still rejected.
   obs.role = 'play'; obs.profileId = null;
-  party.handleMove('obs', { x: 4, z: 3 });
-  assert.deepEqual({ x: party.getPlayer('obs').x, z: party.getPlayer('obs').z }, { x: 3, z: 3 }, 'play-without-profile move rejected');
+  party.handleMove('obs', { x: 5, z: 3 });
+  assert.deepEqual({ x: party.getPlayer('obs').x, z: party.getPlayer('obs').z }, { x: 4, z: 3 }, 'play-without-profile move rejected');
 });

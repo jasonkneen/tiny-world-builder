@@ -70,21 +70,130 @@
       }
       closeWelcome();
     };
-    const openTinyverse = async () => {
-      setTinyverseLoading(true);
-      const worlds = await waitForWorldsFrontend();
+    // Flow: Tinyverse > Login > (if the account has no saved avatar) Select
+    // Avatar > Worlds list. Login wires into the existing auth modal; the avatar
+    // gate is account-scoped (GET /api/avatar) with a localStorage fallback so
+    // local/no-auth dev and cloud outages never strand the flow.
+    const AVATAR_LS_KEY = 'tinyworld:multiplayer:avatar-voxel';
+    const localHasAvatar = () => {
+      try { return !!localStorage.getItem(AVATAR_LS_KEY); } catch (_) { return false; }
+    };
+    // Resolve "does this account need to pick an avatar?". Authoritative server
+    // read with a 4s timeout; any failure/unavailable falls back to localStorage
+    // presence so the spinner never hangs.
+    const accountNeedsAvatar = async () => {
+      const api = window.__tinyworldCloudApiCall;
+      if (!window.__loggedIn || typeof api !== 'function') return !localHasAvatar();
+      let res;
       try {
-        if (worlds) {
-          worlds.open();
-          closeWelcome();
+        res = await Promise.race([
+          api('/api/avatar', 'GET'),
+          new Promise(resolve => setTimeout(() => resolve({ __timeout: true }), 4000)),
+        ]);
+      } catch (_) { res = null; }
+      if (!res || res.__timeout || res.error || res.cloudUnavailable) return !localHasAvatar();
+      if (res.avatar && typeof res.avatar === 'object') {
+        // Hydrate the local look so the room renders the account's avatar.
+        try { localStorage.setItem(AVATAR_LS_KEY, JSON.stringify(res.avatar)); } catch (_) {}
+        return false;
+      }
+      return true;
+    };
+    // Open the avatar picker and resolve true on a deliberate Save, false if the
+    // user closes it without saving. Guarded so the trailing close event that a
+    // save also fires can't flip the result.
+    const promptAvatarSelection = () => new Promise(resolve => {
+      const WS = window.__tinyworldWorlds;
+      if (!WS || typeof WS.openAvatarPicker !== 'function') { resolve(true); return; }
+      let done = false;
+      const finish = (ok) => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('tinyworld:avatar-saved', onSaved);
+        window.removeEventListener('tinyworld:avatar-picker-closed', onClosed);
+        resolve(ok);
+      };
+      const onSaved = () => finish(true);
+      const onClosed = () => finish(false);
+      window.addEventListener('tinyworld:avatar-saved', onSaved);
+      window.addEventListener('tinyworld:avatar-picker-closed', onClosed);
+      try { WS.openAvatarPicker(); } catch (_) { finish(true); }
+    });
+    // Tinyverse is invite-only for now: only these accounts get in; everyone else
+    // sees the button as "Coming soon" (the Battleworlds treatment).
+    const TINYVERSE_ALLOWLIST = ['jason@bouncingfish.com', 'jason.kneen@gmail.com'];
+    async function tinyverseEmailAllowed() {
+      try {
+        const A = window.TinyWorldAuth;
+        if (A && typeof A.getUser === 'function') {
+          const u = await A.getUser();
+          const email = ((u && u.email) || '').trim().toLowerCase();
+          if (email) return TINYVERSE_ALLOWLIST.includes(email);
+        }
+      } catch (_) {}
+      return null; // not logged in / unknown
+    }
+    async function applyTinyverseAccessGate() {
+      if (!tinyverseBtn) return;
+      const allowed = await tinyverseEmailAllowed();
+      // Anyone who isn't a known-allowlisted account sees the "Coming soon" look.
+      tinyverseBtn.classList.toggle('is-soon', allowed !== true);
+      // Hard-disable only a KNOWN non-allowlisted account; leave it clickable when
+      // logged out so an allowlisted user can still sign in through the login gate.
+      if (allowed === false) tinyverseBtn.setAttribute('aria-disabled', 'true');
+      else tinyverseBtn.removeAttribute('aria-disabled');
+    }
+    window.__applyTinyverseGate = applyTinyverseAccessGate;
+
+    let tinyverseOpening = false;
+    const openTinyverse = async () => {
+      if (tinyverseOpening) return;
+      tinyverseOpening = true;
+      try {
+        // 1. Login gate — defer entry until logged in, then resume (enterApp).
+        if (!window.__loggedIn) {
+          if (typeof window.__openLoginModal === 'function') {
+            window.__tinyversePendingEntry = true;
+            // Auth prompts stay in English per the i18n scope rules.
+            window.__openLoginModal('Sign in to enter Tinyverse');
+          } else {
+            showTinyverseUnavailable();
+          }
           return;
         }
-      } catch (err) {
-        console.warn('[welcome] Tinyverse failed to open:', err);
+        // 1b. Email allowlist gate — Tinyverse is invite-only for now.
+        if ((await tinyverseEmailAllowed()) !== true) {
+          applyTinyverseAccessGate();
+          if (typeof twToast === 'function') twToast('Tinyverse is coming soon');
+          return;
+        }
+        setTinyverseLoading(true);
+        const worlds = await waitForWorldsFrontend();
+        if (!worlds) { setTinyverseLoading(false); showTinyverseUnavailable(); return; }
+        // 2. Avatar gate — first-timers pick a look before seeing the list.
+        let needsAvatar = false;
+        try { needsAvatar = await accountNeedsAvatar(); } catch (_) { needsAvatar = false; }
+        if (needsAvatar) {
+          setTinyverseLoading(false);
+          const picked = await promptAvatarSelection();
+          if (!picked) return; // closed without saving — stay on welcome
+          setTinyverseLoading(true);
+        }
+        // 3. Worlds list.
+        try {
+          worlds.open();
+          closeWelcome();
+        } catch (err) {
+          console.warn('[welcome] Tinyverse failed to open:', err);
+          setTinyverseLoading(false);
+          showTinyverseUnavailable();
+        }
+      } finally {
+        tinyverseOpening = false;
       }
-      setTinyverseLoading(false);
-      showTinyverseUnavailable();
     };
+    // Let the login-success path (enterApp, another closure) resume this flow.
+    window.__tinyverseEnter = openTinyverse;
     const openBattleworlds = () => {
       const battleworlds = window.__tinyworldBattleworlds;
       if (battleworlds && typeof battleworlds.open === 'function') {
@@ -97,10 +206,26 @@
       chooseWelcomeMode('play');
     };
 
+    const skipWelcomeForMultiplayer = (() => {
+      try {
+        const params = new URLSearchParams(location.search);
+        if (params.get('party') || params.get('room') || params.get('collab') || params.get('share')) return true;
+        if (typeof window.__tinyworldTinyverseSlugParam === 'function' && window.__tinyworldTinyverseSlugParam()) return true;
+      } catch (_) {}
+      return false;
+    })();
+    if (skipWelcomeForMultiplayer) {
+      const tinyverseSlug = typeof window.__tinyworldTinyverseSlugParam === 'function'
+        ? window.__tinyworldTinyverseSlugParam()
+        : null;
+      chooseWelcomeMode(tinyverseSlug ? 'play' : 'build');
+      return;
+    }
     modal.hidden = false;
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('welcome-launch-open');
     if (tinyverseBtn) tinyverseBtn.addEventListener('click', openTinyverse);
+    applyTinyverseAccessGate();   // reflect the email allowlist on the Tinyverse button
     if (battleworldsBtn) battleworldsBtn.addEventListener('click', openBattleworlds);
     if (buildBtn) buildBtn.addEventListener('click', () => chooseWelcomeMode('build'));
     if (playBtn) playBtn.addEventListener('click', () => chooseWelcomeMode('play'));
@@ -111,9 +236,13 @@
 
   // -------- cloud worlds / assets --------
   const TW_CLOUD_SLOT_PREFIX = 'cloud:';
+  const TW_WORLD_CATALOG_SLOT_PREFIX = 'world:';
+  const TW_WORLD_CATALOG_SLUG_PREFIX = 'world-slug:';
   const TW_WALLET_SESSION_KEY = 'tinyworld:auth:wallet-session.v1';
   let twCloudWorldCache = [];
   let twCloudWorldCacheAt = 0;
+  let twWorldCatalogCache = [];
+  let twWorldCatalogCacheAt = 0;
   let twCloudWorldSyncing = false;
   let twCloudWorldSyncPending = false;
   let twCloudWorldSyncTimer = null;
@@ -312,6 +441,140 @@
       });
     });
     return rows.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  }
+
+  function twWorldCatalogSlotId(world) {
+    const id = Number(world && world.id);
+    if (Number.isInteger(id) && id > 0) return TW_WORLD_CATALOG_SLOT_PREFIX + id;
+    const slug = String((world && world.slug) || '').trim().toLowerCase();
+    return slug ? TW_WORLD_CATALOG_SLUG_PREFIX + slug : '';
+  }
+  function twWorldCatalogIdFromSlotId(id) {
+    if (!id || !String(id).startsWith(TW_WORLD_CATALOG_SLOT_PREFIX)) return null;
+    const n = Number(String(id).slice(TW_WORLD_CATALOG_SLOT_PREFIX.length));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
+  function twWorldCatalogSlugFromSlotId(id) {
+    if (!id || !String(id).startsWith(TW_WORLD_CATALOG_SLUG_PREFIX)) return '';
+    return String(id).slice(TW_WORLD_CATALOG_SLUG_PREFIX.length).trim().toLowerCase();
+  }
+  function twWorldCatalogKeyForWorld(world) {
+    const id = Number(world && world.id);
+    if (Number.isInteger(id) && id > 0) return 'id:' + id;
+    const slug = String((world && world.slug) || '').trim().toLowerCase();
+    return slug ? 'slug:' + slug : '';
+  }
+  function twWorldCatalogKeyForSlot(slot) {
+    if (!slot) return '';
+    const id = Number(slot.worldId || slot.world_id || twWorldCatalogIdFromSlotId(slot.id));
+    if (Number.isInteger(id) && id > 0) return 'id:' + id;
+    const slug = String(slot.worldSlug || slot.world_slug || twWorldCatalogSlugFromSlotId(slot.id) || '').trim().toLowerCase();
+    return slug ? 'slug:' + slug : '';
+  }
+  function twWorldCatalogTime(world) {
+    const raw = world && (world.updatedAt || world.updated_at || world.publishedAt || world.published_at || world.createdAt || world.created_at);
+    const t = raw ? Date.parse(raw) : 0;
+    return Number.isFinite(t) ? t : 0;
+  }
+  function twWorldCatalogDisplayName(world) {
+    if (!world) return 'Untitled world';
+    return world.name || world.slug || 'Untitled world';
+  }
+  function twWorldCatalogLiveRows() {
+    const rows = Array.isArray(twWorldCatalogCache) ? twWorldCatalogCache.slice() : [];
+    try {
+      const WS = window.__tinyworldWorlds;
+      const snap = WS && typeof WS.getState === 'function' ? WS.getState() : null;
+      const live = snap && snap.world;
+      const key = twWorldCatalogKeyForWorld(live);
+      if (key && !rows.some(w => twWorldCatalogKeyForWorld(w) === key)) rows.unshift(live);
+    } catch (_) {}
+    return rows;
+  }
+  async function twWorldCatalogLoad(force) {
+    if (!force && twWorldCatalogCacheAt && Date.now() - twWorldCatalogCacheAt < 15_000) return twWorldCatalogCache;
+    const res = await twCloudApiCall('/api/worlds', 'GET');
+    if (res && Array.isArray(res.worlds)) {
+      twWorldCatalogCache = res.worlds;
+      twWorldCatalogCacheAt = Date.now();
+    } else if (res && res.error && !twCloudIsUnavailable(res)) {
+      console.warn('[world-catalog] load failed:', res.error);
+    }
+    return twWorldCatalogCache;
+  }
+  function twWorldCatalogStateFromWorld(world) {
+    if (!world) return null;
+    let state = world.data || null;
+    if (!state || typeof state !== 'object') return null;
+    try { state = JSON.parse(JSON.stringify(state)); } catch (_) { state = Object.assign({}, state); }
+    if (!Number.isFinite(Number(state.gridSize)) && Number.isFinite(Number(world.gridSize))) state.gridSize = Number(world.gridSize);
+    if (!Array.isArray(state.cells)) state.cells = [];
+    return state;
+  }
+  function twWorldCatalogCacheWorldLocally(world) {
+    if (!world) return '';
+    const id = twWorldCatalogSlotId(world);
+    const state = twWorldCatalogStateFromWorld(world);
+    if (!id || !state) return '';
+    const list = readWorldsMeta();
+    const worldId = Number(world.id);
+    const row = {
+      id,
+      worldId: Number.isInteger(worldId) && worldId > 0 ? worldId : undefined,
+      worldSlug: world.slug || '',
+      worldStatus: world.status || '',
+      worldKind: world.kind || '',
+      name: twWorldCatalogDisplayName(world),
+      ts: Date.now(),
+      state,
+    };
+    const key = twWorldCatalogKeyForSlot(row);
+    const idx = list.findIndex(slot => slot && (slot.id === id || twWorldCatalogKeyForSlot(slot) === key));
+    if (idx === -1) list.push(row);
+    else list[idx] = Object.assign({}, list[idx], row);
+    writeWorldsMeta(list);
+    return id;
+  }
+  function twWorldCatalogMergedWorlds(rows, catalogList) {
+    const catalogByKey = new Map();
+    (Array.isArray(catalogList) ? catalogList : []).forEach(world => {
+      const key = twWorldCatalogKeyForWorld(world);
+      if (key) catalogByKey.set(key, world);
+    });
+    const out = [];
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      if (!row) continue;
+      const key = twWorldCatalogKeyForSlot(row);
+      const catalog = key ? catalogByKey.get(key) : null;
+      if (key) catalogByKey.delete(key);
+      out.push(Object.assign({}, row, {
+        catalog: !!(catalog || key),
+        worldId: row.worldId || row.world_id || (catalog && catalog.id) || twWorldCatalogIdFromSlotId(row.id) || null,
+        worldSlug: row.worldSlug || row.world_slug || (catalog && catalog.slug) || twWorldCatalogSlugFromSlotId(row.id) || '',
+        worldStatus: row.worldStatus || row.world_status || (catalog && catalog.status) || '',
+        worldKind: row.worldKind || row.world_kind || (catalog && catalog.kind) || '',
+        name: row.name || twWorldCatalogDisplayName(catalog),
+        ts: Math.max(Number(row.ts) || 0, twWorldCatalogTime(catalog)),
+      }));
+    }
+    catalogByKey.forEach(world => {
+      const id = twWorldCatalogSlotId(world);
+      if (!id) return;
+      out.push({
+        id,
+        worldId: Number(world.id) || null,
+        worldSlug: world.slug || '',
+        worldStatus: world.status || '',
+        worldKind: world.kind || '',
+        local: false,
+        cloud: false,
+        catalog: true,
+        state: twWorldCatalogStateFromWorld(world),
+        name: twWorldCatalogDisplayName(world),
+        ts: twWorldCatalogTime(world),
+      });
+    });
+    return out.sort((a, b) => (b.ts || 0) - (a.ts || 0) || String(a.name || '').localeCompare(String(b.name || '')));
   }
 
   async function twCloudSaveWorld(buildId, name, data) {
@@ -685,12 +948,25 @@
     Storage.prototype.__twPrefSyncPatched = true;
   }
 
+  // Pull the account's saved voxel avatar into localStorage so any entry path
+  // (incl. share links that skip the welcome flow) renders the right look.
+  async function twCloudHydrateAvatar() {
+    if (!twCloudLoggedIn()) return;
+    try {
+      const res = await twCloudApiCall('/api/avatar', 'GET');
+      if (res && !res.error && res.avatar && typeof res.avatar === 'object') {
+        try { localStorage.setItem('tinyworld:multiplayer:avatar-voxel', JSON.stringify(res.avatar)); } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   async function twCloudBootstrapSync() {
     if (!twCloudLoggedIn()) return;
     await Promise.all([
       twCloudSyncLocalWorldsToCloud({ includeCurrent: true }),
       twCloudSyncAssetsBothWays(),
       twCloudSyncPreferencesBothWays(),
+      twCloudHydrateAvatar(),
     ]);
   }
 
@@ -892,7 +1168,14 @@
         delBtn.title = 'Delete';
         delBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!confirm('Delete "' + b.name + '"?')) return;
+          const confirmed = await window.twConfirm({
+            title: 'Delete saved world?',
+            message: 'Delete "' + b.name + '"?',
+            details: 'This removes the saved copy from your TinyWorld cloud/library.',
+            confirmLabel: 'Delete',
+            intent: 'danger',
+          });
+          if (!confirmed) return;
           await twCloudDeleteWorld(b.id);
           twCloudForgetLocalBuild(b.id);
           if (typeof window.__tinyworldWorldMenuRefresh === 'function') window.__tinyworldWorldMenuRefresh();
@@ -1251,10 +1534,17 @@
     function enterApp() {
       closeTinyModal(modal);
       setLoggedInState(true);
+      if (typeof window.__applyTinyverseGate === 'function') window.__applyTinyverseGate();  // refresh Tinyverse access once email is known
       applyAccountAiEntitlement();
       bootApp();
       initAccountModal();
       twCloudBootstrapSync().catch(err => console.warn('[cloud-sync] bootstrap failed:', err));
+      // Resume a pending Tinyverse entry that was waiting on login. Independent
+      // of the bootstrap sync above; the avatar gate does its own server read.
+      if (window.__tinyversePendingEntry) {
+        window.__tinyversePendingEntry = false;
+        if (typeof window.__tinyverseEnter === 'function') setTimeout(() => window.__tinyverseEnter(), 0);
+      }
     }
 
     function enterAnonApp() {
@@ -1427,6 +1717,14 @@
     twPerfMark('boot:start');
     appBooted = true;
     initWelcomeDialog();
+    // Top-right home button -> back to the marketing landing page (full nav to "/").
+    try {
+      const homeBtn = document.getElementById('landing-home-btn');
+      if (homeBtn && !homeBtn.__wired) {
+        homeBtn.__wired = true;
+        homeBtn.addEventListener('click', () => { window.location.href = '/'; });
+      }
+    } catch (_) {}
     twPerfMark('boot:welcome-ready');
     buildToolbar();
     twPerfMark('boot:toolbar-built');
@@ -2843,7 +3141,10 @@
     if (!window.TinyWorldAuth && collaborateBtn) collaborateBtn.hidden = true;
 
     function menuWorlds() {
-      return twCloudMergedWorlds(readWorldsMeta(), twCloudWorldCache);
+      return twWorldCatalogMergedWorlds(
+        twCloudMergedWorlds(readWorldsMeta(), twCloudWorldCache),
+        twWorldCatalogLiveRows()
+      );
     }
     function findMenuActiveWorld() {
       const activeId = getActiveWorldId();
@@ -2882,34 +3183,94 @@
           cloud.textContent = 'Cloud';
           name.appendChild(cloud);
         }
+        if (w.catalog) {
+          const live = document.createElement('span');
+          live.className = 'slot-cloud-badge';
+          live.textContent = w.local ? 'Local' : 'Live';
+          name.appendChild(live);
+        }
         const date = document.createElement('span');
         date.className = 'slot-date';
         date.textContent = relativeTime(w.ts);
         const del = document.createElement('button');
         del.className = 'slot-delete';
-        del.setAttribute('data-tooltip', 'Delete');
+        del.setAttribute('data-tooltip', w.catalog && w.local ? 'Forget local copy' : 'Delete');
         del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-        del.addEventListener('click', e => {
-          e.stopPropagation();
-          const cloudId = twCloudIdForSlot(w);
-          const next = cloudId
-            ? readWorldsMeta().filter(x => x.id !== w.id && twCloudIdForSlot(x) !== cloudId)
-            : readWorldsMeta().filter(x => x.id !== w.id);
-          writeWorldsMeta(next);
-          if (cloudId) {
-            twCloudDeleteWorld(cloudId).then(result => {
-              if (result && result.error && !twCloudIsUnavailable(result)) twToast(result.error, 'err');
-              paintList(); paintLabel();
-              if (typeof window.__tinyworldAccountWorldsRefresh === 'function') window.__tinyworldAccountWorldsRefresh();
-            }).catch(err => twToast((err && err.message) || 'Delete failed.', 'err'));
-          }
-          if (getActiveWorldId() === w.id) setActiveWorldId('');
-          paintList(); paintLabel();
-        });
+        const canDeleteSlot = !!(w.local || w.cloud);
+        if (!canDeleteSlot) {
+          del.hidden = true;
+          del.disabled = true;
+          del.setAttribute('aria-hidden', 'true');
+        } else {
+          del.addEventListener('click', e => {
+            e.stopPropagation();
+            const cloudId = twCloudIdForSlot(w);
+            const catalogKey = twWorldCatalogKeyForSlot(w);
+            const next = readWorldsMeta().filter(x => {
+              if (!x) return false;
+              if (x.id === w.id) return false;
+              if (cloudId && twCloudIdForSlot(x) === cloudId) return false;
+              if (catalogKey && twWorldCatalogKeyForSlot(x) === catalogKey) return false;
+              return true;
+            });
+            writeWorldsMeta(next);
+            if (cloudId) {
+              twCloudDeleteWorld(cloudId).then(result => {
+                if (result && result.error && !twCloudIsUnavailable(result)) twToast(result.error, 'err');
+                paintList(); paintLabel();
+                if (typeof window.__tinyworldAccountWorldsRefresh === 'function') window.__tinyworldAccountWorldsRefresh();
+              }).catch(err => twToast((err && err.message) || 'Delete failed.', 'err'));
+            }
+            if (getActiveWorldId() === w.id) setActiveWorldId('');
+            paintList(); paintLabel();
+          });
+        }
         li.appendChild(name); li.appendChild(date); li.appendChild(del);
         li.addEventListener('click', () => loadSlot(w.id));
         listEl.appendChild(li);
       });
+    }
+
+    function leaveWorldRoomForMenuLoad() {
+      try {
+        const WS = window.__tinyworldWorlds;
+        if (WS && typeof WS.hideDraftBar === 'function') WS.hideDraftBar();
+        if (WS && typeof WS.leaveRoom === 'function') WS.leaveRoom();
+      } catch (_) {}
+      try {
+        if (window.__tinyworldMode && typeof window.__tinyworldMode.setBuild === 'function') window.__tinyworldMode.setBuild();
+      } catch (_) {}
+    }
+
+    async function loadCatalogSlot(slot) {
+      const worldId = Number(slot && (slot.worldId || slot.world_id || twWorldCatalogIdFromSlotId(slot.id)));
+      const slug = String((slot && (slot.worldSlug || slot.world_slug || twWorldCatalogSlugFromSlotId(slot.id))) || '').trim().toLowerCase();
+      const path = Number.isInteger(worldId) && worldId > 0
+        ? '/api/worlds?id=' + encodeURIComponent(String(worldId))
+        : (slug ? '/api/worlds?slug=' + encodeURIComponent(slug) : '');
+      if (!path) return null;
+      const full = await twCloudApiCall(path, 'GET');
+      if (!full || full.error || !full.world) {
+        if (full && full.error && !twCloudIsUnavailable(full)) twToast(full.error, 'err');
+        return null;
+      }
+      const state = twWorldCatalogStateFromWorld(full.world);
+      if (!state) {
+        twToast('World data is not available for ' + (slot.name || full.world.name || full.world.slug || 'that world') + '.', 'err');
+        return null;
+      }
+      const localId = twWorldCatalogCacheWorldLocally(full.world) || slot.id;
+      // Keep the just-loaded full row warm for the current menu render; the list
+      // endpoint only returns preview data, but this preserves the name/status
+      // and lets the active slot merge back to the same catalog row.
+      const key = twWorldCatalogKeyForWorld(full.world);
+      if (key) {
+        const idx = twWorldCatalogCache.findIndex(w => twWorldCatalogKeyForWorld(w) === key);
+        if (idx === -1) twWorldCatalogCache.unshift(full.world);
+        else twWorldCatalogCache[idx] = Object.assign({}, twWorldCatalogCache[idx], full.world);
+        twWorldCatalogCacheAt = Date.now();
+      }
+      return { id: localId, state };
     }
 
     async function loadSlot(id) {
@@ -2928,10 +3289,34 @@
             return;
           }
         }
-        if (state && typeof applyState === 'function' && applyState(state)) {
-          setActiveWorldId(id);
-          paintLabel(); paintList();
-          close();
+        if (!state && (slot.catalog || slot.worldId || slot.worldSlug)) {
+          const loaded = await loadCatalogSlot(slot);
+          if (!loaded) return;
+          state = loaded.state;
+          id = loaded.id || id;
+        }
+        if (state && slot.catalog) {
+          const localId = twWorldCatalogCacheWorldLocally({
+            id: slot.worldId,
+            slug: slot.worldSlug,
+            status: slot.worldStatus,
+            kind: slot.worldKind,
+            name: slot.name,
+            gridSize: state.gridSize || GRID,
+            data: state,
+          });
+          if (localId) id = localId;
+        }
+        if (state && typeof applyState === 'function') {
+          leaveWorldRoomForMenuLoad();
+          if (applyState(state)) {
+            setActiveWorldId(id);
+            try {
+              if (window.__tinyworldMode && typeof window.__tinyworldMode.setBuild === 'function') window.__tinyworldMode.setBuild();
+            } catch (_) {}
+            paintLabel(); paintList();
+            close();
+          }
         }
       } catch (err) { console.warn('[world-menu] load failed:', err); }
     }
@@ -3074,6 +3459,9 @@
 
     function open() {
       paintLabel(); paintList();
+      twWorldCatalogLoad(false).then(() => {
+        if (!menu.hidden) { paintLabel(); paintList(); }
+      }).catch(err => console.warn('[world-catalog] menu refresh failed:', err));
       if (twCloudLoggedIn()) {
         twCloudLoadWorlds(false).then(() => {
           if (!menu.hidden) { paintLabel(); paintList(); }

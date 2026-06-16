@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><title>avatar body test</title>
+<style>body{margin:0;background:#b6a8e8;display:flex;gap:8px;flex-wrap:wrap}canvas{display:block}</style></head>
+<body>
+<script src="vendor/three/three.r128.min.js"></script>
+<script src="engine/world/53-voxel-avatar.js"></script>
+<script>
+const W=300,H=520;
+// four angles: front, back, left profile, 3/4 back
+const VIEWS=[
+  {name:'front', ang:0},
+  {name:'back', ang:Math.PI},
+  {name:'left', ang:-Math.PI/2},
+  {name:'3q-back', ang:Math.PI*0.78},
+];
+let done=0;
+for(const v of VIEWS){
+  const cv=document.createElement('canvas');
+  cv.width=W*devicePixelRatio; cv.height=H*devicePixelRatio;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  document.body.appendChild(cv);
+  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(W,H,false);
+  renderer.setClearColor(0xb6a8e8,1);
+  const scene=new THREE.Scene();
+  const cam=new THREE.PerspectiveCamera(32,W/H,0.01,100);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x6a5fa0,1.1));
+  const dir=new THREE.DirectionalLight(0xffffff,1.0); dir.position.set(2,4,3); scene.add(dir);
+  const av=window.makeVoxelAvatar({fit:'Casual',seed:7,body:'Masc',skin:2,height:1,build:1,gear:'None'});
+  scene.add(av.group);
+  const box=new THREE.Box3().setFromObject(av.group);
+  const c=box.getCenter(new THREE.Vector3());
+  const r=0.62;
+  const midY=c.y;
+  cam.position.set(Math.sin(v.ang)*r, midY, Math.cos(v.ang)*r);
+  cam.lookAt(0, midY*0.92, 0);
+  let frames=0;
+  function loop(){ av.update(0.016); renderer.render(scene,cam); if(frames++<8) requestAnimationFrame(loop); else { done++; if(done===VIEWS.length) window.__ready=true; } }
+  loop();
+  const lbl=document.createElement('div'); lbl.textContent=v.name; lbl.style.cssText='position:absolute;color:#fff;font:bold 12px monospace';
+}
+</script></body></html>

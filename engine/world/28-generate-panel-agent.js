@@ -821,9 +821,11 @@
       panel.style.setProperty('--agent-panel-width', panelWidth + 'px');
     }
 
+    const ROBOT_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
     function updateCollapseButton() {
       const collapsed = panel.classList.contains('collapsed');
-      toggle.textContent = collapsed ? 'AI' : '×';
+      if (collapsed) toggle.innerHTML = ROBOT_ICON_SVG;
+      else toggle.textContent = '×';
       toggle.setAttribute('aria-label', collapsed ? 'Expand AI chat' : 'Collapse AI chat');
       toggle.title = collapsed ? 'Expand AI chat' : 'Collapse AI chat';
       form.classList.toggle('conversation-open', !collapsed);

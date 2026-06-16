@@ -50,7 +50,8 @@
   ];
 
   const TOOL_GROUPS = [
-    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock', 'mesh-terrain'], iconTool: 'grass' },
+    // TEMP-HIDDEN: 'mesh-terrain' removed from the Terrain flyout for now. Re-add it to restore the mesh build button.
+    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock'], iconTool: 'grass' },
     { id: 'plants', label: 'Plants', toolIds: ['tree', 'tuft', 'flower', 'bush'], iconTool: 'tree' },
     { id: 'build', label: 'Build', toolIds: ['house', 'new-island'], iconTool: 'house' },
     { id: 'infra', label: 'Infra', toolIds: ['fence', 'bridge', 'lamp-post', 'spotlight', 'mooring'], iconTool: 'fence' },
@@ -1149,10 +1150,17 @@
         deleteBtn.title = 'Delete template';
         deleteBtn.setAttribute('aria-label', 'Delete template ' + tool.label);
         deleteBtn.textContent = '×';
-        deleteBtn.addEventListener('click', e => {
+        deleteBtn.addEventListener('click', async e => {
           e.preventDefault();
           e.stopPropagation();
-          if (!confirm('Delete template "' + tool.label + '"?')) return;
+          const confirmed = await window.twConfirm({
+            title: 'Delete template?',
+            message: 'Delete template "' + tool.label + '"?',
+            details: 'This removes the reusable stamp template from this browser.',
+            confirmLabel: 'Delete',
+            intent: 'danger',
+          });
+          if (!confirmed) return;
           deleteAssetTemplate(tool.assetTemplateId);
         });
         card.appendChild(deleteBtn);
@@ -1200,7 +1208,7 @@
   function toolbarIconSvg(id) {
     const icons = {
       select: '<svg viewBox="0 0 24 24"><path d="m4 4 7.07 17 2.51-7.39L21 11.07z"/></svg>',
-      erase: '<svg viewBox="0 0 24 24"><path d="M10 2.6h4l1 2.4h4.5v2H4.5v-2H9zM6.2 8h11.6l-1.05 12.2A1.7 1.7 0 0 1 15.06 22H8.94A1.7 1.7 0 0 1 7.25 20.2z"/></svg>',
+      erase: '<svg viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 12 9 9"/></svg>',
       terrain: '<svg viewBox="0 0 24 24"><path d="M3 19.5 9.2 7.7l4.1 7.1 2.3-3.2 5.4 7.9Z"/><path d="m9.2 7.7 2.2 3.7"/></svg>',
       plants: '<svg viewBox="0 0 24 24"><path d="M12 21V11"/><path d="M12 11C8.2 10.7 6 8.4 5.4 4.5 9.2 4.8 11.4 7.1 12 11Z"/><path d="M12 13c3.7-.3 5.9-2.6 6.5-6.5-3.8.3-6 2.6-6.5 6.5Z"/><path d="M7 21h10"/></svg>',
       build: '<svg viewBox="0 0 24 24"><path d="M3.5 10.2 12 3.8l8.5 6.4"/><path d="M5.8 9.4v10.1h12.4V9.4"/><path d="M10 19.5v-5.2h4v5.2"/></svg>',

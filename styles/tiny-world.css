@@ -503,7 +503,10 @@
   .token-corner {
     position: fixed;
     top: 18px;
-    right: 24px;
+    /* Clear the top-corner-chrome cluster (home / sign-out buttons) parked at
+       right:18px — two 44px buttons + gaps ≈ 100px — so the long CA string never
+       runs underneath them. */
+    right: 124px;
     z-index: 14;
     display: inline-flex;
     align-items: center;
@@ -711,7 +714,7 @@
     position: fixed;
     top: 108px;
     right: 24px;
-    z-index: 40;
+    z-index: 55;
     display: none;
     flex-direction: column;
     gap: 8px;
@@ -1707,6 +1710,50 @@
   .audio-mute.muted .ic-off { display: block; }
 
   /* --- Sound icon (lives inside the bottom toolbar) --- */
+  /* Top-right corner chrome (home / sign out) — same glass treatment as the
+     sound/layers chrome buttons, parked above the welcome modal. */
+  .top-corner-chrome {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 80;
+    display: flex;
+    gap: 8px;
+  }
+  button.corner-chrome-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.6);
+    color: #8a7a58;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 -1px 0 rgba(120, 130, 150, 0.10) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 12px 36px -12px rgba(40, 50, 80, 0.22);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    transition: background 120ms ease, transform 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  }
+  .corner-chrome-btn:hover { color: var(--ink); transform: scale(1.02); }
+  .corner-chrome-btn:active { transform: scale(0.98); }
+  .corner-chrome-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .corner-chrome-btn[hidden] { display: none; }
+
   button.sound-icon {
     position: fixed;
     right: 24px;
@@ -2491,15 +2538,14 @@
     stroke-linejoin: round;
   }
   .tool-palette .tool .tool-icon { color: var(--ink); }
-  /* Erase reads as a white-bodied glyph (like Select on its white tile) instead
-     of grey line-art: filled white with a dark outline. Scoped to erase so
-     Select / Connect / group icons keep their line-art style. */
+  /* Erase renders as clean line-art (eraser glyph), matching the other
+     line-art tool icons. (Previously white-bodied to suit the old trash-can
+     silhouette.) */
   .toolbar .tool[data-id="erase"] .tool-icon svg,
   .tool-palette .tool[data-id="erase"] .tool-icon svg {
-    fill: #fff;
-    stroke: #2f3b57;
-    stroke-width: 1.6;
-    paint-order: stroke;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
   }
   .toolbar .tool-group-btn[data-group="terrain"]::before {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.15' stroke-linecap='round' stroke-linejoin='round'><path d='M3 19.5 9.2 7.7l4.1 7.1 2.3-3.2 5.4 7.9Z'/><path d='m9.2 7.7 2.2 3.7'/></svg>");
@@ -3092,6 +3138,14 @@
   body.vehicle-demo-active #crowd-panel,
   body.vehicle-demo-active #crowd-panel-handle,
   body.vehicle-demo-active #stamp-builder-panel {
+    display: none;
+  }
+  body.tinyverse-rally-watch #agent-input,
+  body.tinyverse-rally-watch #agent-panel,
+  body.tinyverse-rally-watch #agent-panel-handle,
+  body.tinyverse-rally-watch #crowd-panel,
+  body.tinyverse-rally-watch #crowd-panel-handle,
+  body.tinyverse-rally-watch #stamp-builder-panel {
     display: none;
   }
   @keyframes vehicle-demo-pulse {
@@ -5651,6 +5705,7 @@
     display: inline-flex; align-items: center; justify-content: center;
     opacity: 0; transition: opacity 0.12s, background 0.12s, color 0.12s;
   }
+  .world-menu-slot .slot-delete[hidden] { display: none !important; }
   .world-menu-slot:hover .slot-delete { opacity: 1; }
   .world-menu-slot .slot-delete:hover { color: #b84838; background: var(--line); }
   .world-menu-empty {
@@ -7535,6 +7590,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
+  /* TEMP-HIDDEN: Play removed from the main menu; Build spans the full bottom
+     row. Delete these two rules to restore the original Build | Play row. */
+  #welcome-play { display: none !important; }
+  #welcome-build { grid-column: 1 / -1; }
   .welcome-mode-btn {
     --welcome-outline: #2f3b57;
     --welcome-fill: rgba(255, 255, 255, 0.7);
@@ -8626,15 +8685,20 @@ body.tool-flyout-open .agent-input {
 .agent-panel.collapsed {
   top: 96px;
   bottom: auto;
-  right: 14px;
-  width: 52px !important;
-  min-width: 52px;
-  max-width: 52px;
-  height: 152px;
-  max-height: 152px;
-  border-radius: 999px;
+  left: auto;
+  right: 24px;
+  transform: none;
+  width: 44px !important;
+  min-width: 44px;
+  max-width: 44px;
+  height: 44px;
+  max-height: 44px;
+  border-radius: 13px;
   overflow: hidden;
 }
+/* TEMP-HIDDEN: bottom-toolbar shield toggle hidden for now. The button is
+   still built (kept for build checks) — delete this rule to restore it. */
+#toolbar-shield-toggle { display: none !important; }
 .agent-panel.collapsed .agent-panel-resizer,
 .agent-panel.collapsed .agent-selection-preview,
 .agent-panel.collapsed .agent-messages,
@@ -8647,7 +8711,7 @@ body.tool-flyout-open .agent-input {
   display: flex !important;
   height: 100%;
   min-height: 0;
-  padding: 8px;
+  padding: 0;
   border-bottom: 0;
   align-items: center;
   justify-content: center;
@@ -8658,14 +8722,22 @@ body.tool-flyout-open .agent-input {
   justify-content: center;
 }
 .agent-panel.collapsed .agent-panel-toggle {
-  width: 36px;
-  height: 120px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: 0.13em;
-  writing-mode: vertical-rl;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  writing-mode: horizontal-tb;
   text-orientation: mixed;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.agent-panel.collapsed .agent-panel-toggle svg {
+  width: 22px;
+  height: 22px;
 }
 body.ui-theme-dark .agent-panel {
   background: rgba(17, 20, 30, 0.74) !important;
@@ -8717,3 +8789,24 @@ body.ui-theme-dark .agent-panel-clear:hover {
   }
 }
 .flight-menu-btn:hover { background: #d96148; }
+
+/* ---- surface roam mode ---- */
+body.surface-roam-active { cursor: crosshair; }
+body.surface-roam-fp { cursor: none; }
+#tw-surface-roam-hud {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 96;
+  font: 700 12px 'Pixelify Sans', ui-monospace, Menlo, monospace;
+  letter-spacing: .06em;
+  color: #c8f0c8;
+  background: rgba(8, 22, 8, .78);
+  padding: 8px 16px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px #2b7a2b;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+}

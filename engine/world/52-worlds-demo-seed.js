@@ -69,10 +69,12 @@
     }
 
     function seedResources(world) {
-      const data = world && world.data;
-      if (!data) return;
-      const cells = Array.isArray(data.cells) ? data.cells : [];
-      if (hasResources(cells)) return;
+      if (!world) return null;
+      if (!world.data || typeof world.data !== 'object') world.data = { v: 4, gridSize: world.gridSize || 8, cells: [] };
+      const data = world.data;
+      if (!Array.isArray(data.cells)) data.cells = [];
+      const cells = data.cells;
+      if (hasResources(cells)) return null;
 
       const g = world.gridSize || 8;
       const used = usedPositions(cells);
@@ -102,7 +104,10 @@
         data.cells = [...cells, ...added];
         console.log('[demo-seed] Seeded', added.length, 'resource cells into world', world.slug);
       }
+      return added;
     }
+
+    WS.seedDemoResources = seedResources;
 
     on('enter', (d) => {
       const world = d && d.world;

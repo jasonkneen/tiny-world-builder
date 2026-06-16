@@ -1,8 +1,16 @@
+import { timingSafeEqual } from 'node:crypto';
 import { requireAuthUser } from './lib/auth.mjs';
 import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson } from './lib/http.mjs';
 import { ensureProfile } from './lib/profiles.mjs';
 import { WORLD_RESOURCES } from './lib/worlds.mjs';
+
+function constantTimeEqual(a, b) {
+  const left = Buffer.from(String(a || ''), 'utf8');
+  const right = Buffer.from(String(b || ''), 'utf8');
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 
 export const config = { path: '/api/worlds/resources' };
 
@@ -59,7 +67,7 @@ export default async function worldResourcesFunction(request) {
     if (request.method === 'POST') {
       const serviceToken = process.env.WORLDS_SERVICE_TOKEN || '';
       const provided = request.headers.get('x-worlds-token') || '';
-      if (!serviceToken || provided !== serviceToken) return errorResponse('Forbidden', 403, origin);
+      if (!serviceToken || !constantTimeEqual(provided, serviceToken)) return errorResponse('Forbidden', 403, origin);
 
       const body = await readJson(request);
       const resources = (body && body.resources) || {};

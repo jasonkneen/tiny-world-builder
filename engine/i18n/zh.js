@@ -61,6 +61,19 @@
     'worlds.avatarWarriors': '战士',
     'worlds.avatarOrcs': '兽人',
 
+    // ---- 管理员实时大厅编辑器 ----
+    'lobbyAdmin.tag': '管理员',
+    'lobbyAdmin.edit': '编辑大厅',
+    'lobbyAdmin.editing': '编辑中 — 完成',
+    'lobbyAdmin.save': '保存到实时大厅',
+    'lobbyAdmin.saving': '保存中…',
+    'lobbyAdmin.saved': '大厅已保存。',
+    'lobbyAdmin.savedAt': '已保存',
+    'lobbyAdmin.hintView': '实时大厅。点击“编辑大厅”开始搭建。',
+    'lobbyAdmin.hintEdit': '正在实时编辑 — 放置/擦除后保存到实时大厅。',
+    'lobbyAdmin.noWorld': '没有可保存的实时世界。',
+    'lobbyAdmin.error': '大厅保存失败。',
+
     'brand.sub': '点击放置 · 拖动旋转 · 捏合或滚动缩放',
     'minimap.fps': '每秒帧数',
     'minimap.toggle': '隐藏/显示地图 (N)',

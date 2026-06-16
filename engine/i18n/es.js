@@ -61,6 +61,19 @@
     'worlds.avatarWarriors': 'Guerreros',
     'worlds.avatarOrcs': 'Orcos',
 
+    // ---- editor de lobby (admin) ----
+    'lobbyAdmin.tag': 'Admin',
+    'lobbyAdmin.edit': 'Editar lobby',
+    'lobbyAdmin.editing': 'Editando — Listo',
+    'lobbyAdmin.save': 'Guardar lobby en vivo',
+    'lobbyAdmin.saving': 'Guardando…',
+    'lobbyAdmin.saved': 'Lobby guardado.',
+    'lobbyAdmin.savedAt': 'Guardado',
+    'lobbyAdmin.hintView': 'Lobby en vivo. Toca Editar para construir.',
+    'lobbyAdmin.hintEdit': 'Editando en vivo — coloca/borra y luego guarda.',
+    'lobbyAdmin.noWorld': 'No hay mundo en vivo para guardar.',
+    'lobbyAdmin.error': 'No se pudo guardar el lobby.',
+
     'brand.sub': 'Toca para colocar · arrastra para orbitar · pellizca o desplázate para acercar',
     'minimap.fps': 'Fotogramas por segundo',
     'minimap.toggle': 'Ocultar/mostrar mapa (N)',

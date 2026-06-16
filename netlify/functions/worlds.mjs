@@ -2,9 +2,10 @@ import { getAuthUser } from './lib/auth.mjs';
 import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
 import { ensureProfile, profileDto } from './lib/profiles.mjs';
+import { activeSuspension } from './lib/community-moderation.mjs';
 import {
   cleanWorldName, cleanTaxPercent, computeWorldPrice, deriveTerrainCounts,
-  worldDto, worldPreview, signJoinToken,
+  worldDto, worldPreview, signJoinToken, isWorldAdminEmail,
 } from './lib/worlds.mjs';
 
 export const config = { path: '/api/worlds' };
@@ -37,6 +38,14 @@ function worldIdFromRequest(request) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+function slugFromRequest(request) {
+  const slug = new URL(request.url).searchParams.get('slug');
+  if (!slug) return null;
+  const s = String(slug).trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(s)) return null;
+  return s;
+}
+
 // Room join role for a connecting client. build = draft owner, play = logged-in
 // in a published world, observe = guest in a published world. null = no access.
 function roleFor(world, profileId) {
@@ -58,34 +67,61 @@ export default async function worldsFunction(request) {
     // Browsing the universe is allowed for guests (no wallet); writes require auth.
     const user = await getAuthUser(request);
     const profile = (user && user.id) ? await ensureProfile(user) : null;
+    // God-admin: a small email allowlist may edit ANY world live (incl. the
+    // ownerless published lobby) and save to the live record. Follows the account.
+    const isWorldAdmin = isWorldAdminEmail(user && user.email);
     const worldId = worldIdFromRequest(request);
+    const worldSlug = slugFromRequest(request);
 
     if (request.method === 'GET') {
       const economy = await loadEconomy(sql);
 
-      if (worldId) {
-        const rows = await sql`
-          SELECT w.*, p.display_name AS owner_name
-          FROM worlds w
-          LEFT JOIN profiles p ON p.id = w.owner_profile_id
-          WHERE w.id = ${worldId}
-          LIMIT 1
-        `;
+      if (worldId || worldSlug) {
+        const rows = worldId
+          ? await sql`
+              SELECT w.*, p.display_name AS owner_name
+              FROM worlds w
+              LEFT JOIN profiles p ON p.id = w.owner_profile_id
+              WHERE w.id = ${worldId}
+              LIMIT 1
+            `
+          : await sql`
+              SELECT w.*, p.display_name AS owner_name
+              FROM worlds w
+              LEFT JOIN profiles p ON p.id = w.owner_profile_id
+              WHERE w.slug = ${worldSlug}
+              LIMIT 1
+            `;
         if (!rows.length) return errorResponse('World not found', 404, origin);
         const world = rows[0];
         const isOwner = profile && Number(world.owner_profile_id) === Number(profile.id);
-        // Drafts are private to their owner.
-        if (world.status === 'draft' && !isOwner) {
+        // Drafts are private to their owner — except a god-admin, who may load and
+        // edit any world (including the published lobby) live.
+        if (world.status === 'draft' && !isOwner && !isWorldAdmin) {
           return jsonResponse({ world: withLivePrice(worldDto(world), economy) }, origin);
         }
-        const includeData = world.status === 'published' || isOwner;
+        const includeData = world.status === 'published' || isOwner || isWorldAdmin;
         const dto = withLivePrice(worldDto(world, { includeData }), economy);
-        const role = roleFor(world, profile && profile.id);
+        let role = roleFor(world, profile && profile.id);
+        // Community suspensions lock the player out of the game for their duration.
+        let suspendedUntil = null;
+        if (profile) {
+          const susp = await activeSuspension(sql, profile.id);
+          if (susp) {
+            suspendedUntil = susp.expires_at;
+            // Owners can still load their own draft to look, but cannot get a
+            // play/build join token while suspended.
+            role = null;
+          }
+        }
+        // God-admin always gets a build-capable role so they can edit live, even
+        // on the ownerless published lobby (where they'd otherwise be 'play').
+        if (isWorldAdmin && !suspendedUntil) role = 'build';
         let token = '';
         if (role && joinSecret()) {
           token = signJoinToken({ w: dto.id, slug: dto.slug, p: profile ? Number(profile.id) : null, r: role }, joinSecret());
         }
-        return jsonResponse({ world: dto, role, token, me: profile ? profileDto(profile) : null }, origin);
+        return jsonResponse({ world: dto, role, token, suspendedUntil, canAdminEdit: isWorldAdmin, me: profile ? profileDto(profile) : null }, origin);
       }
 
       const rows = await sql`
@@ -138,6 +174,32 @@ export default async function worldsFunction(request) {
       const body = await readJson(request);
       const action = String((body && body.action) || '').trim();
       if (!worldId) return errorResponse('Missing world id', 400, origin);
+
+      // ---- god-admin live save: edit ANY world (incl. the ownerless published
+      // lobby) and write straight to the live record. Email-allowlisted only.
+      // Unlike saveDraft this does NOT require draft status or owner match, and it
+      // preserves the world's current status (a published lobby stays published).
+      if (action === 'adminSave') {
+        if (!isWorldAdmin) return errorResponse('Forbidden', 403, origin);
+        const data = body && body.data;
+        if (!data || typeof data !== 'object' || !Array.isArray(data.cells)) {
+          return errorResponse('World JSON must include a cells array', 400, origin);
+        }
+        if (JSON.stringify(data).length > 2_000_000) return errorResponse('World JSON is too large', 400, origin);
+        const existing = await sql`SELECT grid_size FROM worlds WHERE id = ${worldId} LIMIT 1`;
+        if (!existing.length) return errorResponse('World not found', 404, origin);
+        const counts = deriveTerrainCounts(data, existing[0].grid_size);
+        const rows = await sql`
+          UPDATE worlds
+          SET data = ${sql.json(data)}, tile_count = ${counts.tileCount},
+              stone_tile_count = ${counts.stone}, grass_tile_count = ${counts.grass},
+              water_tile_count = ${counts.water}, updated_at = NOW()
+          WHERE id = ${worldId}
+          RETURNING *
+        `;
+        if (!rows.length) return errorResponse('World save failed', 500, origin);
+        return jsonResponse({ world: worldDto(rows[0], { includeData: true }), admin: true }, origin);
+      }
 
       if (action === 'saveDraft') {
         const data = body && body.data;

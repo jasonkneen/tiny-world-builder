@@ -795,6 +795,10 @@
   let terrainBakeRoot = null;            // THREE.Group holding merged bake meshes
   let terrainBakeSettleTimer = null;     // debounce handle
   let terrainBakeBusy = false;           // re-entrancy guard for renderCellTile hook
+  // Runtime opt-in for non-home contexts (static lobby/demo world rooms) without
+  // the global flag. Toggled by window.__tinyworldSetTerrainBakeForced.
+  let terrainBakeForced = false;
+  const _terrainBakeBox = new THREE.Box3();
 
   function terrainCellBakeEligible(x, z, entry) {
     if (!entry || !entry.tile) return false;
@@ -835,7 +839,7 @@
   }
 
   function bakeHomeTerrainNow() {
-    if (!terrainBakeEnabled) return;
+    if (!terrainBakeEnabled && !terrainBakeForced) return;
     if (bakedTerrainCells.size > 0) return; // already baked
     if (typeof isLandscapeMeshActive === 'function' && isLandscapeMeshActive()) return;
     // Suppress during applyState bulk load (suppressSave flag from 29-persistence-api.js)
@@ -869,6 +873,9 @@
     // transform — the merge then bakes world positions directly.
     for (const { x, z, key, entry } of toAttach) {
       terrainBakeRoot.attach(entry.tile);
+      // Cache the tile-top world Y BEFORE the merge strips the tile's meshes, so
+      // voxelGroundY (47-worlds-room) keeps avatars grounded once entry.tile is null.
+      try { _terrainBakeBox.setFromObject(entry.tile); if (isFinite(_terrainBakeBox.max.y)) entry.bakedGroundY = _terrainBakeBox.max.y; } catch (_) {}
       // Swap transparent fade materials back to their preserved opaque baseMat.
       // prepareFadeable (15-ghost-generation-fade.js) sets keepFadeAtOpaque on
       // home tiles, meaning the material is transparent even at opacity 1.
@@ -936,10 +943,19 @@
   }
 
   function scheduleTerrainBakeOnSettle() {
-    if (!terrainBakeEnabled) return;
+    if (!terrainBakeEnabled && !terrainBakeForced) return;
     if (terrainBakeSettleTimer !== null) clearTimeout(terrainBakeSettleTimer);
     terrainBakeSettleTimer = setTimeout(function () {
       terrainBakeSettleTimer = null;
       bakeHomeTerrainNow();
     }, 1200);
   }
+
+  // World rooms (the static lobby/demo) opt into the bake at runtime: forced ON
+  // after the world finishes rendering, OFF + unbaked on leave so the next world
+  // (or the home builder) starts from live tiles.
+  window.__tinyworldSetTerrainBakeForced = function (on) {
+    terrainBakeForced = !!on;
+    if (terrainBakeForced) scheduleTerrainBakeOnSettle();
+  };
+  window.__tinyworldUnbakeTerrain = function () { try { unbakeAllTerrain(); } catch (_) {} };

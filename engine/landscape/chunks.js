@@ -264,6 +264,63 @@
       return { group, geo, mesh };
     },
 
+    // --- Voxel (blocky) chunk builder ---
+    // Used when this.VOXEL is set (the flooded planet underlay). Builds flat-top
+    // columns quantised to the cell size, with side walls down to lower neighbours
+    // so the surface reads as stacked voxels rather than a smooth mesh. Heights are
+    // snapped to `step`; anything below the waterline is clamped to a flat seabed.
+    // Returns the same { group, geo, mesh } record (and adds to the scene) as the
+    // smooth builders so the streamer can track + dispose it identically.
+    _makeVoxelChunk(cx, cz, size, res, far) {
+      const cxW = (cx + 0.5) * size, czW = (cz + 0.5) * size;
+      const group = new THREE.Group();
+      group.position.set(cxW, 0, czW);
+      // fog:false — the scene's near distanceMistFog (far~100) would wash the
+      // 1/25-scaled planet surface cream; the cloud-sea veil (faded to 0 on
+      // descent, opaque up top) is what provides the sky<->surface separation,
+      // so the voxel ground reads crisp + colourful like voxel-poser.
+      if (!this.voxelMat) this.voxelMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: false });
+      const cell = size / res, step = cell, half = size / 2;
+      const seabed = this.WATER_LEVEL - step;          // flat seabed one block under the waterline
+      const N = res + 2;                               // +1-cell border for neighbour wall lookups
+      const Hg = new Float32Array(N * N);
+      for (let gz = 0; gz < N; gz++) for (let gx = 0; gx < N; gx++) {
+        const wx = cxW - half + (gx - 0.5) * cell;
+        const wz = czW - half + (gz - 0.5) * cell;
+        let h = Math.round(this.getHeight(wx, wz) / step) * step;
+        if (h < seabed) h = seabed;
+        Hg[gz * N + gx] = h;
+      }
+      const pos = [], nor = [], col = [], tmp = new THREE.Color();
+      const v = (x, y, z, n, r, g, b) => { pos.push(x, y, z); nor.push(n[0], n[1], n[2]); col.push(r, g, b); };
+      const quad = (a, b, c, d, n, r, g, b2) => { v(a[0], a[1], a[2], n, r, g, b2); v(b[0], b[1], b[2], n, r, g, b2); v(c[0], c[1], c[2], n, r, g, b2); v(a[0], a[1], a[2], n, r, g, b2); v(c[0], c[1], c[2], n, r, g, b2); v(d[0], d[1], d[2], n, r, g, b2); };
+      for (let gz = 1; gz <= res; gz++) for (let gx = 1; gx <= res; gx++) {
+        const h = Hg[gz * N + gx];
+        const x0 = -half + (gx - 1) * cell, x1 = x0 + cell, z0 = -half + (gz - 1) * cell, z1 = z0 + cell;
+        this._strataColor(h, tmp);
+        const n1 = this._vnoise((cxW + x0) * 0.045, (czW + z0) * 0.045);
+        tmp.multiplyScalar(0.82 + n1 * 0.20);
+        const tr = tmp.r, tg = tmp.g, tb = tmp.b;
+        quad([x0, h, z0], [x0, h, z1], [x1, h, z1], [x1, h, z0], [0, 1, 0], tr, tg, tb);   // flat top
+        const sr = tr * 0.72, sg = tg * 0.72, sb = tb * 0.72;                              // shaded sides
+        const nE = Hg[gz * N + gx + 1], nW = Hg[gz * N + gx - 1], nS = Hg[(gz + 1) * N + gx], nN = Hg[(gz - 1) * N + gx];
+        if (h > nE) quad([x1, nE, z0], [x1, nE, z1], [x1, h, z1], [x1, h, z0], [1, 0, 0], sr, sg, sb);
+        if (h > nW) quad([x0, nW, z1], [x0, nW, z0], [x0, h, z0], [x0, h, z1], [-1, 0, 0], sr, sg, sb);
+        if (h > nS) quad([x0, nS, z1], [x1, nS, z1], [x1, h, z1], [x0, h, z1], [0, 0, 1], sr, sg, sb);
+        if (h > nN) quad([x1, nN, z0], [x0, nN, z0], [x0, h, z0], [x1, h, z0], [0, 0, -1], sr, sg, sb);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      const mesh = new THREE.Mesh(geo, this.voxelMat);
+      mesh.castShadow = false;
+      mesh.receiveShadow = !far;
+      group.add(mesh);
+      this.scene.add(group);
+      return { group, geo, mesh };
+    },
+
     // --- Chunk Queue Routing ---
     _queueChunkBuild(list, set, map, cx, cz, priority) {
       const key = `${cx},${cz}`;
@@ -288,7 +345,9 @@
         const job = this.pendingChunkBuilds.shift();
         this.pendingChunkKeys.delete(job.key);
         if (!this.chunks.has(job.key)) {
-          this.chunks.set(job.key, this._makeChunk(job.cx, job.cz));
+          this.chunks.set(job.key, this.VOXEL
+            ? this._makeVoxelChunk(job.cx, job.cz, this.CHUNK_SIZE, this.VOXEL_RES, false)
+            : this._makeChunk(job.cx, job.cz));
         }
       }
 
@@ -299,7 +358,9 @@
         const job = this.pendingFarChunkBuilds.shift();
         this.pendingFarChunkKeys.delete(job.key);
         if (!this.farChunks.has(job.key)) {
-          this.farChunks.set(job.key, this._makeFarChunk(job.cx, job.cz));
+          this.farChunks.set(job.key, this.VOXEL
+            ? this._makeVoxelChunk(job.cx, job.cz, this.FAR_CHUNK_SIZE, this.FAR_VOXEL_RES, true)
+            : this._makeFarChunk(job.cx, job.cz));
         }
       }
     },

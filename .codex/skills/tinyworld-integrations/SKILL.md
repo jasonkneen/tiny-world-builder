@@ -18,6 +18,40 @@ backend:
   intents, `players.mjs` tracks online presence/search/chat requests/parties,
   and `livekit-token.mjs` issues LiveKit room tokens when `LIVEKIT_URL`,
   `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` are configured.
+- Community functions: `community.mjs` (`/api/community`) backs the `/community`
+  Discord-lite page — rooms, DMs, members, bans, blocks, invites; tables
+  auto-create + seed on first request. Channel names are forced lowercase and
+  the super-owner (`TINYWORLD_COMMUNITY_OWNER`, default `jasonkneen`) is made an
+  owner of every room each request via `ensureCommunityDefaults`. Only staff
+  (super-owner / `TINYWORLD_COMMUNITY_STAFF`) or a room owner can create/delete
+  channels and ban; the same `admin` flag gates every privileged action.
+  Members must pass an anti-AI human check (`community_verifications`) AND have a
+  mandatory **Twitter/X handle** on their profile (GitHub optional) before they
+  can post/DM/join — `saveSocials` writes the bare handles to
+  `profiles.twitter`/`profiles.github` (idempotent `ALTER TABLE ... ADD COLUMN`
+  in `ensureTables`; migration `20260615020000_add_profile_socials.sql`).
+  Bootstrap returns `me.profileComplete`; the page shows a forced
+  "Complete your profile" modal until Twitter is set and renders both handles on
+  profile cards. Members can fully **edit their profile** (display name, bio,
+  avatar, handles) via `saveProfile` (alias `saveSocials`). Avatars are an
+  **allowlisted preset set** under `assets/avatars/*.png` (keys in
+  `AVATAR_KEYS`) — no user image uploads, so no NSFW image risk. All
+  user-authored text (display name + bio) is run through `checkTextSafety`,
+  a two-layer filter (hard substrings + whole-word, leet/spacing-normalized)
+  that rejects sexual / nudity / abusive / hateful content. Tested in
+  `tests/community-profile.test.mjs`. `community.html` signs users in **in-page** (no bounce to the
+  builder): it loads `vendor/tinyworld-auth.js` via the import map for Netlify
+  Identity email login/signup and calls `/api/wallet` for Phantom login, storing
+  the session under the shared `tinyworld:auth:wallet-session.v1` key.
+- Community moderation webhook: `community-webhook.mjs` (`/api/community/webhook`)
+  is a server-to-server endpoint for an agent (Hermes) to ban/unban/block/hide or restore/delete
+  messages/purge spam/delete rooms. Auth is a shared secret
+  (`TINYWORLD_COMMUNITY_WEBHOOK_SECRET`) via `x-tinyworld-signature: sha256=<hmac
+  of raw body>` (preferred) or `x-webhook-secret`. Shared primitives live in
+  `lib/community-moderation.mjs`; `community.mjs` also emits outbound
+  `message.created` events to `HERMES_COMMUNITY_WEBHOOK_URL` (signed, fire-and-
+  forget) so the agent can observe and react. Full reference:
+  `docs/community-webhook.md`.
 - User auth is Netlify Identity. The browser bridge is self-hosted through
   `vendor/tinyworld-auth.js` with an import map to vendored
   `@netlify/identity` / `gotrue-js`; do not reintroduce a remote identity

@@ -53,6 +53,9 @@ Guidance for AI coding agents working in this repo. Read this before touching
   - `.codex/skills/tinyworld-block-button-style` — locked-in "block" button aesthetic: raised square, dark category-colored outline + inner white line, white-bodied outlined glyph. Use for any new icon button/tile.
   - `.codex/skills/tinyworld-mesh-terrain` — opt-in voxel-block landscape sculptor (paint per-voxel materials + pull/push-sculpt flat-topped blocks). Keeps the block mesh as a separate overlay persisted under `tinyworld:meshTerrain:*` (no `setCell` bake) and hides the flat home tiles. Module `engine/world/46-mesh-terrain.js`.
   - `.codex/skills/tinyworld-flight-sim` — flyable plane. The plane is the existing **`stunt-plane` model-stamp** (`models/stunt_plane.glb`) placed via the **Stamps** system (NOT a bespoke tool/kind). A plain click on the placed stamp opens an Enter/Fly menu; flight uses a rear chase-cam + the ported ships physics (sim-space → scene similarity transform); Escape exits.
+  - `.codex/skills/tinyworld-tinyverse-race-track` — Tinyverse ground-surface perimeter rally loop, poser-surface show/hide hook, static road/bridge merging, and local kart race HUD.
+  - `.codex/skills/tinyworld-surface-roam` — Free WASD+mouse-look movement on the Skybound poser surface (J descend/ascend, Space/C fly, Shift sprint). Polling pattern for fly-down state, sampleWorld height helper, presence-echo guard, and _sr-prefixed state variables.
+  - `.codex/skills/tinyworld-cctv-truman` — in-world CCTV / "Truman Show" surveillance cameras: render-to-texture B&W CRT/VHS monitor feeds with captions, lobby/pumpkin/tree camera placement, moving-subject tracking, and the lobby screen cutting to the hottest live feed. Modules `engine/world/62-cctv-truman.js` + `63-cctv-placement.js`.
 
 ## House style
 

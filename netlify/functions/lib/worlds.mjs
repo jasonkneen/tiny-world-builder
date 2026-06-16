@@ -12,6 +12,26 @@ export const WORLD_RESOURCES = ['fish', 'meat', 'plants', 'ore'];
 export const WORLD_STATUSES = ['unclaimed', 'draft', 'published'];
 export const MAX_WORLD_NAME = 48;
 
+// ---- god-admin gate ----
+// A small set of accounts may edit ANY world live — including the published
+// lobby/demo world that no single player "owns" — and save straight to the live
+// record. Gated by the authenticated account EMAIL so it follows the person, not
+// a browser or a draft's ownership row. Mirrors the client allowlist in
+// engine/world/30-ui-boot-wiring.js (AI_ACCOUNT_ALLOWLIST / TINYVERSE_ALLOWLIST).
+// Extra admins can be added via a comma-separated TINYWORLD_WORLD_ADMIN_EMAILS env.
+const WORLD_ADMIN_DEFAULT_EMAILS = ['jason@bouncingfish.com'];
+export function worldAdminEmails() {
+  const extra = String(process.env.TINYWORLD_WORLD_ADMIN_EMAILS || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return new Set(WORLD_ADMIN_DEFAULT_EMAILS.concat(extra));
+}
+export function isWorldAdminEmail(email) {
+  const e = String(email == null ? '' : email).trim().toLowerCase();
+  if (!e) return false;
+  return worldAdminEmails().has(e);
+}
+
+
 // ---- name / tax sanitizers (mirrors worlds table CHECK constraints) ----
 export function cleanWorldName(value) {
   return String(value == null ? '' : value).trim().slice(0, MAX_WORLD_NAME);

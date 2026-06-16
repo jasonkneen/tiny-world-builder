@@ -97,7 +97,7 @@ export default async function walletPaymentsFunction(request) {
 
     if (action !== 'create') return errorResponse('Unknown payment action', 400, origin);
 
-    const recipient = String((body && body.recipientWallet) || solanaEnv('TINYWORLD_PAYMENT_WALLET', '')).trim();
+    const recipient = String(solanaEnv('TINYWORLD_PAYMENT_WALLET', '')).trim();
     if (!isSolanaPublicKey(recipient)) {
       return errorResponse('TINYWORLD_PAYMENT_WALLET is not configured', 501, origin);
     }

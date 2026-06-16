@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="The Tiny World Builder community — text rooms, direct messages, and a member directory. Chat with other builders in the tinyverse." />
+<title>Community - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  // Auth bootstrap — mirrors tiny-world-builder.html so the community page can
+  // sign users in directly (Netlify Identity) without bouncing to the builder.
+  (function communityAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script src="engine/world/00-custom-confirm.js"></script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+<style>
+  /* -------- community page -------- */
+  [hidden] { display: none !important; }
+  .community-main {
+    width: min(1680px, calc(100vw - 32px));
+    max-width: none;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 116px 16px 24px;
+    display: flex;
+    flex-direction: column;
+  }
+  .community-headline {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .community-headline h1 {
+    font-family: var(--display-font);
+    font-size: clamp(30px, 4vw, 44px);
+    margin: 0 0 4px;
+    color: #1c2533;
+  }
+  .community-headline p { margin: 0; color: #404a5c; font-size: 15px; max-width: 52ch; }
+  .me-chip {
+    display: inline-flex; align-items: center; gap: 9px;
+    height: 42px; padding: 0 14px 0 6px; border-radius: var(--radius-md);
+    background: rgba(255,255,255,0.66); border: 1px solid rgba(255,255,255,0.55);
+    font-size: 13px; font-weight: 700;
+    cursor: pointer; color: var(--ink); font-family: inherit; white-space: nowrap;
+  }
+  .me-chip:hover { background: rgba(255,255,255,0.85); }
+  .me-chip .avatar { width: 28px; height: 28px; font-size: 11px; }
+  /* auth controls living inside the nav pill */
+  .site-nav .nav-auth { flex: 0 0 auto; margin-left: 2px; }
+  /* [hidden] must beat the display rules below (author .btn/.icon-btn display
+     overrides the UA [hidden]{display:none}, otherwise signed-in users still
+     see "Sign in" and signed-out users see the edit/chip controls). */
+  .site-nav .nav-auth[hidden] { display: none !important; }
+  .site-nav .btn.primary.nav-auth {
+    height: 42px; border-radius: var(--radius-md); padding: 0 16px;
+    font-weight: 750; font-size: 13px;
+    background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -4px 0 rgba(17,51,128,0.22), 0 12px 24px -14px rgba(22,76,170,0.68);
+  }
+  .site-nav .icon-btn.nav-auth {
+    width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-md); background: rgba(255,255,255,0.66);
+    border: 1px solid rgba(255,255,255,0.55); color: var(--ink); cursor: pointer; padding: 0;
+  }
+  .site-nav .icon-btn.nav-auth:hover { background: rgba(255,255,255,0.85); }
+  .site-nav .icon-btn.nav-auth svg { width: 16px; height: 16px; }
+
+  /* human verification banner */
+  .verify-banner {
+    display: flex; align-items: center; gap: 14px;
+    margin: 0 0 14px; padding: 12px 14px;
+    border: 1px solid rgba(255,255,255,0.55); border-radius: var(--radius-lg);
+    background: rgba(255,255,255,0.72);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+  }
+  .verify-banner svg { width: 26px; height: 26px; flex: 0 0 auto; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .verify-banner .vb-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+  .verify-banner .vb-text strong { font-size: 14px; color: #1c2533; }
+  .verify-banner .vb-text span { font-size: 12.5px; color: #404a5c; }
+  .verify-timing-note { font-size: 12.5px; color: #404a5c; background: rgba(58,114,200,0.08); border: 1px solid rgba(58,114,200,0.16); border-radius: var(--radius-md); padding: 9px 11px; }
+
+  .community-policy-footer {
+    margin-top: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    font-size: 12.5px;
+    color: #404a5c;
+  }
+  .community-policy-footer strong { color: #1c2533; }
+  .community-policy-footer nav { display: flex; flex-wrap: wrap; gap: 10px; }
+  .community-policy-footer a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .community-policy-footer a:hover { text-decoration: underline; }
+
+  /* shell: 3 columns */
+  .community-shell {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr) 268px;
+    gap: 18px;
+    align-items: stretch;
+    flex: 1 1 auto;
+    min-height: calc(100vh - 258px);
+  }
+  .c-panel {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .c-panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  .c-panel-head h2 {
+    margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700;
+  }
+  .c-panel-body { overflow-y: auto; padding: 10px; flex: 1 1 auto; min-height: 0; }
+
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer;
+    padding: 0; transition: filter .15s, transform .15s;
+  }
+  .icon-btn:hover { filter: brightness(0.97); transform: translateY(-1px); }
+  .icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .icon-btn.danger-icon { color: #c0392b; border-color: #f0d2d2; background: #fbecec; }
+  .icon-btn.danger-icon:hover { filter: brightness(0.98); }
+
+  /* rooms + dm list */
+  .c-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+  .c-list-section { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; padding: 10px 8px 5px; }
+  .room-row, .dm-row {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 8px 10px; border-radius: var(--radius-md);
+    border: 1px solid transparent; background: transparent; cursor: pointer;
+    text-align: left; color: var(--ink); font-family: inherit; font-size: 14px;
+  }
+  .room-row:hover, .dm-row:hover { background: rgba(58,114,200,0.08); }
+  .room-row.active, .dm-row.active { background: rgba(58,114,200,0.14); border-color: rgba(58,114,200,0.30); font-weight: 600; }
+  .room-row .hash { color: var(--muted); font-weight: 700; }
+  .room-row .lock { width: 13px; height: 13px; color: var(--muted); }
+  .room-row .name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* avatars */
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
+    object-fit: cover; background: #dfe7f2; border: 1px solid var(--line);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #4a5b78; text-transform: uppercase;
+  }
+  .avatar.lg { width: 64px; height: 64px; font-size: 22px; }
+  .avatar.sm { width: 24px; height: 24px; font-size: 10px; }
+  .avatar-wrap { position: relative; flex: 0 0 auto; }
+  .presence-dot {
+    position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+    border-radius: 50%; background: #b8c0cc; border: 2px solid #fff;
+  }
+  .presence-dot.online { background: #36b37e; }
+
+  /* center: chat */
+  .chat-panel { overflow: hidden; }
+  .chat-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .chat-head .title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .chat-head .title strong { font-size: 16px; display: flex; align-items: center; gap: 7px; }
+  .chat-head .title span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat-head .head-actions { margin-left: auto; display: flex; gap: 6px; }
+  .chat-scroll { flex: 1 1 auto; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .msg { display: flex; gap: 11px; }
+  .msg.hidden-message { opacity: 0.76; }
+  .msg .body { min-width: 0; flex: 1 1 auto; }
+  .msg .by { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .msg .by strong { font-size: 14px; }
+  .msg .by time { font-size: 11px; color: var(--muted); }
+  .msg .text { font-size: 14px; line-height: 1.5; color: var(--ink); word-wrap: break-word; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .msg.hidden-message .text { color: #576174; font-style: italic; }
+  .msg-hidden-badge { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #7a5a1a; background: rgba(255,199,93,0.20); border: 1px solid rgba(170,113,25,0.22); border-radius: 999px; padding: 2px 7px; }
+  .msg-mod-actions { margin-left: auto; display: inline-flex; gap: 5px; opacity: 0; transition: opacity .15s; }
+  .msg:hover .msg-mod-actions, .msg:focus-within .msg-mod-actions { opacity: 1; }
+  .msg-mod-btn { border: 1px solid var(--line); background: rgba(255,255,255,0.78); color: var(--ink); border-radius: 999px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .msg-mod-btn:hover { filter: brightness(0.97); }
+  .msg-mod-btn.danger { color: #c0392b; border-color: #f0d2d2; background: #fff5f5; }
+  .chat-empty { margin: auto; text-align: center; color: var(--muted); font-size: 14px; padding: 40px; }
+
+  .composer { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 10px; align-items: flex-end; }
+  .composer textarea {
+    flex: 1 1 auto; resize: none; min-height: 42px; max-height: 140px;
+    padding: 11px 13px; border-radius: var(--radius-md); border: 1px solid var(--line);
+    font-family: inherit; font-size: 14px; color: var(--ink); background: #fff; line-height: 1.4;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
+  .send-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: none;
+    background: var(--accent); color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .send-btn:hover { filter: brightness(1.08); }
+  .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .send-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .composer-note { font-size: 11.5px; color: var(--muted); padding: 0 16px 10px; }
+  .composer-note.err { color: #c0392b; }
+
+  /* members */
+  .member-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 7px 9px; border-radius: var(--radius-md); border: 1px solid transparent;
+    background: transparent; cursor: pointer; text-align: left; font-family: inherit; color: var(--ink);
+  }
+  .member-row:hover { background: rgba(58,114,200,0.08); }
+  .member-row .mname { flex: 1 1 auto; overflow: hidden; }
+  .member-row .mname b { display: block; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-row .mname small { font-size: 11.5px; color: var(--muted); }
+
+  /* modal */
+  .c-modal-back {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    background: rgba(20,28,44,0.42); backdrop-filter: blur(4px);
+  }
+  .c-modal-back.open { display: flex; }
+  .c-modal {
+    width: 100%; max-width: 420px; background: var(--panel);
+    border-radius: var(--radius-lg); box-shadow: 0 30px 80px -24px rgba(20,30,55,0.5);
+    border: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .c-modal h2 { margin: 0; font-size: 20px; color: var(--ink); font-family: var(--display-font); }
+  .c-modal label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink); }
+  .c-modal input[type=text], .c-modal input[type=password], .c-modal textarea, .c-modal select {
+    width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--line);
+    font-family: inherit; font-size: 14px; color: var(--ink); background: #fff;
+  }
+  .c-modal input:focus, .c-modal textarea:focus, .c-modal select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
+  .c-modal .field { display: flex; flex-direction: column; }
+  .c-modal .field + .field { margin-top: 12px; }
+  .c-modal .row { display: flex; gap: 10px; }
+  .c-modal .row > * { flex: 1; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 40px; padding: 0 16px; border-radius: var(--radius-md); cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 600; border: 1px solid var(--line); background: #fff; color: var(--ink);
+  }
+  .btn:hover { filter: brightness(0.97); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { background: #fbecec; color: #c0392b; border-color: #f0d2d2; }
+  .btn.full { width: 100%; }
+  .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .btn.sm { height: 32px; padding: 0 11px; font-size: 12.5px; }
+
+  /* profile card */
+  .profile-card-head { display: flex; gap: 14px; align-items: center; }
+  .profile-card-head .pc-meta h3 { margin: 0 0 2px; font-size: 18px; color: var(--ink); }
+  .profile-card-head .pc-meta span { font-size: 13px; color: var(--muted); }
+  .profile-about { font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--line-soft); border-radius: var(--radius-md); padding: 12px 14px; }
+  .profile-about.muted { color: var(--muted); font-style: italic; }
+  .pc-socials { display: flex; flex-direction: column; gap: 7px; }
+  .pc-social { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink); text-decoration: none; }
+  .pc-social svg { width: 16px; height: 16px; flex: 0 0 auto; }
+  .pc-social a, .pc-social .val { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .pc-social a:hover { text-decoration: underline; }
+  .handle-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-md); background: #fff; overflow: hidden; }
+  .handle-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
+  .handle-input .handle-at { padding: 0 4px 0 12px; color: var(--muted); font-weight: 600; }
+  .handle-input input { border: none; outline: none; flex: 1 1 auto; padding: 10px 12px 10px 2px; font-family: inherit; font-size: 14px; color: var(--ink); background: transparent; }
+  #profile-edit-modal { max-height: 88vh; overflow-y: auto; }
+  #profile-edit-modal textarea { width: 100%; resize: vertical; min-height: 64px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--line); font-family: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+  #profile-edit-modal textarea:focus, #profile-edit-modal input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.14); }
+  .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .avatar-opt { padding: 0; border: 2px solid var(--line); border-radius: var(--radius-md); background: #fff; cursor: pointer; overflow: hidden; aspect-ratio: 1; transition: border-color .15s, transform .15s; }
+  .avatar-opt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .avatar-opt:hover { transform: translateY(-1px); border-color: rgba(58,114,200,0.5); }
+  .avatar-opt.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(58,114,200,0.18); }
+  .modal-error { background: #fbecec; color: #c0392b; border-radius: var(--radius-md); padding: 9px 12px; font-size: 13px; }
+  .modal-ok { background: #e9f6ef; color: #1d7a4d; border-radius: var(--radius-md); padding: 9px 12px; font-size: 13px; word-break: break-all; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill.role { background: rgba(58,114,200,0.12); color: var(--accent); }
+  .pill.role-admin { background: rgba(200,58,90,0.12); color: #c0392b; }
+  .pill.role-moderator { background: rgba(58,114,200,0.14); color: var(--accent); }
+  .pill.role-channel_creator { background: rgba(46,160,110,0.14); color: #1d7a4d; }
+  #pc-role-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+  .pc-roles-admin { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .pc-roles-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .pc-roles-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+  .role-toggle { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: var(--radius-md); border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: inherit; font-size: 13px; color: var(--ink); }
+  .role-toggle:hover { filter: brightness(0.97); }
+  .role-toggle.on { border-color: var(--accent); background: rgba(58,114,200,0.10); font-weight: 600; }
+  .role-toggle .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .role-toggle.on .dot { background: var(--accent); }
+
+  /* sign-in / empty gate */
+  .gate {
+    grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; padding: 64px 24px; color: var(--muted);
+  }
+  .gate svg { width: 44px; height: 44px; stroke: var(--muted); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .gate h2 { margin: 0; color: var(--ink); font-size: 20px; font-family: var(--display-font); }
+  .gate p { margin: 0; max-width: 44ch; font-size: 14px; }
+
+  .skeleton-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--line) 25%, var(--line-soft) 37%, var(--line) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; margin: 8px; }
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+  @media (max-width: 1040px) {
+    .community-shell { grid-template-columns: 220px minmax(0,1fr); }
+    .members-panel { display: none; }
+  }
+  @media (max-width: 720px) {
+    .community-main { width: min(100vw, calc(100vw - 16px)); padding: 104px 8px 18px; }
+    .community-shell { grid-template-columns: 1fr; min-height: auto; }
+    .rooms-panel { order: 1; max-height: 220px; }
+    .chat-panel { order: 2; min-height: min(560px, calc(100vh - 260px)); }
+    .community-policy-footer { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/roadmap">Roadmap</a>
+      <a href="/features">Suggest</a>
+      <a href="/community" aria-current="page">Community</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+      <button class="btn primary nav-auth" id="headline-login-btn" hidden>Sign in</button>
+      <button class="icon-btn nav-auth" id="edit-profile-btn" title="Edit profile" aria-label="Edit profile" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </button>
+      <button id="me-chip" class="me-chip nav-auth" title="Sign out" hidden></button>
+    </nav>
+  </header>
+
+  <main class="community-main">
+    <div class="community-headline">
+      <div>
+        <h1>Community</h1>
+        <p>Rooms, direct messages, and the people of the tinyverse. Chat with other builders, share worlds, and get help.</p>
+      </div>
+    </div>
+
+    <div class="verify-banner" id="verify-banner" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 7.8 8 9 4.6-1.2 8-4 8-9V5z"/><path d="M9 12l2 2 4-4"/></svg>
+      <div class="vb-text">
+        <strong>One quick human check</strong>
+        <span>Answer a few easy questions to unlock posting, DMs, and joining rooms.</span>
+      </div>
+      <button class="btn primary sm" id="verify-banner-btn">Verify I'm human</button>
+    </div>
+
+    <div class="community-shell" id="community-shell">
+      <!-- Rooms / DMs -->
+      <aside class="c-panel rooms-panel" aria-label="Rooms and direct messages">
+        <div class="c-panel-head">
+          <h2>Channels</h2>
+          <div style="display:flex;gap:6px">
+            <button class="icon-btn" id="redeem-invite-btn" title="Redeem an invite code" aria-label="Redeem invite">
+              <svg viewBox="0 0 24 24"><path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+            </button>
+            <button class="icon-btn" id="create-room-btn" title="Create a channel" aria-label="Create channel" hidden>
+              <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="c-panel-body" id="rooms-body">
+          <div class="skeleton-line" style="width:70%"></div>
+          <div class="skeleton-line" style="width:55%"></div>
+          <div class="skeleton-line" style="width:62%"></div>
+        </div>
+      </aside>
+
+      <!-- Chat -->
+      <section class="c-panel chat-panel" aria-label="Messages">
+        <div class="chat-head" id="chat-head">
+          <div class="title"><strong>Select a channel</strong><span>Pick a room or a direct message to start chatting.</span></div>
+        </div>
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat-empty">No channel selected yet.</div>
+        </div>
+        <div class="composer-note err" id="composer-note" hidden></div>
+        <div class="composer" id="composer" hidden>
+          <textarea id="composer-input" rows="1" maxlength="2000" placeholder="Write a message…" aria-label="Message"></textarea>
+          <button class="send-btn" id="send-btn" disabled>
+            <svg viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+            Send
+          </button>
+        </div>
+      </section>
+
+      <!-- Members -->
+      <aside class="c-panel members-panel" aria-label="Members">
+        <div class="c-panel-head">
+          <h2>Members</h2>
+          <span id="member-count" style="font-size:12px;color:var(--muted);font-weight:600"></span>
+        </div>
+        <div class="c-panel-body" id="members-body">
+          <div class="skeleton-line" style="width:80%"></div>
+          <div class="skeleton-line" style="width:65%"></div>
+          <div class="skeleton-line" style="width:72%"></div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="c-panel community-policy-footer" aria-label="Community policy links">
+      <div><strong>Zero tolerance:</strong> violations suspend community and game access — 4 hours, then 24 hours, then permanent.</div>
+      <nav aria-label="Legal and safety">
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/code-of-conduct">Code of Conduct</a>
+      </nav>
+    </footer>
+  </main>
+
+  <!-- Profile card modal -->
+  <div class="c-modal-back" id="profile-modal-back" role="dialog" aria-modal="true" aria-labelledby="pc-name">
+    <div class="c-modal" id="profile-modal">
+      <div class="profile-card-head">
+        <div class="avatar-wrap"><span class="avatar lg" id="pc-avatar"></span><span class="presence-dot" id="pc-dot"></span></div>
+        <div class="pc-meta">
+          <h3 id="pc-name">Member</h3>
+          <span id="pc-username">@member</span>
+          <div id="pc-role-wrap" style="margin-top:6px" hidden><span class="pill role" id="pc-role"></span></div>
+        </div>
+      </div>
+      <div class="profile-about muted" id="pc-about">No bio yet.</div>
+      <div id="pc-socials" class="pc-socials"></div>
+      <div class="modal-error" id="pc-error" hidden></div>
+      <div class="modal-ok" id="pc-ok" hidden></div>
+      <div class="modal-actions">
+        <button class="btn primary" id="pc-message-btn">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Message
+        </button>
+        <button class="btn" id="pc-block-btn">Block</button>
+        <button class="btn danger" id="pc-ban-btn" hidden>Ban…</button>
+      </div>
+      <div id="pc-roles-admin" class="pc-roles-admin" hidden>
+        <div class="pc-roles-label">Roles</div>
+        <div id="pc-roles-toggles" class="pc-roles-toggles"></div>
+      </div>
+      <div id="pc-ban-form" hidden>
+        <div class="row">
+          <div class="field">
+            <label for="pc-ban-duration">Ban duration</label>
+            <select id="pc-ban-duration">
+              <option value="1">1 hour</option>
+              <option value="24">24 hours</option>
+              <option value="168">7 days</option>
+              <option value="0">Permanent</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pc-ban-reason">Reason (optional)</label>
+            <input type="text" id="pc-ban-reason" maxlength="200" placeholder="Spam, abuse…" />
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:12px">
+          <button class="btn" id="pc-ban-cancel">Cancel</button>
+          <button class="btn danger" id="pc-ban-confirm">Confirm ban</button>
+        </div>
+      </div>
+      <button class="btn full" id="pc-close-btn">Close</button>
+    </div>
+  </div>
+
+  <!-- Create room modal -->
+  <div class="c-modal-back" id="room-modal-back" role="dialog" aria-modal="true" aria-labelledby="room-modal-title">
+    <div class="c-modal">
+      <h2 id="room-modal-title">Create a room</h2>
+      <div class="field">
+        <label for="room-name">Room name</label>
+        <input type="text" id="room-name" maxlength="80" placeholder="e.g. show-and-tell" />
+      </div>
+      <div class="field">
+        <label for="room-topic">Topic (optional)</label>
+        <input type="text" id="room-topic" maxlength="200" placeholder="What's this room about?" />
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer">
+          <input type="checkbox" id="room-private" style="width:auto" /> Invite-only (private)
+        </label>
+      </div>
+      <div class="modal-error" id="room-error" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="room-cancel">Cancel</button>
+        <button class="btn primary" id="room-create">Create room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invite modal -->
+  <div class="c-modal-back" id="invite-modal-back" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
+    <div class="c-modal">
+      <h2 id="invite-modal-title">Invite to room</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px" id="invite-sub">Create a shareable invite link.</p>
+      <div class="row">
+        <div class="field">
+          <label for="invite-expiry">Expires in</label>
+          <select id="invite-expiry">
+            <option value="0">Never</option>
+            <option value="24">24 hours</option>
+            <option value="168">7 days</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="invite-maxuses">Max uses</label>
+          <input type="text" id="invite-maxuses" inputmode="numeric" placeholder="Unlimited" />
+        </div>
+      </div>
+      <div class="modal-error" id="invite-error" hidden></div>
+      <div class="modal-ok" id="invite-result" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="invite-close">Close</button>
+        <button class="btn primary" id="invite-generate">Generate link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Redeem invite modal -->
+  <div class="c-modal-back" id="redeem-modal-back" role="dialog" aria-modal="true" aria-labelledby="redeem-modal-title">
+    <div class="c-modal">
+      <h2 id="redeem-modal-title">Redeem an invite</h2>
+      <div class="field">
+        <label for="redeem-code">Invite code</label>
+        <input type="text" id="redeem-code" maxlength="64" placeholder="Paste your invite code" />
+      </div>
+      <div class="modal-error" id="redeem-error" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="redeem-cancel">Cancel</button>
+        <button class="btn primary" id="redeem-confirm">Join room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign-in modal -->
+  <div class="c-modal-back" id="login-modal-back" role="dialog" aria-modal="true" aria-labelledby="login-modal-title">
+    <div class="c-modal">
+      <h2 id="login-modal-title">Sign in</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px" id="login-sub">Sign in to chat, send DMs, and join rooms.</p>
+
+      <button class="btn full" id="login-wallet-btn" style="gap:9px">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.5h11.8a2.7 2.7 0 0 1 0 5.4H9.2"/><path d="M3 5.5h14a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><circle cx="16.5" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>
+        <span class="login-wallet-label">Sign in with Phantom</span>
+      </button>
+
+      <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px">
+        <span style="flex:1;height:1px;background:var(--line)"></span>or email<span style="flex:1;height:1px;background:var(--line)"></span>
+      </div>
+
+      <div class="field">
+        <label for="login-email">Email</label>
+        <input type="text" id="login-email" autocomplete="email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="Your password" />
+      </div>
+      <div class="field" id="login-name-field" hidden>
+        <label for="login-name">Display name</label>
+        <input type="text" id="login-name" maxlength="80" placeholder="How you'll appear" />
+      </div>
+
+      <div class="modal-error" id="login-error" hidden></div>
+      <div class="modal-ok" id="login-ok" hidden></div>
+
+      <div class="modal-actions">
+        <button class="btn" id="login-close">Close</button>
+        <button class="btn primary" id="login-submit">Sign in</button>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);text-align:center">
+        <span id="login-toggle-text">No account yet?</span>
+        <a href="#" id="login-toggle" style="color:var(--accent);font-weight:600;text-decoration:none">Create one</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit-profile modal (display name, bio, avatar, handles) -->
+  <div class="c-modal-back" id="socials-modal-back" role="dialog" aria-modal="true" aria-labelledby="socials-modal-title">
+    <div class="c-modal" id="profile-edit-modal">
+      <h2 id="socials-modal-title">Edit your profile</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px" id="socials-sub">Set how you appear to other builders. A Twitter/X handle is required to post and chat.</p>
+
+      <div class="field">
+        <label>Avatar</label>
+        <div id="avatar-grid" class="avatar-grid" role="radiogroup" aria-label="Choose an avatar"></div>
+      </div>
+
+      <div class="field">
+        <label for="profile-displayname">Display name</label>
+        <input type="text" id="profile-displayname" maxlength="80" placeholder="Your name in the community" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="profile-about">About <span style="color:var(--muted)">(optional)</span></label>
+        <textarea id="profile-about" rows="3" maxlength="1000" placeholder="A short bio — keep it friendly."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="socials-twitter">Twitter / X handle <span style="color:#c0392b">*</span></label>
+        <div class="handle-input"><span class="handle-at">@</span><input type="text" id="socials-twitter" maxlength="40" placeholder="yourhandle" autocomplete="off" /></div>
+      </div>
+      <div class="field">
+        <label for="socials-github">GitHub username <span style="color:var(--muted)">(optional)</span></label>
+        <div class="handle-input"><span class="handle-at">@</span><input type="text" id="socials-github" maxlength="40" placeholder="yourhandle" autocomplete="off" /></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted)">Names and bios are filtered — no sexual, nude, or abusive content.</div>
+      <div class="modal-error" id="socials-error" hidden></div>
+      <div class="modal-ok" id="socials-ok" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="socials-cancel">Later</button>
+        <button class="btn primary" id="socials-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Human verification modal (anti-AI questionnaire for new members) -->
+  <div class="c-modal-back" id="verify-modal-back" role="dialog" aria-modal="true" aria-labelledby="verify-modal-title">
+    <div class="c-modal">
+      <h2 id="verify-modal-title">Quick human check</h2>
+      <p style="margin:0;color:var(--muted);font-size:13.5px">
+        New members answer a few quick questions before joining the chat. This keeps the
+        tinyverse community human. Take your time — there's no trick.
+      </p>
+      <div id="verify-questions" style="display:flex;flex-direction:column;gap:12px;margin-top:4px"></div>
+      <div class="verify-timing-note" id="verify-timing-note" hidden>Answer the questions, then wait a second for the human-check timer to unlock submit.</div>
+      <!-- honeypot: hidden from humans, irresistible to naive bots. Do not remove. -->
+      <div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden">
+        <label for="verify-mid">Middle initial</label>
+        <input type="text" id="verify-mid" name="middle_initial" tabindex="-1" autocomplete="off" />
+      </div>
+      <div class="modal-error" id="verify-error" hidden></div>
+      <div class="modal-ok" id="verify-ok" hidden></div>
+      <div class="modal-actions">
+        <button class="btn" id="verify-refresh" title="Get new questions">New questions</button>
+        <button class="btn primary" id="verify-submit">Submit &amp; join</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ---- auth: reuse the same token sources the app uses ----
+    // 1) wallet session token in localStorage, 2) Netlify Identity nf_jwt cookie.
+    const TW_WALLET_SESSION_KEY = 'tinyworld:auth:wallet-session.v1';
+    function walletSessionToken() {
+      try { return localStorage.getItem(TW_WALLET_SESSION_KEY) || ''; } catch (_) { return ''; }
+    }
+    function identityCookieToken() {
+      try { const m = document.cookie.match(/(?:^|; )nf_jwt=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; } catch (_) { return ''; }
+    }
+    async function accessToken() {
+      const Auth = window.TinyWorldAuth;
+      if (Auth && typeof Auth.getUser === 'function') {
+        try {
+          const user = await Auth.getUser();
+          if (user) {
+            if (typeof user.jwt === 'function') { try { return await user.jwt(); } catch (_) {} }
+            if (user.token && user.token.access_token) return user.token.access_token;
+          }
+        } catch (_) {}
+      }
+      return walletSessionToken() || identityCookieToken() || '';
+    }
+    function setWalletSessionToken(t) { try { localStorage.setItem(TW_WALLET_SESSION_KEY, t || ''); } catch (_) {} }
+    function clearWalletSessionToken() { try { localStorage.removeItem(TW_WALLET_SESSION_KEY); } catch (_) {} }
+
+    // ---- login (email via Netlify Identity, or Phantom wallet) ----
+    // Reuses the same vendored auth bridge + /api/wallet flow as the builder, so
+    // people can sign in here without bouncing to /tiny-world-builder.
+    let loginMode = 'login'; // 'login' | 'signup'
+
+    async function emailLogin(email, password) {
+      const Auth = window.TinyWorldAuth;
+      if (!Auth || typeof Auth.login !== 'function') throw new Error('Email sign-in is unavailable right now.');
+      await Auth.login(email, password, true);
+    }
+    async function emailSignup(email, password, name) {
+      const Auth = window.TinyWorldAuth;
+      if (!Auth || typeof Auth.signup !== 'function') throw new Error('Sign-up is unavailable right now.');
+      await Auth.signup(email, password, name ? { full_name: name, name } : undefined);
+      // Some Identity configs auto-confirm; try an immediate login so the session is live.
+      try { await Auth.login(email, password, true); } catch (_) {}
+    }
+
+    function phantomProvider() {
+      const p = window.phantom && window.phantom.solana ? window.phantom.solana : window.solana;
+      return p && p.isPhantom ? p : null;
+    }
+    function bytesToBase64(bytes) {
+      let bin = ''; Array.from(bytes || []).forEach(b => { bin += String.fromCharCode(Number(b) & 0xff); });
+      return btoa(bin);
+    }
+    async function walletApi(body) {
+      const r = await fetch('/api/wallet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body || {}) });
+      const text = await r.text();
+      let data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { data = { error: text || ('HTTP ' + r.status) }; }
+      if (!r.ok) { const e = new Error((data && data.error) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+      return data;
+    }
+    async function walletLogin() {
+      const provider = phantomProvider();
+      if (!provider) throw new Error('Phantom wallet was not found. Install Phantom, then try again.');
+      if (typeof provider.signMessage !== 'function') throw new Error('This Phantom provider cannot sign messages.');
+      const connected = await provider.connect();
+      const publicKey = connected && connected.publicKey ? connected.publicKey.toString() : (provider.publicKey && provider.publicKey.toString());
+      if (!publicKey) throw new Error('Wallet did not return a public key.');
+      const challenge = await walletApi({ action: 'loginChallenge', publicKey });
+      const signed = await provider.signMessage(new TextEncoder().encode(challenge.message), 'utf8');
+      const signature = bytesToBase64(signed.signature || signed);
+      const result = await walletApi({ action: 'login', publicKey, message: challenge.message, challengeToken: challenge.challengeToken, signature });
+      if (!result || !result.sessionToken) throw new Error('Wallet login did not return a session.');
+      setWalletSessionToken(result.sessionToken);
+    }
+
+    async function api(path, method, body) {
+      const token = await accessToken();
+      const opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
+      if (token) opts.headers.Authorization = 'Bearer ' + token;
+      if (body) opts.body = JSON.stringify(body);
+      const r = await fetch(path, opts);
+      const text = await r.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { data = { error: text || ('HTTP ' + r.status) }; }
+      if (!r.ok) { const out = data || {}; out.status = r.status; out.error = out.error || ('HTTP ' + r.status); throw out; }
+      return data || {};
+    }
+
+    // ---- helpers ----
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function initials(name) { return String(name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?'; }
+    function fmtTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso); if (isNaN(d)) return '';
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return sameDay ? t : (d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + t);
+    }
+    function avatarHTML(member, cls) {
+      const c = cls ? (' ' + cls) : '';
+      if (member && member.image) return '<img class="avatar' + c + '" src="' + esc(member.image) + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:this.className,textContent:\'' + esc(initials(member.displayName || member.username)) + '\'}))" />';
+      return '<span class="avatar' + c + '">' + esc(initials(member ? (member.displayName || member.username) : '?')) + '</span>';
+    }
+
+    // ---- state ----
+    const VERIFY_MIN_ELAPSED_MS = 2500;
+    let verifyCountdownTimer = null;
+    const state = {
+      me: null, admin: false, verified: false,
+      caps: {}, roleOptions: [],
+      rooms: [], members: [], dms: [], blocks: [],
+      sel: null, // { type: 'room'|'dm', id } — id is roomId or other-profile-id
+      messages: [], pollTimer: null, lastFocus: null,
+      verify: null, // { token, questions:[{id,prompt}], shownAt }
+    };
+    const byId = id => document.getElementById(id);
+
+    // ---- rendering: rooms + dms ----
+    function renderRooms() {
+      const el = byId('rooms-body');
+      const joined = state.rooms;
+      let html = '<div class="c-list-section">Rooms</div><ul class="c-list">';
+      if (!joined.length) html += '<li style="padding:8px 10px;color:var(--muted);font-size:13px">No rooms yet.</li>';
+      for (const r of joined) {
+        const active = state.sel && state.sel.type === 'room' && state.sel.id === r.id ? ' active' : '';
+        const lock = r.isPrivate ? '<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' : '<span class="hash">#</span>';
+        html += '<li><button class="room-row' + active + '" data-room="' + r.id + '">' + lock + '<span class="name">' + esc(r.name) + '</span></button></li>';
+      }
+      html += '</ul>';
+      html += '<div class="c-list-section">Direct messages</div><ul class="c-list">';
+      if (!state.dms.length) html += '<li style="padding:8px 10px;color:var(--muted);font-size:13px">No conversations yet. Open a member to start one.</li>';
+      for (const d of state.dms) {
+        if (!d.other || !d.other.id) continue;
+        const active = state.sel && state.sel.type === 'dm' && state.sel.id === d.other.id ? ' active' : '';
+        html += '<li><button class="dm-row' + active + '" data-dm="' + d.other.id + '">' +
+          '<span class="avatar-wrap">' + avatarHTML(d.other, 'sm') + '<span class="presence-dot ' + (d.other.online ? 'online' : '') + '" style="width:8px;height:8px"></span></span>' +
+          '<span class="name">' + esc(d.other.displayName || d.other.username) + '</span></button></li>';
+      }
+      html += '</ul>';
+      el.innerHTML = html;
+      el.querySelectorAll('[data-room]').forEach(b => b.addEventListener('click', () => selectRoom(Number(b.dataset.room))));
+      el.querySelectorAll('[data-dm]').forEach(b => b.addEventListener('click', () => selectDm(Number(b.dataset.dm))));
+    }
+
+    function renderMembers() {
+      const el = byId('members-body');
+      byId('member-count').textContent = state.members.length ? String(state.members.length) : '';
+      if (!state.members.length) { el.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">No members yet.</div>'; return; }
+      el.innerHTML = '<ul class="c-list">' + state.members.map(m =>
+        '<li><button class="member-row" data-member="' + m.id + '">' +
+          '<span class="avatar-wrap">' + avatarHTML(m) + '<span class="presence-dot ' + (m.online ? 'online' : '') + '"></span></span>' +
+          '<span class="mname"><b>' + esc(m.displayName || m.username) + '</b><small>' + (m.online ? 'Online' : 'Offline') + '</small></span>' +
+        '</button></li>').join('') + '</ul>';
+      el.querySelectorAll('[data-member]').forEach(b => b.addEventListener('click', () => openProfile(Number(b.dataset.member))));
+    }
+
+    function currentRoom() { return state.sel && state.sel.type === 'room' ? state.rooms.find(r => r.id === state.sel.id) : null; }
+    function memberById(id) { return state.members.find(m => m.id === id) || null; }
+    function hasCap(name) { return !!(state.admin || (state.caps && state.caps[name])); }
+    function canModerateCurrentConversation() {
+      if (!state.sel) return false;
+      if (state.sel.type === 'dm') return hasCap('canModerate');
+      const r = currentRoom();
+      return !!(hasCap('canModerate') || (r && (r.role === 'owner' || r.role === 'mod')));
+    }
+
+    function renderChatHead() {
+      const head = byId('chat-head');
+      if (!state.sel) { head.innerHTML = '<div class="title"><strong>Select a channel</strong><span>Pick a room or a direct message to start chatting.</span></div>'; return; }
+      if (state.sel.type === 'room') {
+        const r = currentRoom(); if (!r) return;
+        const isOwnerMod = r.role === 'owner' || r.role === 'mod';
+        let actions = '';
+        if (isOwnerMod || state.admin) actions += '<button class="icon-btn" id="room-invite-btn" title="Create invite" aria-label="Invite"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></button>';
+        if (r.role && r.role !== 'owner') actions += '<button class="icon-btn" id="room-leave-btn" title="Leave room" aria-label="Leave"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>';
+        else if (!r.role) actions += '<button class="btn sm primary" id="room-join-btn">Join</button>';
+        if (r.role === 'owner' || hasCap('canModerate')) actions += '<button class="icon-btn danger-icon" id="room-delete-btn" title="Delete channel" aria-label="Delete channel"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>';
+        head.innerHTML = '<div class="title"><strong>' + (r.isPrivate ? '' : '# ') + esc(r.name) + (r.role ? ' <span class="pill role">' + esc(r.role) + '</span>' : '') + '</strong><span>' + esc(r.topic || 'No topic set') + '</span></div><div class="head-actions">' + actions + '</div>';
+        const ib = byId('room-invite-btn'); if (ib) ib.addEventListener('click', () => openInvite(r));
+        const lb = byId('room-leave-btn'); if (lb) lb.addEventListener('click', () => leaveRoom(r.id));
+        const jb = byId('room-join-btn'); if (jb) jb.addEventListener('click', () => joinRoom(r.id));
+        const db = byId('room-delete-btn'); if (db) db.addEventListener('click', () => deleteRoom(r));
+      } else {
+        const m = memberById(state.sel.id) || (state.dms.find(d => d.other && d.other.id === state.sel.id) || {}).other;
+        const name = m ? (m.displayName || m.username) : 'Direct message';
+        head.innerHTML = '<span class="avatar-wrap">' + avatarHTML(m || {}, 'sm') + '</span><div class="title"><strong>' + esc(name) + '</strong><span>Direct message</span></div><div class="head-actions"><button class="icon-btn" id="dm-profile-btn" title="View profile" aria-label="Profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button></div>';
+        const pb = byId('dm-profile-btn'); if (pb && m) pb.addEventListener('click', () => openProfile(m.id));
+      }
+    }
+
+    function renderMessages() {
+      const el = byId('chat-scroll');
+      if (!state.sel) { el.innerHTML = '<div class="chat-empty">No channel selected yet.</div>'; return; }
+      if (!state.messages.length) { el.innerHTML = '<div class="chat-empty">No messages yet. Be the first to say hello.</div>'; return; }
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      const canMod = canModerateCurrentConversation();
+      el.innerHTML = state.messages.map(m => {
+        const hiddenClass = m.hidden ? ' hidden-message' : '';
+        const hiddenBadge = m.hidden ? '<span class="msg-hidden-badge">Hidden</span>' : '';
+        const actions = canMod
+          ? '<span class="msg-mod-actions">' +
+              (m.hidden
+                ? '<button type="button" class="msg-mod-btn" data-msg-unhide="' + m.id + '">Restore</button>'
+                : '<button type="button" class="msg-mod-btn" data-msg-hide="' + m.id + '">Hide</button>') +
+              '<button type="button" class="msg-mod-btn danger" data-msg-delete="' + m.id + '">Delete</button>' +
+            '</span>'
+          : '';
+        return '<div class="msg' + hiddenClass + '" data-message-id="' + m.id + '">' + avatarHTML(m.author) +
+          '<div class="body"><div class="by"><strong>' + esc(m.author.displayName || m.author.username) + '</strong><time>' + esc(fmtTime(m.createdAt)) + '</time>' + hiddenBadge + actions + '</div>' +
+          '<div class="text">' + esc(m.body) + '</div></div></div>';
+      }).join('');
+      el.querySelectorAll('[data-msg-hide]').forEach(b => b.addEventListener('click', () => moderateMessage(Number(b.dataset.msgHide), 'hideMessage')));
+      el.querySelectorAll('[data-msg-unhide]').forEach(b => b.addEventListener('click', () => moderateMessage(Number(b.dataset.msgUnhide), 'unhideMessage')));
+      el.querySelectorAll('[data-msg-delete]').forEach(b => b.addEventListener('click', () => moderateMessage(Number(b.dataset.msgDelete), 'deleteMessage')));
+      if (nearBottom) el.scrollTop = el.scrollHeight;
+    }
+
+    function canParticipate() { return !!(state.admin || state.verified); }
+    function showComposer(show) {
+      // Unverified members can read but not write — steer them to the questionnaire.
+      if (show && !canParticipate()) {
+        byId('composer').hidden = true;
+        composerError('Complete the quick human check to post here.');
+        return;
+      }
+      composerError('');
+      byId('composer').hidden = !show;
+      byId('send-btn').disabled = !show || !byId('composer-input').value.trim();
+    }
+    function composerError(msg) {
+      const n = byId('composer-note');
+      if (!msg) { n.hidden = true; n.textContent = ''; return; }
+      n.hidden = false; n.textContent = msg;
+    }
+
+    // ---- selection + polling ----
+    function stopPolling() { if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; } }
+    function startPolling() {
+      stopPolling();
+      state.pollTimer = setInterval(() => { loadMessages(true).catch(() => {}); }, 5000);
+    }
+
+    async function selectRoom(id) {
+      state.sel = { type: 'room', id };
+      renderRooms(); renderChatHead(); composerError('');
+      byId('chat-scroll').innerHTML = '<div class="chat-empty">Loading…</div>';
+      const r = currentRoom();
+      showComposer(!!(r && (r.role || !r.isPrivate)));
+      await loadMessages(false); startPolling();
+    }
+    async function selectDm(otherId) {
+      state.sel = { type: 'dm', id: otherId };
+      renderRooms(); renderChatHead(); composerError('');
+      byId('chat-scroll').innerHTML = '<div class="chat-empty">Loading…</div>';
+      showComposer(true);
+      await loadMessages(false); startPolling();
+    }
+
+    async function loadMessages(silent) {
+      if (!state.sel) return;
+      const q = state.sel.type === 'room' ? ('resource=messages&roomId=' + state.sel.id) : ('resource=messages&dm=' + state.sel.id);
+      try {
+        const d = await api('/api/community?' + q, 'GET');
+        state.messages = d.messages || [];
+        renderMessages();
+      } catch (err) {
+        if (!silent) byId('chat-scroll').innerHTML = '<div class="chat-empty">' + esc(err.error || 'Could not load messages.') + '</div>';
+      }
+    }
+
+    async function sendMessage() {
+      const input = byId('composer-input');
+      const text = input.value.trim();
+      if (!text || !state.sel) return;
+      const btn = byId('send-btn'); btn.disabled = true; composerError('');
+      const payload = { action: 'postMessage', body: text };
+      if (state.sel.type === 'room') payload.roomId = state.sel.id; else payload.dmProfileId = state.sel.id;
+      try {
+        await api('/api/community', 'POST', payload);
+        input.value = ''; input.style.height = 'auto';
+        await loadMessages(true);
+        if (state.sel.type === 'dm') refresh(true); // surface new DM thread in sidebar
+      } catch (err) {
+        composerError(err.error || 'Could not send message.');
+      } finally {
+        btn.disabled = !input.value.trim();
+      }
+    }
+
+    async function moderateMessage(messageId, action) {
+      if (!messageId || !canModerateCurrentConversation()) return;
+      const message = state.messages.find(m => Number(m.id) === Number(messageId));
+      if (action === 'deleteMessage') {
+        const sample = message && message.body ? ('"' + message.body.slice(0, 140) + (message.body.length > 140 ? '…' : '') + '"') : '';
+        const confirmed = await window.twConfirm({
+          title: 'Delete message?',
+          message: 'Permanently delete this message?',
+          details: sample,
+          confirmLabel: 'Delete',
+          intent: 'danger',
+        });
+        if (!confirmed) return;
+      }
+      const payload = { action, messageId };
+      try {
+        await api('/api/community', 'POST', payload);
+        await loadMessages(true);
+      } catch (err) {
+        composerError(err.error || 'Could not moderate message.');
+      }
+    }
+
+    // ---- rooms actions ----
+    async function joinRoom(id) {
+      try { const d = await api('/api/community', 'POST', { action: 'joinRoom', roomId: id }); state.rooms = d.rooms || state.rooms; renderRooms(); renderChatHead(); showComposer(true); }
+      catch (err) { composerError(err.error || 'Could not join room.'); }
+    }
+    async function deleteRoom(room) {
+      if (!room) return;
+      const confirmed = await window.twConfirm({
+        title: 'Delete channel?',
+        message: 'Delete #' + room.name + '?',
+        details: 'This permanently removes the channel and all its messages.',
+        confirmLabel: 'Delete',
+        intent: 'danger',
+      });
+      if (!confirmed) return;
+      try {
+        const d = await api('/api/community', 'POST', { action: 'deleteRoom', roomId: room.id });
+        state.rooms = d.rooms || state.rooms;
+        if (state.sel && state.sel.type === 'room' && state.sel.id === room.id) { state.sel = null; stopPolling(); renderChatHead(); renderMessages(); showComposer(false); }
+        renderRooms();
+        const first = state.rooms[0]; if (first) selectRoom(first.id);
+      } catch (err) { composerError(err.error || 'Could not delete channel.'); }
+    }
+    async function leaveRoom(id) {
+      try {
+        const d = await api('/api/community', 'POST', { action: 'leaveRoom', roomId: id });
+        state.rooms = d.rooms || state.rooms;
+        if (state.sel && state.sel.type === 'room' && state.sel.id === id) { state.sel = null; stopPolling(); renderChatHead(); renderMessages(); showComposer(false); }
+        renderRooms();
+      } catch (err) { composerError(err.error || 'Could not leave room.'); }
+    }
+
+    // ---- modals ----
+    function openModal(id) { byId(id).classList.add('open'); }
+    function closeModal(id) { byId(id).classList.remove('open'); }
+    document.querySelectorAll('.c-modal-back').forEach(back => {
+      back.addEventListener('click', e => { if (e.target === back) back.classList.remove('open'); });
+    });
+
+    // create room
+    byId('create-room-btn').addEventListener('click', () => { byId('room-error').hidden = true; byId('room-name').value=''; byId('room-topic').value=''; byId('room-private').checked=false; openModal('room-modal-back'); });
+    byId('room-name').addEventListener('input', e => { const p = e.target.selectionStart; e.target.value = e.target.value.toLowerCase(); try { e.target.setSelectionRange(p, p); } catch (_) {} });
+    byId('room-cancel').addEventListener('click', () => closeModal('room-modal-back'));
+    byId('room-create').addEventListener('click', async () => {
+      const name = byId('room-name').value.trim();
+      const err = byId('room-error');
+      if (!name) { err.textContent = 'Room name is required.'; err.hidden = false; return; }
+      try {
+        const d = await api('/api/community', 'POST', { action: 'createRoom', name, topic: byId('room-topic').value.trim(), isPrivate: byId('room-private').checked });
+        closeModal('room-modal-back');
+        await refresh(true);
+        if (d.room) selectRoom(d.room.id);
+      } catch (e2) { err.textContent = e2.error || 'Could not create room.'; err.hidden = false; }
+    });
+
+    // invite
+    let inviteRoom = null;
+    function openInvite(room) {
+      inviteRoom = room;
+      byId('invite-sub').textContent = 'Create a shareable invite link for ' + (room.isPrivate ? '' : '#') + room.name + '.';
+      byId('invite-error').hidden = true; byId('invite-result').hidden = true; byId('invite-maxuses').value = '';
+      openModal('invite-modal-back');
+    }
+    byId('invite-close').addEventListener('click', () => closeModal('invite-modal-back'));
+    byId('invite-generate').addEventListener('click', async () => {
+      if (!inviteRoom) return;
+      const err = byId('invite-error'); const ok = byId('invite-result'); err.hidden = true; ok.hidden = true;
+      const maxUses = parseInt(byId('invite-maxuses').value, 10);
+      try {
+        const d = await api('/api/community', 'POST', { action: 'createInvite', roomId: inviteRoom.id, expiresInHours: Number(byId('invite-expiry').value), maxUses: Number.isInteger(maxUses) && maxUses > 0 ? maxUses : undefined });
+        const link = d.absoluteUrl || d.url || '';
+        ok.innerHTML = 'Invite link: <strong>' + esc(link) + '</strong><br/>Code: <strong>' + esc(d.invite && d.invite.code) + '</strong>';
+        ok.hidden = false;
+        try { await navigator.clipboard.writeText(link); ok.innerHTML += '<br/><small>Copied to clipboard.</small>'; } catch (_) {}
+      } catch (e2) { err.textContent = e2.error || 'Could not create invite.'; err.hidden = false; }
+    });
+
+    // redeem invite
+    byId('redeem-invite-btn').addEventListener('click', () => { byId('redeem-error').hidden = true; byId('redeem-code').value = ''; openModal('redeem-modal-back'); });
+    byId('redeem-cancel').addEventListener('click', () => closeModal('redeem-modal-back'));
+    byId('redeem-confirm').addEventListener('click', async () => {
+      const code = byId('redeem-code').value.trim();
+      const err = byId('redeem-error');
+      if (!code) { err.textContent = 'Enter an invite code.'; err.hidden = false; return; }
+      try {
+        const d = await api('/api/community', 'POST', { action: 'redeemInvite', code });
+        closeModal('redeem-modal-back');
+        state.rooms = d.rooms || state.rooms; renderRooms();
+        if (d.room) selectRoom(d.room.id);
+      } catch (e2) { err.textContent = e2.error || 'Could not redeem invite.'; err.hidden = false; }
+    });
+
+    // ---- profile card ----
+    const ICON_TWITTER = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1 2h7l4.8 6.3L18.9 2zm-1.2 18h1.9L7.4 4H5.4l12.3 16z"/></svg>';
+    const ICON_GITHUB = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1.5a10.5 10.5 0 0 0-3.3 20.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.4-3.5-1.4-.5-1.2-1.2-1.5-1.2-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1.1 1.6 1.1.9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.3-.3-4.7-1.2-4.7-5.1 0-1.1.4-2 1.1-2.8-.1-.3-.5-1.3.1-2.7 0 0 .9-.3 2.9 1.1a10 10 0 0 1 5.2 0c2-1.4 2.9-1.1 2.9-1.1.6 1.4.2 2.4.1 2.7.7.8 1.1 1.7 1.1 2.8 0 3.9-2.4 4.8-4.7 5.1.4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10.5 10.5 0 0 0 12 1.5z"/></svg>';
+    function renderProfileSocials(m) {
+      const el = byId('pc-socials');
+      const parts = [];
+      if (m && m.twitter) {
+        parts.push('<span class="pc-social">' + ICON_TWITTER + '<a href="https://x.com/' + encodeURIComponent(m.twitter) + '" target="_blank" rel="noopener noreferrer">@' + esc(m.twitter) + '</a></span>');
+      }
+      if (m && m.github) {
+        parts.push('<span class="pc-social">' + ICON_GITHUB + '<a href="https://github.com/' + encodeURIComponent(m.github) + '" target="_blank" rel="noopener noreferrer">' + esc(m.github) + '</a></span>');
+      }
+      el.innerHTML = parts.join('');
+      el.style.display = parts.length ? 'flex' : 'none';
+    }
+
+    // ---- edit-profile modal (avatar / name / about / handles) ----
+    let selectedAvatar = '';
+    function renderAvatarGrid() {
+      const grid = byId('avatar-grid');
+      const keys = (state.avatars && state.avatars.length) ? state.avatars : ['knight','wizard','builder','explorer','knave','robot','fox','cat'];
+      grid.innerHTML = keys.map(k =>
+        '<button type="button" class="avatar-opt' + (k === selectedAvatar ? ' selected' : '') + '" data-avatar="' + esc(k) + '" role="radio" aria-checked="' + (k === selectedAvatar) + '" title="' + esc(k) + '">' +
+        '<img src="/assets/avatars/' + esc(k) + '.png" alt="' + esc(k) + '" loading="lazy" /></button>'
+      ).join('');
+      grid.querySelectorAll('[data-avatar]').forEach(b => b.addEventListener('click', () => {
+        selectedAvatar = b.dataset.avatar;
+        grid.querySelectorAll('.avatar-opt').forEach(x => { const on = x.dataset.avatar === selectedAvatar; x.classList.toggle('selected', on); x.setAttribute('aria-checked', on); });
+      }));
+    }
+    function openSocials(force) {
+      const me = state.me || {};
+      selectedAvatar = me.avatar || '';
+      renderAvatarGrid();
+      byId('profile-displayname').value = me.displayName || '';
+      byId('profile-about').value = me.about || '';
+      byId('socials-twitter').value = me.twitter || '';
+      byId('socials-github').value = me.github || '';
+      byId('socials-error').hidden = true; byId('socials-ok').hidden = true;
+      byId('socials-modal-title').textContent = force ? 'Complete your profile' : 'Edit your profile';
+      // When forced (mandatory, Twitter missing) hide the "Later" escape hatch.
+      byId('socials-cancel').style.display = force ? 'none' : '';
+      byId('socials-sub').textContent = force
+        ? 'Before you can post or chat, add your Twitter/X handle. You can also pick an avatar and set your name.'
+        : 'Set how you appear to other builders. A Twitter/X handle is required to post and chat.';
+      openModal('socials-modal-back');
+    }
+    byId('socials-cancel').addEventListener('click', () => closeModal('socials-modal-back'));
+    [byId('socials-twitter'), byId('socials-github')].forEach(inp => {
+      inp.addEventListener('input', () => { inp.value = inp.value.replace(/^@+/, ''); });
+    });
+    byId('socials-save').addEventListener('click', async () => {
+      const twitter = byId('socials-twitter').value.trim().replace(/^@+/, '');
+      const github = byId('socials-github').value.trim().replace(/^@+/, '');
+      const displayName = byId('profile-displayname').value.trim();
+      const about = byId('profile-about').value.trim();
+      const err = byId('socials-error'); const ok = byId('socials-ok');
+      err.hidden = true; ok.hidden = true;
+      if (!twitter) { err.textContent = 'A Twitter/X handle is required.'; err.hidden = false; return; }
+      if (!displayName) { err.textContent = 'A display name is required.'; err.hidden = false; return; }
+      const btn = byId('socials-save'); btn.disabled = true;
+      try {
+        const payload = { action: 'saveProfile', twitter, github, displayName, about };
+        if (selectedAvatar) payload.avatar = selectedAvatar;
+        const d = await api('/api/community', 'POST', payload);
+        if (d.me) state.me = Object.assign({}, state.me, d.me);
+        ok.textContent = 'Saved. Thanks!'; ok.hidden = false;
+        // Reflect the new identity: chip, composer, members list.
+        if (typeof renderMeChip === 'function') renderMeChip();
+        if (state.sel) showComposer(true);
+        refresh(true).catch(() => {});
+        setTimeout(() => closeModal('socials-modal-back'), 600);
+      } catch (e2) {
+        err.textContent = (e2 && (e2.error || e2.message)) || 'Could not save. Please try again.';
+        err.hidden = false;
+      } finally { btn.disabled = false; }
+    });
+
+    let pcMember = null;
+    function roleLabel(role) {
+      return String(role || '').replace(/_/g, ' ');
+    }
+    function rolePillHTML(role) {
+      const safeRole = String(role || '').replace(/[^a-z_]/g, '');
+      return '<span class="pill role role-' + esc(safeRole) + '">' + esc(roleLabel(role)) + '</span>';
+    }
+    function syncMemberRoles(profileId, roles) {
+      const m = memberById(profileId);
+      if (m) m.roles = roles || [];
+      if (pcMember && pcMember.id === profileId) pcMember.roles = roles || [];
+    }
+    function renderProfileRoles(m) {
+      const roles = (m && Array.isArray(m.roles)) ? m.roles : [];
+      const wrap = byId('pc-role-wrap');
+      wrap.innerHTML = roles.map(rolePillHTML).join('');
+      wrap.hidden = !roles.length;
+    }
+    function renderRoleToggles(m) {
+      const panel = byId('pc-roles-admin');
+      const targetId = m && m.id;
+      if (!hasCap('canManageRoles') || !targetId) { panel.hidden = true; return; }
+      const roles = new Set(Array.isArray(m.roles) ? m.roles : []);
+      const options = state.roleOptions && state.roleOptions.length ? state.roleOptions : ['admin', 'moderator', 'channel_creator'];
+      byId('pc-roles-toggles').innerHTML = options.map(role => {
+        const on = roles.has(role);
+        return '<button type="button" class="role-toggle' + (on ? ' on' : '') + '" data-role="' + esc(role) + '" aria-pressed="' + on + '">' + esc(roleLabel(role)) + '</button>';
+      }).join('');
+      byId('pc-roles-toggles').querySelectorAll('[data-role]').forEach(btn => {
+        btn.addEventListener('click', () => toggleMemberRole(targetId, btn.dataset.role, btn.classList.contains('on')));
+      });
+      panel.hidden = false;
+    }
+    async function toggleMemberRole(profileId, role, currentlyOn) {
+      const err = byId('pc-error'); const ok = byId('pc-ok');
+      err.hidden = true; ok.hidden = true;
+      try {
+        const d = await api('/api/community', 'POST', { action: currentlyOn ? 'revokeRole' : 'grantRole', profileId, role });
+        syncMemberRoles(profileId, d.roles || []);
+        renderProfileRoles(pcMember);
+        renderRoleToggles(pcMember);
+        renderMembers();
+        ok.textContent = currentlyOn ? 'Role removed.' : 'Role granted.';
+        ok.hidden = false;
+      } catch (e2) {
+        err.textContent = e2.error || 'Could not update role.';
+        err.hidden = false;
+      }
+    }
+    function openProfile(id) {
+      const m = memberById(id) || (state.dms.find(d => d.other && d.other.id === id) || {}).other;
+      if (!m) return;
+      pcMember = m;
+      byId('pc-avatar').outerHTML = avatarHTML(m, 'lg').replace('class="avatar lg"', 'class="avatar lg" id="pc-avatar"');
+      byId('pc-name').textContent = m.displayName || m.username;
+      byId('pc-username').textContent = '@' + (m.username || '');
+      byId('pc-dot').className = 'presence-dot ' + (m.online ? 'online' : '');
+      const about = byId('pc-about');
+      if (m.about) { about.textContent = m.about; about.classList.remove('muted'); }
+      else { about.textContent = 'No bio yet.'; about.classList.add('muted'); }
+      renderProfileSocials(m);
+      byId('pc-error').hidden = true; byId('pc-ok').hidden = true; byId('pc-ban-form').hidden = true;
+      renderProfileRoles(m);
+      renderRoleToggles(m);
+      const blocked = state.blocks.indexOf(m.id) >= 0;
+      byId('pc-block-btn').textContent = blocked ? 'Unblock' : 'Block';
+      // Ban is offered to global moderators/admins, or owners/mods of the currently-open room.
+      const canBan = canModerateCurrentConversation();
+      byId('pc-ban-btn').hidden = !canBan || m.id === (state.me && state.me.id);
+      byId('pc-message-btn').hidden = m.id === (state.me && state.me.id);
+      openModal('profile-modal-back');
+    }
+    byId('pc-close-btn').addEventListener('click', () => closeModal('profile-modal-back'));
+    byId('pc-message-btn').addEventListener('click', () => { if (!pcMember) return; closeModal('profile-modal-back'); selectDm(pcMember.id); });
+    byId('pc-block-btn').addEventListener('click', async () => {
+      if (!pcMember) return;
+      const blocked = state.blocks.indexOf(pcMember.id) >= 0;
+      try {
+        const d = await api('/api/community', 'POST', { action: blocked ? 'unblock' : 'block', profileId: pcMember.id });
+        state.blocks = d.blocks || [];
+        byId('pc-block-btn').textContent = state.blocks.indexOf(pcMember.id) >= 0 ? 'Unblock' : 'Block';
+        byId('pc-ok').textContent = blocked ? 'Member unblocked.' : 'Member blocked. Their messages are now hidden.';
+        byId('pc-ok').hidden = false;
+        await refresh(true);
+        if (state.sel) loadMessages(true);
+      } catch (e2) { byId('pc-error').textContent = e2.error || 'Action failed.'; byId('pc-error').hidden = false; }
+    });
+    byId('pc-ban-btn').addEventListener('click', () => { byId('pc-ban-form').hidden = false; });
+    byId('pc-ban-cancel').addEventListener('click', () => { byId('pc-ban-form').hidden = true; });
+    byId('pc-ban-confirm').addEventListener('click', async () => {
+      if (!pcMember) return;
+      const r = currentRoom();
+      const payload = { action: 'ban', profileId: pcMember.id, durationHours: Number(byId('pc-ban-duration').value), reason: byId('pc-ban-reason').value.trim() };
+      // Room owners/mods issue a room ban; admins issuing from no room context ban globally.
+      if (r && !state.admin) payload.roomId = r.id;
+      else if (r && state.admin) payload.roomId = r.id;
+      try {
+        await api('/api/community', 'POST', payload);
+        byId('pc-ban-form').hidden = true;
+        byId('pc-ok').textContent = 'Member banned.';
+        byId('pc-ok').hidden = false;
+      } catch (e2) { byId('pc-error').textContent = e2.error || 'Could not ban member.'; byId('pc-error').hidden = false; }
+    });
+
+    // ---- composer wiring ----
+    const composerInput = byId('composer-input');
+    composerInput.addEventListener('input', () => {
+      byId('send-btn').disabled = !composerInput.value.trim();
+      composerInput.style.height = 'auto';
+      composerInput.style.height = Math.min(composerInput.scrollHeight, 140) + 'px';
+    });
+    composerInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    byId('send-btn').addEventListener('click', sendMessage);
+
+    // ---- login modal wiring ----
+    function setLoginMode(mode) {
+      loginMode = mode;
+      const signup = mode === 'signup';
+      byId('login-modal-title').textContent = signup ? 'Create account' : 'Sign in';
+      byId('login-submit').textContent = signup ? 'Create account' : 'Sign in';
+      byId('login-name-field').hidden = !signup;
+      byId('login-toggle-text').textContent = signup ? 'Already have an account?' : 'No account yet?';
+      byId('login-toggle').textContent = signup ? 'Sign in' : 'Create one';
+      byId('login-error').hidden = true; byId('login-ok').hidden = true;
+    }
+    function openLogin() {
+      setLoginMode('login');
+      byId('login-email').value = ''; byId('login-password').value = ''; byId('login-name').value = '';
+      openModal('login-modal-back');
+    }
+    function loginErr(m) { const e = byId('login-error'); e.textContent = m; e.hidden = !m; if (m) byId('login-ok').hidden = true; }
+    function loginOk(m) { const e = byId('login-ok'); e.textContent = m; e.hidden = !m; if (m) byId('login-error').hidden = true; }
+
+    byId('login-close').addEventListener('click', () => closeModal('login-modal-back'));
+    byId('login-toggle').addEventListener('click', e => { e.preventDefault(); setLoginMode(loginMode === 'login' ? 'signup' : 'login'); });
+
+    async function afterAuthSuccess() {
+      closeModal('login-modal-back');
+      // Rebuild the shell (it may have been replaced by the gate) and reload.
+      location.reload();
+    }
+
+    byId('login-submit').addEventListener('click', async () => {
+      const email = byId('login-email').value.trim();
+      const password = byId('login-password').value;
+      if (!email || !password) { loginErr('Enter your email and password.'); return; }
+      const btn = byId('login-submit'); btn.disabled = true; loginErr('');
+      try {
+        if (loginMode === 'signup') {
+          await emailSignup(email, password, byId('login-name').value.trim());
+          loginOk('Account created. If email confirmation is required, check your inbox, then sign in.');
+        } else {
+          await emailLogin(email, password);
+        }
+        const A = window.TinyWorldAuth;
+        const user = A && typeof A.getUser === 'function' ? await A.getUser() : null;
+        if (user) { await afterAuthSuccess(); return; }
+        if (loginMode === 'login') loginErr('Could not start a session. Check your credentials or confirm your email.');
+      } catch (err) {
+        loginErr((err && (err.message || err.error)) || 'Sign-in failed. Please try again.');
+      } finally { btn.disabled = false; }
+    });
+
+    byId('login-wallet-btn').addEventListener('click', async () => {
+      const btn = byId('login-wallet-btn'); const label = btn.querySelector('.login-wallet-label');
+      btn.disabled = true; if (label) label.textContent = 'Check your wallet…'; loginErr('');
+      try { await walletLogin(); await afterAuthSuccess(); }
+      catch (err) { clearWalletSessionToken(); loginErr((err && (err.message || err.error)) || 'Wallet login failed.'); }
+      finally { btn.disabled = false; if (label) label.textContent = 'Sign in with Phantom'; }
+    });
+
+    // ---- human verification (anti-AI questionnaire) ----
+    function renderVerifyBanner() {
+      // Show the banner only to signed-in, not-yet-verified members.
+      const show = !!state.me && !state.verified && !state.admin;
+      byId('verify-banner').hidden = !show;
+    }
+    byId('verify-banner-btn').addEventListener('click', () => openVerify());
+
+    function stopVerifyCountdown() {
+      if (verifyCountdownTimer) { clearInterval(verifyCountdownTimer); verifyCountdownTimer = null; }
+    }
+    function updateVerifySubmitState() {
+      const btn = byId('verify-submit');
+      const note = byId('verify-timing-note');
+      const v = state.verify;
+      if (!v) { btn.disabled = true; note.hidden = true; return; }
+      const remaining = Math.max(0, VERIFY_MIN_ELAPSED_MS - (Date.now() - v.shownAt));
+      if (remaining > 0) {
+        btn.disabled = true;
+        note.hidden = false;
+        note.textContent = 'Human check unlocks in ' + Math.ceil(remaining / 1000) + 's — answer the questions, then submit.';
+      } else {
+        btn.disabled = false;
+        note.hidden = false;
+        note.textContent = 'Ready — submit your answers to unlock posting, DMs, and rooms.';
+        stopVerifyCountdown();
+      }
+    }
+    function startVerifyCountdown() {
+      stopVerifyCountdown();
+      updateVerifySubmitState();
+      verifyCountdownTimer = setInterval(updateVerifySubmitState, 200);
+    }
+
+    async function loadVerifyChallenge() {
+      const d = await api('/api/community?resource=verifyChallenge', 'GET');
+      if (d.verified) { state.verified = true; return null; }
+      state.verify = { token: d.challenge.token, questions: d.challenge.questions || [], shownAt: Date.now() };
+      startVerifyCountdown();
+      return state.verify;
+    }
+
+    function renderVerifyQuestions() {
+      const wrap = byId('verify-questions');
+      const v = state.verify;
+      if (!v || !v.questions.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading questions…</div>'; return; }
+      wrap.innerHTML = v.questions.map((q, i) =>
+        '<div class="field">' +
+        '<label for="verify-q-' + i + '">' + esc(q.prompt) + '</label>' +
+        '<input type="text" id="verify-q-' + i + '" data-qid="' + esc(q.id) + '" maxlength="120" autocomplete="off" />' +
+        '</div>'
+      ).join('');
+    }
+
+    function verifyErr(m) { const e = byId('verify-error'); e.textContent = m || ''; e.hidden = !m; if (m) byId('verify-ok').hidden = true; }
+    function verifyOk(m) { const e = byId('verify-ok'); e.textContent = m || ''; e.hidden = !m; if (m) byId('verify-error').hidden = true; }
+
+    async function openVerify() {
+      verifyErr(''); verifyOk('');
+      byId('verify-mid').value = '';
+      byId('verify-questions').innerHTML = '<div style="color:var(--muted);font-size:13px">Loading questions…</div>';
+      openModal('verify-modal-back');
+      try { await loadVerifyChallenge(); if (state.verified) { closeModal('verify-modal-back'); return; } renderVerifyQuestions(); }
+      catch (err) { verifyErr((err && (err.error || err.message)) || 'Could not load the questions. Please try again.'); }
+    }
+
+    byId('verify-refresh').addEventListener('click', async () => {
+      verifyErr(''); verifyOk('');
+      byId('verify-mid').value = '';
+      try { await loadVerifyChallenge(); renderVerifyQuestions(); }
+      catch (err) { verifyErr((err && (err.error || err.message)) || 'Could not refresh.'); }
+    });
+
+    byId('verify-submit').addEventListener('click', async () => {
+      const v = state.verify;
+      if (!v) { verifyErr('No active questions — try refreshing.'); return; }
+      const answers = {};
+      document.querySelectorAll('#verify-questions input[data-qid]').forEach(inp => { answers[inp.getAttribute('data-qid')] = inp.value; });
+      const btn = byId('verify-submit'); btn.disabled = true; verifyErr('');
+      try {
+        const payload = {
+          action: 'submitVerification',
+          token: v.token,
+          answers,
+          middle_initial: byId('verify-mid').value,
+          elapsedMs: Date.now() - v.shownAt,
+        };
+        const d = await api('/api/community', 'POST', payload);
+        if (d.verified) {
+          stopVerifyCountdown();
+          state.verified = true; state.verify = null;
+          verifyOk('Welcome aboard! Just one more step.');
+          setTimeout(() => {
+            closeModal('verify-modal-back');
+            refresh(true).then(() => {
+              if (state.sel) { renderChatHead(); }
+              // Require the mandatory Twitter handle before unlocking the composer.
+              if (state.me && state.me.profileComplete === false) { openSocials(true); }
+              else if (state.sel) { showComposer(true); }
+            });
+          }, 700);
+        }
+      } catch (err) {
+        if (err.status === 429) { verifyErr((err.error) || 'Too many attempts. Please try again later.'); }
+        else {
+          const remaining = err && typeof err.remaining === 'number' ? err.remaining : null;
+          const reason = err && err.reason ? String(err.reason) : '';
+          const timingHint = reason.indexOf('timing') >= 0 ? ' Wait for the Ready message before submitting.' : '';
+          verifyErr('That didn\u2019t pass.' + (remaining != null ? ' ' + remaining + ' attempt(s) left.' : '') + timingHint + ' Re-read each question and try again.');
+          // Fetch a fresh challenge so the user isn't stuck on a stale token.
+          try { await loadVerifyChallenge(); renderVerifyQuestions(); } catch (_) {}
+        }
+      } finally { updateVerifySubmitState(); }
+    });
+
+    byId('verify-modal-back').addEventListener('click', e => { if (e.target === byId('verify-modal-back')) { stopVerifyCountdown(); closeModal('verify-modal-back'); } });
+
+    // ---- gate (signed-out / unavailable) ----
+    function showGate(title, msg, withLogin) {
+      stopPolling();
+      const shell = byId('community-shell');
+      shell.innerHTML = '<div class="gate">' +
+        '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+        '<h2>' + esc(title) + '</h2><p>' + esc(msg) + '</p>' +
+        (withLogin ? '<button class="btn primary" id="gate-login-btn">Sign in</button>' : '') + '</div>';
+      const gb = byId('gate-login-btn'); if (gb) gb.addEventListener('click', () => openLogin());
+    }
+
+    // ---- load / refresh ----
+    async function refresh(silent) {
+      try {
+        const d = await api('/api/community?resource=bootstrap', 'GET');
+        state.me = d.me; state.admin = !!d.admin; state.verified = !!d.verified;
+        state.caps = d.caps || {}; state.roleOptions = d.roleOptions || [];
+        state.avatars = d.avatars || state.avatars || [];
+        state.rooms = d.rooms || []; state.members = d.members || []; state.dms = d.dms || []; state.blocks = d.blocks || [];
+        const chip = byId('me-chip');
+        if (state.me) {
+          chip.hidden = false;
+          const capLabel = hasCap('canManageRoles') ? ' · admin' : (hasCap('canModerate') ? ' · mod' : (hasCap('canCreateChannels') ? ' · channels' : ''));
+          chip.innerHTML = avatarHTML(state.me, 'sm') + '<span>' + esc(state.me.displayName || state.me.username) + capLabel + '</span>';
+        } else { chip.hidden = true; }
+        byId('headline-login-btn').hidden = !!state.me;
+        byId('edit-profile-btn').hidden = !state.me;
+        // Only users with management permission can add channels.
+        byId('create-room-btn').hidden = !hasCap('canCreateChannels');
+        renderVerifyBanner();
+        renderRooms(); renderMembers();
+        if (!silent && state.sel) renderChatHead();
+        return true;
+      } catch (err) {
+        if (err.status === 401) { showGate('Sign in to join the community', 'Connect your wallet or sign in via the builder to chat in rooms, send direct messages, and see other builders.', true); return false; }
+        if (err.status === 503) { showGate('Community is warming up', err.error || 'The community database is not available in this session. Check back shortly.', false); return false; }
+        showGate('Something went wrong', err.error || 'Could not load the community right now. Please try again.', false);
+        return false;
+      }
+    }
+
+    // ---- sign out ----
+    async function signOut() {
+      clearWalletSessionToken();
+      try { const A = window.TinyWorldAuth; if (A && typeof A.logout === 'function') await A.logout(); } catch (_) {}
+      location.reload();
+    }
+    byId('me-chip').addEventListener('click', async () => {
+      if (!state.me) return;
+      const confirmed = await window.twConfirm({
+        title: 'Sign out?',
+        message: 'Sign out of Tiny World Builder on this browser?',
+        confirmLabel: 'Sign out',
+      });
+      if (confirmed) signOut();
+    });
+    byId('edit-profile-btn').addEventListener('click', () => { if (state.me) openSocials(false); });
+    byId('headline-login-btn').addEventListener('click', () => openLogin());
+
+    // ---- boot ----
+    (async () => {
+      // Wait for the Identity bridge to finish loading (or time out) so a
+      // returning user's cookie session is recognised on first paint.
+      try { await window.__tinyworldAuthReady; } catch (_) {}
+      const ok = await refresh(false);
+      if (!ok) return;
+      // Auto-redeem an invite passed via ?invite=CODE.
+      try {
+        const code = new URLSearchParams(location.search).get('invite');
+        if (code) {
+          const d = await api('/api/community', 'POST', { action: 'redeemInvite', code });
+          state.rooms = d.rooms || state.rooms; renderRooms();
+          history.replaceState(null, '', location.pathname);
+          if (d.room) { selectRoom(d.room.id); return; }
+        }
+      } catch (_) {}
+      // Default selection: first joined/public room.
+      const first = state.rooms[0];
+      if (first) selectRoom(first.id);
+      // New, not-yet-verified members get the human check up front (after a beat
+      // so the shell paints first). They can dismiss and browse, but can't post.
+      if (state.me && !state.verified && !state.admin) {
+        setTimeout(() => { openVerify(); }, 600);
+      } else if (state.me && state.me.profileComplete === false) {
+        // Verified (or staff) but missing the mandatory Twitter handle — require it.
+        setTimeout(() => { openSocials(true); }, 600);
+      }
+      // Light background refresh of rooms/members/dms.
+      setInterval(() => { refresh(true).catch(() => {}); }, 20000);
+    })();
+  })();
+  </script>
+</body>
+</html>

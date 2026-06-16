@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run check)",
+      "Bash(npm run smoke)",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__claude-in-chrome__tabs_context_mcp"
+    ]
+  }
+}

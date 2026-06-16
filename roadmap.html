@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
 <link rel="stylesheet" href="styles/landing.css" />
+<script src="engine/world/00-custom-confirm.js"></script>
 <style>
 /* ---- kanban board ---- */
 .kanban-wrapper {
@@ -385,6 +386,7 @@
       <a href="/docs">Docs</a>
       <a href="/roadmap" aria-current="page">Roadmap</a>
       <a href="/features">Suggest</a>
+      <a href="/community">Community</a>
       <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
       <a class="nav-cta" href="/tiny-world-builder">Start building</a>
     </nav>
@@ -730,7 +732,14 @@
         const delBtn = modal.querySelector('#d-delete');
         if (delBtn) {
           delBtn.addEventListener('click', async () => {
-            if (!confirm('Delete this card?')) return;
+            const confirmed = await window.twConfirm({
+              title: 'Delete roadmap card?',
+              message: 'Delete this card?',
+              details: 'This removes it from the published roadmap.',
+              confirmLabel: 'Delete',
+              intent: 'danger',
+            });
+            if (!confirmed) return;
             try { await deleteMilestone(modalState.id); closeModal(); render(); }
             catch (err) { alert(err.message); }
           });

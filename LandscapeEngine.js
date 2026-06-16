@@ -18,7 +18,7 @@ class LandscapeEngine {
    * @param {THREE.Color} [config.fogColorOut] - Color object updated with current fog color
    * @param {Object|false} [config.airfield] - Optional runway/airfield terrain-carving configuration. Pass false to disable.
    */
-  constructor({ scene, seed = 8472, initialBiome = 'grassland', styleMode = 'realistic', fogColorOut = null, airfield = undefined }) {
+  constructor({ scene, seed = 8472, initialBiome = 'grassland', styleMode = 'realistic', fogColorOut = null, airfield = undefined, flood = null }) {
     if (!THREE) {
       throw new Error('LandscapeEngine: Three.js (THREE) must be loaded first.');
     }
@@ -53,7 +53,16 @@ class LandscapeEngine {
     this.AIRFIELD_FLAT_R2 = this.AIRFIELD_FLAT_RADIUS * this.AIRFIELD_FLAT_RADIUS;
     this.AIRFIELD_SURFACE_Y = this.airfield.surfaceY;
 
-    this.WATER_LEVEL = 4.0;
+    // Flooded-archipelago mode (planet underlay): raise the waterline and gentle the
+    // terrain so most of the world is ocean with small islands poking through. `flood`
+    // is null for the home builder, so its terrain is unchanged.
+    this.flood = flood;
+    this.HEIGHT_SCALE = (flood && flood.heightScale != null) ? flood.heightScale : 1.0;
+    this.FREQ_SCALE = (flood && flood.freqScale != null) ? flood.freqScale : 1.0;   // higher = smaller, more scattered islands
+    this.WATER_LEVEL = (flood && flood.waterLevel != null) ? flood.waterLevel : 4.0;
+    this.VOXEL = !!(flood && flood.voxel);             // render ground as blocky voxel columns
+    this.VOXEL_RES = (flood && flood.voxelRes) || 24;  // cells per near chunk (block = size/res)
+    this.FAR_VOXEL_RES = (flood && flood.farVoxelRes) || 22;
     this.WATER_EXTENT = 24000;
     this.WATER_RUNWAY_R = this.airfield.enabled ? this.airfield.waterRunwayRadius : 0;
 
@@ -124,6 +133,26 @@ class LandscapeEngine {
     this.currentBiome = { ...this.BIOMES[this.currentBiomeName] };
     this.STRATA = this.currentBiome.strata.map(s => ({ h: s.h, c: new THREE.Color(s.c) }));
     this.CLIFF_TINT = new THREE.Color(this.currentBiome.cliffTint);
+    if (flood) {
+      // Seabed below the raised waterline, a sandy beach band at the shore, then grass
+      // and highland above — voxel-poser's calm sea + scattered sandy isles.
+      const W = this.WATER_LEVEL;
+      // Bands chosen for the VOXEL-SNAPPED island heights: a low isle peaks near
+      // W+90 (snaps to ~W+100 at the near step, ~W+86 far), so the green meadow
+      // must span well past W+100 or the island tops fall into the tan highland
+      // band and read as sand. Sand is a thin shore ring (W+0..+18); everything
+      // above is green meadow — voxel-poser's calm sea + green-hearted sandy isles.
+      this.STRATA = [
+        { h: W - 70,  c: new THREE.Color(0x163a45) },  // deep seabed (dark teal)
+        { h: W - 12,  c: new THREE.Color(0x2f7a72) },  // shallow seabed (teal)
+        { h: W + 0.5, c: new THREE.Color(0xe9dcae) },  // wet sand at the waterline
+        { h: W + 18,  c: new THREE.Color(0xdcc187) },  // dry sand beach
+        { h: W + 32,  c: new THREE.Color(0x6fa03f) },  // grass shore
+        { h: W + 90,  c: new THREE.Color(0x5c8a36) },  // meadow heart (green)
+        { h: W + 230, c: new THREE.Color(0x6b9a40) },  // high meadow (still green; covers island tops)
+        { h: W + 360, c: new THREE.Color(0x90886a) },  // highland (only very tall terrain)
+      ].map(s => ({ h: s.h, c: s.c }));
+    }
 
     // Sun direction vector
     this.sunDir = new THREE.Vector3(0.58, 0.76, 0.28).normalize();
@@ -248,7 +277,7 @@ class LandscapeEngine {
     const airfield = this.airfield;
     const airfieldMasks = this._airfieldMasks(x, z);
 
-    let h = 0, amp = 1, freq = 0.0018, tot = 0;
+    let h = 0, amp = 1, freq = 0.0018 * this.FREQ_SCALE, tot = 0;
     for (let i = 0; i < 5; i++) {
       const n = this._vnoise(x * freq, z * freq);
       h += amp * (1 - Math.abs(n * 2 - 1)); // ridged
@@ -258,7 +287,7 @@ class LandscapeEngine {
     h = Math.pow(h / tot, 2.4) * 260;
 
     // Large-scale valleys
-    h += (this._fbm(x * 0.0006, z * 0.0006, 3) - 0.4) * 120;
+    h += (this._fbm(x * 0.0006 * this.FREQ_SCALE, z * 0.0006 * this.FREQ_SCALE, 3) - 0.4) * 120;
     h = Math.max(0, h);
 
     // Terracing mesas
@@ -283,7 +312,7 @@ class LandscapeEngine {
     h *= 1 - airfieldMasks.airfieldPad * airfield.padFlatten;
     h = Math.max(0, h - airfieldMasks.airfieldPad * airfield.padCut);
 
-    return h;
+    return h * this.HEIGHT_SCALE;
   }
 
   _strataColor(h, out) {
@@ -1038,6 +1067,51 @@ class LandscapeEngine {
     this.scene.add(this.waterMesh);
   }
 
+  // --- Voxel Chunk Builder (flood mode): blocky flat-top columns + side walls ---
+  _makeVoxelChunk(cx, cz, size, res, far) {
+    const cxW = (cx + 0.5) * size, czW = (cz + 0.5) * size;
+    const group = new THREE.Group(); group.position.set(cxW, 0, czW);
+    if (!this.voxelMat) this.voxelMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    const cell = size / res, step = cell, half = size / 2;
+    const seabed = this.WATER_LEVEL - step;     // flat seabed one block under the waterline
+    const N = res + 2;                           // +1-cell border for neighbour wall lookups
+    const Hg = new Float32Array(N * N);
+    for (let gz = 0; gz < N; gz++) for (let gx = 0; gx < N; gx++) {
+      const wx = cxW - half + (gx - 0.5) * cell;
+      const wz = czW - half + (gz - 0.5) * cell;
+      let h = Math.round(this.getHeight(wx, wz) / step) * step;
+      if (h < seabed) h = seabed;
+      Hg[gz * N + gx] = h;
+    }
+    const pos = [], nor = [], col = [], tmp = new THREE.Color();
+    const v = (x, y, z, n, r, g, b) => { pos.push(x, y, z); nor.push(n[0], n[1], n[2]); col.push(r, g, b); };
+    const quad = (a, b, c, d, n, r, g, b2) => { v(a[0], a[1], a[2], n, r, g, b2); v(b[0], b[1], b[2], n, r, g, b2); v(c[0], c[1], c[2], n, r, g, b2); v(a[0], a[1], a[2], n, r, g, b2); v(c[0], c[1], c[2], n, r, g, b2); v(d[0], d[1], d[2], n, r, g, b2); };
+    for (let gz = 1; gz <= res; gz++) for (let gx = 1; gx <= res; gx++) {
+      const h = Hg[gz * N + gx];
+      const x0 = -half + (gx - 1) * cell, x1 = x0 + cell, z0 = -half + (gz - 1) * cell, z1 = z0 + cell;
+      this._strataColor(h, tmp);
+      const n1 = this._vnoise((cxW + x0) * 0.045, (czW + z0) * 0.045);
+      tmp.multiplyScalar(0.82 + n1 * 0.20);
+      const tr = tmp.r, tg = tmp.g, tb = tmp.b;
+      quad([x0, h, z0], [x0, h, z1], [x1, h, z1], [x1, h, z0], [0, 1, 0], tr, tg, tb);   // flat top
+      const sr = tr * 0.72, sg = tg * 0.72, sb = tb * 0.72;                              // shaded sides
+      const nE = Hg[gz * N + gx + 1], nW = Hg[gz * N + gx - 1], nS = Hg[(gz + 1) * N + gx], nN = Hg[(gz - 1) * N + gx];
+      if (h > nE) quad([x1, nE, z0], [x1, nE, z1], [x1, h, z1], [x1, h, z0], [1, 0, 0], sr, sg, sb);
+      if (h > nW) quad([x0, nW, z1], [x0, nW, z0], [x0, h, z0], [x0, h, z1], [-1, 0, 0], sr, sg, sb);
+      if (h > nS) quad([x0, nS, z1], [x1, nS, z1], [x1, h, z1], [x0, h, z1], [0, 0, 1], sr, sg, sb);
+      if (h > nN) quad([x1, nN, z0], [x0, nN, z0], [x0, h, z0], [x1, h, z0], [0, 0, -1], sr, sg, sb);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const mesh = new THREE.Mesh(geo, this.voxelMat);
+    mesh.castShadow = false;
+    mesh.receiveShadow = !far;
+    group.add(mesh);
+    return { group, geo, mesh };   // same shape as _makeChunk/_makeFarChunk so the streamer can add + dispose it
+  }
+
   // --- Terrain Chunk Builder ---
   _makeChunk(cx, cz) {
     const cxW = (cx + 0.5) * this.CHUNK_SIZE;
@@ -1303,7 +1377,7 @@ class LandscapeEngine {
       const job = this.pendingChunkBuilds.shift();
       this.pendingChunkKeys.delete(job.key);
       if (!this.chunks.has(job.key)) {
-        this.chunks.set(job.key, this._makeChunk(job.cx, job.cz));
+        this.chunks.set(job.key, this.VOXEL ? this._makeVoxelChunk(job.cx, job.cz, this.CHUNK_SIZE, this.VOXEL_RES, false) : this._makeChunk(job.cx, job.cz));
       }
     }
 
@@ -1314,7 +1388,7 @@ class LandscapeEngine {
       const job = this.pendingFarChunkBuilds.shift();
       this.pendingFarChunkKeys.delete(job.key);
       if (!this.farChunks.has(job.key)) {
-        this.farChunks.set(job.key, this._makeFarChunk(job.cx, job.cz));
+        this.farChunks.set(job.key, this.VOXEL ? this._makeVoxelChunk(job.cx, job.cz, this.FAR_CHUNK_SIZE, this.FAR_VOXEL_RES, true) : this._makeFarChunk(job.cx, job.cz));
       }
     }
   }

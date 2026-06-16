@@ -34,6 +34,17 @@ Use this together with:
 - Always normalize imported model scale with `Box3` bounds, then apply a target span.
 - Apply orientation fixes once at model root or a named wrapper; do not keep stacking ad-hoc rotations in the animation loop.
 
+## Voxel avatar descriptors
+
+- Keep `window.voxelAvatarDescriptor` in `engine/world/53-voxel-avatar.js` and
+  `cleanAvatar` in `party/index.js` in lockstep. The networked Tinyverse
+  descriptor currently allows `kind`, `seed`, `body`, `skin`, `hairC`, `hair`,
+  `fit`, `head`, `height`, `build`, and `gear`.
+- Voxel avatar gear should use simple cached/shared geometries and materials
+  where possible. Mark shared gear meshes with `userData.sharedAvatarAsset` so
+  the avatar dispose path does not dispose shared assets while removing one
+  avatar instance.
+
 ## Material and palette rules
 
 - Prefer 2–4 materials per object: body, dark trim, highlight, accent.

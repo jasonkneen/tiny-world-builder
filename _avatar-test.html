@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>avatar test</title>
+<style>body{margin:0;background:#b6a8e8}#c{display:block}</style></head>
+<body><canvas id="c"></canvas>
+<script src="vendor/three/three.r128.min.js"></script>
+<script src="engine/world/53-voxel-avatar.js"></script>
+<script>
+const cv=document.getElementById('c');
+const W=520,H=560; cv.width=W*devicePixelRatio; cv.height=H*devicePixelRatio;
+cv.style.width=W+'px'; cv.style.height=H+'px';
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(W,H,false);
+renderer.setClearColor(0xb6a8e8,1);
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(32,W/H,0.01,100);
+scene.add(new THREE.HemisphereLight(0xffffff,0x6a5fa0,1.1));
+const dir=new THREE.DirectionalLight(0xffffff,1.0); dir.position.set(2,4,3); scene.add(dir);
+const av=window.makeVoxelAvatar({fit:'HoodedRogue',seed:99,body:'Masc',skin:1,height:1,build:0,gear:'None'});
+scene.add(av.group);
+// frame on the head/upper body
+const box=new THREE.Box3().setFromObject(av.group);
+const c=box.getCenter(new THREE.Vector3());
+const headY=box.max.y - (box.max.y-box.min.y)*0.18;
+cam.position.set(0, headY, 0.78);
+cam.lookAt(0, headY, 0);
+let t=0,frames=0;
+function loop(){ t+=0.016; av.update(0.016); renderer.render(scene,cam); if(frames++<8) requestAnimationFrame(loop); else window.__ready=true; }
+loop();
+</script></body></html>

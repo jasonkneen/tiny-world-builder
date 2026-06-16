@@ -13,7 +13,12 @@
     "perf": "node tools/perf-probe.js",
     "db:local": "tools/db-local.sh",
     "party:dev": "partykit dev party/index.js --port 1999",
+    "party:dev:open": "partykit dev party/index.js --port 1999 --var WORLDS_JOIN_SECRET= --var WORLDS_SERVICE_TOKEN=",
+    "party:deploy": "partykit deploy",
     "dev:party": "partykit dev party/index.js --port 1999",
+    "smoke:mp": "node tools/smoke-multiplayer.mjs",
+    "smoke:mp:ai": "node tools/smoke-multiplayer.mjs --with-ai-bots",
+    "bots:ai": "node tools/ai-bots.mjs --slug tidewater-bay --bots 3 --mode both",
     "demo:vehicles": "node plugins/examples/vehicle-road-demo.js",
     "test:unit": "node --test tests/*.test.mjs",
     "test": "npm run check && npm run smoke && npm run test:unit"
@@ -30,9 +35,12 @@
   },
   "homepage": "https://github.com/jasonkneen/tiny-world-builder#readme",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.177",
+    "@anthropic-ai/sdk": "^0.104.1",
     "@netlify/database": "^1.0.0",
     "@netlify/identity": "^1.2.0",
     "@open-pets/client": "^2.1.1",
+    "netlify-cli": "^26.1.0",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
