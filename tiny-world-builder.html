@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300..700&family=Space+Grotesk:wght@300..700&display=swap" />
   <link rel="stylesheet" href="styles/tiny-world.css">
 <script src="engine/world/00-custom-confirm.js"></script>
 <script type="text/javascript">
@@ -392,6 +392,16 @@
             </svg>
           </span>
           <span class="language-label">中文</span>
+        </button>
+        <button class="language-option" type="button" role="menuitemradio" data-lang="th" aria-label="ไทย" aria-checked="false">
+          <span class="language-flag-svg" aria-hidden="true">
+            <svg viewBox="0 0 30 20">
+              <rect width="30" height="20" fill="#A51931"/>
+              <rect y="3" width="30" height="14" fill="#F4F5F8"/>
+              <rect y="6" width="30" height="8" fill="#2D2A4A"/>
+            </svg>
+          </span>
+          <span class="language-label">ไทย</span>
         </button>
       </div>
     </div>
@@ -997,13 +1007,14 @@
                 <option value="16">16 × 16</option>
               </select>
             </label>
-            <label data-settings-keywords="language locale translation english french chinese spanish français 中文 español langue idioma 语言">
+            <label data-settings-keywords="language locale translation english french chinese spanish thai français 中文 español ไทย langue idioma 语言 ภาษา">
               <span data-i18n="settings.language">Language</span>
               <select id="ui-lang-mode">
                 <option value="en">English</option>
                 <option value="fr">Français</option>
                 <option value="es">Español</option>
                 <option value="zh">中文</option>
+                <option value="th">ไทย</option>
               </select>
             </label>
             <label data-settings-keywords="theme ui dark mode light night auto chrome after hours">
@@ -1639,6 +1650,7 @@
   <script defer src="engine/i18n/fr.js"></script>
   <script defer src="engine/i18n/es.js"></script>
   <script defer src="engine/i18n/zh.js"></script>
+  <script defer src="engine/i18n/th.js"></script>
   <script defer src="engine/i18n/i18n-core.js"></script>
   <script defer src="engine/world/00-prelude.js"></script>
   <script defer src="engine/world/01-render-core.js"></script>
