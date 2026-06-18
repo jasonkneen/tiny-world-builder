@@ -100,6 +100,9 @@
     'lobbyAdmin.savedAt': 'Saved',
     'lobbyAdmin.hintView': 'Live lobby. Tap Edit Lobby to build.',
     'lobbyAdmin.hintEdit': 'Editing live — place/erase, then Save to Live Lobby.',
+
+    // ---- lobby big-screen "Latest Updates" slide (58-lobby-presentation.js) ----
+    'lobby.updates.title': 'Latest Updates',
     'lobbyAdmin.noWorld': 'No live world to save to.',
     'lobbyAdmin.error': 'Lobby save failed.',
 

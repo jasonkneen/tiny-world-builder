@@ -39,17 +39,36 @@
       ] },
     ];
 
+    // ---- "Latest Updates" feed --------------------------------------------------
+    // A short, curated changelog drawn as its own slide. This is the SINGLE edit
+    // point — add / trim entries here. Entries are CONTENT (English), mirroring the
+    // default welcome deck above; each is wired through tx() with a *dynamic* key so
+    // a translation can be added later (engine/i18n) without touching this file,
+    // while the English text stays the always-available fallback. The slide header
+    // itself is a real i18n string, t('lobby.updates.title').
+    let UPDATES = [
+      { id: 'lobby-live', title: 'Living Lobby', line: 'Ambient crowd plus join / leave notifications are live' },
+      { id: 'cctv', title: 'World CCTV', line: 'Watch live camera feeds from active rooms right here' },
+      { id: 'companions', title: 'AI Companions', line: 'Characters you can walk up to and actually talk with' },
+      { id: 'avatars', title: 'Voxel Avatars', line: 'Pick a preset or customise your look in 3D' },
+      { id: 'emotes', title: 'Chat Emotes', line: 'Type /wave /dance /sit to act out for everyone' },
+    ];
+
     let idx = 0, group = null, canvas = null, ctx = null, tex = null, built = false, controls = null;
     let screenMesh = null, slideMat = null;       // the display plane + its slide material
-    // ---- live-feed cycling (Truman-style auto-cut between slides and cam feeds) ----
-    // When cameras are mounted, the screen alternates: a run of slides, then it cuts
-    // to whichever CCTV feed currently has the most ACTIVITY (a moving subject), then
-    // back to slides. A brief signal glitch sells each cut.
-    let cycleOn = true, cyclePhase = 'slides', cycleT = 0, liveFeedId = null, liveMat = null;
-    const SLIDE_DWELL = 9.0;      // seconds of slides before considering a cam cut
+    // ---- alternating rotation: CCTV camera <-> Latest Updates slide -------------
+    // With cameras mounted (63-cctv-placement always mounts >=6 on enter) the screen
+    // alternates strictly: a live cam feed, then the Latest Updates slide, then the
+    // NEXT cam, then Updates again — cycling through every camera across the cam
+    // turns. With NO cameras it falls back to a self-running deck (Latest Updates +
+    // the default welcome slides) so the screen is never blank. A brief signal
+    // glitch sells each cam cut.
+    let cycleOn = true, cyclePhase = 'deck', cycleT = 0, liveFeedId = null, liveMat = null;
+    let camCursor = -1;           // round-robin index into feeds(); advanced each camera turn
+    let deckCursor = 0;           // 0 = Latest Updates; 1..N = default SLIDES[n-1] (fallback only)
     const FEED_DWELL = 6.0;       // seconds to hold a live cam feed
-    let _autoAdvT = 0;
-    const AUTO_ADVANCE = 7.0;     // auto-advance slides while presenting (host-free ambience)
+    const UPDATES_DWELL = 9.0;    // seconds to hold Latest Updates between cam cuts
+    const AUTO_ADVANCE = 7.0;     // fallback deck (no cams): seconds per slide
 
     // ---- @lobby broadcast strip ----
     // A `@lobby <message>` chat line projects onto the screen as a banner strip pinned
@@ -122,6 +141,38 @@
       ctx.textAlign = 'right';
       ctx.fillText((idx + 1) + ' / ' + SLIDES.length, SW - 60, SH - 44);
       ctx.textAlign = 'left';
+      if (tex) tex.needsUpdate = true;
+      updateControls();
+    }
+
+    // ---- "Latest Updates" slide (shares the slide canvas + matches the deck look) ----
+    function renderUpdatesSlide() {
+      if (!ctx) return;
+      const grad = ctx.createLinearGradient(0, 0, 0, SH);
+      grad.addColorStop(0, '#10203a'); grad.addColorStop(1, '#0a1428');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, SW, SH);
+      ctx.strokeStyle = 'rgba(120,170,255,0.45)'; ctx.lineWidth = 6;
+      ctx.strokeRect(14, 14, SW - 28, SH - 28);
+      ctx.fillStyle = '#7fb2ff'; ctx.fillRect(70, 150, 120, 8);   // accent underline
+
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f2f6ff';
+      ctx.font = '700 76px "Space Grotesk", system-ui, sans-serif';
+      ctx.fillText(t('lobby.updates.title'), 68, 130);
+
+      let y = 224;
+      for (const u of UPDATES.slice(0, 5)) {
+        ctx.fillStyle = '#7fb2ff';
+        ctx.beginPath(); ctx.arc(82, y - 11, 6, 0, Math.PI * 2); ctx.fill();   // bullet dot
+        ctx.fillStyle = '#eaf2ff';
+        ctx.font = '600 36px "Space Grotesk", system-ui, sans-serif';
+        ctx.fillText(tx('lobby.update.' + u.id + '.title', u.title), 112, y);
+        ctx.fillStyle = '#9fb6e6';
+        ctx.font = '400 26px "Space Grotesk", system-ui, sans-serif';
+        ctx.fillText(tx('lobby.update.' + u.id + '.line', u.line), 112, y + 30);
+        y += 66;
+      }
       if (tex) tex.needsUpdate = true;
       updateControls();
     }
@@ -269,6 +320,9 @@
       group.rotation.y = 0;
       group.visible = true;
       ensureControls(true);
+      // Start the rotation fresh on the Latest Updates slide; the cycle takes over
+      // from tick() (cameras mount ~350ms later, so Updates shows during the gap).
+      camCursor = -1; showDeckAt(0);
       return true;
     }
     function hide() {
@@ -280,9 +334,9 @@
     }
 
     function clamp(i) { return Math.max(0, Math.min(SLIDES.length - 1, i)); }
-    function applySlide(i) { idx = clamp(i); renderSlide(); }    // local render only (incoming sync path)
+    function applySlide(i) { idx = clamp(i); showDeckAt(idx + 1); }   // incoming sync -> show that deck slide locally
     function broadcast() { if (typeof WS.present === 'function') { try { WS.present(idx); } catch (_) {} } }
-    function go(i) { showSlides(); _autoAdvT = 0; applySlide(i); broadcast(); }   // user action -> slides + apply + sync
+    function go(i) { idx = clamp(i); showDeckAt(idx + 1); broadcast(); }   // user action -> show + sync
     function next() { if (idx < SLIDES.length - 1) go(idx + 1); }
     function prev() { if (idx > 0) go(idx - 1); }
     function setSlides(arr) {
@@ -335,11 +389,27 @@
     });
 
     // ---- show slides vs. a live CCTV feed on the big screen ------------------
-    function showSlides() {
+    // The deck spans [0] = Latest Updates, [1..N] = the default welcome SLIDES.
+    // showDeckAt renders the requested entry onto the shared slide canvas and binds
+    // it to the screen (so it also un-does any live-feed material swap).
+    function showDeckAt(n) {
       if (!screenMesh || !slideMat) return;
+      const span = SLIDES.length + 1;
+      deckCursor = ((n % span) + span) % span;
+      if (deckCursor === 0) renderUpdatesSlide();
+      else { idx = clamp(deckCursor - 1); renderSlide(); }
       if (screenMesh.material !== slideMat) screenMesh.material = slideMat;
       liveFeedId = null;
-      cyclePhase = 'slides'; cycleT = 0;
+      cyclePhase = 'deck'; cycleT = 0;
+    }
+    function showUpdates() { showDeckAt(0); }
+    function showSlides() { showDeckAt(idx + 1); }   // current welcome slide (host/hide reset)
+    // Advance the round-robin and cut to the next camera; fall back to Updates if it fails.
+    function cutToNextCamera(list) {
+      if (!list || !list.length) { showDeckAt(0); return; }
+      camCursor = (camCursor + 1) % list.length;
+      const pick = list[camCursor];
+      if (!pick || !showFeed(pick.id)) showDeckAt(0);
     }
     function showFeed(feedId) {
       const cc = window.__tinyworldCCTV;
@@ -418,15 +488,18 @@
       return m ? m[1].trim() : '';
     }
 
-    // Called each frame from the animation loop (wired in 25). Auto-advances the
-    // deck and, when cameras exist, cuts to the hottest feed then back to slides.
+    // Called each frame from the animation loop (wired in 25). Drives the strict
+    // alternation: live cam feed -> Latest Updates -> next cam -> Updates -> ...,
+    // round-robining through every camera. With no cameras it self-runs the deck
+    // (Updates + welcome slides) so the screen is never blank. Repaints are cheap
+    // (the slide canvas only redraws on a phase change, never every frame).
     function tick(t, dt) {
       if (!group || !group.visible) return;
       if (t >= countdownNextPaintT) {
         countdownNextPaintT = t + 1;
         renderCountdownStrip();
       }
-      // @lobby strip lifecycle — fade in, hold, fade out (runs regardless of slide/feed phase).
+      // @lobby strip lifecycle — fade in, hold, fade out (runs regardless of phase).
       if (lobbyShowing && lobbyMat) {
         lobbyT += dt;
         const fIn = Math.min(1, lobbyT / LOBBY_FADE);
@@ -434,30 +507,25 @@
         lobbyMat.opacity = Math.max(0, Math.min(fIn, fOut));
         if (lobbyT >= LOBBY_DWELL) startNextLobby();
       }
+      if (!cycleOn) return;   // static mode: whatever was last shown stays
+
       const cc = window.__tinyworldCCTV;
-      const haveFeeds = cc && cc.feeds && cc.feeds().length;
-      // gentle auto-advance of slides for host-free ambience (only in slides phase)
-      if (cyclePhase === 'slides') {
-        _autoAdvT += dt;
-        if (_autoAdvT >= AUTO_ADVANCE) {
-          _autoAdvT = 0;
-          applySlide((idx + 1) % SLIDES.length);   // local-only advance; presenter sync still uses go()
-        }
-      }
-      if (!cycleOn || !haveFeeds) { if (liveFeedId) showSlides(); return; }
+      const feedList = (cc && typeof cc.feeds === 'function') ? (cc.feeds() || []) : [];
+      const haveFeeds = feedList.length > 0;
       cycleT += dt;
-      if (cyclePhase === 'slides') {
-        if (cycleT >= SLIDE_DWELL) {
-          // cut to the most active camera, or the live-feed material's own feed
-          const hot = (typeof cc.activeFeed === 'function') ? cc.activeFeed(0.2) : null;
-          const pick = hot || (cc.feedsByActivity ? cc.feedsByActivity()[0] : cc.feeds()[0]);
-          if (pick) showFeed(pick.id); else cycleT = 0;
-        }
-      } else if (cyclePhase === 'feed') {
-        // while on a feed, keep following the hottest camera if a hotter one appears
-        const hot = (typeof cc.activeFeed === 'function') ? cc.activeFeed(0.35) : null;
-        if (hot && hot.id !== liveFeedId) showFeed(hot.id);
-        if (cycleT >= FEED_DWELL) showSlides();
+
+      if (cyclePhase === 'feed') {
+        if (!haveFeeds) { showDeckAt(0); return; }   // cameras vanished mid-feed -> Latest Updates
+        if (cycleT >= FEED_DWELL) showDeckAt(0);     // cam -> Latest Updates
+        return;
+      }
+
+      // 'deck' phase = Latest Updates (or a welcome slide in fallback / host nav).
+      if (cyclePhase !== 'deck') { showDeckAt(0); return; }   // (re)initialise to a known view
+      if (haveFeeds) {
+        if (cycleT >= UPDATES_DWELL) cutToNextCamera(feedList);   // Updates -> next cam
+      } else if (cycleT >= AUTO_ADVANCE) {
+        showDeckAt(deckCursor + 1);                               // self-running deck, never blank
       }
     }
 

@@ -87,6 +87,7 @@
     'lobbyAdmin.savedAt': 'Enregistré',
     'lobbyAdmin.hintView': 'Lobby en direct. Touchez Modifier pour construire.',
     'lobbyAdmin.hintEdit': 'Modification en direct — placez/effacez, puis enregistrez.',
+    'lobby.updates.title': 'Dernières nouveautés',
     'lobbyAdmin.noWorld': 'Aucun monde en direct à enregistrer.',
     'lobbyAdmin.error': 'Échec de l’enregistrement du lobby.',
 

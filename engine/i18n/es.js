@@ -87,6 +87,7 @@
     'lobbyAdmin.savedAt': 'Guardado',
     'lobbyAdmin.hintView': 'Lobby en vivo. Toca Editar para construir.',
     'lobbyAdmin.hintEdit': 'Editando en vivo — coloca/borra y luego guarda.',
+    'lobby.updates.title': 'Novedades recientes',
     'lobbyAdmin.noWorld': 'No hay mundo en vivo para guardar.',
     'lobbyAdmin.error': 'No se pudo guardar el lobby.',
 

@@ -90,6 +90,7 @@
     'lobbyAdmin.savedAt': 'บันทึกแล้ว',
     'lobbyAdmin.hintView': 'ล็อบบี้สด แตะ แก้ล็อบบี้ เพื่อสร้าง',
     'lobbyAdmin.hintEdit': 'กำลังแก้แบบสด — วาง/ลบ แล้วบันทึกไปล็อบบี้สด',
+    'lobby.updates.title': 'อัปเดตล่าสุด',
     'lobbyAdmin.noWorld': 'ไม่มีโลกสดให้บันทึก',
     'lobbyAdmin.error': 'บันทึกล็อบบี้ล้มเหลว',
     'brand.sub': 'แตะเพื่อวาง · ลากเพื่อหมุน · จีบหรือเลื่อนเพื่อซูม',

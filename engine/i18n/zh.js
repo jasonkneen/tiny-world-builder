@@ -87,6 +87,7 @@
     'lobbyAdmin.savedAt': '已保存',
     'lobbyAdmin.hintView': '实时大厅。点击“编辑大厅”开始搭建。',
     'lobbyAdmin.hintEdit': '正在实时编辑 — 放置/擦除后保存到实时大厅。',
+    'lobby.updates.title': '最新动态',
     'lobbyAdmin.noWorld': '没有可保存的实时世界。',
     'lobbyAdmin.error': '大厅保存失败。',
 
