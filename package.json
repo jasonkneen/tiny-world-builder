@@ -19,6 +19,7 @@
     "smoke:mp": "node tools/smoke-multiplayer.mjs",
     "smoke:mp:ai": "node tools/smoke-multiplayer.mjs --with-ai-bots",
     "bots:ai": "node tools/ai-bots.mjs --slug tidewater-bay --bots 3 --mode both",
+    "bots:lobby": "node tools/lobby-bots.mjs --bots 10 --slug tidewater-bay",
     "demo:vehicles": "node plugins/examples/vehicle-road-demo.js",
     "test:unit": "node --test tests/*.test.mjs",
     "test": "npm run check && npm run smoke && npm run test:unit"
