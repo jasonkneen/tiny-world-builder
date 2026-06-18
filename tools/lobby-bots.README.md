@@ -43,28 +43,45 @@ Each bot connects with a PartyKit conn id prefixed `bot-…`. The client detects
 (e.g. *Marsh the Wanderer*, *Old Brine*, *Willow the Gardener*) a real visitor can
 tell these are characters, not impersonated users.
 
-## Cold start
+## Cold start — `TW_ORIGIN` is required to populate a cold lobby
 
-The server loads the world via its own `SITE_URL` when it receives a valid numeric
-`worldId` (`ensureWorldLoaded`). The runner discovers that id from
-`TW_ORIGIN/api/worlds?slug=<slug>`:
+The server cold-loads the world (`ensureWorldLoaded`) via its own `SITE_URL`, but
+**only when it receives a real NUMERIC `worldId`** — `/api/worlds?id=` ignores a
+slug (`netlify/functions/worlds.mjs:35-37`). The runner resolves that numeric id
+from `TW_ORIGIN/api/worlds?slug=<slug>` and forwards it **only if it is numeric**.
 
-- **With `TW_ORIGIN`**: a cold/hibernated lobby self-loads — bots walk before any
-  human arrives.
-- **Without `TW_ORIGIN`**: bots still join and render, but a *cold* room has no
-  walkable cells yet; they idle (with a clear log) until a real player loads the
-  world, then start wandering. Set `TW_ORIGIN` for a reliably-populated lobby.
+- **With `TW_ORIGIN` (recommended for always-on)**: the numeric id resolves, so a
+  cold/hibernated lobby self-loads and bots walk the *real* lobby before any human
+  arrives.
+- **Without `TW_ORIGIN`** (or if the lookup fails): the runner does **not** send a
+  worldId at all (it never sends a slug — that would silently pin the room to a
+  wrong/default 8x8 board). So a **cold** room is **not** populated: bots join and
+  render, but stay put (with a loud warning) until a real player loads the lobby,
+  then begin wandering the correct board. Set `TW_ORIGIN` for reliable always-on
+  population.
+
+## Resilience (always-on)
+
+On any socket drop (PartyKit restart, network blip) each bot auto-reconnects with
+capped exponential backoff + jitter (2s → 30s ceiling), indefinitely; the backoff
+resets on a clean re-join. Dead-socket timers are cleared before reconnecting so no
+intervals leak. `SIGINT`/`SIGTERM` stop reconnects and shut down cleanly. Run it
+under any supervisor (`Restart=always` is a backstop, not the primary mechanism).
 
 ## LLM (free OpenRouter models)
 
 - Endpoint: `https://openrouter.ai/api/v1/chat/completions` (OpenAI-compatible),
   called via global `fetch` — no SDK dependency.
 - Default model: `meta-llama/llama-3.3-70b-instruct:free`. Override with
-  `--model` / `OPENROUTER_MODEL`. **Use a `:free` model id.** Available free ids
-  change over time — see https://openrouter.ai/models?max_price=0.
+  `--model` / `OPENROUTER_MODEL`. **Free-only is enforced**: the runner refuses to
+  start unless the model id ends with `:free` (override deliberately with
+  `--allow-paid`). Available free ids change over time — see
+  https://openrouter.ai/models?max_price=0.
 - **Graceful degradation**: a missing key, `401/403` (bad key), `429` (rate limit),
   any other non-2xx (incl. model-not-found), or empty content → the bot **skips that
   chat turn** and keeps wandering/emoting. It never crashes and never spams.
+- **No emoji**: every generated line is stripped of emoji/pictographic characters
+  before it is sent (repo no-emoji rule; prompting alone is not a guarantee).
 - **Shared throttle**: free-tier limits are per *account*, not per bot. One global
   min-interval gate (~13 calls/min across all bots) plus jitter prevents 10+ bots
   from bursting the endpoint, on top of a per-bot 15s chat cooldown.
@@ -77,8 +94,9 @@ The server loads the world via its own `SITE_URL` when it receives a valid numer
 | `--bots`    | `BOTS_COUNT`      | `10`                                             | NPC count (1–40) |
 | `--host`    | `PARTYKIT_HOST`   | `wss://tinyworld-shared-building.jasonkneen.partykit.dev` | PartyKit ws base |
 | `--origin`  | `TW_ORIGIN`       | *(none)*                                         | https site for worldId discovery / cold-start |
-| `--model`   | `OPENROUTER_MODEL`| `meta-llama/llama-3.3-70b-instruct:free`         | OpenRouter model id (use a `:free` one) |
-| `--mode`    | `BOTS_MODE`       | `both`                                           | `ambient` \| `react` \| `both` |
+| `--model`   | `OPENROUTER_MODEL`| `meta-llama/llama-3.3-70b-instruct:free`         | OpenRouter model id; must end in `:free` |
+| `--allow-paid` | —              | off                                              | Permit a non-`:free` model (deliberate override) |
+| `--mode`    | `BOTS_MODE`       | `both`                                           | `ambient` \| `react` \| `both` (unknown → warns, uses `both`) |
 | `--seconds` | `BOTS_SECONDS`    | `0`                                              | Auto-exit after N seconds (0 = forever) |
 | `--verbose` | —                 | off                                              | Also log every move/emote |
 | —           | `OPENROUTER_API_KEY` | *(required for chat)*                         | OpenRouter key; unset → silent bots |

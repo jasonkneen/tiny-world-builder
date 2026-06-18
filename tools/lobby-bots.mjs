@@ -96,10 +96,26 @@ const CFG = {
   mode: String(envOr('mode', 'BOTS_MODE', 'both')),
   seconds: parseInt(envOr('seconds', 'BOTS_SECONDS', '0'), 10) || 0,
   verbose: !!arg('verbose', false),
+  allowPaid: !!arg('allow-paid', false),
 };
 const API_KEY = process.env.OPENROUTER_API_KEY || '';
+
+// Validate --mode (anything unknown falls back to 'both' with a loud warning).
+if (!['ambient', 'react', 'both'].includes(CFG.mode)) {
+  console.warn(`lobby-bots: unknown --mode "${CFG.mode}" — falling back to "both" (valid: ambient|react|both).`);
+  CFG.mode = 'both';
+}
 const wantAmbient = CFG.mode === 'ambient' || CFG.mode === 'both';
 const wantReact = CFG.mode === 'react' || CFG.mode === 'both';
+
+// Enforce FREE OpenRouter models (Jason's hard constraint: ~zero cost). A `:free`
+// model id is required unless the operator explicitly opts in with --allow-paid.
+if (!CFG.model.endsWith(':free') && !CFG.allowPaid) {
+  console.error(`lobby-bots: refusing to start — model "${CFG.model}" is not a :free OpenRouter model.\n` +
+    `  Pass a free id (e.g. --model meta-llama/llama-3.3-70b-instruct:free or OPENROUTER_MODEL=...:free).\n` +
+    `  See https://openrouter.ai/models?max_price=0 . To override deliberately, pass --allow-paid.`);
+  process.exit(1);
+}
 
 // ---- NPC personas (ambient characters, not impersonated users) -------------
 // Seeded voxel avatars; `avatar` fields mirror the descriptor cleanAvatar accepts.
@@ -139,6 +155,7 @@ async function askLLM(kind, persona, ctx) {
   const wait = reserveLLMSlot();
   if (wait < 0) return null;             // disabled (no key) -> graceful skip
   await sleep(wait);
+  if (_llmDisabled) return null;         // a 401/403 may have disabled us while we waited in the queue
   const sys = `You are ${persona.name}, an ambient non-player character living in TinyWorld, a cozy voxel world of floating islands around a calm bay called Tidewater Bay. `
     + `Personality: ${persona.personality}. Speak ONE short, casual, in-character line, max ~18 words. `
     + `No emojis. No quotation marks. No stage directions. Just what you say out loud to others in the lobby.`;
@@ -178,8 +195,17 @@ async function askLLM(kind, persona, ctx) {
     return null;                         // network error -> graceful skip
   }
 }
+// Strip emoji / pictographic chars before sending (no-emoji is a hard repo rule;
+// prompting "No emojis" is not a guarantee). Removes pictographs, regional
+// indicators, emoji variation selectors, ZWJ, and skin-tone modifiers.
+const EMOJI_RE = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}\u{20E3}]/gu;
 function clean(s) {
-  return String(s || '').replace(/^["'\s]+|["'\s]+$/g, '').replace(/\s+/g, ' ').slice(0, 160);
+  return String(s || '')
+    .replace(EMOJI_RE, '')
+    .replace(/^["'\s]+|["'\s]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 160)
+    .trim();
 }
 
 // ---- optional world meta lookup (for reliable cold-start worldId) ----------
@@ -198,14 +224,20 @@ function compactCells(data) {
   return out;
 }
 let WORLD_META = null;
+let RESOLVED_WORLD_ID = null;            // a real NUMERIC world id, or null if unresolved
 async function loadWorldMeta() {
-  if (!CFG.origin) return null;          // no origin -> rely on a present peer to load the world
+  if (!CFG.origin) return null;          // no origin -> cannot resolve the numeric world id
   try {
     const res = await fetch(`${CFG.origin}/api/worlds?slug=${encodeURIComponent(CFG.slug)}`);
     if (!res.ok) return null;
     const body = await res.json().catch(() => null);
     if (!body || !body.world) return null;
     WORLD_META = body.world;
+    // The server only treats a NUMERIC id as a world id (worlds.mjs:35-37). A slug
+    // sent as worldId would silently cold-load a WRONG/default board, so we only
+    // ever forward a verified numeric id.
+    const n = Number(WORLD_META.id);
+    RESOLVED_WORLD_ID = Number.isFinite(n) && String(n) === String(WORLD_META.id) ? n : null;
     return WORLD_META;
   } catch (_) {
     return null;
@@ -216,15 +248,24 @@ async function loadWorldMeta() {
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const rnd = (n) => Math.floor(Math.random() * n);
 const EMOTES = ['wave', 'dance', 'jump', 'sit', 'crouch'];   // server allowlist (party EMOTE_CMDS)
+const RECONNECT_BASE_MS = 2000;          // first reconnect delay after a drop
+const RECONNECT_CAP_MS = 30000;          // capped exponential backoff ceiling
 
 class Bot {
   constructor(persona, i) {
     this.p = persona; this.i = i;
+    // Stable `bot-...` conn id (reused across reconnects) => the client tags us as
+    // an NPC ("(bot) joined" toast) and our nameplate identity stays put.
+    this.pk = 'bot-' + this.p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + rnd(0xffffff).toString(16);
     this.id = null; this.x = 0; this.z = 0; this.grid = 8;
     this.grass = new Set(); this.goal = null;
     this.peers = new Map();
     this.connected = false; this.lastTalk = 0;
-    this.timers = [];
+    this.timers = [];                 // movement / emote / ambient timers (cleared on close)
+    this.reconnectTimer = null;
+    this.started = false;             // movement+emote+ambient schedulers armed?
+    this.stopped = false;             // intentional shutdown -> no reconnect
+    this.backoff = RECONNECT_BASE_MS; // current reconnect delay
     this.moves = 0; this.lines = 0; this.emotes = 0; this.role = null;
     this.warnedNoGrass = false;
   }
@@ -232,55 +273,90 @@ class Bot {
   send(o) { if (this.ws && this.ws.readyState === 1) { try { this.ws.send(JSON.stringify(o)); } catch (_) {} } }
 
   connect() {
-    // `bot-...` conn id => the client tags us as an NPC ("(bot) joined" toast).
-    const pk = 'bot-' + this.p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + rnd(0xffffff).toString(16);
-    const url = `${CFG.host}/party/${encodeURIComponent('world-' + CFG.slug)}?_pk=${encodeURIComponent(pk)}`;
+    if (this.stopped) return;
+    const url = `${CFG.host}/party/${encodeURIComponent('world-' + CFG.slug)}?_pk=${encodeURIComponent(this.pk)}`;
     let ws;
-    try { ws = new WebSocket(url); } catch (e) { this.log('connect failed:', e.message); return; }
+    try { ws = new WebSocket(url); } catch (e) { this.log('connect failed:', e.message); this.scheduleReconnect(); return; }
     this.ws = ws;
     ws.onopen = () => {
       const w = WORLD_META;
       // Empty token => observe in prod (secret set); role:'observe' keeps us an
-      // observer in open testing mode too. worldId drives server-side cold-start
-      // (ensureWorldLoaded); cells are a fallback only honored in open mode.
-      this.send({
+      // observer in open testing mode too. worldId (server cold-start via
+      // ensureWorldLoaded) is sent ONLY when we hold a real NUMERIC id — a slug
+      // would silently load a wrong/default board. cells are an open-mode fallback.
+      const join = {
         type: 'world.join', token: '', role: 'observe',
-        worldId: w ? w.id : (CFG.slug),
         name: this.p.name, color: this.p.color,
         profileId: 'bot:' + this.p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         gridSize: w ? (w.gridSize || this.grid) : this.grid,
         cells: w && w.data ? compactCells(w.data) : [],
         taxPercent: w ? w.taxPercent : null, ownerProfileId: w ? w.ownerProfileId : null,
         avatar: Object.assign({ kind: 'voxel' }, this.p.avatar),
-      });
+      };
+      if (RESOLVED_WORLD_ID != null) join.worldId = RESOLVED_WORLD_ID;
+      this.send(join);
     };
     ws.onmessage = (ev) => {
       let d; try { d = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString()); } catch { return; }
       this.onMsg(d);
     };
-    ws.onclose = () => { this.connected = false; };
-    ws.onerror = (e) => { this.log('ws error', (e && e.message) || 'socket'); };
+    ws.onclose = () => { this.handleDrop(); };
+    ws.onerror = (e) => { if (CFG.verbose) this.log('ws error', (e && e.message) || 'socket'); };
+  }
+
+  // A socket drop: stop all activity, then reconnect with backoff (unless shutting
+  // down). Clearing timers first prevents leaking the dead socket's intervals.
+  handleDrop() {
+    if (this.stopped) return;
+    this.connected = false;
+    this.timers.forEach(clearTimeout); this.timers = [];
+    this.started = false;
+    this.goal = null;
+    this.scheduleReconnect();
+  }
+  scheduleReconnect() {
+    if (this.stopped || this.reconnectTimer) return;
+    const delay = this.backoff + rnd(1000);   // jitter so 10+ bots don't reconnect in lockstep
+    this.log(`disconnected — reconnecting in ${(delay / 1000).toFixed(1)}s`);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.backoff = Math.min(RECONNECT_CAP_MS, this.backoff * 2);  // grows until a clean join resets it
+      this.connect();
+    }, delay);
   }
 
   onMsg(d) {
+    if (d.type === 'welcome') {
+      // World rooms deliver our own connection id here (party/index.js:577-585),
+      // BEFORE any chat. world.state.you carries no id, so without this we'd never
+      // learn our own id and would react to our OWN echoed chat (a feedback loop).
+      if (d.id) this.id = d.id;
+      return;
+    }
     if (d.type === 'world.state') {
       this.connected = true;
-      this.id = (d.you && d.you.id) || this.id;
+      this.id = (d.you && d.you.id) || this.id || this.pk;   // fallbacks; welcome already set it
       this.grid = d.gridSize || this.grid;
       this.role = d.you && d.you.role;
       if (d.you && d.you.x != null) { this.x = d.you.x; this.z = d.you.z; }
+      this.backoff = RECONNECT_BASE_MS;                       // clean join -> reset backoff
       this.grass.clear();
       for (const c of (d.grassCells || [])) this.grass.add(c);
       for (const pr of (d.peers || [])) if (pr.id) this.peers.set(pr.id, { name: pr.name });
       this.log(`joined as role=${this.role} at (${this.x},${this.z}); ${this.grass.size} walkable cells, ${this.peers.size} peers`);
       if (!this.grass.size && !this.warnedNoGrass) {
         this.warnedNoGrass = true;
-        this.log('no walkable cells yet — world not loaded. Will idle until it loads.' +
-          (CFG.origin ? '' : ' (pass --origin/TW_ORIGIN so a cold room can self-load via worldId.)'));
+        this.log('no walkable cells — the real lobby world is not loaded for us.' +
+          (RESOLVED_WORLD_ID != null
+            ? ' Idling until a player loads it.'
+            : ' Set TW_ORIGIN so a cold room can self-load via the real numeric worldId; idling until a player loads it.'));
       }
-      this.startMoving();
-      if (wantAmbient) this.scheduleAmbient();
-      this.scheduleEmote();
+      if (!this.started) {            // arm schedulers once per live connection (re-armed after a reconnect)
+        this.started = true;
+        this.startMoving();
+        if (wantAmbient) this.scheduleAmbient();
+        this.scheduleEmote();
+      }
     } else if (d.type === 'presence' && d.presence) {
       const pr = d.presence;
       if (pr.id && pr.id !== this.id) {
@@ -300,8 +376,6 @@ class Bot {
 
   // ---- movement: one walkable step toward a wander goal ----
   startMoving() {
-    if (this._movingStarted) return;
-    this._movingStarted = true;
     const tick = () => {
       if (this.connected) this.step();
       this.timers.push(setTimeout(tick, 1100 + rnd(1600)));
@@ -372,11 +446,17 @@ class Bot {
     if (line && this.connected) { this.send({ type: 'chat', text: line }); this.lines++; this.log(`says: ${line}`); }
   }
 
-  disconnect() { this.timers.forEach(clearTimeout); this.timers = []; try { this.ws && this.ws.close(); } catch (_) {} }
+  // Intentional shutdown: stop reconnecting and clear every timer.
+  disconnect() {
+    this.stopped = true;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    this.timers.forEach(clearTimeout); this.timers = [];
+    try { this.ws && this.ws.close(); } catch (_) {}
+  }
 }
 
 // ---- boot ------------------------------------------------------------------
-(async function boot() {
+async function boot() {
   if (typeof WebSocket !== 'function') {
     console.error('This runner needs a global WebSocket (Node 22+). Your Node:', process.version);
     process.exit(1);
@@ -385,9 +465,15 @@ class Bot {
     console.warn('lobby-bots: OPENROUTER_API_KEY is unset — bots will WANDER and EMOTE but stay silent (no chat). Set it to enable LLM banter.');
   }
   const w = await loadWorldMeta();
-  if (w) console.log(`lobby-bots: resolved "${w.name}" (id=${w.id}, grid=${w.gridSize}) from ${CFG.origin}`);
-  else if (CFG.origin) console.log(`lobby-bots: could not resolve world at ${CFG.origin} — relying on a present peer to load it`);
-  else console.log('lobby-bots: no --origin set — cold rooms cannot self-load; bots idle until a player loads the lobby');
+  if (w && RESOLVED_WORLD_ID != null) {
+    console.log(`lobby-bots: resolved "${w.name}" (id=${RESOLVED_WORLD_ID}, grid=${w.gridSize}) from ${CFG.origin} — cold rooms self-load`);
+  } else if (CFG.origin) {
+    console.warn(`lobby-bots: WARNING — could not resolve a numeric world id for "${CFG.slug}" at ${CFG.origin}. ` +
+      `Bots will NOT cold-start the lobby; they idle until a real player loads it. Check TW_ORIGIN/slug.`);
+  } else {
+    console.warn('lobby-bots: WARNING — no TW_ORIGIN/--origin set. Cannot resolve the real numeric world id, so a COLD lobby will not be populated; ' +
+      'bots idle until a real player loads it. Set TW_ORIGIN=<https site serving /api/worlds> for always-on population.');
+  }
   console.log(`lobby-bots: ${CFG.bots} NPCs -> ${CFG.host}/party/world-${CFG.slug} | mode=${CFG.mode} model=${CFG.model}${_llmDisabled ? ' (chat disabled)' : ''}`);
 
   const roster = [];
@@ -410,4 +496,14 @@ class Bot {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   if (CFG.seconds > 0) setTimeout(shutdown, CFG.seconds * 1000);
+}
+
+// Run only when invoked directly (`node tools/lobby-bots.mjs`), not when imported
+// for tests. Exports below let the unit tests exercise the protocol logic offline.
+const _isMain = (() => {
+  try { return !!process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]); }
+  catch (_) { return false; }
 })();
+if (_isMain) boot();
+
+export { Bot, clean, CFG };
