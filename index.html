@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
 <link rel="stylesheet" href="styles/landing.css" />
+<link rel="stylesheet" href="styles/countdown.css" />
 <link rel="preload" as="image" href="assets/landing-hero.png" />
 <script>
   (function landingAuthBootstrap() {
@@ -57,6 +58,7 @@
       <div class="hero-copy">
         <h1 id="hero-title">Dream Big<br><span>Build Small</span></h1>
         <p>Create beautiful worlds then explore, play, trade, share.</p>
+        <div class="hero-countdown" data-countdown-mount data-countdown-skin="hero" data-countdown-tick="interval" aria-live="polite">WAVE1 in</div>
         <div class="hero-actions" aria-label="Hero actions">
           <a class="primary-action" href="/tiny-world-builder">
             <span>Start building</span>
@@ -218,6 +220,7 @@
 
     </section>
   </main>
+  <script src="scripts/countdown.js" defer></script>
   <script src="scripts/landing-auth-chip.js" defer></script>
   <script src="scripts/landing-feed.js" defer></script>
 </body>

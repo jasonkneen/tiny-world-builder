@@ -1,12 +1,22 @@
 import { getSql, isDatabaseUnavailable } from './lib/db.mjs';
-import { corsResponse, errorResponse, jsonResponse, readJson } from './lib/http.mjs';
-import { requireAuthUser } from './lib/auth.mjs';
+import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
+import { getAuthUser, requireAuthUser } from './lib/auth.mjs';
+import { isWorldAdminEmail } from './lib/worlds.mjs';
 
 export const config = { path: '/api/features' };
 
 // Coin-holder gate: minimum token balance to submit a suggestion (server-enforced
 // in a future step when Solana RPC is wired; for now the client enforces it).
 const MIN_COIN_BALANCE = 100;
+
+// WAVE launch taxonomy: constrain the label server-side to a small known set so
+// arbitrary client strings can never be stored or filtered on. Anything else
+// (incl. 'none'/'') normalizes to null = no wave.
+const WAVES = ['WAVE1', 'WAVE2', 'WAVE3'];
+function normalizeWave(value) {
+  const s = String(value == null ? '' : value).trim().toUpperCase();
+  return WAVES.includes(s) ? s : null;
+}
 
 // Curated idea pool harvested from the design docs, the Skybound roadmap
 // (plans/ROADMAP-skybound.md), the fork-improvement harvest, and existing
@@ -81,6 +91,10 @@ async function ensureTables(sql) {
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  // WAVE launch label (Phase 2). Idempotent ALTER so fresh and older databases
+  // — including prod where migrations lag — gain the column before any write
+  // references it. Mirrors migration 20260618000000_wave_labels.sql.
+  await sql`ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS wave TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS feature_votes (
       id            SERIAL PRIMARY KEY,
@@ -102,6 +116,7 @@ function suggestionDto(row) {
     wallet:       row.wallet,
     vote_weight:  Number(row.vote_weight) || 0,
     status:       row.status,
+    wave:         row.wave || null,
     created_at:   row.created_at,
   };
 }
@@ -116,8 +131,21 @@ function envValue(name) {
   return process.env[name] || '';
 }
 
-function isAdmin(request) {
-  // Admin actions are LOCAL-DEV ONLY. Never grant admin on a non-local host.
+// Admin authority is decided SERVER-SIDE from a verified account session.
+// Prod path: the requester's Netlify Identity (or wallet) session resolves to an
+// email on the world-admin allowlist (isWorldAdminEmail). No host check, so it
+// works on production. Authority is the verified email only — never a client flag.
+async function isAdmin(request) {
+  try {
+    const user = await getAuthUser(request);
+    if (user && isWorldAdminEmail(user.email)) return true;
+  } catch (_) {}
+  return isLocalSecretAdmin(request);
+}
+
+// LOCALHOST-ONLY DEV FALLBACK: the legacy shared secret. Never grants admin off
+// localhost — the host check fails closed on every non-local request.
+function isLocalSecretAdmin(request) {
   try {
     const host = (request.headers.get('host') || '').toLowerCase();
     if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return false;
@@ -139,13 +167,16 @@ export default async function featuresFunction(request) {
       await seedSuggestions(sql);
       const url = new URL(request.url);
       const status = url.searchParams.get('status') || 'open';
+      // Public wave filter: ?wave=WAVE1. Unknown values normalize to null = no filter.
+      const wave = normalizeWave(url.searchParams.get('wave'));
       const rows = await sql`
         SELECT * FROM feature_suggestions
         WHERE ${status === 'all' ? sql`TRUE` : sql`status = ${status}`}
+          AND ${wave ? sql`wave = ${wave}` : sql`TRUE`}
         ORDER BY vote_weight DESC, created_at DESC
         LIMIT 200
       `;
-      return jsonResponse({ suggestions: rows.map(suggestionDto), admin: isAdmin(request) }, origin);
+      return jsonResponse({ suggestions: rows.map(suggestionDto), admin: await isAdmin(request) }, origin);
     } catch (err) {
       if (isDatabaseUnavailable(err)) return jsonResponse({ suggestions: [], source: 'unavailable' }, origin);
       console.error('[features] GET error:', err);
@@ -155,7 +186,12 @@ export default async function featuresFunction(request) {
 
   // ---- POST — submit a suggestion (requires wallet auth or admin) ----
   if (request.method === 'POST') {
-    const isAdminReq = isAdmin(request);
+    const isAdminReq = await isAdmin(request);
+    // CSRF / same-origin guard, scoped to the admin-authenticated path only: admin
+    // sessions are cookie-ambient, so a cross-site POST riding the admin cookie must
+    // be rejected. The public wallet vote/suggest path is left untouched (Phase 3
+    // tightens that separately).
+    if (isAdminReq && !sameOriginWriteGuard(request)) return errorResponse('Forbidden', 403, origin);
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'suggest';
 
@@ -222,17 +258,25 @@ export default async function featuresFunction(request) {
 
   // ---- PATCH — admin status update ----
   if (request.method === 'PATCH') {
-    if (!isAdmin(request)) return errorResponse('Forbidden', 403, origin);
+    if (!(await isAdmin(request))) return errorResponse('Forbidden', 403, origin);
+    if (!sameOriginWriteGuard(request)) return errorResponse('Forbidden', 403, origin);
     const url = new URL(request.url);
     const id = Number(url.searchParams.get('id'));
     if (!id) return errorResponse('id is required', 400, origin);
     const body = await readJson(request);
     const status = ['open','planned','done','rejected'].includes(body && body.status) ? body.status : null;
-    if (!status) return errorResponse('valid status is required', 400, origin);
+    // wave is set/cleared explicitly: a provided 'none'/'' normalizes to null (a real
+    // clear) and bypasses COALESCE, which would treat null as "leave unchanged".
+    const waveProvided = !!(body && Object.prototype.hasOwnProperty.call(body, 'wave'));
+    const wave = waveProvided ? normalizeWave(body.wave) : null;
+    if (!status && !waveProvided) return errorResponse('status or wave is required', 400, origin);
     try {
       const sql = getSql();
       const rows = await sql`
-        UPDATE feature_suggestions SET status = ${status}, updated_at = NOW()
+        UPDATE feature_suggestions SET
+          status = COALESCE(${status}, status),
+          wave = CASE WHEN ${waveProvided} THEN ${wave} ELSE wave END,
+          updated_at = NOW()
         WHERE id = ${id} RETURNING *
       `;
       if (!rows.length) return errorResponse('Not found', 404, origin);

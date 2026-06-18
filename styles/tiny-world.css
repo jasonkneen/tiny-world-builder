@@ -37,6 +37,13 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  html[lang="th"] body { font-family: 'Noto Sans Thai', 'Space Grotesk', system-ui, -apple-system, sans-serif; }
+  html[lang="th"] .tw-pixel-font { font-family: 'Noto Sans Thai', 'Press Start 2P', 'Courier New', monospace; }
+  html[lang="th"] .toolbar-label,
+  html[lang="th"] .mode-title,
+  html[lang="th"] .settings-tab,
+  html[lang="th"] .welcome-card h3 { font-family: 'Noto Sans Thai', 'Space Grotesk', system-ui, sans-serif; }
+
   body {
     background:
       radial-gradient(circle at 86% 15%, rgba(255, 214, 154, min(1, calc(var(--backdrop-strength, 0.78) * 0.58))), transparent 32%),

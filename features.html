@@ -10,6 +10,25 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
 <link rel="stylesheet" href="styles/landing.css" />
+<script>
+  // Resolve once the Netlify Identity auth module has loaded (or time out), so the
+  // admin-by-account check can read window.TinyWorldAuth before booting.
+  (function featuresAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
 <style>
 /* ---- features page ---- */
 .features-list-section { width: min(1200px, calc(100% - 48px)); margin: 0 auto; padding: 8px 0 64px; }
@@ -266,6 +285,40 @@
 .admin-status-select.badge-planned { background:#e8f0fe; color:#1a4fcf; border-color:#b3cafd; }
 .admin-status-select.badge-done    { background:#e6f4ea; color:#1a6632; border-color:#b7dfbe; }
 .admin-status-select.badge-rejected{ background:#f5f0f0; color:#8a2a20; border-color:#e0bab7; }
+
+/* WAVE launch taxonomy — public filter, per-item badge, admin set control. */
+.wave-filter {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d6dae5);
+  background: #fff;
+  color: var(--ink, #1a1d27);
+  cursor: pointer;
+}
+.wave-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent, #ffb020);
+  color: #1a1205;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.admin-wave-select {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #e6c98a;
+  background: #fff7e6;
+  color: #6a4a00;
+  cursor: pointer;
+}
 </style>
 </head>
 <body class="landing-page">
@@ -303,6 +356,12 @@
           <button class="filter-btn" data-status="done">Done</button>
           <button class="filter-btn" data-status="all">All</button>
         </div>
+        <select class="wave-filter" id="wave-filter" aria-label="Filter by wave">
+          <option value="">All waves</option>
+          <option value="WAVE1">WAVE1</option>
+          <option value="WAVE2">WAVE2</option>
+          <option value="WAVE3">WAVE3</option>
+        </select>
         <button class="suggest-btn" id="suggest-open-btn">
           <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Suggest a feature
@@ -354,6 +413,7 @@
   (function() {
     const MIN_BALANCE = 100;
     const STATUS_OPTS = ['open','planned','done','rejected'];
+    const WAVES = ['WAVE1','WAVE2','WAVE3'];
 
     const FALLBACK_SUGGESTIONS = [
       { id: -1, title: 'NPC companions', description: 'Add AI-driven NPCs that wander your world and interact with players — merchants, wanderers, quest-givers.', wallet: 'admin', vote_weight: 0, status: 'open', created_at: '' },
@@ -396,8 +456,12 @@
       try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
     }
     let currentFilter = 'open';
+    let currentWave = ''; // '' = all waves; otherwise WAVE1/WAVE2/WAVE3
     let suggestions = [];
     let myVotes = {};
+    // The server's last verdict on admin authority (verified account email on prod,
+    // or the localhost-only dev secret). Set as a side effect of loadSuggestions().
+    let serverSaysAdmin = false;
 
     // ---- admin toggle — Ctrl+Shift+A (local dev only) ----
     document.addEventListener('keydown', async e => {
@@ -437,8 +501,39 @@
       const _ab = document.getElementById('features-admin-bar'); if (_ab) _ab.hidden = !adminMode;
     }
 
-    function adminHeaders() {
-      return { 'Content-Type': 'application/json', 'x-admin-secret': adminSecret };
+    // Bearer token for the signed-in account, if any. Mirrors scripts/admin-users.js:
+    // Identity JWT first, then wallet-session / nf_jwt cookie fallbacks. The server
+    // decides admin authority from the verified email this token resolves to.
+    function walletToken() {
+      try { return localStorage.getItem('tinyworld:auth:wallet-session.v1') || ''; } catch (_) { return ''; }
+    }
+    function cookieToken() {
+      try { const m = document.cookie.match(/(?:^|; )nf_jwt=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; } catch (_) { return ''; }
+    }
+    async function accessToken() {
+      try {
+        const A = window.TinyWorldAuth;
+        if (A && typeof A.getUser === 'function') {
+          const u = await A.getUser();
+          if (u && typeof u.jwt === 'function') {
+            const jwt = await Promise.resolve(u.jwt()).catch(() => '');
+            return jwt || (u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+          }
+          return (u && u.token && u.token.access_token) || walletToken() || cookieToken() || '';
+        }
+      } catch (_) {}
+      return walletToken() || cookieToken() || '';
+    }
+
+    // Headers for authenticated reads/writes: the account bearer token (prod path)
+    // plus the localhost-only dev secret when present. Same-origin fetch sets Origin
+    // automatically, satisfying the server's CSRF guard.
+    async function authHeaders(withJson) {
+      const headers = withJson ? { 'Content-Type': 'application/json' } : {};
+      const token = await accessToken();
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (adminSecret) headers['x-admin-secret'] = adminSecret;
+      return headers;
     }
 
     // ---- phantom wallet ----
@@ -462,17 +557,19 @@
 
     // ---- API ----
     async function loadSuggestions(status) {
-      const r = await fetch('/api/features?status=' + encodeURIComponent(status));
+      const waveQ = currentWave ? '&wave=' + encodeURIComponent(currentWave) : '';
+      const r = await fetch('/api/features?status=' + encodeURIComponent(status) + waveQ, { headers: await authHeaders(false), credentials: 'same-origin' });
       const d = await r.json();
+      serverSaysAdmin = !!d.admin; // server's verdict: verified admin email OR local dev secret
       return d.suggestions || [];
     }
 
     async function submitSuggestion(title, description) {
-      const headers = adminMode ? adminHeaders() : { 'Content-Type': 'application/json' };
+      const headers = await authHeaders(true);
       const effectiveWallet = adminMode ? 'admin' : wallet;
       const effectiveBalance = adminMode ? MIN_BALANCE : coinBalance;
       const r = await fetch('/api/features', {
-        method: 'POST', headers,
+        method: 'POST', headers, credentials: 'same-origin',
         body: JSON.stringify({ wallet: effectiveWallet, coinBalance: effectiveBalance, title, description }),
       });
       const d = await r.json();
@@ -481,11 +578,11 @@
     }
 
     async function castVote(suggestionId, vote) {
-      const headers = adminMode ? adminHeaders() : { 'Content-Type': 'application/json' };
+      const headers = await authHeaders(true);
       const effectiveWallet = adminMode ? 'admin' : wallet;
       const effectiveBalance = adminMode ? MIN_BALANCE : coinBalance;
       const r = await fetch('/api/features?action=vote', {
-        method: 'POST', headers,
+        method: 'POST', headers, credentials: 'same-origin',
         body: JSON.stringify({ wallet: effectiveWallet, coinBalance: effectiveBalance, suggestionId, vote }),
       });
       const d = await r.json();
@@ -495,8 +592,19 @@
 
     async function patchStatus(id, status) {
       const r = await fetch('/api/features?id=' + id, {
-        method: 'PATCH', headers: adminHeaders(),
+        method: 'PATCH', headers: await authHeaders(true), credentials: 'same-origin',
         body: JSON.stringify({ status }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Update failed');
+      return d.suggestion;
+    }
+
+    // Admin-only: set/clear a suggestion's launch wave ('none' clears it).
+    async function patchWave(id, wave) {
+      const r = await fetch('/api/features?id=' + id, {
+        method: 'PATCH', headers: await authHeaders(true), credentials: 'same-origin',
+        body: JSON.stringify({ wave }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Update failed');
@@ -537,6 +645,13 @@
               ${STATUS_OPTS.map(o => `<option value="${o}"${o===s.status?' selected':''}>${o}</option>`).join('')}
             </select>`
           : `<span class="feature-status-badge ${badgeClass(s.status)}">${esc(s.status)}</span>`;
+        // WAVE label: admins get a set/clear picker; everyone else sees a badge (or nothing).
+        const waveCell = adminMode
+          ? `<select class="admin-wave-select" data-wave-id="${s.id}" aria-label="Set wave">
+              <option value="none"${!WAVES.includes(s.wave)?' selected':''}>No wave</option>
+              ${WAVES.map(w => `<option value="${w}"${w===s.wave?' selected':''}>${w}</option>`).join('')}
+            </select>`
+          : (WAVES.includes(s.wave) ? `<span class="wave-badge">${esc(s.wave)}</span>` : '');
 
         return `<div class="feature-item" data-id="${s.id}">
   <div class="vote-col">
@@ -549,6 +664,7 @@
     ${s.description ? `<p>${esc(s.description)}</p>` : ''}
     <div class="feature-meta">
       <span class="feature-wallet">${esc(fmtWallet(s.wallet))}</span>
+      ${waveCell}
     </div>
   </div>
   ${adminStatusPicker}
@@ -597,6 +713,25 @@
           } catch (err) { alert(err.message); }
         });
       });
+
+      // admin wave pickers
+      el.querySelectorAll('.admin-wave-select').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          const id = Number(sel.dataset.waveId);
+          try {
+            const updated = await patchWave(id, sel.value);
+            if (updated) {
+              const idx = suggestions.findIndex(s => s.id === id);
+              if (idx >= 0) suggestions[idx] = updated;
+              // If a wave filter is active and this item no longer matches, drop it.
+              if (currentWave && updated.wave !== currentWave) {
+                suggestions = suggestions.filter(s => s.id !== id);
+              }
+              renderList();
+            }
+          } catch (err) { alert(err.message); }
+        });
+      });
     }
 
     // ---- filter ----
@@ -609,6 +744,14 @@
         suggestions = await loadSuggestions(currentFilter).catch(() => []);
         renderList();
       });
+    });
+
+    // ---- wave filter ----
+    document.getElementById('wave-filter').addEventListener('change', async (e) => {
+      currentWave = e.target.value;
+      document.getElementById('features-list').innerHTML = '<div class="features-empty">Loading...</div>';
+      suggestions = await loadSuggestions(currentFilter).catch(() => []);
+      renderList();
     });
 
     // ---- suggest modal ----
@@ -679,23 +822,25 @@
 
     // ---- boot ----
     (async () => {
-      // A stored secret only grants admin if the server actually accepts it.
-      if (adminSecret) {
-        const ok = await validateSecret(adminSecret);
-        if (!ok) {
-          adminSecret = '';
-          try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
-          try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
-          adminMode = false;
-        }
-      }
-      renderAdminBar();
+      // Wait for the Identity auth module so accessToken() can read a live session
+      // on the first load (prod account-based admin), then ask the server.
+      try { await window.__tinyworldAuthReady; } catch (_) {}
       try {
-        const s = await loadSuggestions('open');
+        const s = await loadSuggestions('open'); // sets serverSaysAdmin
         suggestions = s.length ? s : FALLBACK_SUGGESTIONS;
       } catch (_) {
         suggestions = FALLBACK_SUGGESTIONS;
       }
+      // Clear a stale local dev secret the server rejected.
+      if (adminSecret && !serverSaysAdmin) {
+        adminSecret = '';
+        try { sessionStorage.removeItem('twAdminSecret'); } catch (_) {}
+        try { localStorage.removeItem('twAdminSecret'); } catch (_) {}
+      }
+      // Authority is the server's verdict — verified admin email (works on prod) OR
+      // the localhost-only dev secret. No client-side host gate.
+      adminMode = serverSaysAdmin;
+      renderAdminBar();
       renderList();
     })();
   })();

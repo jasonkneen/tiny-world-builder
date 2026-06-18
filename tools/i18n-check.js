@@ -6,7 +6,7 @@
  *   node tools/i18n-check.js --report   print full coverage report
  *
  * Verifies:
- *   1. Locale parity — fr/es/zh define EXACTLY the keys en.js defines
+ *   1. Locale parity — fr/es/zh/th define EXACTLY the keys en.js defines
  *      (no missing keys = no silent English leakage; no extra/orphan keys).
  *   2. No empty translations.
  *   3. Every data-i18n* key used in the HTML, and every LITERAL t()/tx() key
@@ -24,7 +24,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const i18nDir = path.join(root, 'engine', 'i18n');
-const LOCALES = ['en', 'fr', 'es', 'zh'];
+const LOCALES = ['en', 'fr', 'es', 'zh', 'th'];
 const REPORT = process.argv.includes('--report');
 
 // Load each locale file by executing its IIFE against a stub window.
@@ -79,7 +79,7 @@ function main() {
   if (!enKeys.length) problems.push('en.js defines no keys');
 
   // 1 + 2: parity and emptiness.
-  for (const code of ['fr', 'es', 'zh']) {
+  for (const code of LOCALES.filter((code) => code !== 'en')) {
     const d = data[code] || {};
     const keys = Object.keys(d);
     const keySet = new Set(keys);

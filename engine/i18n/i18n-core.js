@@ -9,8 +9,8 @@
  * sharing one global scope):
  *   t(key, params)        -> translated string, with {name} interpolation,
  *                            falling back to English, then to the key itself.
- *   TWI18N.locale         -> active locale code ('en' | 'fr' | 'es' | 'zh').
- *   TWI18N.supported      -> ['en','fr','es','zh'].
+ *   TWI18N.locale         -> active locale code ('en' | 'fr' | 'es' | 'zh' | 'th').
+ *   TWI18N.supported      -> ['en','fr','es','zh','th'].
  *   TWI18N.names          -> endonyms for the language switcher.
  *   TWI18N.apply(root)    -> translate data-i18n* attributes under root.
  *   TWI18N.setLocale(code)-> persist + reload (reload-on-switch; see below).
@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  var SUPPORTED = ['en', 'fr', 'es', 'zh'];
+  var SUPPORTED = ['en', 'fr', 'es', 'zh', 'th'];
   var DEFAULT = 'en';
   var LS_KEY = 'tinyworld:lang';
 
@@ -37,6 +37,7 @@
     fr: 'Français',
     es: 'Español',
     zh: '中文',
+    th: 'ไทย',
   };
 
   var DATA = (typeof window !== 'undefined' && window.TWI18N_DATA) || {};

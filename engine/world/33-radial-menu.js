@@ -17,6 +17,8 @@
       back: '<path d="m15 18-6-6 6-6"/>',
       edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
       explode: '<path d="M12 2v5"/><path d="M12 17v5"/><path d="M2 12h5"/><path d="M17 12h5"/><path d="m4.9 4.9 3.5 3.5"/><path d="m15.6 15.6 3.5 3.5"/><path d="m19.1 4.9-3.5 3.5"/><path d="m8.4 15.6-3.5 3.5"/>',
+      minus: '<path d="M5 12h14"/>',
+      plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     };
 
     // Root ring — angles in screen degrees (0=right, 90=down, 270=up). The top
@@ -24,7 +26,7 @@
     const ROOT = [
       { id: 'color',     label: window.t('radial.color'),     icon: 'palette',  angle: 225, submenu: 'color', posType: 'primary' },
       { id: 'style',     label: window.t('radial.style'),     icon: 'sparkles', angle: 315, action: 'style', posType: 'primary' },
-      { id: 'size',      label: window.t('radial.size'),      icon: 'size',     angle: 0,   action: 'size', posType: 'primary' },
+      { id: 'size',      label: window.t('radial.size'),      icon: 'size',     angle: 0,   submenu: 'size', posType: 'primary' },
       { id: 'rotate',    label: window.t('radial.rotate'),    icon: 'rotate',   angle: 45,  action: 'rotate', posType: 'primary' },
       { id: 'more',      label: window.t('radial.more'),      icon: 'more',     angle: 90,  action: 'more', posType: 'primary' },
       { id: 'move',      label: window.t('radial.move'),      icon: 'move',     angle: 135, action: 'move', posType: 'primary' },
@@ -248,6 +250,26 @@
           btn.addEventListener('click', e => { e.stopPropagation(); flash(btn); if (se && se.recolorPart) se.recolorPart(c.hex); });
           root.appendChild(btn);
         });
+      } else if (level === 'size') {
+        // Two-way scale for the whole selected object — explicit, labelled, no
+        // hidden Shift modifier. Reuses scaleSelectedBoardObject() (universal:
+        // basic kinds, buildings, voxel/asset-templates). 0.87 ≈ 1/1.15, so a
+        // Shrink undoes a Grow tap-for-tap.
+        const its = [
+          { id: 'shrink', label: window.t('radial.size.shrink'), icon: 'minus', factor: 0.87 },
+          { id: 'grow',   label: window.t('radial.size.grow'),   icon: 'plus',  factor: 1.15 },
+        ];
+        const angles = arcAngles(its.length);
+        its.forEach((it, i) => {
+          const btn = makeBtn('', iconHtml(it.icon) + '<span class="radial-label">' + it.label + '</span>', angles[i], i + 1, 'primary');
+          btn.title = it.label;
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            flash(btn);
+            if (typeof scaleSelectedBoardObject === 'function') scaleSelectedBoardObject(it.factor);
+          });
+          root.appendChild(btn);
+        });
       } else if (level === 'color') {
         const angles = arcAngles(COLORS.length);
         COLORS.forEach((c, i) => {
@@ -309,10 +331,6 @@
             const sel = window.__tinyworldSelection;
             if (sel && typeof sel.rotate === 'function') sel.rotate(Math.PI / 2);
             else if (typeof rotateSelectedCells === 'function') rotateSelectedCells(Math.PI / 2);
-          }
-        } else if (id === 'size') {
-          if (typeof scaleSelectedBoardObject === 'function') {
-            scaleSelectedBoardObject((window.event && window.event.shiftKey) ? 0.87 : 1.15);
           }
         } else if (id === 'more' || id === 'style') {
           openSelectionPanel();

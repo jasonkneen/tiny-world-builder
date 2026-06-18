@@ -60,6 +60,10 @@
     let lobbyQueue = [], lobbyShowing = false, lobbyT = 0;
     const LOBBY_DWELL = 7.0, LOBBY_FADE = 0.5;
 
+    // ---- WAVE1 countdown strip ----
+    let countdownCanvas = null, countdownCtx = null, countdownTex = null, countdownMat = null, countdownMesh = null;
+    let countdownLastLabel = '', countdownNextPaintT = 0;
+
     function parentNode() {
       if (typeof worldGroup !== 'undefined' && worldGroup) return worldGroup;
       if (typeof xrWorldRoot !== 'undefined' && xrWorldRoot) return xrWorldRoot;
@@ -163,6 +167,22 @@
       overlay.name = 'lobbyBroadcast';
       group.add(overlay);
       lobbyMesh = overlay;
+
+      const CCW = 1024, CCH = 132;
+      countdownCanvas = document.createElement('canvas');
+      countdownCanvas.width = CCW; countdownCanvas.height = CCH;
+      countdownCtx = countdownCanvas.getContext('2d');
+      countdownTex = new THREE.CanvasTexture(countdownCanvas);
+      if ('colorSpace' in countdownTex && THREE.SRGBColorSpace) countdownTex.colorSpace = THREE.SRGBColorSpace;
+      const CW = W, CH = CW * CCH / CCW;
+      countdownMat = new THREE.MeshBasicMaterial({ map: countdownTex, transparent: true, opacity: 0.96, toneMapped: false, depthTest: false });
+      const countdownStrip = new THREE.Mesh(new THREE.PlaneGeometry(CW, CH), countdownMat);
+      countdownStrip.position.set(0, bottom + H - CH / 2 - 0.06, 0.055);
+      countdownStrip.renderOrder = 5;
+      countdownStrip.name = 'lobbyCountdown';
+      group.add(countdownStrip);
+      countdownMesh = countdownStrip;
+      renderCountdownStrip();
 
       const frame = new THREE.Mesh(
         new THREE.BoxGeometry(W + 0.34, H + 0.34, 0.16),
@@ -369,6 +389,16 @@
       c.fillText(lobbyClip(d.text || '', 40), 214, 140);
       if (lobbyTex) lobbyTex.needsUpdate = true;
     }
+
+    function renderCountdownStrip() {
+      const cd = window.TinyWorldCountdown;
+      if (!cd || !countdownCtx) return;
+      const formatted = cd.formatRemaining();
+      if (formatted.label === countdownLastLabel) return;
+      countdownLastLabel = formatted.label;
+      cd.renderCanvas(countdownCtx, { formatted, width: countdownCanvas.width, height: countdownCanvas.height, skin: 'lobby' });
+      if (countdownTex) countdownTex.needsUpdate = true;
+    }
     function startNextLobby() {
       const d = lobbyQueue.shift();
       if (!d) { lobbyShowing = false; if (lobbyMesh) lobbyMesh.visible = false; return; }
@@ -392,6 +422,10 @@
     // deck and, when cameras exist, cuts to the hottest feed then back to slides.
     function tick(t, dt) {
       if (!group || !group.visible) return;
+      if (t >= countdownNextPaintT) {
+        countdownNextPaintT = t + 1;
+        renderCountdownStrip();
+      }
       // @lobby strip lifecycle — fade in, hold, fade out (runs regardless of slide/feed phase).
       if (lobbyShowing && lobbyMat) {
         lobbyT += dt;
