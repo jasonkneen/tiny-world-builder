@@ -1,9 +1,13 @@
-// Lobby population layer: spawns >=10 persistent NPC peers that JOIN the in-world
+// Lobby population layer: spawns >=10 persistent peers that JOIN the in-world
 // lobby (slug `tidewater-bay`) as REAL peers, wander the lobby grid, periodically
 // emote, and chat using LLM banter on FREE OpenRouter models. They render with the
 // same voxel avatar + nameplate + chat bubble pipeline as any human peer (handled
 // entirely client-side in engine/world/47-worlds-room.js) — so this process needs
 // NO rendering code; it only speaks the PartyKit world protocol.
+//
+// They are meant to be INDISTINGUISHABLE FROM HUMAN PLAYERS: ordinary first-name /
+// gamer-handle display names, plain nameplates, and casual chat. See the IDENTITY
+// note below for why they read as regular players, not labelled NPCs.
 //
 // SECURITY / JOIN DECISION (verified against party/index.js):
 //   In production the world room sets WORLDS_JOIN_SECRET, so an empty-token join is
@@ -17,11 +21,16 @@
 //   the behaviour is identical whether the target runs in prod (secret set) or open
 //   testing mode (no secret) — never an unintended `play` seat.
 //
-// NPC DISCLOSURE (not deceptive):
-//   Each bot connects with a PartyKit conn id prefixed `bot-...`. The client detects
-//   that (isBotPeer in 47-worlds-room.js) and shows the localized "(bot) joined"
-//   toast (worlds.notify.botJoined). Combined with ambient NPC names, real visitors
-//   can tell these are characters, not impersonated users.
+// IDENTITY (indistinguishable from humans):
+//   The client tags a peer as a bot (isBotPeer in 47-worlds-room.js) only when its
+//   conn id starts with `bot-` OR its profileId starts with `bot:`. To read as an
+//   ordinary player, each peer connects with a guest-style conn id (`u_...`, exactly
+//   like a real not-logged-in visitor's connToken) and sends profileId:null (the
+//   server maps that to `guest:<id>` in open mode, or keeps it null in prod — never
+//   a `bot:` value). So neither isBotPeer branch fires: no "(bot) joined" toast, just
+//   the same plain join toast and plain nameplate a human gets. Note presenceFor()
+//   (party/index.js) does not even relay profileId, so the conn-id is the marker that
+//   actually matters; profileId:null is belt-and-suspenders.
 //
 // OFF BY DEFAULT IN THE APP: this is an external Node process. It is never imported
 // by the browser build and does not touch the local-only engine/world/51-worlds-bots.js.
@@ -117,21 +126,25 @@ if (!CFG.model.endsWith(':free') && !CFG.allowPaid) {
   process.exit(1);
 }
 
-// ---- NPC personas (ambient characters, not impersonated users) -------------
-// Seeded voxel avatars; `avatar` fields mirror the descriptor cleanAvatar accepts.
+// ---- personas (ordinary players — read as humans, not labelled NPCs) --------
+// Names are believable first-name / gamer-handle display names so a visitor reads
+// them as regular players. Each keeps a distinct seeded voxel avatar descriptor
+// (`avatar` fields mirror what cleanAvatar accepts) so they all look different.
+// `personality` is just a casual chatting vibe handed to the LLM — a normal person,
+// never a fantasy narrator.
 const PERSONAS = [
-  { name: 'Marsh the Wanderer', color: '#6fae57', personality: 'a roaming naturalist who narrates the tide pools and reeds', avatar: { seed: 111, body: 'Masc', fit: 'Scout', skin: 2, head: 'Wide', hair: 'Short' } },
-  { name: 'Pebble', color: '#c9a14a', personality: 'a small chatty tinkerer who collects shiny stones', avatar: { seed: 222, body: 'Fem', fit: 'Casual', skin: 1, head: 'Slim', hair: 'Curls' } },
-  { name: 'Old Brine', color: '#4f8fb0', personality: 'a weathered fisher who speaks in calm sea proverbs', avatar: { seed: 333, body: 'Masc', fit: 'Formal', skin: 4, head: 'Wide', hair: 'Bald' } },
-  { name: 'Fern the Forager', color: '#7bc46b', personality: 'a cheerful plant-gatherer pointing out herbs and blossoms', avatar: { seed: 444, body: 'Fem', fit: 'Rogue', skin: 0, head: 'Slim', hair: 'Tail' } },
-  { name: 'Cobble', color: '#b87f4a', personality: 'a gruff stonemason always sizing up the lobby paths', avatar: { seed: 555, body: 'Masc', fit: 'Barbarian', skin: 3, head: 'Wide', hair: 'Mohawk' } },
-  { name: 'Dewdrop', color: '#62c0d4', personality: 'a dreamy wanderer who marvels at mist and morning light', avatar: { seed: 666, body: 'Fem', fit: 'Casual', skin: 2, head: 'Slim', hair: 'Curls' } },
-  { name: 'Tinder the Lamplighter', color: '#d8973f', personality: 'a warm keeper of lanterns who greets every passerby', avatar: { seed: 777, body: 'Masc', fit: 'Formal', skin: 1, head: 'Wide', hair: 'Short' } },
-  { name: 'Reed', color: '#5aaf6e', personality: 'a quiet flute-player who hums about the water and birds', avatar: { seed: 888, body: 'Fem', fit: 'Scout', skin: 0, head: 'Slim', hair: 'Tail' } },
-  { name: 'Barnacle', color: '#9a6cc4', personality: 'a curious dock-dweller asking newcomers where they wander from', avatar: { seed: 999, body: 'Masc', fit: 'Rogue', skin: 4, head: 'Wide', hair: 'Mohawk' } },
-  { name: 'Willow the Gardener', color: '#8fb24a', personality: 'a gentle gardener tending imaginary window-boxes as she walks', avatar: { seed: 121, body: 'Fem', fit: 'Casual', skin: 3, head: 'Slim', hair: 'Curls' } },
-  { name: 'Skiff', color: '#4fb0a0', personality: 'a restless little ferryman describing currents and far islands', avatar: { seed: 232, body: 'Masc', fit: 'Scout', skin: 2, head: 'Wide', hair: 'Short' } },
-  { name: 'Maple the Storyteller', color: '#c46a5a', personality: 'a kindly elder weaving tiny tales about the bay', avatar: { seed: 343, body: 'Fem', fit: 'Formal', skin: 1, head: 'Slim', hair: 'Bald' } },
+  { name: 'Alex', color: '#6fae57', personality: 'laid-back, friendly, into building cool stuff and chatting about it', avatar: { seed: 111, body: 'Masc', fit: 'Scout', skin: 2, head: 'Wide', hair: 'Short' } },
+  { name: 'mia_k', color: '#c9a14a', personality: 'upbeat and curious, asks people what they are working on', avatar: { seed: 222, body: 'Fem', fit: 'Casual', skin: 1, head: 'Slim', hair: 'Curls' } },
+  { name: 'Jordan', color: '#4f8fb0', personality: 'chill and dry-witted, drops the occasional one-liner', avatar: { seed: 333, body: 'Masc', fit: 'Formal', skin: 4, head: 'Wide', hair: 'Bald' } },
+  { name: 'sam2200', color: '#7bc46b', personality: 'enthusiastic gamer, hyped about new worlds and updates', avatar: { seed: 444, body: 'Fem', fit: 'Rogue', skin: 0, head: 'Slim', hair: 'Tail' } },
+  { name: 'priya', color: '#b87f4a', personality: 'warm and welcoming, likes saying hi to people who just joined', avatar: { seed: 555, body: 'Masc', fit: 'Barbarian', skin: 3, head: 'Wide', hair: 'Mohawk' } },
+  { name: 'theo', color: '#62c0d4', personality: 'thoughtful and easygoing, into the little details of the place', avatar: { seed: 666, body: 'Fem', fit: 'Casual', skin: 2, head: 'Slim', hair: 'Curls' } },
+  { name: 'Casey', color: '#d8973f', personality: 'sociable and chatty, always up for a quick conversation', avatar: { seed: 777, body: 'Masc', fit: 'Formal', skin: 1, head: 'Wide', hair: 'Short' } },
+  { name: 'nico', color: '#5aaf6e', personality: 'quiet but friendly, comments now and then while wandering', avatar: { seed: 888, body: 'Fem', fit: 'Scout', skin: 0, head: 'Slim', hair: 'Tail' } },
+  { name: 'devon', color: '#9a6cc4', personality: 'curious newcomer-energy, asks where people are from', avatar: { seed: 999, body: 'Masc', fit: 'Rogue', skin: 4, head: 'Wide', hair: 'Mohawk' } },
+  { name: 'lena_b', color: '#8fb24a', personality: 'cheerful and creative, likes complimenting what others build', avatar: { seed: 121, body: 'Fem', fit: 'Casual', skin: 3, head: 'Slim', hair: 'Curls' } },
+  { name: 'kofi', color: '#4fb0a0', personality: 'energetic explorer, talks about checking out the other islands', avatar: { seed: 232, body: 'Masc', fit: 'Scout', skin: 2, head: 'Wide', hair: 'Short' } },
+  { name: 'rae', color: '#c46a5a', personality: 'mellow and kind, makes small talk and keeps things light', avatar: { seed: 343, body: 'Fem', fit: 'Formal', skin: 1, head: 'Slim', hair: 'Bald' } },
 ];
 
 // ---- shared, account-wide LLM throttle -------------------------------------
@@ -156,14 +169,15 @@ async function askLLM(kind, persona, ctx) {
   if (wait < 0) return null;             // disabled (no key) -> graceful skip
   await sleep(wait);
   if (_llmDisabled) return null;         // a 401/403 may have disabled us while we waited in the queue
-  const sys = `You are ${persona.name}, an ambient non-player character living in TinyWorld, a cozy voxel world of floating islands around a calm bay called Tidewater Bay. `
-    + `Personality: ${persona.personality}. Speak ONE short, casual, in-character line, max ~18 words. `
-    + `No emojis. No quotation marks. No stage directions. Just what you say out loud to others in the lobby.`;
+  const sys = `You are ${persona.name}, a regular person hanging out in the lobby of TinyWorld, a voxel multiplayer game. `
+    + `You are just another player chatting, not a narrator or character — talk like a normal person in a game chat. `
+    + `Personality: ${persona.personality}. Write ONE short, casual chat line, max ~18 words. `
+    + `Lowercase and relaxed is fine. No emojis. No quotation marks. No stage directions or roleplay asterisks.`;
   const user = kind === 'react'
     ? (ctx.addressed
-        ? `${ctx.speaker} is speaking directly to you (they used your name): "${ctx.text}"\nReply to them directly and warmly in one short line.`
-        : `A visitor named ${ctx.speaker} just said: "${ctx.text}"\nReply naturally in one short line.`)
-    : `Say a brief in-character line about what you are noticing or doing as you wander the lobby.`;
+        ? `${ctx.speaker} is talking to you directly (they used your name): "${ctx.text}"\nReply to them naturally in one short line.`
+        : `Another player named ${ctx.speaker} just said in chat: "${ctx.text}"\nReply naturally in one short line.`)
+    : `Say a brief, casual chat line — a quick hello, an observation, or something on your mind as you walk around the lobby.`;
   try {
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -254,9 +268,11 @@ const RECONNECT_CAP_MS = 30000;          // capped exponential backoff ceiling
 class Bot {
   constructor(persona, i) {
     this.p = persona; this.i = i;
-    // Stable `bot-...` conn id (reused across reconnects) => the client tags us as
-    // an NPC ("(bot) joined" toast) and our nameplate identity stays put.
-    this.pk = 'bot-' + this.p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + rnd(0xffffff).toString(16);
+    // Guest-style conn id (reused across reconnects) mirroring a real not-logged-in
+    // visitor's connToken (`u_<base36>`, see 47-worlds-room.js). It MUST NOT start
+    // with `bot-`, or the client's isBotPeer would tag us and show a "(bot) joined"
+    // toast — we want to read as an ordinary player. Random + opaque like a real id.
+    this.pk = 'u_' + Math.random().toString(36).slice(2, 10);
     this.id = null; this.x = 0; this.z = 0; this.grid = 8;
     this.grass = new Set(); this.goal = null;
     this.peers = new Map();
@@ -287,7 +303,11 @@ class Bot {
       const join = {
         type: 'world.join', token: '', role: 'observe',
         name: this.p.name, color: this.p.color,
-        profileId: 'bot:' + this.p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        // profileId:null mirrors a real guest join. The server maps null to
+        // `guest:<id>` in open mode (or keeps it null in prod) — never a `bot:`
+        // value — so the client's isBotPeer never flags us. (presenceFor doesn't
+        // even relay profileId, so the guest-style conn id is the real safeguard.)
+        profileId: null,
         gridSize: w ? (w.gridSize || this.grid) : this.grid,
         cells: w && w.data ? compactCells(w.data) : [],
         taxPercent: w ? w.taxPercent : null, ownerProfileId: w ? w.ownerProfileId : null,
@@ -349,7 +369,7 @@ class Bot {
         this.log('no walkable cells — the real lobby world is not loaded for us.' +
           (RESOLVED_WORLD_ID != null
             ? ' Idling until a player loads it.'
-            : ' Set TW_ORIGIN so a cold room can self-load via the real numeric worldId; idling until a player loads it.'));
+            : ' Could not resolve a numeric worldId (check TW_ORIGIN/slug), so a cold room cannot self-load; idling until a player loads it.'));
       }
       if (!this.started) {            // arm schedulers once per live connection (re-armed after a reconnect)
         this.started = true;
@@ -461,20 +481,32 @@ async function boot() {
     console.error('This runner needs a global WebSocket (Node 22+). Your Node:', process.version);
     process.exit(1);
   }
+  // SAFETY GUARD: refuse to start without an origin. CFG.origin is set from either
+  // --origin or TW_ORIGIN. Without it we cannot resolve the real NUMERIC worldId, so
+  // a join into a cold room would make the server cold-load a DEFAULT empty board
+  // (open mode: setWorldStateFromData with cells:[]) — corrupting the live lobby.
+  // Requiring it guarantees we only ever populate the real, already-correct world.
+  if (!CFG.origin) {
+    console.error('lobby-bots: refusing to start — TW_ORIGIN (or --origin) is required.\n' +
+      '  Without it the runner cannot resolve the real numeric worldId for the lobby, and\n' +
+      '  joining a cold room could make the server load a wrong/default board over the live lobby.\n' +
+      '  Set TW_ORIGIN=<https site serving /api/worlds> (e.g. https://your-site) and retry.');
+    process.exit(1);
+  }
   if (!API_KEY) {
     console.warn('lobby-bots: OPENROUTER_API_KEY is unset — bots will WANDER and EMOTE but stay silent (no chat). Set it to enable LLM banter.');
   }
+  // CFG.origin is guaranteed set (guard above). If the numeric worldId still fails
+  // to resolve (bad slug, site down), we DON'T cold-start the lobby — we idle until a
+  // real player loads it, never forwarding a slug that would pin a wrong/default board.
   const w = await loadWorldMeta();
   if (w && RESOLVED_WORLD_ID != null) {
     console.log(`lobby-bots: resolved "${w.name}" (id=${RESOLVED_WORLD_ID}, grid=${w.gridSize}) from ${CFG.origin} — cold rooms self-load`);
-  } else if (CFG.origin) {
+  } else {
     console.warn(`lobby-bots: WARNING — could not resolve a numeric world id for "${CFG.slug}" at ${CFG.origin}. ` +
       `Bots will NOT cold-start the lobby; they idle until a real player loads it. Check TW_ORIGIN/slug.`);
-  } else {
-    console.warn('lobby-bots: WARNING — no TW_ORIGIN/--origin set. Cannot resolve the real numeric world id, so a COLD lobby will not be populated; ' +
-      'bots idle until a real player loads it. Set TW_ORIGIN=<https site serving /api/worlds> for always-on population.');
   }
-  console.log(`lobby-bots: ${CFG.bots} NPCs -> ${CFG.host}/party/world-${CFG.slug} | mode=${CFG.mode} model=${CFG.model}${_llmDisabled ? ' (chat disabled)' : ''}`);
+  console.log(`lobby-bots: ${CFG.bots} players -> ${CFG.host}/party/world-${CFG.slug} | mode=${CFG.mode} model=${CFG.model}${_llmDisabled ? ' (chat disabled)' : ''}`);
 
   const roster = [];
   for (let i = 0; i < CFG.bots; i++) roster.push(PERSONAS[i % PERSONAS.length]);

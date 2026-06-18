@@ -5,7 +5,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Bot, clean } from '../tools/lobby-bots.mjs';
 
-const persona = { name: 'Marsh the Wanderer', color: '#6fae57', personality: 'test', avatar: { seed: 1 } };
+const persona = { name: 'Alex', color: '#6fae57', personality: 'test', avatar: { seed: 1 } };
+
+// Safety: these offline tests must NEVER open a real socket. Constructing a Bot and
+// driving onMsg() never calls connect(), but stub it on the prototype as a hard guard
+// so any accidental connect attempt fails loudly instead of dialing a prod host.
+const _origConnect = Bot.prototype.connect;
+Bot.prototype.connect = function () { throw new Error('connect() must not run in unit tests'); };
+void _origConnect;
 
 test('clean() strips emoji / pictographic characters', () => {
   // Inputs use codepoint escapes (no literal emoji glyphs in source) — leaf/wave,
@@ -18,6 +25,14 @@ test('clean() strips emoji / pictographic characters', () => {
 
 test('clean() trims wrapping quotes/whitespace and collapses spaces', () => {
   assert.equal(clean('  "a   quiet  tide"  '), 'a quiet tide');
+});
+
+test('conn id reads as an ordinary player, not a bot (indistinguishable)', () => {
+  // isBotPeer (engine/world/47-worlds-room.js) tags a peer when its id starts with
+  // `bot-`. A guest-style `u_...` id keeps these peers indistinguishable from humans.
+  const b = new Bot(persona, 0);
+  assert.equal(b.pk.startsWith('bot-'), false, 'conn id must not start with bot-');
+  assert.match(b.pk, /^u_[a-z0-9]+$/, 'conn id should look like a real guest token');
 });
 
 test('bot learns its own id from the welcome message', () => {
