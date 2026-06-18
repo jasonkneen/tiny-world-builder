@@ -384,6 +384,21 @@
 
 /* roadmap status badges (reused inside modal) */
 
+/* WAVE launch badge — small accent pill shown on cards + in the detail modal. */
+.wave-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent, #ffb020);
+  color: #1a1205;
+  border: 1px solid rgba(0,0,0,0.08);
+  vertical-align: middle;
+}
+.kanban-card .wave-badge { margin-top: 8px; }
+
 /* responsive */
 @media (max-width: 780px) {
   .kanban-board {
@@ -512,8 +527,13 @@
     }
 
     // ---- Helpers ----
+    const WAVES = ['WAVE1', 'WAVE2', 'WAVE3'];
     function esc(s) {
       return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    // WAVE launch label pill, or '' when the milestone has no wave.
+    function waveBadge(w) {
+      return WAVES.includes(w) ? `<span class="wave-badge">${esc(w)}</span>` : '';
     }
 
     // Bearer token for the signed-in account, if any. Mirrors scripts/admin-users.js:
@@ -617,6 +637,7 @@
                 <div class="kanban-card-body">
                   <h3>${esc(m.title)}</h3>
                   ${m.description ? `<p>${esc(m.description)}</p>` : ''}
+                  ${waveBadge(m.wave)}
                 </div>
               </div>
             </div>`;
@@ -624,6 +645,7 @@
           return `<div class="kanban-card" data-id="${m.id}" tabindex="0" role="button" aria-label="${esc(m.title)}">
             <h3>${esc(m.title)}</h3>
             ${m.description ? `<p>${esc(m.description)}</p>` : ''}
+            ${waveBadge(m.wave)}
           </div>`;
         }).join('');
 
@@ -724,15 +746,15 @@
       const m = milestones.find(m => m.id === id);
       if (!m) return;
       modalState = { id, isNew: false, status: m.status };
-      renderModal(m.title, m.description, m.status);
+      renderModal(m.title, m.description, m.status, m.wave);
     }
 
     function openNewCard(status) {
       modalState = { id: null, isNew: true, status };
-      renderModal('', '', status);
+      renderModal('', '', status, null);
     }
 
-    function renderModal(title, description, status) {
+    function renderModal(title, description, status, wave) {
       const modal = document.getElementById('detail-modal');
       const sc = STATUS_CLASS[status] || 'planned';
       const sl = STATUS_LABEL[status] || 'Planned';
@@ -741,12 +763,16 @@
         const opts = Object.entries(STATUS_LABEL).map(([v, l]) =>
           `<option value="${v}"${v === status ? ' selected' : ''}>${l}</option>`
         ).join('');
+        // Wave control: 'none' clears the label; WAVE1/2/3 sets it. PATCHed on save.
+        const waveOpts = `<option value="none"${!WAVES.includes(wave) ? ' selected' : ''}>No wave</option>`
+          + WAVES.map(w => `<option value="${w}"${w === wave ? ' selected' : ''}>${w}</option>`).join('');
 
         modal.innerHTML = `
           <div class="detail-head">
             <div class="detail-head-copy">
               <input class="detail-edit-title" id="d-title" type="text" value="${esc(title)}" placeholder="Card title" maxlength="200" />
               <select class="detail-status-select" id="d-status">${opts}</select>
+              <select class="detail-status-select" id="d-wave" aria-label="Launch wave">${waveOpts}</select>
             </div>
             <button class="detail-close-btn" id="d-close">
               <svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -763,15 +789,16 @@
           const newTitle = modal.querySelector('#d-title').value.trim();
           const newDesc = modal.querySelector('#d-desc').value.trim();
           const newStatus = modal.querySelector('#d-status').value;
+          const newWave = modal.querySelector('#d-wave').value;
           if (!newTitle) { modal.querySelector('#d-title').focus(); return; }
           const btn = modal.querySelector('#d-save');
           btn.disabled = true;
           btn.textContent = modalState.isNew ? 'Adding…' : 'Saving…';
           try {
             if (modalState.isNew) {
-              await createMilestone({ title: newTitle, description: newDesc, status: newStatus, sort_order: (milestones.length + 1) * 10 });
+              await createMilestone({ title: newTitle, description: newDesc, status: newStatus, wave: newWave, sort_order: (milestones.length + 1) * 10 });
             } else {
-              await patchMilestone(modalState.id, { title: newTitle, description: newDesc, status: newStatus });
+              await patchMilestone(modalState.id, { title: newTitle, description: newDesc, status: newStatus, wave: newWave });
             }
             closeModal();
             render();
@@ -797,7 +824,7 @@
         modal.innerHTML = `
           <div class="detail-head">
             <div class="detail-head-copy">
-              <span class="roadmap-status roadmap-status--${sc}">${sl}</span>
+              <span class="roadmap-status roadmap-status--${sc}">${sl}</span>${waveBadge(wave)}
               <h2 class="detail-modal-title" id="detail-modal-title">${esc(title)}</h2>
             </div>
             <button class="detail-close-btn" id="d-close">

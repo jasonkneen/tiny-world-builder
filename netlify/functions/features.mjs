@@ -9,6 +9,15 @@ export const config = { path: '/api/features' };
 // in a future step when Solana RPC is wired; for now the client enforces it).
 const MIN_COIN_BALANCE = 100;
 
+// WAVE launch taxonomy: constrain the label server-side to a small known set so
+// arbitrary client strings can never be stored or filtered on. Anything else
+// (incl. 'none'/'') normalizes to null = no wave.
+const WAVES = ['WAVE1', 'WAVE2', 'WAVE3'];
+function normalizeWave(value) {
+  const s = String(value == null ? '' : value).trim().toUpperCase();
+  return WAVES.includes(s) ? s : null;
+}
+
 // Curated idea pool harvested from the design docs, the Skybound roadmap
 // (plans/ROADMAP-skybound.md), the fork-improvement harvest, and existing
 // infra seams. These are intentionally broad — the team filters/triages them on
@@ -82,6 +91,10 @@ async function ensureTables(sql) {
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  // WAVE launch label (Phase 2). Idempotent ALTER so fresh and older databases
+  // — including prod where migrations lag — gain the column before any write
+  // references it. Mirrors migration 20260618000000_wave_labels.sql.
+  await sql`ALTER TABLE feature_suggestions ADD COLUMN IF NOT EXISTS wave TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS feature_votes (
       id            SERIAL PRIMARY KEY,
@@ -103,6 +116,7 @@ function suggestionDto(row) {
     wallet:       row.wallet,
     vote_weight:  Number(row.vote_weight) || 0,
     status:       row.status,
+    wave:         row.wave || null,
     created_at:   row.created_at,
   };
 }
@@ -153,9 +167,12 @@ export default async function featuresFunction(request) {
       await seedSuggestions(sql);
       const url = new URL(request.url);
       const status = url.searchParams.get('status') || 'open';
+      // Public wave filter: ?wave=WAVE1. Unknown values normalize to null = no filter.
+      const wave = normalizeWave(url.searchParams.get('wave'));
       const rows = await sql`
         SELECT * FROM feature_suggestions
         WHERE ${status === 'all' ? sql`TRUE` : sql`status = ${status}`}
+          AND ${wave ? sql`wave = ${wave}` : sql`TRUE`}
         ORDER BY vote_weight DESC, created_at DESC
         LIMIT 200
       `;
@@ -248,11 +265,18 @@ export default async function featuresFunction(request) {
     if (!id) return errorResponse('id is required', 400, origin);
     const body = await readJson(request);
     const status = ['open','planned','done','rejected'].includes(body && body.status) ? body.status : null;
-    if (!status) return errorResponse('valid status is required', 400, origin);
+    // wave is set/cleared explicitly: a provided 'none'/'' normalizes to null (a real
+    // clear) and bypasses COALESCE, which would treat null as "leave unchanged".
+    const waveProvided = !!(body && Object.prototype.hasOwnProperty.call(body, 'wave'));
+    const wave = waveProvided ? normalizeWave(body.wave) : null;
+    if (!status && !waveProvided) return errorResponse('status or wave is required', 400, origin);
     try {
       const sql = getSql();
       const rows = await sql`
-        UPDATE feature_suggestions SET status = ${status}, updated_at = NOW()
+        UPDATE feature_suggestions SET
+          status = COALESCE(${status}, status),
+          wave = CASE WHEN ${waveProvided} THEN ${wave} ELSE wave END,
+          updated_at = NOW()
         WHERE id = ${id} RETURNING *
       `;
       if (!rows.length) return errorResponse('Not found', 404, origin);

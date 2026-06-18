@@ -40,6 +40,15 @@ function envValue(name) {
   return process.env[name] || '';
 }
 
+// WAVE launch taxonomy: constrain the label server-side to a small known set so
+// arbitrary client strings can never be stored. Anything else (incl. 'none'/'')
+// normalizes to null = no wave.
+const WAVES = ['WAVE1', 'WAVE2', 'WAVE3'];
+function normalizeWave(value) {
+  const s = String(value == null ? '' : value).trim().toUpperCase();
+  return WAVES.includes(s) ? s : null;
+}
+
 // Admin authority is decided SERVER-SIDE from a verified account session.
 // Prod path: the requester's Netlify Identity (or wallet) session resolves to an
 // email on the world-admin allowlist (isWorldAdminEmail). This branch has NO host
@@ -79,6 +88,10 @@ async function ensureTable(sql) {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  // WAVE launch label (Phase 2). Idempotent ALTER so fresh and older databases
+  // — including prod where migrations lag — gain the column before any write
+  // references it. Mirrors migration 20260618000000_wave_labels.sql.
+  await sql`ALTER TABLE roadmap_milestones ADD COLUMN IF NOT EXISTS wave TEXT`;
 }
 
 async function seedTable(sql) {
@@ -118,6 +131,7 @@ function milestoneDto(row) {
     title:       row.title,
     description: row.description,
     sort_order:  row.sort_order,
+    wave:        row.wave || null,
   };
 }
 
@@ -155,13 +169,14 @@ export default async function roadmapFunction(request) {
     const description = String(body && body.description || '').slice(0, 1000).trim();
     const status = ['done', 'active', 'planned'].includes(body && body.status) ? body.status : 'planned';
     const sort_order = Number.isFinite(Number(body && body.sort_order)) ? Math.round(Number(body.sort_order)) : 0;
+    const wave = normalizeWave(body && body.wave);
     if (!title) return errorResponse('title is required', 400, origin);
     try {
       const sql = getSql();
       await ensureTable(sql);
       const rows = await sql`
-        INSERT INTO roadmap_milestones (status, title, description, sort_order)
-        VALUES (${status}, ${title}, ${description}, ${sort_order})
+        INSERT INTO roadmap_milestones (status, title, description, sort_order, wave)
+        VALUES (${status}, ${title}, ${description}, ${sort_order}, ${wave})
         RETURNING *
       `;
       return jsonResponse({ milestone: milestoneDto(rows[0]) }, origin, 201);
@@ -182,7 +197,12 @@ export default async function roadmapFunction(request) {
     if (body && body.description != null) updates.description = String(body.description).slice(0, 1000).trim();
     if (body && body.status != null && ['done', 'active', 'planned'].includes(body.status)) updates.status = body.status;
     if (body && body.sort_order != null && Number.isFinite(Number(body.sort_order))) updates.sort_order = Math.round(Number(body.sort_order));
-    if (!Object.keys(updates).length) return errorResponse('No fields to update', 400, origin);
+    // wave is set/cleared explicitly: a provided value of 'none'/'' normalizes to
+    // null (a real clear), so it must bypass COALESCE — which would otherwise treat
+    // null as "leave unchanged". Tracked separately so a wave-only PATCH is allowed.
+    const waveProvided = !!(body && Object.prototype.hasOwnProperty.call(body, 'wave'));
+    const wave = waveProvided ? normalizeWave(body.wave) : null;
+    if (!Object.keys(updates).length && !waveProvided) return errorResponse('No fields to update', 400, origin);
     try {
       const sql = getSql();
       const rows = await sql`
@@ -192,6 +212,7 @@ export default async function roadmapFunction(request) {
           description = COALESCE(${updates.description ?? null}, description),
           status      = COALESCE(${updates.status ?? null}, status),
           sort_order  = COALESCE(${updates.sort_order ?? null}, sort_order),
+          wave        = CASE WHEN ${waveProvided} THEN ${wave} ELSE wave END,
           updated_at  = NOW()
         WHERE id = ${id}
         RETURNING *
