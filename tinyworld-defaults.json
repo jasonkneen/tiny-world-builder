@@ -49,7 +49,7 @@
     "tinyworld:render:underCloudSpread": "1.35",
     "tinyworld:crowd:mode": "wander",
     "tinyworld:audio:music-muted": "0",
-    "tinyworld:crowd:enabled": "1",
+    "tinyworld:crowd:enabled": "0",
     "tinyworld:render:pixelDepthEdge": "0.00",
     "tinyworld:render:backdropVignette": "0.24",
     "tinyworld:render:materialParts": "{}",

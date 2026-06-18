@@ -8,7 +8,9 @@
   //  - Default-on: the bell toggle (mounted into the minimap header by 47) starts
   //    on for fresh visitors, while a saved "0" keeps returning users muted.
   //    Clicking back on requests OS permission once.
-  //  - In-view toasts (via the existing window.twToast) fire for join/leave/bot-join/chat.
+  //  - In-view toasts (via the existing window.twToast) fire for join/leave/bot-join.
+  //    Chat is NOT toasted in-view because the room already shows a chat bubble — it
+  //    only raises a web notification, and only when the tab is hidden.
   //  - Web notifications only fire when enabled AND permission granted AND the tab is
   //    hidden, so a focused player is never double-notified by the OS.
   //  - Join bursts coalesce within a short window into "N players joined".
@@ -96,10 +98,9 @@
           break;
         }
         case 'chat': {
+          // The room already shows an in-view bubble; only nudge backgrounded tabs.
           var text = (ev.text != null) ? String(ev.text).slice(0, TEXT_MAX) : '';
-          var title = T('worlds.notify.chatFrom', { name: name });
-          if (canToast()) window.twToast(title);
-          webNotify(title, text);
+          webNotify(T('worlds.notify.chatFrom', { name: name }), text);
           break;
         }
         default:

@@ -287,7 +287,7 @@
     crowdDebug: '1',
     crowdMode: 'wander',
     crowdShowArrows: '1',
-    crowdEnabled: '1',
+    crowdEnabled: '0',
   };
   const renderSettingsReset = localStorage.getItem(RENDER_LS.version) !== RENDER_SETTINGS_VERSION;
   if (renderSettingsReset) {

@@ -89,6 +89,7 @@
     let gridSize = 8;
     let taxPercent = null;
     let restoreAmbientCrowdVisible = null;
+    let restoreAmbientCrowdState = null;
     const AMBIENT_CROWD_ROOM_SLUG = 'tidewater-bay';
     let you = { x: 0, z: 0, hearts: 10, role: 'play' };
     let myId = '';
@@ -222,7 +223,7 @@
       }
       // One map: hide the builder's own minimap, and lock out builder tools.
       hideBaseMinimap(true);
-      setAmbientCrowdVisibleForRoom(roomShowsAmbientCrowd(w));
+      applyAmbientCrowdForRoom(w);
       if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(true);
       // Tilt-shift reads as a toy-diorama effect; turn it off for the immersive
       // tinyverse view. Remember prior state so leaving restores the build setting.
@@ -306,7 +307,7 @@
       connected = false; peers.clear(); nodes = {}; animals = [];
       knownPeerIds.clear(); peerNames.clear(); peersSeeded = false;
       unbindInput(); hideMinimap();
-      setAmbientCrowdVisibleForRoom(true);
+      restoreAmbientCrowdForRoom();
       hideBaseMinimap(false);
       if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(false);
       try { if (!window.__twTiltWasOff) document.body.classList.remove('tilt-blur-off'); } catch (_) {}
@@ -339,6 +340,37 @@
         api.setRuntimeVisible(restoreAmbientCrowdVisible);
         restoreAmbientCrowdVisible = null;
       }
+    }
+
+    function applyAmbientCrowdForRoom(w) {
+      if (roomShowsAmbientCrowd(w)) {
+        forceAmbientCrowdForLobby();
+        return;
+      }
+      setAmbientCrowdVisibleForRoom(false);
+    }
+
+    function forceAmbientCrowdForLobby() {
+      const api = window.__tinyworldCrowd;
+      if (!api) return;
+      if (restoreAmbientCrowdState === null && typeof api.snapshotRuntimeState === 'function') {
+        restoreAmbientCrowdState = api.snapshotRuntimeState();
+      }
+      if (typeof api.enableRuntimeForRoom === 'function') {
+        api.enableRuntimeForRoom();
+      } else if (typeof api.setRuntimeVisible === 'function') {
+        api.setRuntimeVisible(true);
+      }
+    }
+
+    function restoreAmbientCrowdForRoom() {
+      const api = window.__tinyworldCrowd;
+      if (restoreAmbientCrowdState !== null) {
+        if (api && typeof api.restoreRuntimeState === 'function') api.restoreRuntimeState(restoreAmbientCrowdState);
+        restoreAmbientCrowdState = null;
+        return;
+      }
+      setAmbientCrowdVisibleForRoom(true);
     }
 
     function roomShowsAmbientCrowd(w) {

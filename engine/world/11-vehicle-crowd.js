@@ -947,12 +947,16 @@
     }
   }
 
-  function applyCrowdSettings({ reseed = false } = {}) {
-    persistCrowdSettings();
+  function configureCrowdLayer({ reseed = false } = {}) {
     if (!crowdLayer) return;
     crowdLayer.scale = crowdScale;
     crowdLayer.configure(crowdConfigOverride(), crowdWorldConfigOverride());
     if (reseed || crowdLayer.people.size !== crowdCount) seedCrowdPeople();
+  }
+
+  function applyCrowdSettings({ reseed = false } = {}) {
+    persistCrowdSettings();
+    configureCrowdLayer({ reseed });
   }
 
   function crowdTerrainHeightAt(x, z) {
@@ -1174,12 +1178,72 @@
     });
     if (crowdLayer.group) crowdLayer.group.visible = crowdRuntimeVisible;
     ensureCrowdModelCharacterAssetsLoading();
-    crowdLayer.load().then(seedCrowdPeople).catch(err => {
+    const layer = crowdLayer;
+    layer.load().then(() => {
+      if (crowdLayer === layer) seedCrowdPeople();
+    }).catch(err => {
       console.warn('[crowd] failed to load sprites', err);
     });
+  }
+
+  function disposeCrowdLayer() {
+    clearCrowdModelActors();
+    if (crowdLayer) {
+      try {
+        if (typeof crowdLayer.dispose === 'function') crowdLayer.dispose();
+      } catch (_) {
+        try { if (typeof crowdLayer.clear === 'function') crowdLayer.clear(); } catch (_) {}
+        try { if (crowdLayer.group && crowdLayer.group.parent) crowdLayer.group.parent.remove(crowdLayer.group); } catch (_) {}
+      }
+    }
+    crowdLayer = null;
+    crowdLoadStarted = false;
+    crowdModelSpritesVisible = true;
+  }
+
+  function crowdRuntimeStateSnapshot() {
+    return {
+      enabled: !!crowdEnabled,
+      runtimeVisible: !!crowdRuntimeVisible,
+      layerExists: !!crowdLayer || !!crowdLoadStarted,
+    };
+  }
+
+  function enableCrowdForRoomRuntime() {
+    crowdEnabled = true;
+    setCrowdRuntimeVisible(true);
+    if (!crowdLayer) {
+      initCrowdLayer();
+    } else {
+      configureCrowdLayer({ reseed: true });
+    }
+    if (typeof syncControls === 'function') syncControls();
+  }
+
+  function restoreCrowdRuntimeState(state) {
+    if (!state) return;
+    crowdEnabled = !!state.enabled;
+    setCrowdRuntimeVisible(state.runtimeVisible !== false);
+    if (crowdEnabled) {
+      if (!crowdLayer) initCrowdLayer();
+      else configureCrowdLayer({ reseed: true });
+    } else if (state.layerExists) {
+      if (crowdLayer) crowdLayer.clear();
+      clearCrowdModelActors();
+    } else {
+      disposeCrowdLayer();
+    }
+    if (typeof syncControls === 'function') syncControls();
   }
 
   window.__tinyworldCrowd = Object.assign(window.__tinyworldCrowd || {}, {
     setRuntimeVisible: setCrowdRuntimeVisible,
     runtimeVisible: () => crowdRuntimeVisible,
+    snapshotRuntimeState: crowdRuntimeStateSnapshot,
+    enableRuntimeForRoom: enableCrowdForRoomRuntime,
+    restoreRuntimeState: restoreCrowdRuntimeState,
+    enabled: () => crowdEnabled,
+    layerExists: () => !!crowdLayer || !!crowdLoadStarted,
+    visible: () => !!(crowdLayer && crowdLayer.group && crowdLayer.group.visible && crowdRuntimeVisible),
+    peopleCount: () => (crowdLayer && crowdLayer.people ? crowdLayer.people.size : 0),
   });
