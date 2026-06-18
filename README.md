@@ -2,7 +2,20 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/jasonkneen/tiny-world-builder?style=flat&logo=github&label=Stars&color=3a72c8)](https://github.com/jasonkneen/tiny-world-builder/stargazers)
 
-<img width="1324" height="1016" alt="Screenshot 2026-05-11 at 07 09 24" src="https://github.com/user-attachments/assets/1b19a5f7-def5-42bf-b85f-01714f502afa" />
+![Tiny World Builder](assets/landing-hero.png)
+
+A self-contained 3D voxel world editor in the browser: build, sculpt, fly
+through, and share tiny worlds.
+
+| Build | Fly |
+| --- | --- |
+| ![Build worlds](assets/landing-feature-build.png) | ![Fly and explore](assets/landing-feature-fly.png) |
+| Place terrain, props, homes, paths, crops, and animals. | Switch camera modes and explore from every angle. |
+
+| Sculpt | Share |
+| --- | --- |
+| ![Sculpt terrain](assets/landing-feature-sculpt.png) | ![Share your tinyverse](assets/landing-feature-share.png) |
+| Raise, lower, paint, and tune the ground into cliffs and rivers. | Save, remix, export, and open worlds to real players. |
 
 ## Running locally
 

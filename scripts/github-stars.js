@@ -6,9 +6,9 @@
  *   number instantly even when the API is rate-limited.
  * - Unauthenticated api.github.com is ~60 req/hr per IP. A rate-limited call
  *   RESOLVES with HTTP 403 (no stargazers_count), so we gate on res.ok and on
- *   Number.isFinite — we only ever render a real integer, never undefined / 0
- *   from a bad body / NaN. On any failure we keep the cached value or the plain
- *   "Star on GitHub" label.
+ *   a positive finite integer - we only ever render a real count, never
+ *   undefined / 0 from a bad body / NaN. On any failure we keep the cached
+ *   value or the plain "Star on GitHub" label.
  */
 (function githubStars() {
   var REPO = 'jasonkneen/tiny-world-builder';
@@ -21,7 +21,7 @@
   if (!countEl || !valueEl) return;
 
   function render(n) {
-    if (!Number.isFinite(n) || n < 0) return;
+    if (!Number.isFinite(n) || n <= 0) return;
     valueEl.textContent = Math.round(n).toLocaleString('en-US');
     countEl.hidden = false;
     pill.classList.add('has-count');
@@ -30,7 +30,7 @@
   // 1) Hydrate immediately from cache (survives API rate limits).
   try {
     var cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (cached && Number.isFinite(cached.count)) render(cached.count);
+    if (cached) render(cached.count);
   } catch (err) { /* ignore malformed cache */ }
 
   // 2) Best-effort live refresh.
@@ -43,7 +43,7 @@
     })
     .then(function (data) {
       var n = data && data.stargazers_count;
-      if (!Number.isFinite(n)) throw new Error('missing stargazers_count');
+      if (!Number.isFinite(n) || n <= 0) throw new Error('missing stargazers_count');
       render(n);
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ count: n, ts: Date.now() }));
