@@ -89,6 +89,7 @@
     let gridSize = 8;
     let taxPercent = null;
     let restoreAmbientCrowdVisible = null;
+    const AMBIENT_CROWD_ROOM_SLUG = 'tidewater-bay';
     let you = { x: 0, z: 0, hearts: 10, role: 'play' };
     let myId = '';
     const peers = new Map();
@@ -221,7 +222,7 @@
       }
       // One map: hide the builder's own minimap, and lock out builder tools.
       hideBaseMinimap(true);
-      setAmbientCrowdVisibleForRoom(false);
+      setAmbientCrowdVisibleForRoom(roomShowsAmbientCrowd(w));
       if (typeof WS.setPlayChrome === 'function') WS.setPlayChrome(true);
       // Tilt-shift reads as a toy-diorama effect; turn it off for the immersive
       // tinyverse view. Remember prior state so leaving restores the build setting.
@@ -338,6 +339,12 @@
         api.setRuntimeVisible(restoreAmbientCrowdVisible);
         restoreAmbientCrowdVisible = null;
       }
+    }
+
+    function roomShowsAmbientCrowd(w) {
+      // Preserve the world-room suppression for gameplay spaces; the static lobby
+      // benefits from ambient wanderers and has its terrain baked for draw-call headroom.
+      return !!(w && w.slug === AMBIENT_CROWD_ROOM_SLUG);
     }
     WS.leaveRoom = function () {
       leaveRoom();

@@ -939,7 +939,7 @@
       crowdDebug = true;
       crowdMode = 'wander';
       crowdShowArrows = true;
-      crowdEnabled = false;
+      crowdEnabled = true;
       applyCrowdSettings({ reseed: true });
       if (crowdEnabled && !crowdLayer) {
         initCrowdLayer();

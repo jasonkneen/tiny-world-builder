@@ -5,12 +5,10 @@
   // the only global it leaks is window.twNotify.
   //
   // Design notes:
-  //  - Opt-in: the bell toggle (mounted into the minimap header by 47) defaults OFF.
-  //    While off, no toast and no web notification fire. Enabling it requests OS
-  //    permission once.
-  //  - In-view toasts (via the existing window.twToast) fire for join/leave/bot-join.
-  //    Chat is NOT toasted in-view because the room already shows a chat bubble — it
-  //    only raises a web notification, and only when the tab is hidden.
+  //  - Default-on: the bell toggle (mounted into the minimap header by 47) starts
+  //    on for fresh visitors, while a saved "0" keeps returning users muted.
+  //    Clicking back on requests OS permission once.
+  //  - In-view toasts (via the existing window.twToast) fire for join/leave/bot-join/chat.
   //  - Web notifications only fire when enabled AND permission granted AND the tab is
   //    hidden, so a focused player is never double-notified by the OS.
   //  - Join bursts coalesce within a short window into "N players joined".
@@ -27,8 +25,11 @@
     function supported() { return typeof window !== 'undefined' && 'Notification' in window; }
     function canToast() { return typeof window.twToast === 'function'; }
 
-    var enabled = false;
-    try { enabled = localStorage.getItem(PREF_KEY) === '1'; } catch (_) { /* storage unavailable — stays off */ }
+    var enabled = true;
+    try {
+      var storedPref = localStorage.getItem(PREF_KEY);
+      enabled = storedPref === null ? true : storedPref === '1';
+    } catch (_) { /* storage unavailable — stays on for this session */ }
 
     var joinBuf = [];          // [{name, bot}] accumulated within the burst window
     var joinTimer = null;
@@ -95,9 +96,10 @@
           break;
         }
         case 'chat': {
-          // The room already shows an in-view bubble; only nudge backgrounded tabs.
           var text = (ev.text != null) ? String(ev.text).slice(0, TEXT_MAX) : '';
-          webNotify(T('worlds.notify.chatFrom', { name: name }), text);
+          var title = T('worlds.notify.chatFrom', { name: name });
+          if (canToast()) window.twToast(title);
+          webNotify(title, text);
           break;
         }
         default:
