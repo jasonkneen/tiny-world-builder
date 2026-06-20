@@ -1072,6 +1072,7 @@ export default class TinyWorldParty {
       type: 'world.state',
       gridSize: this.worldState ? this.worldState.gridSize : 8,
       taxPercent: this.world ? this.world.taxPercent : null,
+      lastTaxChange: this.world ? this.world.lastTaxChange : null,
       you: { x: p.x, z: p.z, hearts: p.hearts, role: p.role, avatar: p.avatar || null },
       nodes,
       animals: this.animals,
@@ -1120,7 +1121,7 @@ export default class TinyWorldParty {
         if (!this.worldState) {
           this.setWorldStateFromData(
             { v: 4, gridSize: data.gridSize || 8, cells: Array.isArray(data.cells) ? data.cells : [] },
-            { id: data.worldId, taxPercent: data.taxPercent != null ? data.taxPercent : null, ownerProfileId: data.ownerProfileId != null ? data.ownerProfileId : null },
+            { id: data.worldId, taxPercent: data.taxPercent != null ? data.taxPercent : null, ownerProfileId: data.ownerProfileId != null ? data.ownerProfileId : null, lastTaxChange: data.lastTaxChange || null },
           );
         }
       }

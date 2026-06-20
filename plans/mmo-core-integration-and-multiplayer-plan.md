@@ -262,3 +262,9 @@ Next suggested: surface cooldown in world cards + full client-side block before 
 **Client tax cooldown UX complete (manage dialog blocks + HUD timer) + redeployed to alias.**
 
 **Tax cooldown client surface complete** (cards (CD), manage dialog block + remaining time, HUD CD timer). Redeployed to mmo-preview.
+
+
+**Latest (continuing):** Tax cooldown client surface complete across cards, manage dialog (block + remaining time on open), HUD timer, and now in-room role label (e.g. "Visitor · 15% (CD 18h)"). Server + DB enforcement live. Preview alias updated.
+
+**In-room taxCooldown flow complete:** lastTaxChange now sent on world.join (from list data), stored on room.world meta, forwarded in worldSnapshotFor + state updates. Client computes cooldown object from it and feeds to HUD role label (shows e.g. "Visitor · 15% (CD 18h)") and listeners. Fully consistent with cards/manage/HUD.
+Preview alias updated with the change.

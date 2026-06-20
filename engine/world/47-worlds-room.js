@@ -111,6 +111,16 @@
     let role = 'play';
     let gridSize = 8;
     let taxPercent = null;
+    
+function computeTaxCooldown(lastTaxChangeAt) {
+  const COOLDOWN = 24 * 60 * 60 * 1000;
+  if (!lastTaxChangeAt) return { canChange: true, remainingMs: 0 };
+  const last = new Date(lastTaxChangeAt).getTime();
+  const now = Date.now();
+  const rem = Math.max(0, COOLDOWN - (now - last));
+  return { canChange: rem === 0, remainingMs: rem };
+}
+
     let taxCooldown = null;
     let restoreAmbientCrowdVisible = null;
     let you = { x: 0, z: 0, hearts: 10, role: 'play' };
@@ -232,7 +242,7 @@
       try { if (typeof WS.seedDemoResources === 'function') WS.seedDemoResources(w); } catch (_) {}
       try { window.__tinyworldInWorldRoom = true; } catch (_) {}   // relax camera pan clamp (02) for island exploration
       gridSize = w.gridSize || 8; taxPercent = w.taxPercent != null ? w.taxPercent : null;
-      taxCooldown = w.taxCooldown || null;
+      taxCooldown = w.taxCooldown || (w.lastTaxChange ? computeTaxCooldown(w.lastTaxChange) : null);
       cells = w.data && Array.isArray(w.data.cells) ? w.data.cells : [];
       rebuildBlocked();
       if (w.data && typeof applyState === 'function') {
@@ -280,7 +290,7 @@
         send({
           type: 'world.join', token, worldId: w.id, name: playerName(), color: playerColor(),
           role, profileId: (WS.myProfileId != null ? WS.myProfileId : null),
-          gridSize, cells: compactCells(w.data), taxPercent: w.taxPercent, ownerProfileId: w.ownerProfileId,
+          gridSize, cells: compactCells(w.data), taxPercent: w.taxPercent, ownerProfileId: w.ownerProfileId, lastTaxChange: w.taxCooldown ? w.taxCooldown.lastChange : (w.lastTaxChange || null),
           avatar: getSelfAvatarDescriptor(), // networked voxel identity (server validates via cleanAvatar)
         });
         emit('status', { connected: true });
