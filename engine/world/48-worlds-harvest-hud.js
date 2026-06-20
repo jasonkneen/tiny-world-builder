@@ -39,7 +39,7 @@
   .tw-hud-res{display:flex;gap:8px}
   .tw-res-item{display:flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(4,6,20,.5);border:1px solid rgba(80,110,200,.18);border-radius:8px}
   .tw-res-item svg{opacity:.9}
-  .tw-hud-gold{font-size:11px;opacity:.9;padding:0 6px;border-left:1px solid rgba(80,110,200,.25)} .tw-hud-role{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.72;padding:0 8px;
+  .tw-hud-token,.tw-hud-gold{font-size:11px;opacity:.9;padding:0 6px;border-left:1px solid rgba(80,110,200,.25);min-width:42px;text-align:right} .tw-hud-role{font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.72;padding:0 8px;
     border-left:1px solid rgba(80,110,200,.25);border-right:1px solid rgba(80,110,200,.25)}
   .tw-hud-acts{display:flex;gap:6px}
   .tw-act{display:flex;align-items:center;gap:6px;border:0;cursor:pointer;color:#fff;
@@ -80,7 +80,7 @@
     const ACTIONS = [['fish', 'worlds.actionFish', 'fish'], ['mine', 'worlds.actionMine', 'ore'], ['gather', 'worlds.actionGather', 'plant'], ['hunt', 'worlds.actionHunt', 'meat']];
     const RES_ICON = { fish: 'fish', meat: 'meat', plants: 'plant', ore: 'ore' };
   
-    let hud = null, heartsEl = null, resEl = null, roleEl = null, progFill = null, helpPanel = null;
+    let hud = null, heartsEl = null, resEl = null, roleEl = null, tokenEl = null, goldEl = null, progFill = null, helpPanel = null;
     const actBtns = {};
     const cooldowns = {};
   
@@ -100,6 +100,8 @@
         el('div', { class: 'tw-hud-grp' }, [ic('heart', 16), heartsEl]),
         el('div', { class: 'tw-hud-grp' }, [resEl]),
         roleEl,
+        el('div', { class: 'tw-hud-grp' }, [el('span', { style: 'opacity:.6;font-size:10px' }, ['$TW']), tokenEl]),
+        el('div', { class: 'tw-hud-grp' }, [el('span', { style: 'opacity:.6;font-size:10px' }, ['G']), goldEl]),
         actGrp,
         el('button', { class: 'tw-hud-icon tw-hud-avatar', title: T('worlds.avatarOpen'), onclick: () => { if (typeof WS.openAvatarPicker === 'function') WS.openAvatarPicker(); } }, [ic('person', 16)]),
         el('button', { class: 'tw-hud-icon', title: T('worlds.help'), onclick: toggleHelp }, [ic('help', 16)]),
@@ -107,6 +109,8 @@
         el('div', { class: 'tw-hud-progress' }, [progFill]),
       ]);
       document.body.appendChild(hud);
+  if (typeof WS.getTokenHeld === "function") renderToken(WS.getTokenHeld());
+  if (typeof WS.getGold === "function") renderGold(WS.getGold());
     }
   
     // ---- how-to-play legend ----
@@ -164,7 +168,14 @@
   
     // ---- renderers ----
     function renderHearts(n) { buildHud(); const f = Math.max(0, Math.min(10, Math.round(n || 0))); heartsEl.textContent = f + '/10'; }
-    function renderResources(r) {
+    function fmtCompact(n) {
+    n = Number(n || 0);
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "m";
+    if (n >= 10000) return Math.floor(n / 1000) + "k";
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    return String(n);
+  }
+  function renderResources(r) {
       buildHud();
       r = r || (typeof WS.getResources === 'function' ? WS.getResources() : {});
       resEl.textContent = '';
@@ -172,7 +183,10 @@
         resEl.appendChild(el('span', { class: 'tw-res-item' }, [ic(RES_ICON[k], 14), el('span', { text: String(v || 0) })]));
       });
     }
-    function setRole() {
+    function renderToken(n) { buildHud(); if (tokenEl) tokenEl.textContent = fmtCompact(n || 0); }
+  function renderGold(g) { buildHud(); if (goldEl) goldEl.textContent = fmtCompact((g && g.available) || 0); }
+
+  function setRole() {
       buildHud();
       const s = (typeof WS.getState === 'function' ? WS.getState() : {}) || {};
       let label;

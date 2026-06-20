@@ -53,6 +53,7 @@ export default async function meGold(request) {
       ...base,
       spent: summary.spent,
       available: Math.max(0, base.totalAllowance - summary.spent),
+      tinyworldHeld: "22000000", // demo 22m: wire real SPL balance from wallet
       ledgerEvents: events.slice(-5),
       note: "LIVE mmo-core + gold_ledger_events. Full wallet balance + harvest accrual next burst.",
     };

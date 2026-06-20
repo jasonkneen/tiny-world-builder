@@ -84,19 +84,24 @@
 
 // ---- real GOLD via mmo-core backend (Phase 2 starter) ----
   let currentGold = { available: 0, totalAllowance: 0, tier: "none" };
+  let tokenHeld = 22000000; // demo 22m $TINYWORLD holdings (abbrev for UI)
 
   async function refreshGold() {
     try {
       const res = await fetch("/api/me/gold", { credentials: "include" });
       if (res.ok) {
-        currentGold = await res.json();
+        const g = await res.json();
+        currentGold = g;
+        if (g.tinyworldHeld != null) { tokenHeld = Number(g.tinyworldHeld) || tokenHeld; emit("token", tokenHeld); }
         emit("gold", currentGold);
         console.log("[worlds] GOLD allowance:", currentGold.available, "tier:", currentGold.tier);
       }
     } catch (e) { /* offline or no auth — normal in pure static */ }
   }
   WS.getGold = () => currentGold;
+  WS.getTokenHeld = () => tokenHeld;
   WS.refreshGold = refreshGold;
+  WS.setTokenHeld = (n) => { tokenHeld = n || 0; emit("token", tokenHeld); };
 
   
     // ---- room state ----

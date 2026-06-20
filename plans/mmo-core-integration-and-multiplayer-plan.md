@@ -228,3 +228,9 @@ This plan is the deliverable from the review. Execute in bursts; update this fil
 
 
 **Latest loop run (continuing):** Interest scoping + world.interest messages + client handler live. GOLD accrual now scales with harvest reward. Cooldown enforcement stub wired. All verifications passing. Loop still running.
+
+## Latest Loop Run (interest tick + gold spends + weekly token payout)
+**Interest tick**: onAlarm now periodically calls interest updates to all players using buildInterestSnapshot + world.interest.
+**Gold spends**: recordGoldSpend (GOLD_SPENT via mmo-core) called on every harvest (small cost).
+**Weekly payout**: grantWeeklyGoldPayout using calculateGoldAllowance + tinyworldHeld from join data; emits ALLOWANCE_RECALCULATED on join and in tick for new cycles. Client sends demo holding.
+All verified, tests green, committed in small bursts.
