@@ -411,7 +411,7 @@
           "lamp-post",
           "spotlight",
           "voxel-build",
-          "model-stamp"
+          "model-stamp", "stargate"
         ]
       },
       "island": {

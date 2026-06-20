@@ -827,8 +827,37 @@ function computeTaxCooldown(lastTaxChangeAt) {
     // If the player has just stepped onto a lobby-gate cell, run the gate-to-gate travel
     // on THEIR avatar (dissolve here, emerge at the paired gate) and teleport their grid
     // cell to the destination. animVoxel cedes control while _traveling (see its guard).
-    function tryEnterGate() {
-      if (!selfEnt || !selfEnt.voxel || selfEnt._traveling) return;
+    
+// Cross-island stargate (hub + rich islands traversal - Valheim portal style)
+function getCellAt(x, z) {
+  if (!this._cells) return null;
+  return this._cells.find(c => Math.round(c.x) === Math.round(x) && Math.round(c.z) === Math.round(z));
+}
+function tryCrossIslandGate() {
+  if (!selfEnt || !selfEnt.voxel) return false;
+  const c = getCellAt.call(this, you.x, you.z);
+  if (!c || c.kind !== "stargate" || !c.dest) return false;
+  const destSlug = c.dest;
+  selfEnt._traveling = true;
+  const GT = window.__tinyworldGateTransit;
+  if (GT && GT.flash) GT.flash(1.0);
+  const worldsApi = window.__tinyworldWorlds;
+  setTimeout(() => {
+    try {
+      if (worldsApi && typeof worldsApi.enterPublished === "function") {
+        worldsApi.enterPublished({ slug: destSlug });
+      } else if (worldsApi && typeof worldsApi.enterWorld === "function") {
+        worldsApi.enterWorld({ slug: destSlug });
+      }
+    } catch (e) {}
+    selfEnt._traveling = false;
+  }, 250);
+  return true;
+}
+
+function tryEnterGate() {
+  if (!selfEnt || !selfEnt.voxel || selfEnt._traveling) return;
+  if (tryCrossIslandGate.call(this)) return;
       const GT = window.__tinyworldGateTransit;
       if (!GT) return;
       // Sky-edge stargate -> descend to the mainland (replaces walk-off-the-edge). J still works.

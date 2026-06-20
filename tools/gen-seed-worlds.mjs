@@ -138,6 +138,7 @@ function buildRichWorld(a) {
 // All published and dense with resources + artifacts for immediate MMO play
 // (harvest, GOLD, tax, interest testing).
 const ARCHETYPES = [
+  { slug: "tinyverse-nexus", name: "Tinyverse Nexus (Hub)", grid: 20, water: [20, 10], stone: [8], crops: 15, trees: 8, artifacts: 12, isHub: true },
   // Fishing heavy + artifacts
   { slug: 'tidewater-bay', name: 'Tidewater Bay', grid: 20, water: [55, 28, 14], stone: [6], crops: 22, trees: 8, artifacts: 18 },
   { slug: 'coral-reef', name: 'Coral Reef', grid: 18, water: [62, 19], stone: [5], crops: 14, trees: 7, artifacts: 14 },
