@@ -313,6 +313,27 @@ All previous features (interest scoping, GOLD accrual on harvest, weekly payouts
 
 **mmo-burst-3 (tax cooldown) completed on code side** — full server enforcement + DB state + client visibility (cards, manage dialog, HUD timer, in-room role label). Admin tool DB limitation is a platform constraint (documented above and in the page banner).
 
+
+## Valheim Inspiration Pulls (what we can/should extract)
+
+**Core loops that map extremely well:**
+- Owned bases that others visit and farm on → owner gets passive income (already have tax + GOLD).
+- Comfort / Rested system → building nice things gives buffs (we just added comfort + modifiers to generator).
+- Public rich starter islands → the 29 default published islands we generated are exactly the "public meadows" new players use.
+- Artifacts as power-ups → different artifacts can give island-wide or personal bonuses (currently just placed as cells).
+- Settlements / small NPC camps on public islands → we added houses/fences on richer seeds; can become traders or flavor.
+- Island "flavor" → different islands feel different (fishing heaven, artifact rich, mining god, etc.) via modifiers.
+
+**Concrete things we can pull right now:**
+1. Comfort affecting gameplay (interest rate, node respawn, visitor yield).
+2. Artifact kinds giving small distinct bonuses when present on an island.
+3. High-comfort islands attracting "better" visitors or giving the owner a small global buff.
+4. Default islands with visible settlement clusters (already partially done).
+5. "Rested" temporary buff for players after leaving a high-comfort island.
+
+We have started wiring comfort/modifiers into deriveWorldState and node rates. Next: make comfort boost GOLD interest and expose it nicely in the Chrome test plan.
+
+
 ## Chrome End-to-End Test Plan for mmo-preview (as of 2026-06-20)
 
 **Goal**: Manually smoke the current MMO features in a real browser (Chrome) against the live preview alias. Covers tax cooldown, GOLD, HUD indicators, harvest, interest effects, and lobby access.

@@ -98,9 +98,20 @@ function buildRichWorld(a) {
   for (let i = 0; i < a.artifacts; i++) {
     const c = emptyGrassCell(occupied, g, rng); if (!c) break;
     const kind = ARTIFACT_KINDS[Math.floor(rng() * ARTIFACT_KINDS.length)];
-    // Occasionally place on stone for "ruins" feel
-    const terrain = rng() < 0.25 ? 'stone' : 'grass';
+    const terrain = rng() < 0.25 ? "stone" : "grass";
     cells.push({ x: c[0], z: c[1], terrain, kind });
+  }
+
+  // Valheim-style small survivor settlements on richer islands
+  if (a.artifacts > 14) {
+    for (let s = 0; s < 2; s++) {
+      const camp = emptyGrassCell(occupied, g, rng);
+      if (camp) cells.push({ x: camp[0], z: camp[1], terrain: "grass", kind: "house" });
+    }
+    if (a.artifacts > 18) {
+      const dock = emptyGrassCell(occupied, g, rng);
+      if (dock) cells.push({ x: dock[0], z: dock[1], terrain: "grass", kind: "fence" });
+    }
   }
 
   const water = cells.filter(c => c.terrain === 'water').length;

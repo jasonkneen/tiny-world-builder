@@ -396,11 +396,11 @@ function heartsNow(hearts, lastRegenAt, now, max = HEART_MAX, regenMs = HEART_RE
   return { hearts: h, lastRegenAt: last };
 }
 
-function oreRespawnMs(stoneCount) {
-  return Math.round(ORE_RESPAWN_BASE_MS / (1 + Math.max(0, stoneCount) / 8));
+function oreRespawnMs(stoneCount, mod = 1) {
+  return Math.round(ORE_RESPAWN_BASE_MS / (1 + Math.max(0, stoneCount) / 8) / mod);
 }
-function plantRipenMs(grassCount) {
-  return Math.round(PLANT_RIPEN_BASE_MS / (1 + Math.max(0, grassCount) / 40));
+function plantRipenMs(grassCount, mod = 1) {
+  return Math.round(PLANT_RIPEN_BASE_MS / (1 + Math.max(0, grassCount) / 40) / mod);
 }
 
 function cellTerrain(cell) { return Array.isArray(cell) ? cell[2] : (cell && cell.terrain); }
@@ -488,7 +488,9 @@ function deriveWorldState(data, rng = Math.random) {
     }
   }
   const grassCount = grassCells.length;
-  return { gridSize, nodes, cellIndex, stoneCount, grassCount, grassCells };
+  const comfort = data && data.comfort ? data.comfort : Math.round(10 + (stoneCount * 0.6) + (grassCount / 12));
+  const modifiers = data && data.modifiers ? data.modifiers : { fishing:1, mining:1, artifacts:1, comfortBonus:1 };
+  return { gridSize, nodes, cellIndex, stoneCount, grassCount, grassCells, comfort, modifiers };
 }
 
 // ---- signed join token verification (Web Crypto HMAC-SHA256) ----
@@ -997,6 +999,9 @@ export default class TinyWorldParty {
   setWorldStateFromData(data, meta) {
     this.world = meta || this.world;
     this.worldState = deriveWorldState(data || { v: 4, cells: [] });
+      this.worldComfort = this.worldState.comfort || 10;
+      this.worldModifiers = this.worldState.modifiers || {};
+      this.hasSettlement = (data && data.cells && data.cells.some(c => ["house","fence"].includes(c.kind))) || false;
     this.lastTickAt = Date.now();
     this.maintainAnimals();
     return this.worldState;
