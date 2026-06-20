@@ -85,6 +85,13 @@
     const cooldowns = {};
   
     function buildHud() {
+      // TEMP PREVIEW MARKER - remove after testing
+      if (location.hostname.includes("mmo-preview")) {
+        const marker = document.createElement("div");
+        marker.style.cssText = "position:fixed;top:8px;right:8px;z-index:9999;background:#f60;color:#fff;padding:2px 8px;font:700 10px monospace;border-radius:4px";
+        marker.textContent = "MMO PREVIEW";
+        document.body.appendChild(marker);
+      }
       if (hud) return;
       injectStyles();
       heartsEl = el('span', { class: 'tw-hud-hearts' });

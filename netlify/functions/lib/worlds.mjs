@@ -216,11 +216,18 @@ export function worldDto(row, { includeData = false } = {}) {
 
 // Tax change cooldown (guide: 24h). Simple in-memory + DB hook for now.
 const TAX_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const lastTaxChange = new Map(); // worldId -> timestamp (demo; use DB in prod)
-export function canChangeTax(worldId, now = Date.now()) {
-  const last = lastTaxChange.get(String(worldId)) || 0;
+
+export function canChangeTax(worldId, lastTaxChangeAt, now = Date.now()) {
+  if (!worldId) return true;
+  if (!lastTaxChangeAt) return true;
+  const last = new Date(lastTaxChangeAt).getTime();
   return (now - last) > TAX_CHANGE_COOLDOWN_MS;
 }
-export function recordTaxChange(worldId, now = Date.now()) {
-  lastTaxChange.set(String(worldId), now);
+
+export function getTaxCooldownInfo(lastTaxChangeAt, now = Date.now()) {
+  if (!lastTaxChangeAt) return { canChange: true, remainingMs: 0 };
+  const last = new Date(lastTaxChangeAt).getTime();
+  const remaining = Math.max(0, TAX_CHANGE_COOLDOWN_MS - (now - last));
+  return { canChange: remaining === 0, remainingMs: remaining };
 }
+

@@ -164,17 +164,27 @@ export default async function worldsFunction(request) {
       if (!worldId) return errorResponse('Missing world id', 400, origin);
       const body = await readJson(request);
       const name = cleanWorldName(body && body.name);
-      const tax = cleanTaxPercent(body && body.taxPercent);
+      // fetch current last_tax_change for cooldown
+      const cur = await sql`SELECT last_tax_change FROM worlds WHERE id = ${worldId} AND owner_profile_id = ${profile.id} AND status = 'draft' LIMIT 1`;
+      const lastChange = cur[0] ? cur[0].last_tax_change : null;
+      const cd = getTaxCooldownInfo(lastChange);
+      if (!cd.canChange) {
+        const h = Math.ceil(cd.remainingMs / (1000*60*60));
+        return errorResponse("Tax changes are on cooldown (" + h + "h remaining)", 429, origin);
+      }
+      const tax = cleanTaxPercent(body && body.taxPercent, lastChange);
       if (tax == null) return errorResponse('Tax must be 1-100', 400, origin);
       // Name + tax are editable only while the world is a draft; locked on publish.
       const rows = await sql`
         UPDATE worlds
-        SET name = ${name}, tax_percent = ${tax}, updated_at = NOW()
+        SET name = ${name}, tax_percent = ${tax}, last_tax_change = NOW(), updated_at = NOW()
         WHERE id = ${worldId} AND owner_profile_id = ${profile.id} AND status = 'draft'
         RETURNING *
       `;
       if (!rows.length) return errorResponse('World not editable (must be your draft)', 409, origin);
-      return jsonResponse({ world: worldDto(rows[0], { includeData: true }) }, origin);
+      const dto = worldDto(rows[0], { includeData: true });
+      dto.taxCooldown = getTaxCooldownInfo(rows[0].last_tax_change);
+      return jsonResponse({ world: dto }, origin);
     }
 
     if (request.method === 'POST') {

@@ -231,6 +231,7 @@
       try { if (typeof WS.seedDemoResources === 'function') WS.seedDemoResources(w); } catch (_) {}
       try { window.__tinyworldInWorldRoom = true; } catch (_) {}   // relax camera pan clamp (02) for island exploration
       gridSize = w.gridSize || 8; taxPercent = w.taxPercent != null ? w.taxPercent : null;
+      taxCooldown = w.taxCooldown || null;
       cells = w.data && Array.isArray(w.data.cells) ? w.data.cells : [];
       rebuildBlocked();
       if (w.data && typeof applyState === 'function') {
