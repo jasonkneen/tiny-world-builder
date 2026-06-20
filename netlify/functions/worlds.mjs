@@ -135,7 +135,7 @@ export default async function worldsFunction(request) {
         SELECT w.*, p.display_name AS owner_name
         FROM worlds w
         LEFT JOIN profiles p ON p.id = w.owner_profile_id
-        ORDER BY (w.kind = 'starter') DESC, w.id ASC
+        ORDER BY (w.slug = 'tinyverse-nexus') DESC, (w.kind = 'starter') DESC, w.id ASC
         LIMIT 500
       `;
       const worlds = rows.map(r => {

@@ -213,10 +213,12 @@
     }
   
     function renderCard(w) {
-      // Only the demo world (Tidewater Bay) is playable for now; everything else
-      // is greyed out and non-interactive, and no costs are shown anywhere.
+      // All PUBLISHED worlds are playable (the Nexus hub + rich starter islands);
+      // unclaimed plots stay locked/greyed. Access to the whole Tinyverse is
+      // already gated to allowlisted accounts server-side.
+      const isHub = w.slug === 'tinyverse-nexus';
       const isDemo = w.slug === 'tidewater-bay';
-      const locked = !isDemo;
+      const locked = w.status !== 'published';
       const mine = me && w.ownerProfileId != null && Number(w.ownerProfileId) === Number(me.id);
       const meta = el('div', { class: 'tw-worlds-meta' }, [
         el('div', {}, [el('b', { text: T('worlds.tiles') + ': ' }), document.createTextNode(String(w.tileCount))]),
@@ -236,7 +238,7 @@
         actions.appendChild(el('button', { class: 'tw-btn alt', text: T('worlds.manage'), onclick: () => manageFlow(w) }));
       }
       const baseTitle = w.name || (w.kind === 'starter' ? w.slug : T('worlds.statusUnclaimed'));
-      const title = baseTitle + (isDemo ? ' (demo)' : '');
+      const title = baseTitle + (isHub ? ' (hub)' : (isDemo ? ' (demo)' : ''));
       const prev = el('canvas', { class: 'tw-worlds-prev', width: '320', height: '200' });
       const card = el('div', { class: 'tw-worlds-card' + (locked ? ' tw-worlds-locked' : '') }, [
         prev,

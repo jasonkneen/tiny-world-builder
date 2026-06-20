@@ -1,0 +1,13 @@
+-- Nexus hub is a pure through-port: grass platform with ONLY stargates.
+-- Strip all resources/artifacts/water/stone; reset terrain counts to all-grass.
+UPDATE worlds
+SET data = '{"v": 4, "gridSize": 20, "cells": [{"x": 3, "z": 1, "terrain": "grass", "kind": "stargate", "dest": "ancient-grove"}, {"x": 8, "z": 1, "terrain": "grass", "kind": "stargate", "dest": "coral-reef"}, {"x": 11, "z": 1, "terrain": "grass", "kind": "stargate", "dest": "crimson-bay"}, {"x": 16, "z": 1, "terrain": "grass", "kind": "stargate", "dest": "crystal-canyon"}, {"x": 3, "z": 4, "terrain": "grass", "kind": "stargate", "dest": "dawn-island"}, {"x": 8, "z": 4, "terrain": "grass", "kind": "stargate", "dest": "echo-valley"}, {"x": 11, "z": 4, "terrain": "grass", "kind": "stargate", "dest": "ember-falls"}, {"x": 16, "z": 4, "terrain": "grass", "kind": "stargate", "dest": "ember-isle"}, {"x": 3, "z": 7, "terrain": "grass", "kind": "stargate", "dest": "fern-hollow"}, {"x": 8, "z": 7, "terrain": "grass", "kind": "stargate", "dest": "forest-glade"}, {"x": 11, "z": 7, "terrain": "grass", "kind": "stargate", "dest": "golden-strand"}, {"x": 16, "z": 7, "terrain": "grass", "kind": "stargate", "dest": "green-pastures"}, {"x": 3, "z": 10, "terrain": "grass", "kind": "stargate", "dest": "highland-basin"}, {"x": 8, "z": 10, "terrain": "grass", "kind": "stargate", "dest": "iron-ridge"}, {"x": 11, "z": 10, "terrain": "grass", "kind": "stargate", "dest": "jade-lagoon"}, {"x": 16, "z": 10, "terrain": "grass", "kind": "stargate", "dest": "mist-veil"}, {"x": 3, "z": 13, "terrain": "grass", "kind": "stargate", "dest": "mixed-hollow"}, {"x": 8, "z": 13, "terrain": "grass", "kind": "stargate", "dest": "mosswood"}, {"x": 11, "z": 13, "terrain": "grass", "kind": "stargate", "dest": "obsidian-shore"}, {"x": 16, "z": 13, "terrain": "grass", "kind": "stargate", "dest": "quarry-flats"}, {"x": 3, "z": 16, "terrain": "grass", "kind": "stargate", "dest": "sable-ridge"}, {"x": 8, "z": 16, "terrain": "grass", "kind": "stargate", "dest": "salt-marsh"}, {"x": 11, "z": 16, "terrain": "grass", "kind": "stargate", "dest": "silver-glen"}, {"x": 16, "z": 16, "terrain": "grass", "kind": "stargate", "dest": "storm-coast"}, {"x": 3, "z": 19, "terrain": "grass", "kind": "stargate", "dest": "sunflower-plains"}, {"x": 8, "z": 19, "terrain": "grass", "kind": "stargate", "dest": "thornfield"}, {"x": 11, "z": 19, "terrain": "grass", "kind": "stargate", "dest": "tidewater-bay"}, {"x": 16, "z": 19, "terrain": "grass", "kind": "stargate", "dest": "willow-bend"}]}'::jsonb,
+    tile_count = 400,
+    grid_size = 20,
+    stone_tile_count = 0,
+    water_tile_count = 0,
+    grass_tile_count = 400,
+    status = 'published',
+    kind = 'starter',
+    updated_at = NOW()
+WHERE slug = 'tinyverse-nexus';
