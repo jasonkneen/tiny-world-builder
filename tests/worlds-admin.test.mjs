@@ -6,7 +6,7 @@ import {
   deriveTerrainCounts,
 } from '../netlify/functions/lib/worlds.mjs';
 
-test('isWorldAdminEmail allows the default god-admin account (case/space-insensitive)', () => {
+test('isWorldAdminEmail allows the default world-admin accounts (case/space-insensitive)', () => {
   delete process.env.TINYWORLD_WORLD_ADMIN_EMAILS;
   assert.equal(isWorldAdminEmail('jason@bouncingfish.com'), true);
   assert.equal(isWorldAdminEmail('  JASON@BouncingFish.com  '), true);
@@ -32,7 +32,7 @@ test('worldAdminEmails merges extra emails from env', () => {
   delete process.env.TINYWORLD_WORLD_ADMIN_EMAILS;
 });
 
-test('deriveTerrainCounts stays consistent for an admin lobby save payload', () => {
+test('deriveTerrainCounts stays consistent for a world payload', () => {
   // A tiny 4x4 board: a couple of water + stone cells, rest implied grass.
   const data = { v: 4, cells: [
     [0, 0, 'water'], [1, 0, 'water'], [2, 2, 'stone'], [3, 3, 'grass', 'tree'],

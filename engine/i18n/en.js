@@ -89,22 +89,8 @@
     'worlds.emote.attack': 'attacks',
     'worlds.unknownCommand': 'Unknown command',
 
-    // ---- god-admin live lobby editor (66-lobby-admin.js) ----
-    // Admin-only control surface; kept terse. Shown only to allow-listed accounts.
-    'lobbyAdmin.tag': 'Admin',
-    'lobbyAdmin.edit': 'Edit Lobby',
-    'lobbyAdmin.editing': 'Editing — Done',
-    'lobbyAdmin.save': 'Save to Live Lobby',
-    'lobbyAdmin.saving': 'Saving…',
-    'lobbyAdmin.saved': 'Live lobby saved.',
-    'lobbyAdmin.savedAt': 'Saved',
-    'lobbyAdmin.hintView': 'Live lobby. Tap Edit Lobby to build.',
-    'lobbyAdmin.hintEdit': 'Editing live — place/erase, then Save to Live Lobby.',
-
     // ---- lobby big-screen "Latest Updates" slide (58-lobby-presentation.js) ----
     'lobby.updates.title': 'Latest Updates',
-    'lobbyAdmin.noWorld': 'No live world to save to.',
-    'lobbyAdmin.error': 'Lobby save failed.',
 
     // ---- brand / chrome ----
     'brand.sub': 'Tap to place · drag to orbit · pinch or scroll to zoom',

@@ -495,6 +495,62 @@
     function voxelCenter(i, j) { return { x: (i + 0.5) * spacing - half, z: (j + 0.5) * spacing - half }; }
     function falloff(d) { const t = 1 - d / brushRadius; return t <= 0 ? 0 : t * t * (3 - 2 * t); }
 
+    // Public surface sampler used by object placement and multiplayer avatars.
+    // It samples the visible/applied/generated block mesh in scene/world coords.
+    function sampleWorld(wx, wz) {
+      if (!shown() || !cellH || !mats || !(N > 0) || !(spacing > 0)) return null;
+      if (!Number.isFinite(wx) || !Number.isFinite(wz)) return null;
+      if (wx < -half || wx > half || wz < -half || wz > half) return null;
+      const i = clamp(Math.floor((wx + half) / spacing), 0, N - 1);
+      const j = clamp(Math.floor((wz + half) / spacing), 0, N - 1);
+      if (voxelIsPreservedSunken(i, j)) return null;
+      const idx = j * N + i;
+      const material = MATERIALS[mats[idx]] ? MATERIALS[mats[idx]].id : 'grass';
+      return {
+        x: wx,
+        z: wz,
+        y: surfaceY + cellH[idx],
+        walkWorldY: surfaceY + cellH[idx],
+        material,
+        i,
+        j,
+        cellX: clamp(Math.floor(i * gridAtEnter / N), 0, gridAtEnter - 1),
+        cellZ: clamp(Math.floor(j * gridAtEnter / N), 0, gridAtEnter - 1),
+        applied,
+        generated: generatedActive,
+        solid: true,
+      };
+    }
+    function sampleCell(x, z, opts) {
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+      opts = opts || {};
+      const p = (typeof tilePos === 'function')
+        ? tilePos(x, z)
+        : { x: x - gridAtEnter / 2 + 0.5, z: z - gridAtEnter / 2 + 0.5 };
+      const ox = Number.isFinite(opts.offsetX) ? opts.offsetX : 0;
+      const oz = Number.isFinite(opts.offsetZ) ? opts.offsetZ : 0;
+      return sampleWorld(p.x + ox, p.z + oz);
+    }
+    function anchorForCell(x, z, opts) {
+      opts = opts || {};
+      const ox = Number.isFinite(opts.offsetX) ? opts.offsetX : 0;
+      const oz = Number.isFinite(opts.offsetZ) ? opts.offsetZ : 0;
+      const radius = Number.isFinite(opts.radius) ? clamp(opts.radius, 0, 2) : 0;
+      const probes = [[0, 0]];
+      if (radius > 0) {
+        probes.push([radius, 0], [-radius, 0], [0, radius], [0, -radius]);
+      }
+      let best = null;
+      let supportCount = 0;
+      for (const p of probes) {
+        const s = sampleCell(x, z, { offsetX: ox + p[0], offsetZ: oz + p[1] });
+        if (!s) continue;
+        supportCount++;
+        if (!best || s.y > best.y) best = s;
+      }
+      return best ? Object.assign({}, best, { supportCount }) : null;
+    }
+
     function showBrushAt(point) {
       if (!brushRing) return;
       brushRing.scale.set(brushRadius, 1, brushRadius);
@@ -960,6 +1016,7 @@
     window.__tinyworldMeshTerrain = {
       open: openEditor, apply: applyDesign, cancel: cancelEdit, remove: removeDesign,
       generate: generateFromSampler, clearGenerated: clearGenerated,
+      sampleWorld: sampleWorld, sampleCell: sampleCell, anchorForCell: anchorForCell,
       isEditing: () => editing, isApplied: () => applied, isGenerated: () => generatedActive,
       setTool: (m) => { if (m === 'sculpt' || m === 'paint') { toolMode = m; if (modeSeg) syncSeg(modeSeg, () => toolMode); syncPaintVisibility(); } },
     };

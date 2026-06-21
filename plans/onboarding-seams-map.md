@@ -11,7 +11,7 @@ current source (engine modules are served live via `netlify dev`; dist/ is prod 
 **Renderer / entry module:** `engine/world/47-worlds-room.js` is the multiplayer world room.
 The lobby is just a *world* rendered by this module — there is no separate "lobby renderer".
 Lobby-specific furniture lives in sibling modules: `58-lobby-presentation.js` (slide screen),
-`64-lobby-chat-bridge.js`, `65-lobby-benches.js`, `66-lobby-admin.js`.
+`64-lobby-chat-bridge.js`, `65-lobby-benches.js`.
 
 **Join flow / first-land entry point:**
 - `enterRoom(w, joinToken, joinRole)` — `47-worlds-room.js:201`. Main entry when transitioning
@@ -35,7 +35,6 @@ one-shot flag so it only runs on the first state after an `enter`.
   `'tidewater-bay'`. Used by the lobby modules:
   - `65-lobby-benches.js:13` — `(window.__TW_LOBBY_WORLD_SLUG || 'tidewater-bay').toLowerCase()`
   - `64-lobby-chat-bridge.js:18` — same pattern (community room slug is `'lobby'`, line 19)
-  - `66-lobby-admin.js:58` — same pattern
 - `__TW_LOBBY_WORLD_SLUG` is **never assigned** anywhere in the codebase — it always resolves to
   `'tidewater-bay'`. (`64-lobby-chat-bridge.js:17,149` note it must be set *before* module load if
   it ever changes; nothing sets it.)

@@ -77,19 +77,7 @@
     'worlds.emote.attack': 'attaque',
     'worlds.unknownCommand': 'Commande inconnue',
 
-    // ---- éditeur de lobby (admin) ----
-    'lobbyAdmin.tag': 'Admin',
-    'lobbyAdmin.edit': 'Modifier le lobby',
-    'lobbyAdmin.editing': 'Modification — Terminé',
-    'lobbyAdmin.save': 'Enregistrer le lobby',
-    'lobbyAdmin.saving': 'Enregistrement…',
-    'lobbyAdmin.saved': 'Lobby enregistré.',
-    'lobbyAdmin.savedAt': 'Enregistré',
-    'lobbyAdmin.hintView': 'Lobby en direct. Touchez Modifier pour construire.',
-    'lobbyAdmin.hintEdit': 'Modification en direct — placez/effacez, puis enregistrez.',
     'lobby.updates.title': 'Dernières nouveautés',
-    'lobbyAdmin.noWorld': 'Aucun monde en direct à enregistrer.',
-    'lobbyAdmin.error': 'Échec de l’enregistrement du lobby.',
 
     'brand.sub': 'Touchez pour placer · glissez pour pivoter · pincez ou défilez pour zoomer',
     'minimap.fps': 'Images par seconde',

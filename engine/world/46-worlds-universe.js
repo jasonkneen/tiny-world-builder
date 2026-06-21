@@ -453,10 +453,10 @@
       if (!validWorldSlug(full.world.slug)) { toast(T('worlds.error')); return false; }
       full = Object.assign({}, full, { world: normalizeWorldForEntry(full.world) });
       WS.myProfileId = (full.me && full.me.id != null) ? full.me.id : (me && me.id != null ? me.id : null);
-      // God-admin live-edit grant for THIS world (server-verified by account email).
-      // The lobby-admin module (66) reads these to surface the live build controls.
-      WS.canAdminEdit = full.canAdminEdit === true;
-      WS.adminWorldId = full.world && full.world.id != null ? full.world.id : null;
+      // Multiplayer rooms are play/moderation surfaces only; building happens in
+      // the dedicated draft/version flow, never inline in the room client.
+      WS.canAdminEdit = false;
+      WS.adminWorldId = null;
       rememberFreeform();
       closeOverlay();
       if (typeof WS.enterRoom === 'function') {

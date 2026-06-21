@@ -1105,7 +1105,6 @@ export default class TinyWorldParty {
     if (type === 'world.join') {
       let role = 'observe';
       let profileId = null;
-      let isAdmin = false;
       const secret = this.env.WORLDS_JOIN_SECRET || this.env.WORLDS_SERVICE_TOKEN || '';
       const slug = String(this.room.id || '').slice(WORLD_ROOM_PREFIX.length);
       if (secret) {
@@ -1115,11 +1114,10 @@ export default class TinyWorldParty {
         // Fail closed: a signed token must name THIS world. (Previously a
         // slug-less token was accepted on any world — a latent cross-world replay.)
         if (payload && payload.slug === slug) {
-          // A signed 'build' token = a god-admin granted live-edit by the site
-          // (email-verified in /api/worlds). They move like a player AND may push
-          // live world refreshes. 'play' = a logged-in player; anything else observes.
-          if (payload.r === 'build') { role = 'play'; isAdmin = true; profileId = payload.p || null; }
-          else { role = payload.r === 'play' ? 'play' : 'observe'; profileId = payload.r === 'play' ? (payload.p || null) : null; }
+          // Old 'build' tokens are deliberately downgraded: multiplayer rooms are
+          // play surfaces, and island editing/version publishing lives elsewhere.
+          role = (payload.r === 'play' || payload.r === 'build') ? 'play' : 'observe';
+          profileId = role === 'play' ? (payload.p || null) : null;
           if (payload.w) await this.ensureWorldLoaded(payload.w);
         }
         if (!this.worldState && data.worldId) await this.ensureWorldLoaded(data.worldId);
@@ -1129,8 +1127,7 @@ export default class TinyWorldParty {
         // No durable economy is engaged here — flushPending() is disabled in this
         // mode — so a spoofed profile only affects this room's local tallies.
         this.openMode = true;
-        if (data.role === 'build') { role = 'play'; isAdmin = true; }
-        else role = data.role === 'observe' ? 'observe' : 'play';
+        role = data.role === 'observe' ? 'observe' : 'play';
         profileId = data.profileId != null ? data.profileId : ('guest:' + id);
         if (this.siteBase() && data.worldId) await this.ensureWorldLoaded(data.worldId);
         if (!this.worldState) {
@@ -1143,7 +1140,7 @@ export default class TinyWorldParty {
       const seat = this.admitted.get(id) || { role: 'observe', island: null };
       seat.role = role;
       seat.profileId = profileId;
-      seat.isAdmin = isAdmin;
+      seat.isAdmin = false;
       this.admitted.set(id, seat);
       const p = this.getPlayer(id);
       p.role = role;
@@ -1253,33 +1250,6 @@ export default class TinyWorldParty {
       return;
     }
 
-    if (type === 'world.refresh') {
-      // God-admin pushed a fresh live board after an authoritative adminSave. ONLY
-      // an admin seat may do this. We re-derive the room's world state from the
-      // relayed compact cells (so new harvest nodes / standable tiles take effect)
-      // and relay the cells to every OTHER client so they re-render without a
-      // reload. The DB write already happened client-side via /api/worlds adminSave;
-      // this is the live propagation channel, not the durable store.
-      const seat = this.admitted.get(id);
-      if (!seat || !seat.isAdmin) return;
-      const incoming = Array.isArray(data.cells) ? data.cells : null;
-      if (!incoming) return;
-      const gridSize = (this.worldState && this.worldState.gridSize) || Math.round(Number(data.gridSize)) || 8;
-      // Re-derive authoritative state (nodes, grass/standable, animals) from the
-      // new board, preserving world meta (id/tax/owner) already on this.world.
-      this.setWorldStateFromData({ v: 4, gridSize, cells: incoming }, this.world);
-      // Re-seat every player on a standable cell in case their tile changed.
-      for (const [, pl] of this.players) {
-        if (this.worldState.grassCells.indexOf(pl.x + ',' + pl.z) < 0) {
-          const sp = this.safeSpawn(); pl.x = sp.x; pl.z = sp.z;
-        }
-      }
-      const p = this.getPlayer(id);
-      this.broadcastToAdmitted({ type: 'world.refresh', cells: incoming, gridSize, id, name: p.name }, id);
-      // Push a fresh snapshot to everyone so nodes/presence reflect the new world.
-      for (const [pid] of this.players) this.sendTo(pid, this.worldSnapshotFor(pid));
-      return;
-    }
   }
 
   handleMove(id, data) {

@@ -97,6 +97,10 @@ backend:
 - Tinyverse room join/refresh payloads use compact cells. Terrain-only cells may
   be `[x,z,terrain]`; object/resource cells are `[x,z,terrain,kind]`. Keep the
   renderer validator and `applyState()` tolerant of both tuple lengths.
+- Tinyverse multiplayer rooms are runtime/play/moderation surfaces only. Do not
+  add live island building controls, `adminSave`, build-role seats, or
+  `world.refresh` board replacement inside PartyKit rooms. Island editing and
+  version publication must live in the dedicated draft/version flow.
 - Local custom assets are account data too: `/api/assets` stores one
   `asset_libraries` row per profile containing custom voxel-build stamps and
   saved asset templates. Browser hooks in `saveCustomVoxelBuildStamps()` and

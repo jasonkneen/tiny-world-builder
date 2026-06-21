@@ -51,12 +51,12 @@ export function normalizeWorldSelectionGateData(data, gridSizeHint) {
   });
 }
 
-// ---- god-admin gate ----
-// A small set of accounts may edit ANY world live — including the published
-// lobby/demo world that no single player "owns" — and save straight to the live
-// record. Gated by the authenticated account EMAIL so it follows the person, not
-// a browser or a draft's ownership row. Mirrors the client allowlist in
-// engine/world/30-ui-boot-wiring.js (Tinyverse access API) and 66-lobby-admin.js.
+// ---- world admin gate ----
+// A small set of accounts may inspect/administer worlds beyond ownership.
+// Live multiplayer rooms are not build surfaces; island editing/version
+// publication is handled outside the room flow. Gated by authenticated account
+// EMAIL so it follows the person, not a browser or a draft's ownership row.
+// Mirrors the client allowlist in engine/world/30-ui-boot-wiring.js.
 // Extra admins can be added via a comma-separated TINYWORLD_WORLD_ADMIN_EMAILS env.
 const WORLD_ADMIN_DEFAULT_EMAILS = ['jason@bouncingfish.com', 'jason.kneen@bouncingfish.com'];
 export function worldAdminEmails() {

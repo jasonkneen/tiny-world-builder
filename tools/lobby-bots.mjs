@@ -387,10 +387,6 @@ class Bot {
       this.peers.delete(d.id);
     } else if (d.type === 'chat' && d.id && d.id !== this.id) {
       this.onChat(d);
-    } else if (d.type === 'world.refresh' && Array.isArray(d.cells)) {
-      // World board changed live: rebuild our walkable set from the relayed cells.
-      this.grass.clear();
-      for (const c of compactCells({ cells: d.cells })) if ((c[2] || 'grass') === 'grass') this.grass.add(c[0] + ',' + c[1]);
     }
   }
 

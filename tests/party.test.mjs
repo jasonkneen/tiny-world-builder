@@ -561,47 +561,26 @@ test('normalizeWorldSelectionGateData enforces one center picker stargate', () =
   assert.equal(normalized.cells.some(c => c && c.x === 4 && c.z === 4 && c.terrain === 'water'), true, 'unrelated terrain stays');
 });
 
-test('god-admin world.refresh re-derives state and relays the fresh board to peers', async () => {
-  // Open mode (no WORLDS_JOIN_SECRET): a client declaring role 'build' is seated
-  // as an admin. The admin pushes a new board; the server re-derives nodes and
-  // standable tiles and relays world.refresh to every OTHER client.
+test('build joins are plain play seats and world.refresh is ignored', async () => {
+  // Open mode still tolerates stale clients declaring role 'build', but it no
+  // longer grants an admin seat or a live board refresh channel.
   const room = makeRoom();
   room.id = 'world-lobby';
   const party = new TinyWorldParty(room);
-  const admin = room.addConn('admin'); party.onConnect(admin);
+  const staleBuilder = room.addConn('admin'); party.onConnect(staleBuilder);
   const peer = room.addConn('peer'); party.onConnect(peer);
-  await party.onWorldMessage({ type: 'world.join', role: 'build', profileId: 1, gridSize: 8, cells: [[2, 2, 'stone']] }, admin);
+  await party.onWorldMessage({ type: 'world.join', role: 'build', profileId: 1, gridSize: 8, cells: [[2, 2, 'stone']] }, staleBuilder);
   await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 2, gridSize: 8, cells: [[2, 2, 'stone']] }, peer);
-  assert.equal(party.admitted.get('admin').isAdmin, true, 'build token seats an admin');
+  assert.equal(party.admitted.get('admin').role, 'play', 'stale build role downgrades to play');
+  assert.equal(party.admitted.get('admin').isAdmin, false, 'stale build role is not admin');
   assert.equal(party.admitted.get('peer').isAdmin, false, 'a plain player is not admin');
 
   peer.received.length = 0;
-  // Admin replaces the board: move the ore to 4,4 and add a water cell at 1,1.
-  await party.onWorldMessage({ type: 'world.refresh', gridSize: 8, cells: [[4, 4, 'stone'], [1, 1, 'water']] }, admin);
-
-  // The room's authoritative world state now reflects the new board.
-  assert.ok(party.worldState.cellIndex['4,4'], 'new ore node indexed at 4,4');
-  assert.ok(!party.worldState.cellIndex['2,2'], 'old ore node at 2,2 is gone');
-  // The peer received a world.refresh carrying the new cells, then a fresh snapshot.
-  const refresh = peer.received.find(m => m.type === 'world.refresh');
-  assert.ok(refresh, 'peer receives the live world.refresh');
-  assert.deepEqual(refresh.cells, [[4, 4, 'stone'], [1, 1, 'water']]);
-  assert.ok(peer.received.some(m => m.type === 'world.state'), 'peer gets a fresh snapshot');
-});
-
-test('a non-admin world.refresh is ignored (no state change, no relay)', async () => {
-  const room = makeRoom();
-  room.id = 'world-lobby2';
-  const party = new TinyWorldParty(room);
-  const player = room.addConn('p1'); party.onConnect(player);
-  const peer = room.addConn('p2'); party.onConnect(peer);
-  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 1, gridSize: 8, cells: [[2, 2, 'stone']] }, player);
-  await party.onWorldMessage({ type: 'world.join', role: 'play', profileId: 2, gridSize: 8, cells: [[2, 2, 'stone']] }, peer);
-  peer.received.length = 0;
-  await party.onWorldMessage({ type: 'world.refresh', gridSize: 8, cells: [[4, 4, 'stone']] }, player);
+  await party.onWorldMessage({ type: 'world.refresh', gridSize: 8, cells: [[4, 4, 'stone'], [1, 1, 'water']] }, staleBuilder);
   assert.ok(party.worldState.cellIndex['2,2'], 'original ore node untouched');
-  assert.ok(!party.worldState.cellIndex['4,4'], 'spoofed board NOT applied');
+  assert.ok(!party.worldState.cellIndex['4,4'], 'refresh board NOT applied');
   assert.equal(peer.received.some(m => m.type === 'world.refresh'), false, 'no relay to peers');
+  assert.equal(peer.received.some(m => m.type === 'world.state'), false, 'no forced snapshot to peers');
 });
 
 test('open testing mode (no join secret) seeds from client cells and lets a declared player harvest', async () => {

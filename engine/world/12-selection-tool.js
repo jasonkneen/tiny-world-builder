@@ -296,6 +296,10 @@
   function terrainSurfaceHeightForCell(bx, bz, x, z, cell) {
     const island = editableIslandForBoard(bx || 0, bz || 0);
     if (island) return (island.positionY || 0) + TOP_H + terrainVisualRiseForCell(cell || getWorldCell(x + island.boardX * GRID, z + island.boardZ * GRID));
+    if (!(bx || bz) && window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+      const s = window.__tinyworldMeshTerrain.anchorForCell(x, z, { radius: 0.25 });
+      if (s && Number.isFinite(s.y)) return s.y;
+    }
     if (isLandscapeMeshActive()) return landscapeHeightAtCell(x + (bx || 0) * GRID, z + (bz || 0) * GRID);
     if (cell) return TOP_H + terrainVisualRiseForCell(cell);
     return TOP_H + terrainRiseAt(x, z);

@@ -958,6 +958,10 @@
   function crowdTerrainHeightAt(x, z) {
     const cellX = Math.max(0, Math.min(GRID - 1, Math.round(x)));
     const cellZ = Math.max(0, Math.min(GRID - 1, Math.round(z)));
+    if (window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+      const s = window.__tinyworldMeshTerrain.anchorForCell(cellX, cellZ, { radius: 0.12 });
+      if (s && Number.isFinite(s.y)) return s.y + 0.025;
+    }
     if (isLandscapeMeshActive()) return landscapeHeightAtCell(cellX, cellZ) + 0.025;
     return TOP_H + terrainRiseAt(cellX, cellZ) + 0.025;
   }

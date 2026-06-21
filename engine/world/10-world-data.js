@@ -335,6 +335,10 @@
   }
 
   function vehicleRoadHeightAtCell(x, z) {
+    if (window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+      const s = window.__tinyworldMeshTerrain.anchorForCell(Math.round(x), Math.round(z), { radius: 0.18 });
+      if (s && Number.isFinite(s.y)) return s.y;
+    }
     if (isLandscapeMeshActive()) {
       return landscapeHeightAtCell(x, z);
     }

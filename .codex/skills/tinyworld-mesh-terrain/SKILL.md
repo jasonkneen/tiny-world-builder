@@ -83,6 +83,12 @@ terrain instead of baking into per-tile `setCell`.
   or `{ material, height }` (world-Y directly). It exits the manual editor if open.
 - `clearGenerated()` tears the transient overlay down and restores the flat tiles
   (no-op if none, or if the user opened it for editing). `isGenerated()` reports state.
+- `sampleWorld(wx, wz)`, `sampleCell(x, z, opts)`, and
+  `anchorForCell(x, z, opts)` expose the visible block surface for runtime
+  grounding. `anchorForCell` samples the center plus optional cardinal probes
+  (`offsetX`, `offsetZ`, `radius`) and returns the highest support. Consumers must
+  fall back to LandscapeEngine/tile heights when it returns `null` (for example
+  over preserved water/stone holes or outside the home board).
 - The Generate modal's **Realistic** landscape style routes here:
   `applyRealisticVoxelLandscape()` (in `engine/world/27-landscape-engine.js`) samples
   `sampleLandscapeCell()` (the same procedural height/biome the old realistic
@@ -106,6 +112,12 @@ terrain instead of baking into per-tile `setCell`.
   `tinyworld:meshTerrain:prefs:v1` prefs). The world schema and embedded
   `WORLD_SCHEMA` are untouched, so schema parity stays green. Do not persist this
   feature in the world save.
+- **Height consumers ask the mesh first, then fall back**. Current wired consumers
+  include object/extras placement (`17-tile-renderers.js`), selection/hover
+  height (`12-selection-tool.js`, `18-scene-pick-xr.js`), crowd/vehicle grounding
+  (`11-vehicle-crowd.js`, `10-world-data.js`), and Tinyverse avatar grounding
+  (`47-worlds-room.js`). Keep this one-way: consumers sample the overlay; they do
+  not mutate or bake it.
 - **CSS injected from JS**; guarded `styles/tiny-world.css` is never edited.
 - **Window capture-phase pointer handling** that engages only when
   `e.target === renderer.domElement` and the ray hits the surface, then
@@ -114,10 +126,9 @@ terrain instead of baking into per-tile `setCell`.
 
 ## Known limitations / next steps
 
-- The block terrain is a visual overlay persisted separately; it does not yet
-  feed object-placement height (you cannot natively "build on" individual blocks
-  — placed objects still use the hidden flat tiles). Sampling block height for
-  placement, and integrating with world save/slots, is the next iteration.
+- The block terrain is still a separately persisted overlay. Object/avatar
+  grounding can sample it, but the world save/version schema does not yet store a
+  mesh-terrain payload for published islands.
 - Home-tile hiding can race world (re)renders; it re-hides on
   `tinyworld:world-changed` and via short boot timers.
 

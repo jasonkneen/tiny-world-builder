@@ -875,6 +875,10 @@
       const intent = getWorldCell(gx, gz);
       return (cell.worldY || 0) + TOP_H + terrainVisualRiseForCell(intent) + 0.02;
     }
+    if (!(cell.boardX || cell.boardZ) && window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+      const s = window.__tinyworldMeshTerrain.anchorForCell(cell.x, cell.z, { radius: 0.25 });
+      if (s && Number.isFinite(s.y)) return s.y + 0.02;
+    }
     if (isLandscapeMeshActive()) {
       return landscapeHeightAtCell(
         cell.x + (cell.boardX || 0) * GRID,

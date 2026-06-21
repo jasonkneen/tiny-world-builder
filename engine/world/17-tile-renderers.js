@@ -52,6 +52,16 @@
     }
   }
 
+  function twRenderObjectSurfaceY(x, z, offsetX = 0, offsetZ = 0, radius = 0) {
+    const onEditableIsland = (typeof isEditableIslandCell === 'function') && isEditableIslandCell(x, z);
+    if (!onEditableIsland && window.__tinyworldMeshTerrain && typeof window.__tinyworldMeshTerrain.anchorForCell === 'function') {
+      const s = window.__tinyworldMeshTerrain.anchorForCell(x, z, { offsetX, offsetZ, radius });
+      if (s && Number.isFinite(s.y)) return s.y;
+    }
+    if (isLandscapeMeshActive()) return landscapeHeightAtCell(x, z);
+    return TOP_H + terrainRiseAt(x, z);
+  }
+
   // -------- low-level renderers (build the actual meshes from world state) --------
   function renderCellTile(x, z, opts) {
     if (!shouldRenderCellMesh(x, z)) return;
@@ -427,9 +437,11 @@
     }
     mesh.userData.objectScaleBase = userScale;
     mesh.userData.objectScaleBaseVec = mesh.scale.clone();
-    const objectY = isLandscapeMeshActive()
-      ? landscapeHeightAtCell(x, z)
-      : TOP_H + terrainRiseAt(x, z);
+    const surfaceBase = cellRenderPositionForCell(x, z);
+    const surfaceOffsetX = (Number.isFinite(posX) ? posX - surfaceBase.x : 0) + userOffsetX;
+    const surfaceOffsetZ = (Number.isFinite(posZ) ? posZ - surfaceBase.z : 0) + userOffsetZ;
+    const surfaceRadius = kind === 'house' ? 0.45 : (kind === 'fence' || kind === 'model-stamp' || kind === 'stargate') ? 0.35 : 0.22;
+    const objectY = twRenderObjectSurfaceY(x, z, surfaceOffsetX, surfaceOffsetZ, surfaceRadius);
     mesh.position.set(posX + userOffsetX, objectY + userOffsetY, posZ + userOffsetZ);
     if (stargatePortal) {
       stargatePortal._cell = { x, z };
@@ -486,9 +498,6 @@
     const cell = world[x] && world[x][z];
     if (!cell || !cell.extras || !cell.extras.length) return;
     const p = cellRenderPositionForCell(x, z);
-    const objectY = isLandscapeMeshActive()
-      ? landscapeHeightAtCell(x, z)
-      : TOP_H + terrainRiseAt(x, z);
     cell.extras.forEach((ex, i) => {
       let mesh = null;
       if (ex.kind === 'tuft') mesh = makeVoxelCropKind('tuft', ex.floors || 1);
@@ -503,11 +512,11 @@
           [-cornerOff,  cornerOff], [cornerOff,  cornerOff],
         ];
         const [dx, dz] = corners[(i + Math.floor(cellRand(x, z, 90 + i) * 4)) % 4];
-        mesh.position.set(p.x + dx, objectY, p.z + dz);
+        mesh.position.set(p.x + dx, twRenderObjectSurfaceY(x, z, dx, dz, 0.1), p.z + dz);
         mesh.scale.set(0.7, 0.7, 0.7);
       } else {
         // Fences keep their full side geometry (they live on the tile edge).
-        mesh.position.set(p.x, objectY, p.z);
+        mesh.position.set(p.x, twRenderObjectSurfaceY(x, z, 0, 0, 0.35), p.z);
       }
       stampCellUserData(mesh, x, z);
       mesh.userData.fadeRole = 'object';

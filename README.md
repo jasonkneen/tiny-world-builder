@@ -173,9 +173,10 @@ Newer systems are still routed through that same contract:
   small flat-topped blocks depicting the layout (not a smooth/curved surface).
   Pulling one voxel up drags its neighbours up too with a smoothstep "tension"
   falloff. **Apply** keeps the block mesh as the rendered terrain (hiding the
-  flat home tiles) rather than baking back into per-tile terrain. State lives
-  under its own `tinyworld:meshTerrain:*` localStorage keys; the world schema is
-  unchanged.
+  flat home tiles) rather than baking back into per-tile terrain. Runtime
+  placement, selection highlights, vehicles, crowds, and Tinyverse avatars can
+  sample the block surface for grounding; state still lives under its own
+  `tinyworld:meshTerrain:*` localStorage keys and the world schema is unchanged.
 
 ## Validation
 
