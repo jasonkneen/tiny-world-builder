@@ -1,5 +1,6 @@
 import { getSql } from './db.mjs';
 import { absoluteSiteUrl } from './http.mjs';
+import { tinyverseLobbyAccessForEmail } from './tinyverse-access.mjs';
 
 export const PROFILE_AVATAR_KEYS = ['knight', 'wizard', 'builder', 'explorer', 'knave', 'robot', 'fox', 'cat'];
 
@@ -121,10 +122,11 @@ export async function ensureProfile(user) {
   const displayName = defaultDisplayNameForUser(user);
   const image = defaultImageForUser(user);
   const email = userEmail(user);
+  const lobbyAccess = tinyverseLobbyAccessForEmail(email);
   try {
     const inserted = await sql`
       INSERT INTO profiles (auth0_id, email, username, display_name, about, image, lobby_access)
-      VALUES (${user.id}, ${email}, ${username}, ${displayName}, '', ${image}, true)
+      VALUES (${user.id}, ${email}, ${username}, ${displayName}, '', ${image}, ${lobbyAccess})
       ON CONFLICT (auth0_id) DO NOTHING
       RETURNING id, auth0_id, email, username, display_name, about, image, twitter, github, lobby_access, password_reset_requested_at, archived_at, merged_into_profile_id, created_at, updated_at
     `;
@@ -136,7 +138,7 @@ export async function ensureProfile(user) {
   const fallbackUsername = ('builder_' + profileSuffix(user.id)).slice(0, 24);
   const fallback = await sql`
     INSERT INTO profiles (auth0_id, email, username, display_name, about, image, lobby_access)
-    VALUES (${user.id}, ${email}, ${fallbackUsername}, ${displayName}, '', ${image}, true)
+    VALUES (${user.id}, ${email}, ${fallbackUsername}, ${displayName}, '', ${image}, ${lobbyAccess})
     ON CONFLICT (auth0_id) DO UPDATE SET updated_at = profiles.updated_at
     RETURNING id, auth0_id, email, username, display_name, about, image, twitter, github, lobby_access, password_reset_requested_at, archived_at, merged_into_profile_id, created_at, updated_at
   `;
