@@ -15,6 +15,7 @@ export const config = { path: '/api/worlds' };
 
 const WORLD_RELATIONS = ['worlds', 'world_economy_state', 'profiles'];
 const isMissingWorldSchema = (err) => isMissingRelations(err, WORLD_RELATIONS);
+const TINYVERSE_OWNER_EMAIL = 'jason@bouncingfish.com';
 
 function joinSecret() {
   return process.env.WORLDS_JOIN_SECRET || process.env.WORLDS_SERVICE_TOKEN || '';
@@ -61,6 +62,21 @@ function slugFromRequest(request) {
   return s;
 }
 
+function isTinyverseOwnerProfile(profile) {
+  return String((profile && profile.email) || '').trim().toLowerCase() === TINYVERSE_OWNER_EMAIL;
+}
+
+async function ensureTinyverseStarterOwnership(sql, profile) {
+  if (!profile || !isTinyverseOwnerProfile(profile)) return;
+  await sql`
+    UPDATE worlds
+    SET owner_profile_id = ${profile.id}, updated_at = NOW()
+    WHERE slug <> ${TINYVERSE_HUB_SLUG}
+      AND (kind = 'starter' OR (owner_profile_id IS NULL AND status IN ('published', 'draft')))
+      AND owner_profile_id IS DISTINCT FROM ${profile.id}
+  `;
+}
+
 // World access role for a client. `build` is retained for draft owner/editing
 // flows only; published multiplayer rooms downgrade stale build tokens to play.
 // play = authenticated/allowlisted in a published world, observe = guest in a published world.
@@ -84,6 +100,7 @@ export default async function worldsFunction(request) {
     // Browsing the universe is account-gated; writes require auth too.
     const user = await getAuthUser(request);
     const profile = (user && user.id) ? await ensureProfile(user) : null;
+    await ensureTinyverseStarterOwnership(sql, profile);
     const isWorldService = isWorldServiceRequest(request);
     // World admin: a small email allowlist may inspect/administer worlds beyond
     // ownership. Live room editing is intentionally not part of this path.
@@ -99,14 +116,14 @@ export default async function worldsFunction(request) {
         if (!canAccessTinyverse && !isWorldService) return errorResponse('Tinyverse access is invite-only', 403, origin);
         const rows = worldId
           ? await sql`
-              SELECT w.*, p.display_name AS owner_name
+              SELECT w.*, p.display_name AS owner_name, p.email AS owner_email
               FROM worlds w
               LEFT JOIN profiles p ON p.id = w.owner_profile_id
               WHERE w.id = ${worldId}
               LIMIT 1
             `
           : await sql`
-              SELECT w.*, p.display_name AS owner_name
+              SELECT w.*, p.display_name AS owner_name, p.email AS owner_email
               FROM worlds w
               LEFT JOIN profiles p ON p.id = w.owner_profile_id
               WHERE w.slug = ${worldSlug}
@@ -151,7 +168,7 @@ export default async function worldsFunction(request) {
       if (!canAccessTinyverse) return errorResponse('Tinyverse access is invite-only', 403, origin);
 
       const rows = await sql`
-        SELECT w.*, p.display_name AS owner_name
+        SELECT w.*, p.display_name AS owner_name, p.email AS owner_email
         FROM worlds w
         LEFT JOIN profiles p ON p.id = w.owner_profile_id
         WHERE w.slug <> ${TINYVERSE_HUB_SLUG}

@@ -30,7 +30,7 @@
     { id: 'rock',   label: 'Rock',   kind: 'rock',  color: '#9b9a8f', shortcut: '8', group: 'nature' },
     // Action tool (not a paint brush): opens the Mesh Terrain sculptor. Handled in
     // the tool-button click via t.action; never becomes the active paint tool.
-    { id: 'mesh-terrain', label: 'Mesh Terrain', action: 'mesh-terrain', color: '#7a9a4f', group: 'nature' },
+    { id: 'mesh-terrain', label: 'Mesh Terrain', action: 'mesh-terrain', color: '#7a9a4f', group: 'terrain' },
     { id: 'bridge', label: 'Bridge', kind: 'bridge', terrainOverride: 'water', color: '#8b5a32', shortcut: '9', group: 'build' },
     { id: 'lamp-post', label: 'Lamp', kind: 'lamp-post', color: '#f0b45a', group: 'infra' },
     { id: 'spotlight', label: 'Spotlight', kind: 'spotlight', color: '#ffd280', group: 'infra' },
@@ -50,8 +50,7 @@
   ];
 
   const TOOL_GROUPS = [
-    // TEMP-HIDDEN: 'mesh-terrain' removed from the Terrain flyout for now. Re-add it to restore the mesh build button.
-    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock'], iconTool: 'grass' },
+    { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock', 'mesh-terrain'], iconTool: 'grass' },
     { id: 'plants', label: 'Plants', toolIds: ['tree', 'tuft', 'flower', 'bush'], iconTool: 'tree' },
     { id: 'build', label: 'Build', toolIds: ['house', 'new-island'], iconTool: 'house' },
     { id: 'infra', label: 'Infra', toolIds: ['fence', 'bridge', 'lamp-post', 'spotlight', 'mooring'], iconTool: 'fence' },

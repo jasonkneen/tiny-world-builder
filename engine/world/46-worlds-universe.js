@@ -186,7 +186,7 @@
     background:linear-gradient(180deg,rgba(13,24,48,.88),rgba(5,10,22,.9));border:1px solid rgba(114,150,225,.34);border-radius:8px;padding:14px 14px 18px;display:flex;flex-direction:column;gap:10px;
     backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);
     box-shadow:inset 0 1px 0 rgba(160,190,255,.18),0 28px 80px -24px rgba(0,0,0,.85),0 10px 24px -12px rgba(0,0,0,.62);
-    transition:transform .18s ease,opacity .18s ease,filter .18s ease,box-shadow .18s ease;will-change:transform,opacity;cursor:pointer}
+    transition:transform .34s cubic-bezier(.2,.72,.18,1),opacity .28s ease,filter .34s ease,box-shadow .34s ease;will-change:transform,opacity,filter;cursor:pointer}
   .tw-worlds-card[data-offset="0"]{transform:translate(-50%,-50%) translateX(0) translateY(38px) scale(1);opacity:1;z-index:6;cursor:default;
     border-color:rgba(78,230,80,.68);box-shadow:inset 0 1px 0 rgba(214,255,218,.22),0 0 0 1px rgba(78,230,80,.28),0 0 34px rgba(52,225,88,.36),0 36px 92px -26px rgba(0,0,0,.9)}
   .tw-worlds-card[data-offset="-1"]{transform:translate(-50%,-50%) translateX(-415px) translateY(80px) scale(.72);opacity:.82;z-index:4;filter:saturate(.9) brightness(.82)}
@@ -214,6 +214,9 @@
   .tw-worlds-meta{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;font-size:13px;opacity:.9;font-family:'Space Grotesk',system-ui,sans-serif}
   .tw-worlds-card:not([data-offset="0"]) .tw-worlds-meta{display:none}
   .tw-worlds-meta b{opacity:.6;font-weight:400}
+  .tw-worlds-resources,.tw-worlds-ready{flex-basis:100%;display:flex;justify-content:center;gap:6px;line-height:1.25}
+  .tw-worlds-resources{color:#bdf3c9}
+  .tw-worlds-ready{color:#9fb4cf;font-size:12px}
   .tw-worlds-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
   .tw-btn{flex:1;min-width:80px;border:0;border-radius:10px;padding:9px;cursor:pointer;color:#fff;
     font:700 11px/1 'Pixelify Sans',ui-monospace,monospace;text-transform:uppercase;letter-spacing:.05em;
@@ -292,6 +295,8 @@
     // ---- state ----
     let overlay = null, gridEl = null, dotsEl = null, searchEl = null, filterEl = null;
     let worldsCache = [], selectedWorldSlug = '', worldSearch = '', publishedOnly = false;
+    let pickerCards = new Map();
+    let wheelAccum = 0, wheelResetTimer = 0, wheelCooldownUntil = 0;
     let me = null;
     let savedFreeform = null;   // freeform world to restore when leaving a world
 
@@ -344,6 +349,7 @@
           onclick: () => rotateWorldSelection(1),
         }, [makeIcon('chevronRight', 28)]),
       ]);
+      stage.addEventListener('wheel', handleWorldPickerWheel, { passive: false });
       const controls = el('div', { class: 'tw-worlds-controls' }, [
         el('label', { class: 'tw-worlds-search-wrap' }, [makeIcon('search', 17), searchEl]),
         filterEl,
@@ -368,6 +374,7 @@
   
     async function loadWorlds() {
       if (!gridEl) return;
+      pickerCards.clear();
       gridEl.textContent = "";
       gridEl.appendChild(el("p", { class: 'tw-worlds-empty', text: T("worlds.loading") }));
       const res = await api("/api/worlds", "GET");
@@ -379,6 +386,8 @@
 
     function setWorlds(worlds) {
       worldsCache = Array.isArray(worlds) ? worlds.slice() : [];
+      pickerCards.clear();
+      if (gridEl) gridEl.textContent = '';
       if (!selectedWorldSlug) {
         const active = activeTinyverseSlug();
         const preferred = worldsCache.find(w => w.slug === active) || worldsCache.find(w => w.slug === 'tidewater-bay') || worldsCache.find(w => w.status === 'published') || worldsCache[0];
@@ -390,6 +399,22 @@
     function worldTitle(w) {
       const baseTitle = w.name || (w.kind === 'starter' ? w.slug : T('worlds.statusUnclaimed'));
       return baseTitle + (w.slug === 'tidewater-bay' ? ' (demo)' : '');
+    }
+
+    const RESOURCE_LABELS = [
+      ['fish', 'worlds.resourceFish'],
+      ['ore', 'worlds.resourceOre'],
+      ['plants', 'worlds.resourcePlants'],
+      ['meat', 'worlds.resourceMeat'],
+    ];
+
+    function resourceStatsText(stats) {
+      const s = stats || {};
+      const parts = RESOURCE_LABELS.map(([key, label]) => {
+        const value = Math.max(0, Math.round(Number(s[key]) || 0));
+        return value > 0 ? T(label) + ' ' + value : '';
+      }).filter(Boolean);
+      return parts.length ? parts.join(' · ') : T('worlds.noResources');
     }
 
     function visibleWorlds() {
@@ -405,6 +430,8 @@
           w.gridSize,
           w.tileCount,
           w.taxPercent,
+          resourceStatsText(w.resourceStats),
+          w.resourceStats && w.resourceStats.ready,
         ].join(' ').toLowerCase();
         return hay.includes(q);
       });
@@ -437,10 +464,39 @@
       renderPicker();
     }
 
+    function selectWorldSlug(slug) {
+      const next = validWorldSlug(slug);
+      if (!next || next === selectedWorldSlug) return;
+      selectedWorldSlug = next;
+      renderPicker();
+    }
+
+    function handleWorldPickerWheel(e) {
+      if (!overlay || !overlay.classList.contains('open')) return;
+      const target = e.target;
+      if (target && target.closest && target.closest('input,textarea,select,.tw-worlds-controls,.tw-worlds-head-actions')) return;
+      const worlds = visibleWorlds();
+      if (worlds.length < 2) return;
+      const dx = Number(e.deltaX) || 0;
+      const dy = Number(e.deltaY) || 0;
+      const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      if (!delta) return;
+      e.preventDefault();
+      wheelAccum += delta;
+      clearTimeout(wheelResetTimer);
+      wheelResetTimer = setTimeout(() => { wheelAccum = 0; }, 160);
+      const threshold = e.deltaMode === 1 ? 2 : 54;
+      const now = (window.performance && performance.now) ? performance.now() : Date.now();
+      if (Math.abs(wheelAccum) < threshold || now < wheelCooldownUntil) return;
+      const step = wheelAccum > 0 ? 1 : -1;
+      wheelAccum = 0;
+      wheelCooldownUntil = now + 170;
+      rotateWorldSelection(step);
+    }
+
     function renderPicker() {
       if (!gridEl) return;
       const worlds = visibleWorlds();
-      gridEl.textContent = '';
       if (dotsEl) dotsEl.textContent = '';
       if (filterEl) {
         filterEl.classList.toggle('active', !!publishedOnly);
@@ -448,12 +504,33 @@
         if (span) span.textContent = publishedOnly ? 'Live only' : 'Filters';
       }
       if (!worlds.length) {
+        pickerCards.clear();
+        gridEl.textContent = '';
         gridEl.appendChild(el('p', { class: 'tw-worlds-empty', text: T('worlds.empty') }));
         return;
       }
       const selectedIndex = selectedIndexFor(worlds);
       selectedWorldSlug = worlds[selectedIndex].slug;
-      worlds.forEach((w, i) => gridEl.appendChild(renderCard(w, i, selectedIndex, worlds.length)));
+      const emptyEl = gridEl.querySelector('.tw-worlds-empty');
+      if (emptyEl) emptyEl.remove();
+      const liveSlugs = new Set(worlds.map(w => w.slug));
+      for (const [slug, card] of pickerCards) {
+        if (!liveSlugs.has(slug)) {
+          card.remove();
+          pickerCards.delete(slug);
+        }
+      }
+      worlds.forEach((w, i) => {
+        let card = pickerCards.get(w.slug);
+        if (!card) {
+          card = renderCard(w);
+          pickerCards.set(w.slug, card);
+          gridEl.appendChild(card);
+        } else if (card.parentNode !== gridEl) {
+          gridEl.appendChild(card);
+        }
+        updateCardPosition(card, w, i, selectedIndex, worlds.length);
+      });
       if (dotsEl) {
         worlds.forEach((w, i) => dotsEl.appendChild(el('button', {
           class: 'tw-worlds-dot' + (i === selectedIndex ? ' active' : ''),
@@ -461,7 +538,7 @@
           role: 'tab',
           'aria-selected': i === selectedIndex ? 'true' : 'false',
           'aria-label': worldTitle(w),
-          onclick: () => { selectedWorldSlug = w.slug; renderPicker(); },
+          onclick: () => selectWorldSlug(w.slug),
         })));
       }
     }
@@ -471,21 +548,40 @@
       return el('span', { class: 'tw-badge ' + status, text: map[status] || status });
     }
   
-    function renderCard(w, index, selectedIndex, count) {
-      // All PUBLISHED worlds are playable (rich starter islands + claimed worlds);
-      // unclaimed plots stay locked/greyed. Access to the whole Tinyverse is
-      // already gated to allowlisted accounts server-side.
+    function isMine(w) {
+      return me && w && w.ownerProfileId != null && Number(w.ownerProfileId) === Number(me.id);
+    }
+
+    function isLockedWorld(w) {
+      return w && (w.status === 'unclaimed' || (w.status === 'draft' && !isMine(w)));
+    }
+
+    function updateCardPosition(card, w, index, selectedIndex, count) {
       const offset = carouselOffset(index, selectedIndex, count);
       const hidden = Math.abs(offset) > 2;
       const shownOffset = Math.max(-2, Math.min(2, offset));
       const selected = index === selectedIndex;
-      const mine = me && w.ownerProfileId != null && Number(w.ownerProfileId) === Number(me.id);
-      const locked = w.status === 'unclaimed' || (w.status === 'draft' && !mine);
+      card.dataset.offset = String(shownOffset);
+      card.dataset.hidden = hidden ? 'true' : 'false';
+      card.tabIndex = hidden ? -1 : 0;
+      card.setAttribute('aria-selected', selected ? 'true' : 'false');
+      card.classList.toggle('tw-worlds-locked', !!isLockedWorld(w));
+    }
+
+    function renderCard(w) {
+      // All PUBLISHED worlds are playable (rich starter islands + claimed worlds);
+      // unclaimed plots stay locked/greyed. Access to the whole Tinyverse is
+      // already gated to allowlisted accounts server-side.
+      const mine = isMine(w);
+      const locked = isLockedWorld(w);
+      const resources = w.resourceStats || {};
       const meta = el('div', { class: 'tw-worlds-meta' }, [
         el('div', {}, [el('b', { text: T('worlds.tiles') + ': ' }), document.createTextNode(String(w.tileCount))]),
         el('div', {}, [el('b', { text: T('worlds.players') + ': ' }), document.createTextNode(String(w.activePlayers || 0))]),
         el('div', {}, [el('b', { text: T('worlds.tax') + ': ' }), document.createTextNode(w.taxPercent + '%')]), (w.taxCooldown && !w.taxCooldown.canChange) ? el('span', { style: 'font-size:10px;color:#f66;margin-left:6px', text: '(CD)' }) : null,
         el('div', {}, [el('b', { text: T('worlds.owner') + ': ' }), document.createTextNode(w.ownerName || '—')]),
+        el('div', { class: 'tw-worlds-resources' }, [el('b', { text: T('worlds.resources') + ': ' }), document.createTextNode(resourceStatsText(resources))]),
+        el('div', { class: 'tw-worlds-ready' }, [el('b', { text: T('worlds.ready') + ': ' }), document.createTextNode(String(Math.max(0, Math.round(Number(resources.ready) || 0))) + ' ' + T('worlds.nodes'))]),
       ]);
       const actions = el('div', { class: 'tw-worlds-actions' });
       if (w.status === 'unclaimed') {
@@ -499,23 +595,18 @@
         actions.appendChild(el('button', { class: 'tw-btn alt', text: T('worlds.manage'), onclick: (e) => { e.stopPropagation(); manageFlow(w); } }));
       }
       const prev = el('canvas', { class: 'tw-worlds-prev', width: '320', height: '200' });
-      const card = el('article', { class: 'tw-worlds-card' + (locked ? ' tw-worlds-locked' : ''), 'data-offset': String(shownOffset), 'data-hidden': hidden ? 'true' : 'false' }, [
+      const card = el('article', { class: 'tw-worlds-card' + (locked ? ' tw-worlds-locked' : ''), 'data-offset': '0', 'data-hidden': 'true' }, [
         prev,
         el('h3', {}, [document.createTextNode(worldTitle(w)), statusBadge(w.status)]), meta, actions,
       ]);
-      card.tabIndex = hidden ? -1 : 0;
-      card.setAttribute('aria-selected', selected ? 'true' : 'false');
+      card.dataset.slug = w.slug;
       card.addEventListener('click', () => {
-        if (!selected) {
-          selectedWorldSlug = w.slug;
-          renderPicker();
-        }
+        selectWorldSlug(w.slug);
       });
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          selectedWorldSlug = w.slug;
-          renderPicker();
+          selectWorldSlug(w.slug);
         }
       });
       if (locked) {

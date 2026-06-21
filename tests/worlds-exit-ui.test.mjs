@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const universeJs = readFileSync(new URL('../engine/world/46-worlds-universe.js', import.meta.url), 'utf8');
+const toolbarJs = readFileSync(new URL('../engine/world/19-tools-toolbar.js', import.meta.url), 'utf8');
 const bootJs = readFileSync(new URL('../engine/world/30-ui-boot-wiring.js', import.meta.url), 'utf8');
 const roomJs = readFileSync(new URL('../engine/world/47-worlds-room.js', import.meta.url), 'utf8');
 const hudJs = readFileSync(new URL('../engine/world/48-worlds-harvest-hud.js', import.meta.url), 'utf8');
@@ -79,8 +80,8 @@ test('home controls reopen the same launch modal instead of navigating or signin
 });
 
 test('owned draft worlds remain buildable from the carousel picker', () => {
-  assert.match(universeJs, /const mine = me && w\.ownerProfileId != null && Number\(w\.ownerProfileId\) === Number\(me\.id\)/);
-  assert.match(universeJs, /const locked = w\.status === 'unclaimed' \|\| \(w\.status === 'draft' && !mine\)/);
+  assert.match(universeJs, /function isMine\(w\) \{[\s\S]*Number\(w\.ownerProfileId\) === Number\(me\.id\)/);
+  assert.match(universeJs, /function isLockedWorld\(w\) \{[\s\S]*w\.status === 'draft' && !isMine\(w\)/);
   assert.doesNotMatch(universeJs, /const locked = w\.status !== 'published'/);
 });
 
@@ -121,8 +122,31 @@ test('world picker is a carousel overlay with search and filter controls', () =>
   assert.match(universeJs, /class: 'tw-worlds-search'/);
   assert.match(universeJs, /function renderPicker\(\)/);
   assert.match(universeJs, /function rotateWorldSelection\(delta\)/);
+  assert.match(universeJs, /stage\.addEventListener\('wheel', handleWorldPickerWheel, \{ passive: false \}\)/);
+  assert.match(universeJs, /function handleWorldPickerWheel\(e\)/);
+  assert.match(universeJs, /let pickerCards = new Map\(\)/);
+  assert.match(universeJs, /function updateCardPosition\(card, w, index, selectedIndex, count\)/);
+  assert.match(universeJs, /pickerCards\.get\(w\.slug\)/);
   assert.match(universeJs, /WS\.renderPreview\(prev, preview\)/);
   assert.doesNotMatch(universeJs, /for \(const w of worlds\) gridEl\.appendChild\(renderCard\(w\)\)/);
+  assert.doesNotMatch(universeJs, /gridEl\.textContent = '';\n      worlds\.forEach/);
+});
+
+test('world picker cards display owner-backed resource readiness stats', () => {
+  assert.match(worldsFunctionJs, /p\.email AS owner_email/);
+  assert.match(worldsFunctionJs, /function ensureTinyverseStarterOwnership\(sql, profile\)/);
+  assert.match(universeJs, /function resourceStatsText\(stats\)/);
+  assert.match(universeJs, /w\.resourceStats/);
+  assert.match(universeJs, /class: 'tw-worlds-resources'/);
+  assert.match(universeJs, /worlds\.resourceOre/);
+  assert.match(universeJs, /worlds\.ready/);
+});
+
+test('mesh terrain is reachable from the Terrain flyout as an action tool', () => {
+  assert.match(toolbarJs, /id: 'mesh-terrain'[\s\S]*action: 'mesh-terrain'[\s\S]*group: 'terrain'/);
+  assert.match(toolbarJs, /toolIds: \[[^\]]*'rock', 'mesh-terrain'[^\]]*\]/);
+  assert.match(toolbarJs, /function runToolAction\(t\)[\s\S]*__tinyworldMeshTerrain/);
+  assert.doesNotMatch(toolbarJs, /TEMP-HIDDEN: 'mesh-terrain'/);
 });
 
 test('multiplayer name tags scale to a fixed screen size across zoom levels', () => {

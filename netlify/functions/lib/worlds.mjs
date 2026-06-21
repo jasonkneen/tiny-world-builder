@@ -13,13 +13,24 @@ export const WORLD_STATUSES = ['unclaimed', 'draft', 'published'];
 export const MAX_WORLD_NAME = 48;
 export const TINYVERSE_HUB_SLUG = 'tinyverse-nexus';
 const WORLD_SELECTION_GATE_DEST = '__world-picker';
+const WORLD_RESOURCE_PLANT_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
+const WORLD_RESOURCE_ANIMAL_KINDS = new Set(['cow', 'sheep']);
+const WORLD_RESOURCE_ANIMAL_MIN = 2;
 
 function worldCellX(cell) { return Array.isArray(cell) ? cell[0] : (cell && cell.x); }
 function worldCellZ(cell) { return Array.isArray(cell) ? cell[1] : (cell && cell.z); }
 function worldCellKind(cell) { return Array.isArray(cell) ? cell[3] : (cell && cell.kind); }
+function worldCellTerrain(cell) { return Array.isArray(cell) ? cell[2] : (cell && cell.terrain); }
 function worldSelectionGateCell(gridSize) {
   const center = Math.floor(Math.max(1, gridSize) / 2);
   return { x: center, z: center, terrain: 'grass', kind: 'stargate', dest: WORLD_SELECTION_GATE_DEST };
+}
+
+function isResourceStandableObjectKind(kind) {
+  if (!kind) return true;
+  if (kind === 'stargate' || kind === 'bridge') return true;
+  if (WORLD_RESOURCE_PLANT_KINDS.has(kind) || WORLD_RESOURCE_ANIMAL_KINDS.has(kind)) return true;
+  return kind === 'bush' || kind === 'flower' || kind === 'tuft';
 }
 
 export function normalizeWorldSelectionGateData(data, gridSizeHint) {
@@ -126,6 +137,68 @@ export function deriveTerrainCounts(data, gridSize) {
     else if (terrain && terrain !== 'grass') { nonGrass++; }
   }
   out.grass = Math.max(0, out.tileCount - nonGrass);
+  return out;
+}
+
+// Resource summary for world-picker cards. Mirrors the authoritative room's
+// resource seeding rules in party/index.js: one fish node per connected water
+// body, one ore node per stone cell, one plant node per crop cell, and wildlife
+// is available when the room has non-stone standable spawn cells.
+export function deriveResourceStats(data, gridSizeHint) {
+  const gridSize = Math.max(1, Math.round(Number((data && data.gridSize) || gridSizeHint) || 8));
+  const cells = data && Array.isArray(data.cells) ? data.cells : [];
+  const byXZ = new Map();
+  for (const c of cells) {
+    const x = Math.round(Number(worldCellX(c)));
+    const z = Math.round(Number(worldCellZ(c)));
+    if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+    byXZ.set(x + ',' + z, c);
+  }
+
+  const out = { fish: 0, ore: 0, plants: 0, meat: 0, ready: 0, mineable: 0, spawnable: 0 };
+  const waterSeen = new Set();
+  for (const [key, c] of byXZ) {
+    if (worldCellTerrain(c) !== 'water' || waterSeen.has(key)) continue;
+    const stack = [key];
+    let members = 0;
+    while (stack.length) {
+      const k = stack.pop();
+      if (waterSeen.has(k)) continue;
+      const cc = byXZ.get(k);
+      if (!cc || worldCellTerrain(cc) !== 'water') continue;
+      waterSeen.add(k);
+      members++;
+      const px = Math.round(Number(worldCellX(cc)));
+      const pz = Math.round(Number(worldCellZ(cc)));
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nk = (px + dx) + ',' + (pz + dz);
+        if (!waterSeen.has(nk) && byXZ.has(nk)) stack.push(nk);
+      }
+    }
+    if (members > 0) out.fish++;
+  }
+
+  for (const c of byXZ.values()) {
+    const terrain = worldCellTerrain(c) || 'grass';
+    const kind = worldCellKind(c);
+    if (terrain === 'stone') out.ore++;
+    else if (WORLD_RESOURCE_PLANT_KINDS.has(kind)) out.plants++;
+    if (terrain !== 'stone' && WORLD_RESOURCE_ANIMAL_KINDS.has(kind)) out.meat++;
+  }
+
+  for (let x = 0; x < gridSize; x++) {
+    for (let z = 0; z < gridSize; z++) {
+      const c = byXZ.get(x + ',' + z);
+      const terrain = c ? (worldCellTerrain(c) || 'grass') : 'grass';
+      const kind = c ? worldCellKind(c) : null;
+      if (terrain === 'lava' || terrain === 'stone') continue;
+      if (!isResourceStandableObjectKind(kind)) continue;
+      out.spawnable++;
+    }
+  }
+  if (out.spawnable > 0) out.meat = Math.max(out.meat, WORLD_RESOURCE_ANIMAL_MIN);
+  out.mineable = out.ore;
+  out.ready = out.fish + out.ore + out.plants + out.meat;
   return out;
 }
 
@@ -251,6 +324,8 @@ export function worldDto(row, { includeData = false } = {}) {
     activePlayers: Number(row.active_players) || 0,
     ownerProfileId: row.owner_profile_id != null ? Number(row.owner_profile_id) : null,
     ownerName: row.owner_name || '',
+    ownerEmail: row.owner_email || '',
+    resourceStats: deriveResourceStats(row.data, row.grid_size),
     publishedAt: row.published_at || null,
   };
   if (includeData) out.data = normalizeWorldSelectionGateData(row.data, out.gridSize);

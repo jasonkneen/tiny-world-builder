@@ -47,6 +47,9 @@ terrain instead of baking into per-tile `setCell`.
 
 ## Sculpt / paint
 
+- Entry point: the Terrain toolbar flyout includes a `Mesh Terrain` action tool
+  (`id: mesh-terrain`) that opens `window.__tinyworldMeshTerrain.open()`. Keep it
+  as an action, not a paint brush.
 - **Sculpt**: drag a voxel up/down. Screen dy maps to world units
   (`perPixelWorldY`, ortho vs perspective aware). The grabbed voxel and its
   neighbours move by `worldDy * falloff(dist/brushRadius)` (smoothstep
