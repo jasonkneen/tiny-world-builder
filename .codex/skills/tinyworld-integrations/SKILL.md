@@ -89,6 +89,11 @@ backend:
   world data should normalize to one center `stargate` with
   `dest: '__world-picker'`, and PartyKit `safeSpawn()` should prefer that gate
   so players arrive where the in-world picker exit is.
+- Tinyverse/lobby access is locked to the Jason account allowlist in
+  `netlify/functions/lib/tinyverse-access.mjs`. Do not use
+  `accountMeetsCriteria()` or a raw `profiles.lobby_access` flag as the
+  authoritative gate; migrations should keep `lobby_access` default false and
+  clear it for every non-allowlisted profile.
 - Tinyverse room join/refresh payloads use compact cells. Terrain-only cells may
   be `[x,z,terrain]`; object/resource cells are `[x,z,terrain,kind]`. Keep the
   renderer validator and `applyState()` tolerant of both tuple lengths.

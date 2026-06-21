@@ -1,8 +1,9 @@
-import { accountMeetsCriteria, requireAuthUser } from './lib/auth.mjs';
+import { requireAuthUser } from './lib/auth.mjs';
 import { getSql, isDatabaseUnavailable } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
 import { ensureProfile, normalizeProfileHandle, normalizeProfileImageUrl, normalizeUsername, profileDto } from './lib/profiles.mjs';
 import { isWorldAdminEmail, worldAdminEmails } from './lib/worlds.mjs';
+import { isTinyverseAccessEmail, tinyverseAccessEmails } from './lib/tinyverse-access.mjs';
 
 export const config = { path: '/api/admin-users' };
 
@@ -23,31 +24,21 @@ function adminEmailsArray() {
   return Array.from(worldAdminEmails()).map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
 }
 
-function isBuiltInTinyverseEmail(email) {
-  const e = cleanEmail(email);
-  if (e === 'jason.kneen@gmail.com') return false; // alt is non-admin
-  return adminEmailsArray().includes(e);
+function tinyverseAccessEmailsArray() {
+  return Array.from(tinyverseAccessEmails()).map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
 }
 
-function canAccessTinyverse(user, profile) {
+export function canAccessTinyverse(user, profile) {
   if (!user || !user.id) return false;
-
   const email = cleanEmail(user.email || (profile && profile.email) || '');
-  const allowedEmails = [
-    'jason@bouncingfish.com',
-    'jason.kneen@bouncingfish.com',
-    'jason.kneen@gmail.com'
-  ];
-  if (allowedEmails.includes(email)) return true;
-
-  return false;
+  return isTinyverseAccessEmail(email);
 }
 
 function adminUserDto(row) {
   const dto = profileDto(row);
   if (!dto) return null;
-  dto.lobbyAccess = row.lobby_access !== false; // default true
-  dto.builtInAccess = isBuiltInTinyverseEmail(row.email);
+  dto.lobbyAccess = isTinyverseAccessEmail(row.email);
+  dto.builtInAccess = isTinyverseAccessEmail(row.email);
   return dto;
 }
 
@@ -61,7 +52,7 @@ function validateAdminEdit(body) {
   const email = cleanEmail(body && body.email);
   const twitter = normalizeProfileHandle(body && body.twitter);
   const github = normalizeProfileHandle(body && body.github);
-  const lobbyAccess = !!(body && body.lobbyAccess);
+  const lobbyAccess = isTinyverseAccessEmail(email);
   if (!/^[a-z0-9_]{3,24}$/.test(username)) return { error: 'Username must be 3-24 lowercase letters, numbers, underscores' };
   if (!displayName) return { error: 'Display name required' };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Email is invalid' };
@@ -120,23 +111,21 @@ export default async function adminUsersFunction(request) {
   const user = auth.user;
 
   try {
-    const profile = await ensureProfile(user);
     const url = new URL(request.url);
     if (request.method === 'GET' && url.searchParams.get('action') === 'tinyverse-access') {
-            try {
+      try {
         const profile = await ensureProfile(user);
         return jsonResponse({ allowed: canAccessTinyverse(user, profile), admin: isWorldAdminEmail(user && user.email) }, origin);
       } catch (err) {
         if (isDatabaseUnavailable(err)) {
-  const email = cleanEmail(user && user.email);
-  const allowedEmails = ['jason@bouncingfish.com', 'jason.kneen@bouncingfish.com', 'jason.kneen@gmail.com'];
-  const allowed = allowedEmails.includes(email);
+          const allowed = isTinyverseAccessEmail(user && user.email);
           return jsonResponse({ allowed, admin: isWorldAdminEmail(user && user.email) }, origin);
         }
         return jsonResponse({ allowed: false }, origin);
       }
     }
 
+    await ensureProfile(user);
     if (!isWorldAdminEmail(user && user.email)) return errorResponse('Forbidden', 403, origin);
 
     const sql = getSql();
@@ -162,7 +151,7 @@ export default async function adminUsersFunction(request) {
             ORDER BY updated_at DESC, id DESC
             LIMIT 100
           `;
-      return jsonResponse({ users: rows.map(adminUserDto), adminEmails: adminEmailsArray() }, origin);
+      return jsonResponse({ users: rows.map(adminUserDto), adminEmails: adminEmailsArray(), tinyverseAccessEmails: tinyverseAccessEmailsArray() }, origin);
     }
 
     if (request.method === 'PUT') {

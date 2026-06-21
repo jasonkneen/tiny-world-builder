@@ -3,6 +3,7 @@ import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs'
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
 import { ensureProfile, profileDto } from './lib/profiles.mjs';
 import { activeSuspension } from './lib/community-moderation.mjs';
+import { isTinyverseAccessEmail } from './lib/tinyverse-access.mjs';
 import {
   cleanWorldName, cleanTaxPercent, computeWorldPrice, deriveTerrainCounts,
   worldDto, worldPreview, signJoinToken, isWorldAdminEmail, getTaxCooldownInfo,
@@ -71,6 +72,7 @@ export default async function worldsFunction(request) {
     // God-admin: a small email allowlist may edit ANY world live (incl. the
     // ownerless published lobby) and save to the live record. Follows the account.
     const isWorldAdmin = isWorldAdminEmail(user && user.email);
+    const canAccessTinyverse = isTinyverseAccessEmail(user && (user.email || (profile && profile.email)));
     const worldId = worldIdFromRequest(request);
     const worldSlug = slugFromRequest(request);
 
@@ -78,6 +80,7 @@ export default async function worldsFunction(request) {
       const economy = await loadEconomy(sql);
 
       if (worldId || worldSlug) {
+        if (!canAccessTinyverse) return errorResponse('Tinyverse access is invite-only', 403, origin);
         const rows = worldId
           ? await sql`
               SELECT w.*, p.display_name AS owner_name
@@ -132,6 +135,7 @@ export default async function worldsFunction(request) {
           perTileBase: String(economy.per_tile_base || '0'),
         } }, origin);
       }
+      if (!canAccessTinyverse) return errorResponse('Tinyverse access is invite-only', 403, origin);
 
       const rows = await sql`
         SELECT w.*, p.display_name AS owner_name
@@ -163,6 +167,7 @@ export default async function worldsFunction(request) {
 
     // ---- writes require auth + same-origin ----
     if (!profile) return errorResponse('Unauthorized', 401, origin);
+    if (!canAccessTinyverse) return errorResponse('Tinyverse access is invite-only', 403, origin);
     if (!sameOriginWriteGuard(request)) return errorResponse('Forbidden', 403, origin);
 
     if (request.method === 'PUT') {

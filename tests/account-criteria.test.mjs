@@ -1,6 +1,6 @@
-// Unit tests for accountMeetsCriteria() - the single centralized predicate that
-// decides whether an account auto-qualifies for Tinyverse/lobby/multiplayer
-// access. Run with: npm run test:unit
+// Unit tests for accountMeetsCriteria() - the shared registered-account
+// predicate. Tinyverse access is separately locked to the Jason allowlist.
+// Run with: npm run test:unit
 //
 // The rule is intentionally narrow for now (registered, email-verified Identity
 // account) because a wallet-access policy decision is still pending upstream.
