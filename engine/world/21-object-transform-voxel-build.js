@@ -2108,6 +2108,12 @@
       panel.style.top = clamped.top + 'px';
     }
 
+    function syncStampBuilderToolbarButton() {
+      if (typeof window.syncToolbarStampButton === 'function') {
+        window.syncToolbarStampButton();
+      }
+    }
+
     function open() {
       renderStampBuilderCards();
       updateStampBuilderSummary();
@@ -2118,9 +2124,26 @@
       applySavedStampPanelPosition();
       if (status) status.textContent = 'Choose a stamp to place (' + stampBuilderTools().length + ' shown)';
       (searchInput || closeBtn).focus({ preventScroll: true });
+      syncStampBuilderToolbarButton();
     }
 
-    function close() { panel.hidden = true; }
+    function close() {
+      panel.hidden = true;
+      syncStampBuilderToolbarButton();
+    }
+
+    function toggle() {
+      if (panel.hidden) open();
+      else close();
+    }
+
+    window.__tinyworldStampBuilder = {
+      open,
+      close,
+      toggle,
+      isOpen: () => !panel.hidden,
+      refresh: renderStampBuilderCards,
+    };
 
     function firstSelectableStampCard() {
       return panel.querySelector('.stamp-card:not(.unsupported):not(.hidden):not(.manage)');
@@ -2136,10 +2159,7 @@
       return true;
     }
 
-    openBtn.addEventListener('click', () => {
-      if (panel.hidden) open();
-      else close();
-    });
+    openBtn.addEventListener('click', toggle);
     closeBtn.addEventListener('click', close);
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !panel.hidden) close();

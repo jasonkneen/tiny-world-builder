@@ -208,17 +208,32 @@
     scheduleToolThumbBuildQueue(160);
   }
 
+  function toolbarCompactViewportActive() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+  }
+
+  function toolbarThumbDprCap() {
+    return toolbarCompactViewportActive() ? 1 : 2;
+  }
+
+  function stampBuilderThumbBudget() {
+    return toolbarCompactViewportActive()
+      ? { maxPerFrame: 1, maxMs: 7, delayMs: 72 }
+      : { maxPerFrame: 2, maxMs: 12, delayMs: 32 };
+  }
+
   function ensureThumbRenderer() {
-    if (thumbRenderer) return thumbRenderer;
-    thumbRenderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
-      powerPreference: 'low-power',
-    });
-    thumbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (!thumbRenderer) {
+      thumbRenderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        preserveDrawingBuffer: true,
+        powerPreference: 'low-power',
+      });
+      thumbRenderer.outputEncoding = THREE.sRGBEncoding;
+    }
+    thumbRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, toolbarThumbDprCap()));
     thumbRenderer.setSize(THUMB_SIZE, THUMB_SIZE, false);
-    thumbRenderer.outputEncoding = THREE.sRGBEncoding;
     return thumbRenderer;
   }
 
@@ -1098,8 +1113,9 @@
   function drainStampBuilderThumbQueue() {
     if (!stampBuilderThumbQueue.length) return;
     const start = performance.now();
+    const budget = stampBuilderThumbBudget();
     let built = 0;
-    while (stampBuilderThumbQueue.length && built < 2 && performance.now() - start < 12) {
+    while (stampBuilderThumbQueue.length && built < budget.maxPerFrame && performance.now() - start < budget.maxMs) {
       const item = stampBuilderThumbQueue.shift();
       if (!item || item.runId !== stampBuilderThumbQueueRunId) continue;
       if (!item.canvas || !item.canvas.isConnected) continue;
@@ -1112,7 +1128,7 @@
       }
       built++;
     }
-    if (stampBuilderThumbQueue.length) scheduleStampBuilderThumbQueue(32);
+    if (stampBuilderThumbQueue.length) scheduleStampBuilderThumbQueue(budget.delayMs);
   }
 
   function scheduleStampBuilderThumb(tool, canvas, key) {
@@ -1419,6 +1435,7 @@
       farm: '<svg viewBox="0 0 24 24"><path d="M12 21V5"/><path d="M7.2 8.1 12 12.9l4.8-4.8"/><path d="M7.2 13.2 12 18l4.8-4.8"/><path d="M5 20h14"/></svg>',
       life: '<svg viewBox="0 0 24 24"><circle cx="7.5" cy="10" r="2.2"/><circle cx="12" cy="7" r="2.2"/><circle cx="16.5" cy="10" r="2.2"/><path d="M6.6 17.6c0-3.2 2.4-5.4 5.4-5.4s5.4 2.2 5.4 5.4c0 1.5-.9 2.4-2.2 2.4-1.1 0-1.8-.8-3.2-.8s-2.1.8-3.2.8c-1.3 0-2.2-.9-2.2-2.4Z"/></svg>',
       home: '<svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>',
+      stamps: '<svg viewBox="0 0 24 24"><path d="m12 2.7 8.5 4.9-8.5 4.9-8.5-4.9Z"/><path d="M3.5 7.6v8.8l8.5 4.9 8.5-4.9V7.6"/><path d="M12 12.5v8.8"/><path d="m7.8 10 8.4-4.9"/><path d="m7.8 15 8.4-4.9"/></svg>',
       shield: '<svg viewBox="0 0 24 24"><path d="M12 2.8 4.5 6.1v5.7c0 4.7 3.1 8.2 7.5 9.4 4.4-1.2 7.5-4.7 7.5-9.4V6.1Z"/><path d="M12 6.2v11.4"/><path d="M8.2 8.2h7.6"/><path d="M7.8 12h8.4"/></svg>',
       'build-play': '<svg viewBox="0 0 24 24"><path d="m14.7 6.3 3 3"/><path d="m5 21 4.8-1 9.4-9.4a2.1 2.1 0 0 0-3-3L6.2 17.2 5 21Z"/><path d="M9 5.5 5.5 2 3 4.5 6.5 8"/></svg>',
       view: '<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -1695,6 +1712,17 @@
   }
   window.syncToolbarLayersButton = syncToolbarLayersButton;
 
+  function syncToolbarStampButton() {
+    const btn = document.getElementById('toolbar-stamps');
+    const panel = document.getElementById('stamp-builder-panel');
+    if (!btn || !panel) return;
+    const open = !panel.hidden;
+    btn.classList.toggle('active', open);
+    btn.classList.toggle('on', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  window.syncToolbarStampButton = syncToolbarStampButton;
+
   function updateShieldToolbarState() {
     const btn = document.getElementById('toolbar-shield-toggle');
     if (!btn) return;
@@ -1748,6 +1776,12 @@
         clickLegacyControlButton('build-play-mode');
       }
     }, { posType: 'primary', pressed: false }));
+    bar.appendChild(buildToolbarUtilityButton('toolbar-stamps', 'Stamps', 'stamps', () => {
+      const api = window.__tinyworldStampBuilder;
+      if (api && typeof api.toggle === 'function') api.toggle();
+      else clickLegacyControlButton('stamp-builder');
+      syncToolbarStampButton();
+    }, { posType: 'primary' }));
     bar.appendChild(buildToolbarUtilityButton('toolbar-home', 'Home', 'home', () => {
       if (typeof flyHomeCamera === 'function') flyHomeCamera();
     }, { posType: 'primary' }));
@@ -1823,6 +1857,7 @@
     const audioPanel = document.getElementById('audio-panel');
     if (audioPanel) bar.appendChild(audioPanel);
     syncToolbarAccountButton();
+    syncToolbarStampButton();
     if (typeof window.__tinyworldIsPlayMode === 'function') updateToolbarBuildPlayState(window.__tinyworldIsPlayMode());
     updateToolActiveStates();
     if (typeof rebuildToolPaletteIfActive === 'function') rebuildToolPaletteIfActive();
@@ -1861,6 +1896,7 @@
     });
     syncToolbarSoundButton();
     syncToolbarLayersButton();
+    syncToolbarStampButton();
     updateShieldToolbarState();
   }
 

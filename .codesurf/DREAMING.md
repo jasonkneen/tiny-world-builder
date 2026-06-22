@@ -46,6 +46,8 @@ Multiplayer is PartyKit: `party/index.js` (server, deploys with `partykit deploy
 
 ### Skybound (sky islands + surface + gates)
 
+Confirmed modules on disk as of 2026-06-22:
+
 | Module | Key | Entry point | Notes |
 |--------|-----|-------------|-------|
 | `53-voxel-avatar.js` | — | `window.makeVoxelAvatar({seed,body,skin,hairC,hair,fit,head})` | Material must use `side:THREE.DoubleSide`; `AVATAR_HEIGHT=0.5`; swapped into `47-worlds-room.js` for self+peers+bots; `setFirstPerson(on)` hides head group; `getEyeWorldPosition(out)` added |
@@ -53,14 +55,16 @@ Multiplayer is PartyKit: `party/index.js` (server, deploys with `partykit deploy
 | `55-stargate.js` | `G` | `window.__tinyworldStargate` | `nested` style = voxel stone casing + smooth ring + white energy centre, sunk to ground level |
 | `56-gate-transit.js` | `h` | `window.__tinyworldGateTransit.{placeGate,enter,isOnSurface}` | Accessors: `skyGateCell/ensureSkyGate/flashSky/ensureLandGate/flashLand/landGateWorldPos`; sky gate labeled "GROUND LEVEL", rotated `Math.PI` |
 | `57-poser-surface.js` | — | `window.__tinyworldPoserSurface.{show,hide,build,sampleWorld}` | Real voxel-poser island/sea VERBATIM, scaled (SCALE 1.6, **Y_BOOST 1**); `sampleWorld(wx,wz)→{walkWorldY,localH,water}`; **read `group.position.x/z`** for stable origin, NOT `target.x/z` (camera rewrites it every frame) |
-| `58-island-proxy.js` | — | `window.__tinyworldIslandProxy.{show,hide}` | Cheap stand-in (~4 draws) when descended; cuts draws ~1610→49 |
-| `59-gate-travel-fx.js` | — | wired into `56-gate-transit.js` | 5-stage travel effect: magnetic pull → particle dissolve-in → portal flash → back-extrude → edge-light+emerge (THREE.Points, one draw call each); auto-travel loop fires every ~4–8s so gates animate without player input |
-| `60-skyfall.js` | — | `window.__tinyworldSkyfall.{createSim,buildCourse,CFG}` | **BUILT but RETIRED 2026-06-15** — complete headless sim (gravity/rings/rocket-pack fuel/HUD) kept unreachable; `startSkyfall()` early-returns false; islands have solid edges |
+| `58-lobby-presentation.js` | — | `window.__tinyworldLobby` | In-world slide screen at north edge; multiplayer slide sync via `WS.present(idx)` → PartyKit `present` handler → `broadcastToAdmitted`; `@lobby <msg>` broadcasts a banner strip; `@name` mentions in `50-worlds-play-chat.js` |
+| `59-gate-travel-fx.js` | — | wired into `56-gate-transit.js` | 5-stage travel effect; auto-travel loop fires every ~4–8s |
+| `60-skyfall.js` | — | `window.__tinyworldSkyfall.{createSim,buildCourse,CFG}` | **BUILT but RETIRED 2026-06-15** — `startSkyfall()` early-returns false; islands have solid edges |
+
+**No `58-island-proxy.js` exists on disk.** The skybound memory described a cheap home-island stand-in module (cutting draws ~1610→49 when descended); that module was never created. The `__tinyworldIslandProxy` symbol is absent from the codebase. If home-island-when-descended draw reduction is needed, this remains unbuilt.
 
 - **Surface roam** (`_sr*` in `47-worlds-room.js` IIFE, never globals): WASD+drag-look (hold LMB), Space/C fly, Shift sprint, J ascend; polls `__tinyworldFlyDown.state()` each RAF via `_srPollFlyDown`; wheel zoom `_srCamDist` [SR_CAM_MIN 1.2 .. SR_CAM_MAX 14]; FP threshold `SR_FP_THRESH` 1.6 or **V key** direct toggle → `persCam.fov` widens to `SR_FP_FOV`=75; jump arc (Space tap, `SR_JUMP_H` 1.4, `SR_JUMP_DUR` 0.46); double-tap Space (`SR_DBL_MS` 320) = fly toggle; F = attack; `_srStep` won't stomp 'attack'/'jump' (rig auto-reverts); HUD `#tw-surface-roam-hud`; body class `surface-roam-fp` (cursor:none in FP)
 - **Stargate round-trip**: walk onto sky-edge gate → `FlyDown.descend()` (wired in 47 `tryEnterGate`); mainland gate placed at surface-local 0,0 by `_srActivate` via `GT.ensureLandGate()`; proximity `SR_GATE_R` 2.2 → `FlyDown.ascend()`; J still works as shortcut for both
 - **Skyfall RETIRED 2026-06-15**: off-rim freefall removed; `startSkyfall()` early-returns false; `60-skyfall.js` kept in source but unreachable
-- **Y_BOOST trap**: anything parented to surface group (57) inherits vertical stretch (SCALE, SCALE×Y_BOOST, SCALE); counter with `obj.scale.set(NET/gs.x, NET/gs.y, NET/gs.z)` (see mainland gate in 56)
+- **Y_BOOST trap**: anything parented to surface group (57) inherits vertical stretch `(SCALE, SCALE×Y_BOOST, SCALE)`; counter with `obj.scale.set(NET/gs.x, NET/gs.y, NET/gs.z)` (see mainland gate in 56)
 - Skybound roadmap: `plans/ROADMAP-skybound.md`
 
 ### Voxel avatar animation states (`53-voxel-avatar.js`)
@@ -90,12 +94,14 @@ Multiplayer is PartyKit: `party/index.js` (server, deploys with `partykit deploy
 
 **Lobby population bots** (`tools/lobby-bots.mjs`, `npm run bots:lobby`, PR #65):
 - External Node 22 runner; empty-token observers that CAN move, chat, emote, and render as peers — no token minting needed
-- OpenRouter free models + graceful degrade (falls back silently if model unavailable); exact model strings not captured — check the file
+- `TW_ORIGIN` required for cold-room self-load (server `ensureWorldLoaded` fetches `/api/worlds?id=<numericId>` — slug is ignored, use numeric id)
+- OpenRouter free models + graceful degrade (401 disables globally, 429/empty skips, keeps wandering); LLM default `meta-llama/llama-3.3-70b-instruct:free`; `:free` enforced on every model entry
+- Bot conn ids start with `bot-`, triggering the existing `worlds.notify.botJoined` toast
+- Live creds (`OPENROUTER_API_KEY`, `TW_ORIGIN`, `OPENROUTER_MODEL`) in main-repo `.env` (gitignored) — NOT worktree root
 
 **AI bots** (`tools/ai-bots.mjs`, `npm run bots:ai`):
 - LLM-driven, join as real `play` peers; Anthropic Messages API, default `claude-haiku` (model is swappable)
 - Require `openMode` + `grassCells` populated in `world.state`
-- Can speak in chat: LLM response is wired into `WS.sendChat`
 
 ### CCTV / Truman Show
 - Modules `62-cctv-truman.js` + `63-cctv-placement.js`; render-to-texture B&W CRT/VHS feeds with captions
@@ -103,13 +109,17 @@ Multiplayer is PartyKit: `party/index.js` (server, deploys with `partykit deploy
 - Headless browse has no WebGL — wall is deploy-verify-only
 - `room world_slug/editRoom` backend endpoints required
 
-### Lobby presentation (in-world jumbotron)
-- Memory index says module 58 = jumbotron/slide screen; however `58-island-proxy.js` exists — **actual module number hosting the slide screen needs file-list verification**
-- PartyKit `present` slide-sync: client↔server, no echo loop
+### Lobby presentation (module 58)
+- `engine/world/58-lobby-presentation.js`, `window.__tinyworldLobby`
+- Framed in-world screen at `z = -(GRID/2)-1`; 6×3.375 canvas-rendered slide deck (`MeshBasicMaterial`, unlit)
+- Multiplayer sync: `WS.present(idx)` → `{type:'present', slide}` → PartyKit `present` handler (admitted-gated, `RATE_LIMITS {refill:4,burst:10}`) → `broadcastToAdmitted` → client `case 'present': emit('present', d)` → `applySlide` (local-only, no re-broadcast)
+- `@lobby <message>` chat command projects a banner strip on a separate plane (`depthTest:false`, `renderOrder 5`); strip and slides are independent materials
+- `@name` mention highlighting in `50-worlds-play-chat.js`
 - Verify recipe: `show()+CCTVPlacement.setup()+drive tick(t,dt)` manually (rAF throttles in bg tab); `page-eval` shares engine global scope so `let t=` poisons the i18n fn
+- Ships via `./publish.sh`; PartyKit `present` handler ships via `partykit deploy`
 
 ### World notifications
-- Module 68: join/leave/chat/bot toasts + web notifications
+- Module `68-notifications.js`: join/leave/chat/bot toasts + web notifications
 - Opt-in bell in minimap header
 - Implicit-join seeding gotcha: no join message emitted — diff peer ids, seed silently on `world.state`
 
@@ -119,18 +129,20 @@ Multiplayer is PartyKit: `party/index.js` (server, deploys with `partykit deploy
 ### Tinyverse flight sync
 - Peer plane sync in `47-worlds-room.js`; `flightGhosts {id,group}` map; `_mpInstalled` guard; `enterRoom→leaveRoom` stub-clobber fixed
 - Guest name "not-Player" gotcha; abrupt-disconnect ghost cleanup required
-- `avatarParent` local-frame contract; live verify recipe documented in memory
-- Code looks correct as of 2026-06-21; no live browser confirmation this session
+- `avatarParent` local-frame contract
+
+### Lobby admin full-edit
+- Described in memory (`66-lobby-admin.js`, `tw-admin-fulledit` CSS class) as of 2026-06-16, but **neither the file nor the CSS class exist in the current repo** as of 2026-06-22 file-system check
+- The feature may have been built in the `~/clawd` auto-commit mirror but not reflected in the main repo, or may be planned/not-yet-shipped — verify before assuming it's live
 
 ---
 
 ## Open Threads
 
-- **Module 58 identity**: memory says 58 = jumbotron/slide screen, but file is named `58-island-proxy.js` — verify which module actually hosts the lobby slide screen by listing `engine/world/` files
-- **Live browser verification pending** (as of 2026-06-21): tinyverse flight sync + surface roam FP mode both look correct in code but neither confirmed in a real browser session
-- **Avatar real-time re-customization peer sync**: live mid-session re-customization peer sync unconfirmed
-- **`skydive` animation state**: visually unconfirmed — no live browser verification
-- **Lobby bots OpenRouter model names**: exact model strings not captured; check `tools/lobby-bots.mjs` directly
+- **Home-island proxy when descended**: the skybound memory described a cheap ~4-draw stand-in module (`58-island-proxy.js`), but no such file exists; draw reduction when descended (from ~1610 to ~49) is unbuilt
+- **Lobby admin full-edit (`66-lobby-admin.js` / `tw-admin-fulledit`)**: described in memory as shipped 2026-06-16 but absent from repo on disk — verify what actually shipped
+- **Live browser verification pending** (as of 2026-06-22): tinyverse flight sync + surface roam FP mode both look correct in code but neither confirmed in a real browser session this cycle
+- **Avatar real-time re-customization peer sync**: live mid-session re-customization sync unconfirmed
+- **`skydive` animation state**: visually unconfirmed
 - **i18n-fallback in avatar picker**: follow-up noted in memory, not yet resolved
 - **Flooded planet tuning**: `LandscapeEngine` flood config (`waterLevel`/`freqScale` levers) is the control surface; no recent tuning sessions noted
-- **Tom Doerr tweet tracker** (infrastructure, not tinyworld): all X access methods blocked (browser redirects to login, web_search 403, web_fetch wall); cron exists but cannot retrieve tweets — needs alternative approach if still needed

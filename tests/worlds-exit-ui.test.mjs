@@ -12,6 +12,9 @@ const worldsFunctionJs = readFileSync(new URL('../netlify/functions/worlds.mjs',
 const lobbyPresentationJs = readFileSync(new URL('../engine/world/58-lobby-presentation.js', import.meta.url), 'utf8');
 const cctvPlacementJs = readFileSync(new URL('../engine/world/63-cctv-placement.js', import.meta.url), 'utf8');
 const cctvViewJs = readFileSync(new URL('../engine/world/67-cctv-view.js', import.meta.url), 'utf8');
+const builderJs = readFileSync(new URL('../engine/world/21-object-transform-voxel-build.js', import.meta.url), 'utf8');
+const renderCoreJs = readFileSync(new URL('../engine/world/01-render-core.js', import.meta.url), 'utf8');
+const stylesCss = readFileSync(new URL('../styles/tiny-world.css', import.meta.url), 'utf8');
 
 test('explicit island exits open the world picker instead of exposing a restored selector board', () => {
   assert.match(roomJs, /WS\.exitToWorldPicker\s*=\s*function\s*\(\)/);
@@ -147,6 +150,26 @@ test('mesh terrain is reachable from the Terrain flyout as an action tool', () =
   assert.match(toolbarJs, /toolIds: \[[^\]]*'rock', 'mesh-terrain'[^\]]*\]/);
   assert.match(toolbarJs, /function runToolAction\(t\)[\s\S]*__tinyworldMeshTerrain/);
   assert.doesNotMatch(toolbarJs, /TEMP-HIDDEN: 'mesh-terrain'/);
+});
+
+test('stamps are reachable from the main toolbar and keep the floating panel active', () => {
+  assert.match(toolbarJs, /stamps: '<svg viewBox="0 0 24 24">/);
+  assert.match(toolbarJs, /buildToolbarUtilityButton\('toolbar-stamps', 'Stamps', 'stamps'/);
+  assert.match(toolbarJs, /window\.__tinyworldStampBuilder/);
+  assert.match(toolbarJs, /function syncToolbarStampButton\(\)/);
+  assert.match(builderJs, /window\.__tinyworldStampBuilder = \{[\s\S]*open,[\s\S]*close,[\s\S]*toggle,[\s\S]*isOpen:/);
+  assert.match(builderJs, /function close\(\) \{[\s\S]*panel\.hidden = true;[\s\S]*syncStampBuilderToolbarButton\(\)/);
+  assert.match(stylesCss, /body\.tw-play-mode #toolbar-stamps/);
+  assert.match(stylesCss, /body\.tw-worlds-play #toolbar-stamps/);
+});
+
+test('mobile rendering and stamp thumbnails stay under compact-screen budgets', () => {
+  assert.match(renderCoreJs, /function renderDprCapForViewport\(\) \{[\s\S]*return renderCompactViewportActive\(\) \? 1\.35 : 2\.0/);
+  assert.match(renderCoreJs, /window\.addEventListener\('resize', \(\) => \{[\s\S]*applyRendererPixelRatio\(\);[\s\S]*applyStageSize\(\);/);
+  assert.match(toolbarJs, /function toolbarThumbDprCap\(\) \{[\s\S]*return toolbarCompactViewportActive\(\) \? 1 : 2/);
+  assert.match(toolbarJs, /function stampBuilderThumbBudget\(\) \{[\s\S]*maxPerFrame: 1, maxMs: 7, delayMs: 72/);
+  assert.match(stylesCss, /@media \(max-width: 700px\) \{[\s\S]*\.stamp-panel \{[\s\S]*max-height: calc\(100dvh - 168px\)/);
+  assert.match(stylesCss, /@media \(max-width: 600px\) and \(hover: none\), \(max-width: 600px\) and \(pointer: coarse\) \{[\s\S]*flex: 0 0 44px/);
 });
 
 test('multiplayer name tags scale to a fixed screen size across zoom levels', () => {

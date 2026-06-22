@@ -1411,6 +1411,7 @@
     display: none !important;
   }
   body.tw-play-mode #stamp-builder,
+  body.tw-play-mode #toolbar-stamps,
   body.tw-play-mode #generate,
   body.tw-play-mode #render-settings,
   body.tw-play-mode #import,
@@ -1443,6 +1444,9 @@
   body.tw-worlds-play #crowd-panel-handle,
   body.tw-worlds-play .unsaved-banner,
   body.tw-worlds-play .radial-menu {
+    display: none !important;
+  }
+  body.tw-worlds-play #toolbar-stamps {
     display: none !important;
   }
   body.tw-worlds-play .controls > :not(#home):not(#view-modes):not(#tips-toggle):not(#account-btn) {
@@ -8202,15 +8206,51 @@
   }
   @media (max-width: 700px) {
     .stamp-panel {
-      left: 12px;
-      top: 72px;
-      width: min(360px, calc(100vw - 24px));
-      max-height: calc(100vh - 104px);
+      left: 10px;
+      top: calc(env(safe-area-inset-top, 0px) + 58px);
+      width: min(340px, calc(100vw - 20px));
+      max-height: calc(100vh - 168px);
+      max-height: calc(100dvh - 168px);
+      gap: 8px;
+      padding: 10px;
       border-radius: 18px;
     }
+    .stamp-panel-title strong { font-size: 21px; }
+    .stamp-panel-title span,
+    .stamp-panel-note {
+      display: none;
+    }
+    .stamp-panel-summary {
+      padding: 6px 8px;
+      font-size: 10px;
+    }
+    .stamp-builder-controls,
+    .stamp-builder-tools {
+      gap: 6px;
+    }
+    .stamp-builder-search {
+      flex-basis: 150px;
+      height: 32px;
+    }
     .stamp-builder-grid {
-      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-      max-height: calc(100vh - 464px);
+      grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+      gap: 8px;
+      max-height: calc(100vh - 392px);
+      max-height: calc(100dvh - 392px);
+    }
+    .stamp-card {
+      min-height: 118px;
+      padding: 7px;
+      border-radius: 14px;
+    }
+    .stamp-card canvas {
+      width: 74px;
+      height: 74px;
+      border-radius: 11px;
+    }
+    .stamp-card strong {
+      font-size: 10px;
+      min-height: 24px;
     }
     .stamp-model-range { grid-template-columns: 58px minmax(0, 1fr) 42px; }
     /* Settings on phones: claim almost the whole screen and scroll the panels
@@ -9351,18 +9391,24 @@
       transform: translateX(-50%);
       min-height: 50px;
       max-width: calc(100vw - 24px);
-      padding: 0 5px;
-      gap: 1px;
+      justify-content: flex-start;
+      overflow-x: auto;
+      overflow-y: visible;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      padding: 0 4px;
+      gap: 0;
     }
+    .toolbar::-webkit-scrollbar { display: none; }
     .toolbar-world-slot { height: 42px; padding-right: 6px; margin-right: 4px; }
     .toolbar .brand-title-btn { height: 36px; font-size: 11px; }
     .toolbar .brand-title-btn::before { width: 22px; height: 22px; }
     .toolbar .brand-title-btn::after { left: 6px; top: 14px; width: 9px; height: 7px; }
-    .tool-group-btn { width: 50px; height: 48px; font-size: 9px; padding: 2px; border-radius: 14px; }
+    .tool-group-btn { width: 44px; height: 44px; font-size: 9px; padding: 2px; border-radius: 13px; }
     .tool-group-btn .tool-thumb { width: 26px; height: 26px; }
     .toolbar .audio-panel { min-width: 120px; }
     .toolbar .audio-row { grid-template-columns: 20px 62px 26px; }
-    .tool { width: 48px; height: 48px; font-size: 9px; padding: 2px; border-radius: 14px; }
+    .tool { width: 44px; height: 44px; font-size: 9px; padding: 2px; border-radius: 13px; }
     .tool .swatch { width: 20px; height: 20px; }
     .tool .tool-thumb { width: 26px; height: 26px; }
 
@@ -9396,6 +9442,14 @@
     .tool-group-btn { min-width: 54px; min-height: 50px; }
     .flyout-item { min-height: 40px; padding: 10px 14px; }
     .tool kbd { display: none; }
+  }
+  @media (max-width: 600px) and (hover: none), (max-width: 600px) and (pointer: coarse) {
+    .toolbar .tool,
+    .toolbar .tool-group-btn {
+      min-width: 44px;
+      min-height: 44px;
+      flex: 0 0 44px;
+    }
   }
   html.ai-disabled [data-ai-interface] { display: none !important; }
   html.ai-disabled #agent-panel.has-selection {

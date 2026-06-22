@@ -340,8 +340,15 @@
     renderer.domElement.style.height = h + 'px';
     return { w, h };
   }
-  const BASE_DPR_CAP = window.matchMedia && window.matchMedia('(max-width: 800px)').matches ? 1.5 : 2.0;
   let renderResolutionScale = storedNumber(RENDER_LS.resolution, parseFloat(RENDER_DEFAULTS.resolution), 0.25, 1.5);
+  function renderCompactViewportActive() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 800px)').matches);
+  }
+
+  function renderDprCapForViewport() {
+    return renderCompactViewportActive() ? 1.35 : 2.0;
+  }
+
   let renderBrightness = storedNumber(RENDER_LS.brightness, parseFloat(RENDER_DEFAULTS.brightness), 0.75, 1.3);
   let uiThemeMode = ['auto', 'light', 'dark'].includes(localStorage.getItem(RENDER_LS.uiTheme)) ? localStorage.getItem(RENDER_LS.uiTheme) : 'auto';
   let renderSaturation = storedNumber(RENDER_LS.saturation, parseFloat(RENDER_DEFAULTS.saturation), 0.8, 1.3);
@@ -494,8 +501,15 @@
     alpha: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, BASE_DPR_CAP) * renderResolutionScale);
+  function applyRendererPixelRatio() {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, renderDprCapForViewport()) * renderResolutionScale);
+  }
+  applyRendererPixelRatio();
   applyStageSize();
+  window.addEventListener('resize', () => {
+    applyRendererPixelRatio();
+    applyStageSize();
+  }, { passive: true });
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // The scene is mostly static, and the post-processing path calls
@@ -623,7 +637,7 @@
 
   function setRenderResolutionScale(value) {
     renderResolutionScale = Math.max(0.25, Math.min(1.5, value));
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, BASE_DPR_CAP) * renderResolutionScale);
+    applyRendererPixelRatio();
   }
 
   var landscapeGhostBoardsSuppressed = false;
