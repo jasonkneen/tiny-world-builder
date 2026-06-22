@@ -2,7 +2,7 @@
 // Run with: npm run test:unit   (node --test, zero extra deps)
 //
 // Covers the security-critical, pure-logic core: input validation, role/edit
-// gating, the lobby/host state machine, and rate limiting. These run in plain
+// gating, the public observer/host state machine, and rate limiting. These run in plain
 // Node (no browser/THREE), which is exactly why the server is the right first
 // unit-test target.
 
@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import TinyWorldParty, {
   cleanText, cleanNumber, cleanVec3, cleanPresence, cleanAvatar, cleanCell, cleanCellSet,
   cleanRole, cleanIsland, clampFloors, inIsland, takeToken, safeJson,
+  cleanBuildZones, inBuildZones,
   RATE_LIMITS, MAX_CELL_COORD,
   cleanHarvestAction, actionDurationMs, isAdjacentStep, withinReach, taxSplit,
   heartsNow, oreRespawnMs, plantRipenMs, nodeActionForCell, deriveWorldState,
@@ -123,6 +124,22 @@ test('inIsland enforces bounds; null island denies all', () => {
   assert.equal(inIsland(null, 3, 3), false);
 });
 
+test('build zones sanitize, dedupe, and only active assigned zones grant cells', () => {
+  const zones = cleanBuildZones([
+    { id: ' alpha zone ', label: 'Alpha', minX: 0, maxX: 2, minZ: 0, maxZ: 2, color: '#36d576' },
+    { id: 'alpha-zone', label: 'Duplicate', minX: 3, maxX: 4, minZ: 3, maxZ: 4 },
+    { id: 'beta', label: 'Beta', active: false, minX: 5, maxX: 6, minZ: 5, maxZ: 6 },
+  ]);
+  assert.equal(zones.length, 2);
+  assert.equal(zones[0].id, 'alpha-zone');
+  assert.equal(zones[0].label, 'Alpha');
+  assert.equal(zones[1].active, false);
+  const map = new Map(zones.map(zone => [zone.id, zone]));
+  assert.equal(inBuildZones(map, ['alpha-zone'], 1, 1), true);
+  assert.equal(inBuildZones(map, ['alpha-zone'], 5, 5), false);
+  assert.equal(inBuildZones(map, ['beta'], 5, 5), false, 'inactive assigned zone does not authorize edits');
+});
+
 test('cleanPresence sanitizes name/color', () => {
   const p = cleanPresence({ name: '  Daisy  ', color: '#ff0000' }, 'fallback');
   assert.equal(p.name, 'Daisy');
@@ -182,21 +199,25 @@ test('first connection becomes host, admitted', () => {
   assert.equal(party.hostId, 'h');
 });
 
-test('second connection lands in the lobby, not admitted', () => {
+test('second connection joins as a public observer, admitted but not editable', () => {
   const { party, connect } = setup();
   connect('h');
   const guest = connect('g');
   const w = last(guest);
   assert.equal(w.role, 'viewer');
-  assert.equal(w.admitted, false);
-  assert.equal(party.lobby.has('g'), true);
-  assert.equal(party.admitted.has('g'), false);
+  assert.equal(w.admitted, true);
+  assert.deepEqual(w.zoneIds, []);
+  assert.equal(party.lobby.has('g'), false);
+  assert.equal(party.admitted.get('g').role, 'viewer');
 });
 
 test('only the host can admit; admit assigns the chosen role', () => {
   const { party, connect, send } = setup();
   const host = connect('h');
   const guest = connect('g');
+  party.admitted.delete('g');
+  party.seats.delete('g');
+  party.lobby.set('g', { id: 'g', name: 'Guest', presence: null });
   // A non-host trying to admit is ignored.
   send({ id: 'g' }, { type: 'admit', id: 'g', role: 'editor' });
   assert.equal(party.admitted.has('g'), false, 'non-host admit ignored');
@@ -211,7 +232,6 @@ test('cell.set is dropped from viewers and players, allowed from host', () => {
   const { party, connect, send, room } = setup();
   const host = connect('h');
   const viewer = connect('v');
-  send(host, { type: 'admit', id: 'v', role: 'viewer' });
   host.received.length = 0;
   // Viewer edit is dropped: host receives no cell.set.
   send({ id: 'v' }, { type: 'cell.set', op: { x: 1, z: 1, cell: { terrain: 'grass' } } });
@@ -226,7 +246,7 @@ test('editor edits only within the granted island', () => {
   const { party, connect, send } = setup();
   const host = connect('h');
   const ed = connect('e');
-  send(host, { type: 'admit', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
+  send(host, { type: 'setRole', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
   host.received.length = 0;
   // Inside the island → relayed to host.
   send({ id: 'e' }, { type: 'cell.set', op: { x: 3, z: 3, cell: { terrain: 'grass' } } });
@@ -237,11 +257,45 @@ test('editor edits only within the granted island', () => {
   assert.equal(host.received.filter((m) => m.type === 'cell.set').length, 0, 'out-of-island edit dropped');
 });
 
+test('editor edits only within assigned active build zones', () => {
+  const { party, connect, send } = setup();
+  const host = connect('h');
+  const ed = connect('e');
+  send({ id: 'e' }, { type: 'zones.set', zones: [
+    { id: 'bad', label: 'Bad', minX: 80, maxX: 90, minZ: 80, maxZ: 90 },
+  ] });
+  assert.equal(party.zoneList().length, 0, 'non-host zones.set ignored');
+  send(host, { type: 'zones.set', zones: [
+    { id: 'alpha', label: 'Alpha', active: true, minX: 0, maxX: 2, minZ: 0, maxZ: 2 },
+    { id: 'beta', label: 'Beta', active: true, minX: 8, maxX: 10, minZ: 8, maxZ: 10 },
+    { id: 'off', label: 'Off', active: false, minX: 4, maxX: 5, minZ: 4, maxZ: 5 },
+  ] });
+  send(host, { type: 'setRole', id: 'e', role: 'editor', zoneIds: ['alpha', 'beta', 'off', 'missing'] });
+  assert.deepEqual(party.admitted.get('e').zoneIds, ['alpha', 'beta', 'off']);
+  host.received.length = 0;
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 1, z: 1, cell: { terrain: 'grass' } } });
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 9, z: 9, cell: { terrain: 'grass' } } });
+  assert.equal(host.received.filter((m) => m.type === 'cell.set').length, 2, 'both active zones permit edits');
+  host.received.length = 0;
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 4, z: 4, cell: { terrain: 'grass' } } });
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 99, z: 99, cell: { terrain: 'grass' } } });
+  assert.equal(host.received.filter((m) => m.type === 'cell.set').length, 0, 'inactive and unassigned cells are dropped');
+  send(host, { type: 'zones.set', zones: [
+    { id: 'alpha', label: 'Alpha', active: false, minX: 0, maxX: 2, minZ: 0, maxZ: 2 },
+    { id: 'beta', label: 'Beta', active: true, minX: 8, maxX: 10, minZ: 8, maxZ: 10 },
+  ] });
+  assert.deepEqual(party.admitted.get('e').zoneIds, ['alpha', 'beta'], 'deleted assigned zone is pruned');
+  host.received.length = 0;
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 1, z: 1, cell: { terrain: 'grass' } } });
+  send({ id: 'e' }, { type: 'cell.set', op: { x: 9, z: 9, cell: { terrain: 'grass' } } });
+  assert.deepEqual(host.received.filter((m) => m.type === 'cell.set').map((m) => [m.op.x, m.op.z]), [[9, 9]]);
+});
+
 test('snapshot/env/moorings are honored only from the host', () => {
   const { party, connect, send } = setup();
   const host = connect('h');
   const ed = connect('e');
-  send(host, { type: 'admit', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
+  send(host, { type: 'setRole', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
   host.received.length = 0;
   // Non-host env/moorings injection is ignored (host receives nothing).
   send({ id: 'e' }, { type: 'env', env: { weather: 'storm' } });
@@ -256,7 +310,6 @@ test('kick is host-only, removes the seat, and closes the connection', () => {
   const { party, connect, send, room } = setup();
   const host = connect('h');
   const v = connect('v');
-  send(host, { type: 'admit', id: 'v', role: 'viewer' });
   // Non-host kick ignored.
   send({ id: 'v' }, { type: 'kick', id: 'v' });
   assert.equal(party.admitted.has('v'), true, 'non-host kick ignored');
@@ -272,7 +325,7 @@ test('host leaving promotes the next admitted member to host', () => {
   const { party, connect, send, room } = setup();
   const host = connect('h');
   const ed = connect('e');
-  send(host, { type: 'admit', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
+  send(host, { type: 'setRole', id: 'e', role: 'editor', island: { minX: 0, maxX: 7, minZ: 0, maxZ: 7 } });
   party.onClose(room.getConnection('h'));
   assert.equal(party.hostId, 'e', 'next admitted promoted to host');
   assert.equal(party.admitted.get('e').role, 'host');
@@ -282,11 +335,10 @@ test('host leaving promotes the next admitted member to host', () => {
 test('combat.hit routes only to the targeted peer, stamped with shooter id', () => {
   const { connect, send } = setup();
   const host = connect('host');           // first connection becomes host
-  // admit two peers as players
   const a = connect('peerA');
   const b = connect('peerB');
-  send(host, { type: 'admit', id: 'peerA', role: 'player' });
-  send(host, { type: 'admit', id: 'peerB', role: 'player' });
+  send(host, { type: 'setRole', id: 'peerA', role: 'player' });
+  send(host, { type: 'setRole', id: 'peerB', role: 'player' });
   // peerA shoots peerB
   a.received.length = 0; b.received.length = 0; host.received.length = 0;
   send(a, { type: 'combat.hit', to: 'peerB', damage: 8, source: 'gun' });
@@ -302,9 +354,8 @@ test('combat.hit routes only to the targeted peer, stamped with shooter id', () 
 
 test('a returning admitted member (same id) is re-admitted, not re-lobbied', () => {
   const { party, connect, send, room } = setup();
-  const host = connect('h');
+  connect('h');
   const v = connect('v');
-  send(host, { type: 'admit', id: 'v', role: 'viewer' });
   // v drops...
   party.onClose(room.getConnection('v'));
   assert.equal(party.admitted.has('v'), false);

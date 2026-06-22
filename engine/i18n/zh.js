@@ -121,7 +121,7 @@
     'view.walk.desc': '透过角色的眼睛',
 
     'time.title': '时间与天气',
-    'time.timeOfDay': '一天中的时间 (GMT)',
+    'time.timeOfDay': '一天中的时间 (BST)',
     'time.season': '季节',
     'time.weather': '天气',
     'time.intensity': '天气强度',

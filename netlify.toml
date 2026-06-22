@@ -77,6 +77,11 @@
   status = 200
 
 [[redirects]]
+  from = "/collabs"
+  to = "/collabs.html"
+  status = 200
+
+[[redirects]]
   from = "/harvest"
   to = "/harvest.html"
   status = 200

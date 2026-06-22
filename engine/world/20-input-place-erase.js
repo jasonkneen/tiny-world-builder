@@ -210,6 +210,12 @@
     return !mp || typeof mp.canEditAny !== 'function' || mp.canEditAny();
   }
 
+  function mpCellEditAllowed(x, z) {
+    if (window.__tinyworldIsPlayMode && window.__tinyworldIsPlayMode()) return false;
+    const mp = window.__tinyworldMultiplayer;
+    return !mp || typeof mp.canEdit !== 'function' || mp.canEdit(x, z);
+  }
+
   function applyTool(x, z, opts = {}) {
     if (window.__flightActive) return;
     if (window.__tinyworldIsPlayMode && window.__tinyworldIsPlayMode()) return;
@@ -218,8 +224,7 @@
     // LOCAL mutation here (not just the broadcast) so a restricted client can't
     // desync its own view. Single-player and the host see no __tinyworldMultiplayer
     // gate (canEdit returns true), so this is a no-op outside shared rooms.
-    const mp = window.__tinyworldMultiplayer;
-    if (mp && typeof mp.canEdit === 'function' && !mp.canEdit(x, z)) return;
+    if (!mpCellEditAllowed(x, z)) return;
     if (selectedTool.mooring) return;
     if (selectedTool.island) {
       createEditableIsland(nextEditableIslandPosition(currentHover));
@@ -1067,7 +1072,7 @@
       // players and editors/host can. Outside a shared room canInteract is
       // absent => unrestricted.
       const _mpInteract = window.__tinyworldMultiplayer;
-      const _canInteract = !_mpInteract || typeof _mpInteract.canInteract !== 'function' || _mpInteract.canInteract();
+      const _canInteract = !_mpInteract || typeof _mpInteract.canInteract !== 'function' || _mpInteract.canInteract(_planeWX, _planeWZ);
       const _clickedPlane = _canInteract && hit && !mods.shift && !mods.meta
         && selectedTool && !selectedTool.erase
         && world[_planeWX] && world[_planeWX][_planeWZ]
@@ -1393,7 +1398,7 @@
   }
 
   function clearCellForCut(x, z) {
-    if (!mpEditAllowed()) return;
+    if (!mpCellEditAllowed(x, z)) return;
     const cell = getWorldCell(x, z);
     if (!cell) return;
     const hadExtras = !!(cell.extras && cell.extras.length);
@@ -1461,6 +1466,7 @@
     cells.forEach(item => {
       const x = target.x + item.dx;
       const z = target.z + item.dz;
+      if (!mpCellEditAllowed(x, z)) return;
       const next = cloneCellIntent(item.cell);
       if (!next) return;
       setCell(x, z, Object.assign({}, next, {
@@ -2022,8 +2028,7 @@
   });
 
   function togglePerspective() {
-    const next = cameraMode === 'ortho' ? 'perspective' : 'ortho';
-    setCameraMode(next);
+    setCameraMode('perspective');
   }
 
   // Item 7 — raise/lower terrain at the hovered cell.  Acts on the
@@ -2050,42 +2055,17 @@
   // Expose for the command palette.
   window.__adjustHoverTerrainHeight = adjustHoverTerrainHeight;
 
-  // Stash the user's last orbital polar so toggling out of true top-down
-  // can return to a sensible angled view instead of getting stuck flat.
-  let polarBeforeTopdown = null;
   function setCameraMode(mode) {
     const requested = mode === 'soft' ? 'perspective' : mode;
-    let effective = ['ortho', 'topdown', 'perspective', 'tp', 'fp'].includes(requested) ? requested : 'ortho';
+    let effective = ['ortho', 'topdown', 'perspective', 'tp', 'fp'].includes(requested) ? requested : 'perspective';
+    if (effective === 'ortho' || effective === 'topdown') effective = 'perspective';
     if (effective !== 'fp' && effective !== 'tp' && fp.active) exitFP();
-    // 'topdown' is orthoCam with polar snapped to ~0 (straight down).
-    // Internally we still store cameraMode='ortho' for everything that
-    // branches on it (renderer, ghost-board code, persistence) — the
-    // angle is the only thing that differs.
-    if (effective === 'topdown') {
-      if (cameraMode !== 'ortho' || polar > 0.05) polarBeforeTopdown = polar;
-      polar = 0;
-      cameraMode = 'ortho';
-    } else if (effective === 'ortho') {
-      // Returning to isometric from a true top-down — restore the
-      // previous orbital polar so the user isn't dropped back flat.
-      if (polar < 0.05 && polarBeforeTopdown != null) {
-        polar = polarBeforeTopdown;
-        polarBeforeTopdown = null;
-      }
-      cameraMode = 'ortho';
-    } else if (effective === 'tp' || effective === 'fp') {
-      cameraMode = effective;
-    } else {
-      cameraMode = effective;
-    }
+    cameraMode = effective;
     camera = cameraMode === 'ortho' ? orthoCam
            : persCam;
-    const isTopdown = (effective === 'topdown') || (cameraMode === 'ortho' && polar < 0.05);
-    perspBtn.classList.toggle('on', cameraMode !== 'ortho' || isTopdown);
+    perspBtn.classList.toggle('on', cameraMode !== 'ortho');
     perspBtn.classList.remove('disabled');
     perspBtn.setAttribute('data-tooltip',
-      isTopdown              ? 'Top-down (bird\'s eye)' :
-      cameraMode === 'ortho' ? 'Isometric' :
       cameraMode === 'tp'    ? 'Third-person walk' :
       cameraMode === 'fp'    ? 'First-person walk' : 'Perspective');
     if (effective === 'fp' || effective === 'tp') enterFP(effective);
@@ -2099,9 +2079,8 @@
   // tinyworld's 8×8 grid:
   //   - ground height is sampled directly from world[x][z].terrainFloors
   //     rather than via raycast (every cell is 1×1 with a known top Y).
-  //   - collision is bound-clamping to the home grid; no obstacle box
-  //     collisions (you can walk through props — keeps the diorama
-  //     readable rather than turning into a maze).
+  //   - collision is solid-by-default for object cells, matching Tinyverse
+  //     movement: low cover is passable, heavy props block.
   const FP_EYE_H = 0.5;          // eye sits 0.5 units above the cell top
   const FP_SPEED = 1.4;          // units / sec
   const FP_SPRINT_MULT = 2.2;
@@ -2116,6 +2095,12 @@
   const FP_GRAVITY = 10;
   const FP_FALL_THRESHOLD = 0.5;
   const FP_STEP_LERP = 14;
+  const FP_COLLISION_RADIUS = 0.22;
+  const FP_STANDABLE_OBJECT_KINDS = new Set([
+    'stargate', 'bridge', 'bush', 'flower', 'tuft',
+    'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower',
+    'cow', 'sheep',
+  ]);
   const fp = {
     active: false,
     pos: new THREE.Vector3(0, TOP_H + FP_EYE_H, 0),
@@ -2128,10 +2113,47 @@
   };
   const fpKeys = new Set();
 
+  function fpGridCoordsAt(worldX, worldZ) {
+    return {
+      x: Math.floor(worldX + GRID / 2),
+      z: Math.floor(worldZ + GRID / 2),
+    };
+  }
+
+  function fpStandableKind(kind) {
+    return !kind || FP_STANDABLE_OBJECT_KINDS.has(kind);
+  }
+
+  function fpCellHasBlockingExtra(cell) {
+    if (!cell || !Array.isArray(cell.extras)) return false;
+    return cell.extras.some(extra => !fpStandableKind(extra && extra.kind));
+  }
+
+  function fpCellWalkableAt(worldX, worldZ) {
+    const g = fpGridCoordsAt(worldX, worldZ);
+    if (g.x < 0 || g.z < 0 || g.x >= GRID || g.z >= GRID) return false;
+    const cell = getWorldCell(g.x, g.z);
+    const terrain = (cell && cell.terrain) || 'grass';
+    if (terrain === 'lava') return false;
+    if (!fpStandableKind(cell && cell.kind)) return false;
+    if (fpCellHasBlockingExtra(cell)) return false;
+    return true;
+  }
+
+  function fpWalkableAt(worldX, worldZ) {
+    const r = FP_COLLISION_RADIUS;
+    return fpCellWalkableAt(worldX, worldZ)
+      && fpCellWalkableAt(worldX - r, worldZ - r)
+      && fpCellWalkableAt(worldX + r, worldZ - r)
+      && fpCellWalkableAt(worldX - r, worldZ + r)
+      && fpCellWalkableAt(worldX + r, worldZ + r);
+  }
+
   function fpGroundYAt(worldX, worldZ) {
     // Convert world-space (x, z) back to grid indices.
-    const gx = Math.round(worldX + GRID / 2 - 0.5);
-    const gz = Math.round(worldZ + GRID / 2 - 0.5);
+    const g = fpGridCoordsAt(worldX, worldZ);
+    const gx = g.x;
+    const gz = g.z;
     const cell = (world[gx] && world[gx][gz]) ? world[gx][gz] : null;
     const rise = terrainVisualRiseForCell(cell);
     return rise + TOP_H;
@@ -2179,6 +2201,7 @@
       document.body.classList.toggle('fp-third-person', fp.view === 'tp');
       persCam.fov = fp.view === 'tp' ? FP_THIRD_FOV : FP_FOV;
       persCam.updateProjectionMatrix();
+      requestFPPointerLock();
       return;
     }
     fp.active = true;
@@ -2211,9 +2234,7 @@
     persCam.updateProjectionMatrix();
     document.body.classList.add('fp-active');
     document.body.classList.toggle('fp-third-person', fp.view === 'tp');
-    if (renderer.domElement.requestPointerLock) {
-      try { renderer.domElement.requestPointerLock(); } catch (_) {}
-    }
+    requestFPPointerLock();
   }
   function exitFP() {
     if (!fp.active) return;
@@ -2224,6 +2245,7 @@
     persCam.updateProjectionMatrix();
     document.body.classList.remove('fp-active');
     document.body.classList.remove('fp-third-person');
+    document.body.classList.remove('fp-pointer-unlocked');
 
     const isRoom = !!(typeof window !== 'undefined' && window.__tinyworldInWorldRoom);
     if (isRoom) {
@@ -2241,15 +2263,22 @@
       try { document.exitPointerLock(); } catch (_) {}
     }
   }
+
+  function requestFPPointerLock() {
+    if (!fp.active) return;
+    if (document.pointerLockElement === renderer.domElement) return;
+    if (renderer.domElement.requestPointerLock) {
+      try { renderer.domElement.requestPointerLock(); } catch (_) {}
+    }
+  }
+
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === renderer.domElement) {
       fp.hadPointerLock = true;
+      document.body.classList.remove('fp-pointer-unlocked');
     } else if (fp.active) {
-      if (fp.hadPointerLock) {
-        // User explicitly exited pointer lock — drop back to the normal isometric view.
-        exitFP();
-        setCameraMode('ortho');
-      }
+      fpDragActive = false;
+      document.body.classList.add('fp-pointer-unlocked');
     }
   });
   // Force-leave the home-builder walk avatar (e.g. when handing the scene to a
@@ -2257,7 +2286,7 @@
   // standalone fp/tp voxel body lingers in worldGroup as a duplicate "you".
   if (typeof window !== 'undefined') {
     window.__tinyworldExitWalkMode = function () {
-      if (fp.active) { exitFP(); setCameraMode('ortho'); }
+      if (fp.active) { exitFP(); setCameraMode('perspective'); }
     };
   }
 
@@ -2266,6 +2295,7 @@
   let fpLastPointerX = 0, fpLastPointerY = 0;
   function fpOnPointerDown(e) {
     if (!fp.active || document.pointerLockElement === renderer.domElement) return;
+    if (e.target !== renderer.domElement) return;
     fpDragActive = true;
     fpLastPointerX = e.clientX;
     fpLastPointerY = e.clientY;
@@ -2287,6 +2317,10 @@
   window.addEventListener('pointermove', fpOnPointerMove, true);
   window.addEventListener('pointerup', fpOnPointerUp, true);
   window.addEventListener('pointercancel', fpOnPointerUp, true);
+  renderer.domElement.addEventListener('click', () => {
+    if (!fp.active) return;
+    requestFPPointerLock();
+  });
 
   document.addEventListener('mousemove', e => {
     if (!fp.active || document.pointerLockElement !== renderer.domElement) return;
@@ -2296,7 +2330,16 @@
   }, { passive: true });
   window.addEventListener('keydown', e => {
     if (!fp.active) return;
-    if (e.key === 'Escape') { setCameraMode('ortho'); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+        try { document.exitPointerLock(); } catch (_) {}
+        return;
+      }
+      setCameraMode('perspective');
+      return;
+    }
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || '')) return;
     if (e.code === 'Space') {
       e.preventDefault();
       if (fp.grounded) { fp.vy = FP_JUMP_V0; fp.grounded = false; }
@@ -2320,6 +2363,7 @@
     const sprint = fpKeys.has('shift') ? FP_SPRINT_MULT : 1;
     const speed = FP_SPEED * sprint * dt;
     const len = Math.hypot(fx, fz);
+    let movedThisFrame = false;
 
     const isRoom = !!(typeof window !== 'undefined' && window.__tinyworldInWorldRoom);
     let roomSelfEnt = null;
@@ -2336,8 +2380,13 @@
       if (len > 0) {
         markCameraMoving();
         const ux = fx / len, uz = fz / len;
-        fp.pos.x += ux * speed;
-        fp.pos.z += uz * speed;
+        const beforeX = fp.pos.x;
+        const beforeZ = fp.pos.z;
+        const nextX = fp.pos.x + ux * speed;
+        if (fpWalkableAt(nextX, fp.pos.z)) fp.pos.x = nextX;
+        const nextZ = fp.pos.z + uz * speed;
+        if (fpWalkableAt(fp.pos.x, nextZ)) fp.pos.z = nextZ;
+        movedThisFrame = Math.hypot(fp.pos.x - beforeX, fp.pos.z - beforeZ) > 0.001;
       }
       // Clamp to the home-grid bounds (small margin so eye doesn't peek
       // past the world edge).
@@ -2364,7 +2413,7 @@
     }
 
     const avatar = (isRoom && roomSelfEnt) ? roomSelfEnt.voxel : ensureFPAvatar();
-    const moving = len > 0;
+    const moving = isRoom ? len > 0 : movedThisFrame;
     if (avatar && avatar.group) {
       if (!isRoom) {
         avatar.group.position.copy(fp.pos);

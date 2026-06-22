@@ -45,6 +45,9 @@ Checks:
 - At night/dusk, the star vault should appear behind the world without covering
   objects or UI, cloud rim lighting should warm cloud edges, and accent lights
   should brighten nearby foreground objects without adding shadow-map cost.
+- The brand WAVE countdown should sit in the brand stack below the wordmark,
+  never fixed over the logo, and `body.ui-theme-dark` should give it the same
+  dark pill surface/text treatment as the rest of the top chrome.
 - Lamp/spotlight stamps should show a blurred warm haze plus a ground spill at
   night. The spotlight spill must be narrow at the fixture and wider/fainter in
   front of it; window spill decals should not render through buildings or lose

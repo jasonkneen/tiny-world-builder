@@ -22,8 +22,8 @@
   const _storedCamera = loadStoredCameraState();
   let viewSize = (_storedCamera && Number.isFinite(_storedCamera.viewSize))
     ? _storedCamera.viewSize : DEFAULT_VIEW_SIZE;
-  let cameraMode = (_storedCamera && (_storedCamera.mode === 'ortho' || _storedCamera.mode === 'perspective'))
-    ? _storedCamera.mode : DEFAULT_CAMERA_MODE; // 'ortho' | 'perspective'
+  let cameraMode = (_storedCamera && _storedCamera.mode === 'perspective')
+    ? _storedCamera.mode : DEFAULT_CAMERA_MODE;
 
   const aspect0 = window.innerWidth / window.innerHeight;
   const orthoCam = new THREE.OrthographicCamera(

@@ -437,6 +437,17 @@ svg {
   image-rendering: pixelated;
   box-shadow: inset 0 0 0 1px rgba(17, 27, 69, 0.12);
 }
+.hero-feed-map-collab {
+  display: inline-grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(54, 213, 118, 0.95), rgba(76, 134, 255, 0.88));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  image-rendering: auto;
+}
 .hero-feed-body {
   display: flex;
   flex-direction: column;
@@ -571,6 +582,149 @@ svg {
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* -------- public collab worlds page -------- */
+.collab-worlds-section {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto 96px;
+}
+.collab-worlds-list {
+  display: grid;
+  gap: 16px;
+}
+.collab-world-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 18px;
+  align-items: start;
+  padding: 20px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 70px -42px rgba(17, 27, 69, 0.58);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.collab-world-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #36d576, #4d8dff);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+}
+.collab-world-body {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.collab-world-body h3 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  color: #111b45;
+}
+.collab-world-meta {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.collab-world-meta dt {
+  margin: 0 0 4px;
+  color: #7b8498;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.collab-world-meta dd {
+  margin: 0;
+  min-width: 0;
+  color: #263250;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collab-world-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.collab-network {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #526078;
+  font-size: 14px;
+  font-weight: 750;
+}
+.collab-network::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa4b8;
+}
+.collab-network-good::before { background: #25c264; }
+.collab-network-fair::before { background: #ffbe55; }
+.collab-network-poor::before { background: #ff6b76; }
+.collab-world-enter {
+  min-height: 46px;
+  padding: 0 24px;
+  font-size: 15px;
+}
+.collab-world-empty {
+  padding: 22px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  color: #526078;
+  font-size: 17px;
+  font-weight: 650;
+}
+@media (max-width: 860px) {
+  .collab-world-card {
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+  .collab-world-badge {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    font-size: 17px;
+  }
+  .collab-world-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .collab-world-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .collab-world-enter {
+    justify-content: center;
+    width: 100%;
+  }
+}
+@media (max-width: 540px) {
+  .collab-worlds-section {
+    width: min(100% - 28px, 1180px);
+  }
+  .collab-world-card {
+    grid-template-columns: 1fr;
+  }
+  .collab-world-meta {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Below the wide hero layout, drop the panel into normal flow under the copy. */

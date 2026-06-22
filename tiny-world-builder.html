@@ -130,13 +130,13 @@
   <!-- View modes popup -->
   <div class="topbar-popup" id="view-popup" hidden role="menu">
     <div class="topbar-popup-title" data-i18n="view.title">Camera view</div>
-    <button class="view-option" data-view="topdown" role="menuitem">
+    <button class="view-option" data-view="topdown" role="menuitem" hidden aria-hidden="true" tabindex="-1">
       <span class="view-thumb" aria-hidden="true">
         <svg viewBox="0 0 32 28" width="36" height="32"><rect x="6" y="6" width="20" height="16" rx="1" fill="#a08454"/><rect x="9" y="9" width="14" height="10" fill="#cdb98a"/><rect x="11" y="11" width="3" height="3" fill="#86b53e"/><rect x="18" y="14" width="3" height="3" fill="#86b53e"/></svg>
       </span>
       <span class="view-body"><strong data-i18n="view.topdown">Top-down</strong><em data-i18n="view.topdown.desc">bird's eye, straight down</em></span>
     </button>
-    <button class="view-option" data-view="ortho" role="menuitem">
+    <button class="view-option" data-view="ortho" role="menuitem" hidden aria-hidden="true" tabindex="-1">
       <span class="view-thumb" aria-hidden="true">
         <svg viewBox="0 0 32 28" width="36" height="32"><path d="M16 4 28 11l-12 7L4 11z" fill="#cdb98a"/><path d="M16 18l12-7v9l-12 7z" fill="#a08454"/><path d="M16 18l-12-7v9l12 7z" fill="#8a6f44"/></svg>
       </span>
@@ -166,7 +166,7 @@
   <div class="topbar-popup time-popup" id="time-popup" hidden role="menu">
     <div class="topbar-popup-title" data-i18n="time.title">Time &amp; weather</div>
     <label class="time-row">
-      <span class="time-row-label" data-i18n="time.timeOfDay">Time of day (GMT)</span>
+      <span class="time-row-label" data-i18n="time.timeOfDay">Time of day (BST)</span>
       <input id="time-range" type="range" min="0" max="1440" step="5" value="720" />
       <span class="time-row-val" id="time-readout">12:00</span>
     </label>
@@ -1285,6 +1285,77 @@
 
           <section class="settings-panel" id="settings-panel-environment" role="tabpanel" aria-labelledby="settings-tab-environment" data-settings-panel="environment" data-settings-keywords="environment weather sky clouds atmosphere mist backdrop vignette undercloud" hidden>
             <div class="settings-section-title">Environment</div>
+            <div class="watcher-settings" data-watcher-owner-control hidden>
+              <div class="settings-section-title">The Watcher</div>
+              <label class="gen-check" data-settings-keywords="watcher admin face webcam mediapipe sky layer collaborators multiplayer">
+                <input type="checkbox" id="watcher-enabled" />
+                <span>Watcher layer <em class="gen-hint">admin-only build-mode face and hand layer</em></span>
+              </label>
+              <div class="watcher-actions">
+                <button class="btn" id="watcher-start-camera" type="button">Start watcher camera</button>
+                <span id="watcher-status" role="status" aria-live="polite"></span>
+              </div>
+              <div class="range-row">
+                <span>Size</span>
+                <input id="watcher-size" type="range" min="0.6" max="12" step="0.1" />
+                <output id="watcher-size-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face width</span>
+                <input id="watcher-face-width" type="range" min="0.5" max="2.5" step="0.05" />
+                <output id="watcher-face-width-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face height</span>
+                <input id="watcher-face-height" type="range" min="0.5" max="2.5" step="0.05" />
+                <output id="watcher-face-height-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position X</span>
+                <input id="watcher-pos-x" type="range" min="-80" max="80" step="1" />
+                <output id="watcher-pos-x-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position Y</span>
+                <input id="watcher-pos-y" type="range" min="-20" max="80" step="1" />
+                <output id="watcher-pos-y-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Position Z</span>
+                <input id="watcher-pos-z" type="range" min="-120" max="80" step="1" />
+                <output id="watcher-pos-z-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Head tilt</span>
+                <input id="watcher-tilt" type="range" min="-45" max="45" step="1" />
+                <output id="watcher-tilt-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Watcher zoom</span>
+                <input id="watcher-zoom" type="range" min="0.6" max="8" step="0.1" />
+                <output id="watcher-zoom-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Smoothness</span>
+                <input id="watcher-smooth" type="range" min="0" max="0.95" step="0.05" />
+                <output id="watcher-smooth-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Face opacity</span>
+                <input id="watcher-face-opacity" type="range" min="0.03" max="1" step="0.01" />
+                <output id="watcher-face-opacity-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Hand opacity</span>
+                <input id="watcher-hand-opacity" type="range" min="0.03" max="1" step="0.01" />
+                <output id="watcher-hand-opacity-value"></output>
+              </div>
+              <div class="range-row">
+                <span>Clouds</span>
+                <input id="watcher-cloud-opacity" type="range" min="0" max="1" step="0.05" />
+                <output id="watcher-cloud-opacity-value"></output>
+              </div>
+            </div>
             <div class="range-row">
               <span>Clouds</span>
               <input id="render-clouds" type="range" min="0" max="100" step="1" />
@@ -1750,6 +1821,7 @@
   <script defer src="engine/world/65-lobby-benches.js"></script>
   <script defer src="engine/world/67-cctv-view.js"></script>
   <script defer src="engine/world/68-notifications.js"></script>
+  <script defer src="engine/world/69-watcher-layer.js"></script>
   <script defer src="engine/world/99-late-boot.js"></script>
 </body>
 </html>

@@ -30,13 +30,20 @@ Structure rules:
 Organization guidance:
 
 - App/Workspace owns the UI theme selector (`ui-theme-mode`). `Auto` follows
-  time-of-day, `Dark` forces dark chrome, and `Light` still darkens after-hours
-  so white/grey glass controls remain readable against night scenes.
+  live UK/BST time-of-day, `Dark` forces dark chrome, and `Light` forces light
+  chrome without auto-darkening after-hours.
 - Rendering: keep image/render-cost controls grouped by intent. `Quality` covers resolution and shadows; `Lighting` covers lighting and fill controls; `Image effects` covers brightness, saturation, contrast, pixelation, shader AA, and tilt-shift.
 - World: preview/ghost controls are intentionally removed and forced to zero; do not reintroduce distance/window/opacity controls unless Preview rendering is explicitly brought back. Terrain style covers voxel bevel, landscape/planet toggles, voxel/cottage, and terrain voxel resolution. `Voxel gap` and `Show crowns` are also intentionally removed from the UI and forced off for render stability/performance.
 - Environment owns the `Planes` checkbox (`render-planes-enabled`) because it
   controls ambient flyovers and towed banners. It defaults off for the current
   performance pass and should stay searchable by plane/crop-duster/banner terms.
+- Environment owns the admin-only Watcher controls (`watcher-*`). The Watcher
+  visual is sourced from `engine/world/assets/god-face_15.html`, rendered by
+  `engine/world/69-watcher-layer.js`, and must stay a transient Three scene
+  layer, not saved world data. Keep it world-anchored with X/Y/Z controls so it
+  zooms/pans with the island; do not re-lock it to the camera. Leave depth
+  testing enabled so a distant Watcher sits behind the island instead of
+  painting over it.
 - Material wear defaults to 100% (`materialWear: '1'` and shipped
   `tinyworld:render:materialWear` = `1.00`). When changing shipped render
   defaults that must override older browser localStorage, bump

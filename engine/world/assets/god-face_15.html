@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Watcher</title>
+<style>
+  :root {
+    --void: #07080d;
+    --ash: #c7c4bb;
+    --ember: #d4663a;
+    --mist: rgba(199,196,187,0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--void); }
+  body {
+    font-family: ui-monospace, "SF Mono", "Roboto Mono", monospace;
+    color: var(--ash);
+  }
+  #scene { position: fixed; inset: 0; display: block; }
+  #cam {
+    position: fixed; bottom: 16px; right: 16px;
+    width: 180px; height: 135px; transform: scaleX(-1);
+    border: 1px solid rgba(199,196,187,0.2);
+    object-fit: cover; opacity: 0.32; z-index: 5;
+    border-radius: 2px;
+  }
+  #hud {
+    position: fixed; top: 18px; left: 20px; z-index: 10;
+    font-size: 11px; letter-spacing: 0.18em; line-height: 1.9;
+    text-transform: uppercase; pointer-events: none;
+    text-shadow: 0 0 12px rgba(0,0,0,0.9);
+  }
+  #hud .ttl {
+    font-size: 13px; color: var(--ash); letter-spacing: 0.32em;
+    margin-bottom: 10px; font-weight: 700;
+  }
+  #hud .row { color: var(--mist); }
+  #hud .dot { color: var(--ember); }
+  #gate {
+    position: fixed; inset: 0; z-index: 50;
+    background: radial-gradient(circle at 50% 45%, #11131c 0%, var(--void) 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 26px; text-align: center; padding: 24px;
+  }
+  #gate h1 {
+    font-size: clamp(28px, 7vw, 60px); font-weight: 700;
+    letter-spacing: 0.42em; text-indent: 0.42em;
+    color: var(--ash); line-height: 1;
+  }
+  #gate p {
+    max-width: 440px; font-size: 12.5px; line-height: 2; letter-spacing: 0.06em;
+    color: var(--mist); text-transform: none;
+  }
+  #gate p .e { color: var(--ember); }
+  #enter {
+    margin-top: 8px; background: none; cursor: pointer;
+    border: 1px solid rgba(212,102,58,0.6); color: var(--ash);
+    font-family: inherit; font-size: 12px; letter-spacing: 0.34em; text-indent: 0.34em;
+    padding: 16px 38px; text-transform: uppercase; transition: all .35s ease;
+  }
+  #enter:hover { background: rgba(212,102,58,0.14); border-color: var(--ember); color: #fff; }
+  #enter:focus-visible { outline: 2px solid var(--ember); outline-offset: 4px; }
+  #status { font-size: 10.5px; letter-spacing: 0.2em; color: var(--mist); min-height: 14px; text-transform: uppercase; }
+  .fade { opacity: 0 !important; pointer-events: none; transition: opacity 1s ease; }
+  /* settings panel */
+  #panel {
+    position: fixed; top: 18px; right: 18px; z-index: 12;
+    width: 210px; padding: 16px 16px 14px;
+    max-height: calc(100vh - 36px); overflow-y: auto;
+    background: rgba(20,28,38,0.55); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+    font-size: 11px; letter-spacing: 0.04em; color: #e8f1f8;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  }
+  #panel h2 {
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: rgba(255,255,255,0.7); margin-bottom: 14px; font-weight: 700;
+  }
+  #panel .ctrl { margin-bottom: 13px; }
+  #panel .ctrl:last-child { margin-bottom: 0; }
+  #panel label { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  #panel label .val { color: #9fd0f2; font-variant-numeric: tabular-nums; }
+  #panel input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 3px;
+    background: rgba(255,255,255,0.18); border-radius: 3px; outline: none; cursor: pointer;
+  }
+  #panel input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #cfe8ff; border: 2px solid #5a90c0; cursor: pointer;
+  }
+  #panel input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #cfe8ff; border: 2px solid #5a90c0; cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<video id="cam" autoplay muted playsinline></video>
+<div id="hud" class="fade">
+  <div class="ttl">THE WATCHER</div>
+  <div class="row">view <span class="dot">/</span> mortal</div>
+  <div class="row">seen by <span class="dot">/</span> the world</div>
+  <div class="row" id="trk">tracking <span class="dot">/</span> —</div>
+</div>
+<div id="panel" class="fade">
+  <h2>The Watcher</h2>
+  <div class="ctrl">
+    <label>Size <span class="val" id="v_sz">2.00×</span></label>
+    <input type="range" id="s_sz" min="0.6" max="4" step="0.05" value="2.0">
+  </div>
+  <div class="ctrl">
+    <label>Face width <span class="val" id="v_fw">1.00×</span></label>
+    <input type="range" id="s_fw" min="0.5" max="2.5" step="0.05" value="1.0">
+  </div>
+  <div class="ctrl">
+    <label>Face height <span class="val" id="v_fh">1.00×</span></label>
+    <input type="range" id="s_fh" min="0.5" max="2.5" step="0.05" value="1.0">
+  </div>
+  <div class="ctrl">
+    <label>Position X <span class="val" id="v_px">0.0</span></label>
+    <input type="range" id="s_px" min="-24" max="24" step="0.5" value="0">
+  </div>
+  <div class="ctrl">
+    <label>Position Y <span class="val" id="v_py">0.0</span></label>
+    <input type="range" id="s_py" min="-16" max="16" step="0.5" value="0">
+  </div>
+  <div class="ctrl">
+    <label>Head tilt <span class="val" id="v_tl">0°</span></label>
+    <input type="range" id="s_tl" min="-45" max="45" step="1" value="0">
+  </div>
+  <div class="ctrl">
+    <label>Zoom <span class="val" id="v_zm">1.10×</span></label>
+    <input type="range" id="s_zm" min="0.6" max="3.5" step="0.05" value="1.10">
+  </div>
+  <div class="ctrl">
+    <label>Smoothness <span class="val" id="v_sm">0.65</span></label>
+    <input type="range" id="s_sm" min="0" max="0.95" step="0.05" value="0.65">
+  </div>
+  <div class="ctrl">
+    <label>Face opacity <span class="val" id="v_fo">0.32</span></label>
+    <input type="range" id="s_fo" min="0.03" max="1" step="0.01" value="0.32">
+  </div>
+  <div class="ctrl">
+    <label>Hand opacity <span class="val" id="v_ho">0.40</span></label>
+    <input type="range" id="s_ho" min="0.03" max="1" step="0.01" value="0.40">
+  </div>
+  <div class="ctrl">
+    <label>Clouds <span class="val" id="v_co">1.00</span></label>
+    <input type="range" id="s_co" min="0" max="1" step="0.05" value="1.0">
+  </div>
+</div>
+<div id="gate">
+  <h1>WATCHER</h1>
+  <p>To you, the sky is just the sky.<br>
+  But to anything looking up from <span class="e">inside</span> the world — a vast face among the clouds, and two hands reaching down from the blue.</p>
+  <button id="enter">Open the eye</button>
+  <div id="status"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { FaceLandmarker, HandLandmarker, FilesetResolver }
+  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/vision_bundle.mjs';
+
+const VOID = 0x07080d, EMBER = 0xd4663a, ASH = 0xc7c4bb;
+
+// ---------- RUNTIME SETTINGS (driven by the on-screen sliders) ----------
+const settings = {
+  faceSize:    2.0,    // overall scale of the face — HUGE / godlike by default
+  faceWidth:   1.0,    // horizontal stretch (1 = natural)
+  faceHeight:  1.0,    // vertical stretch (1 = natural)
+  posX:        0.0,    // horizontal position offset of the face, world units
+  posY:        0.0,    // vertical position offset of the face, world units
+  tilt:        0.0,    // head pitch in degrees (+ tilts the face to look DOWN)
+  faceOpacity: 0.32,   // face voxel opacity — wispy / ethereal by default
+  handOpacity: 0.40,   // hand voxel opacity
+  smooth:      0.65,   // temporal smoothing (0 = raw/snappy, ~1 = glassy smooth)
+  zoom:        1.10,   // camera magnification (larger = zoomed in)
+  cloudOpacity: 1.0,   // overall cloud visibility multiplier
+};
+
+// ---------- THREE SETUP ----------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+
+// ---------- SKY ----------
+// Soft blue gradient sky on a large back-facing sphere (shader-based vertical blend).
+const SKY_TOP = new THREE.Color(0x4a90d9);     // deeper blue up high
+const SKY_BOT = new THREE.Color(0xbfe3f5);     // pale near the horizon
+scene.background = SKY_BOT.clone();            // fallback flat color
+const skyGeo = new THREE.SphereGeometry(400, 32, 16);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false,
+  uniforms: { top:{value:SKY_TOP}, bot:{value:SKY_BOT} },
+  vertexShader: `varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bot;
+    void main(){ float h=clamp((normalize(vP).y*0.5+0.5),0.0,1.0); gl_FragColor=vec4(mix(bot,top,pow(h,0.7)),1.0); }`
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+scene.fog = new THREE.Fog(SKY_BOT.getHex(), 60, 320);
+
+// ---------- WISPY CLOUDS ----------
+// Soft circular sprites drifting slowly across the sky behind the watcher.
+const cloudTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(64,64,0, 64,64,64);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.fillRect(0,0,128,128);
+  const t = new THREE.CanvasTexture(c); return t;
+})();
+const clouds = [];
+const cloudGroup = new THREE.Group();
+scene.add(cloudGroup);
+for (let i = 0; i < 26; i++) {
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: cloudTex, transparent: true, opacity: 0.18 + Math.random()*0.22,
+    depthWrite: false, fog: false
+  }));
+  m.userData.baseOpacity = m.material.opacity;     // for the cloud-opacity slider
+  const s = 30 + Math.random()*60;
+  m.scale.set(s, s*0.55, 1);
+  m.position.set((Math.random()-0.5)*360, 6 + Math.random()*70, -120 - Math.random()*180);
+  m.userData.speed = 0.6 + Math.random()*1.4;     // drift speed
+  cloudGroup.add(m); clouds.push(m);
+}
+
+// The MORTAL camera — first-person, peering up at the watcher.
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 600);
+camera.position.set(0, 4.0, 14);
+camera.zoom = settings.zoom;
+camera.lookAt(0, 13, -30);
+camera.updateProjectionMatrix();
+
+// ---------- LIGHTING ----------
+scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x8aa0b0, 1.0));
+const key = new THREE.DirectionalLight(0xffffff, 1.1);
+key.position.set(6, 24, 14); key.castShadow = false;   // no ground left to catch shadows
+scene.add(key);
+
+// soft front-fill aimed at the watcher so the video-colored face/hands are
+// clearly lit from the viewer's side — replaces the old self-glow
+const faceFill = new THREE.DirectionalLight(0xffffff, 1.15);
+faceFill.position.set(0, 14, 10);     // in front of and above the face
+faceFill.target.position.set(0, 13, -30);
+scene.add(faceFill);
+scene.add(faceFill.target);
+
+// ---------- THE WATCHER (face + hands), at the far edge facing INWARD ----------
+// Lives in a group sitting at the back of the world, looking toward the mortal camera.
+const watcher = new THREE.Group();
+const WATCHER_BASE_Y = 13;           // anchor height the face hovers around (Position Y offsets from here)
+watcher.position.set(0, WATCHER_BASE_Y, -30);
+scene.add(watcher);
+
+// Face lives in its own sub-group so size / width / height / position can be
+// adjusted live (and smoothly) via a transform — no voxel rebuild required.
+const faceGroup = new THREE.Group();
+watcher.add(faceGroup);
+
+// ---- shared scratch ----
+const _m = new THREE.Matrix4();
+const _q = new THREE.Quaternion();
+const _s = new THREE.Vector3();
+const _v = new THREE.Vector3();
+const _up = new THREE.Vector3(0,1,0);
+
+// ============================================================
+//  VOXEL FACE  (solid, triangle-filled, very high-res)
+//  468 landmarks are sparse. We reconstruct the mesh TRIANGLES
+//  from the tessellation edge list, then barycentric-fill every
+//  triangle interior densely (step count scales with edge length
+//  / cell size) so the surface has NO holes at any resolution.
+//  Each (x,y) column is then scan-filled back-to-front into a
+//  SOLID blocky head. One InstancedMesh holds every cube.
+// ============================================================
+const FACE_PTS = 468;
+const FACE_SCALE = 34;                 // base resolution unit (overall size driven by settings.faceSize)
+const FACE_CELL = 0.16;                // world size of one face voxel (smaller = higher res / smoother)
+const FACE_SHELL = 1.0;                 // shell thickness behind the front surface, WORLD units (thin = wispy)
+const FACE_MAX_CUBES = 220000;         // capacity for the dense hi-res head
+const faceLandmarks = new Float32Array(FACE_PTS * 3);
+// Canonical MediaPipe face-mesh triangulation (852 tris), embedded directly
+// from tfjs-models so there is ZERO runtime dependency on a tessellation const
+// that does not exist in tasks-vision. 3 indices per triangle, range [0,467].
+const FACE_TRIS = [127,34,139,11,0,37,232,231,120,72,37,39,128,121,47,232,121,128,104,69,67,175,171,148,118,50,101,73,39,40,9,151,108,48,115,131,194,204,211,74,40,185,80,42,183,40,92,186,230,229,118,202,212,214,83,18,17,76,61,146,160,29,30,56,157,173,106,204,194,135,214,192,203,165,98,21,71,68,51,45,4,144,24,23,77,146,91,205,50,187,201,200,18,91,106,182,90,91,181,85,84,17,206,203,36,148,171,140,92,40,39,193,189,244,159,158,28,247,246,161,236,3,196,54,68,104,193,168,8,117,228,31,189,193,55,98,97,99,126,47,100,166,79,218,155,154,26,209,49,131,135,136,150,47,126,217,223,52,53,45,51,134,211,170,140,67,69,108,43,106,91,230,119,120,226,130,247,63,53,52,238,20,242,46,70,156,78,62,96,46,53,63,143,34,227,123,117,111,44,125,19,236,134,51,216,206,205,154,153,22,39,37,167,200,201,208,36,142,100,57,212,202,20,60,99,28,158,157,35,226,113,160,159,27,204,202,210,113,225,46,43,202,204,62,76,77,137,123,116,41,38,72,203,129,142,64,98,240,49,102,64,41,73,74,212,216,207,42,74,184,169,170,211,170,149,176,105,66,69,122,6,168,123,147,187,96,77,90,65,55,107,89,90,180,101,100,120,63,105,104,93,137,227,15,86,85,129,102,49,14,87,86,55,8,9,100,47,121,145,23,22,88,89,179,6,122,196,88,95,96,138,172,136,215,58,172,115,48,219,42,80,81,195,3,51,43,146,61,171,175,199,81,82,38,53,46,225,144,163,110,52,65,66,229,228,117,34,127,234,107,108,69,109,108,151,48,64,235,62,78,191,129,209,126,111,35,143,117,123,50,222,65,52,19,125,141,221,55,65,3,195,197,25,7,33,220,237,44,70,71,139,122,193,245,247,130,33,71,21,162,170,169,150,188,174,196,216,186,92,2,97,167,141,125,241,164,167,37,72,38,12,38,82,13,63,68,71,226,35,111,101,50,205,206,92,165,209,198,217,165,167,97,220,115,218,133,112,243,239,238,241,214,135,169,190,173,133,171,208,32,125,44,237,86,87,178,85,86,179,84,85,180,83,84,181,201,83,182,137,93,132,76,62,183,61,76,184,57,61,185,212,57,186,214,207,187,34,143,156,79,239,237,123,137,177,44,1,4,201,194,32,64,102,129,213,215,138,59,166,219,242,99,97,2,94,141,75,59,235,24,110,228,25,130,226,23,24,229,22,23,230,26,22,231,112,26,232,189,190,243,221,56,190,28,56,221,27,28,222,29,27,223,30,29,224,247,30,225,238,79,20,166,59,75,60,75,240,147,177,215,20,79,166,187,147,213,112,233,244,233,128,245,128,114,188,114,217,174,131,115,220,217,198,236,198,131,134,177,132,58,143,35,124,110,163,7,228,110,25,356,389,368,11,302,267,452,350,349,302,303,269,357,343,277,452,453,357,333,332,297,175,152,377,347,348,330,303,304,270,9,336,337,278,279,360,418,262,431,304,408,409,310,415,407,270,409,410,450,348,347,422,430,434,313,314,17,306,307,375,387,388,260,286,414,398,335,406,418,364,367,416,423,358,327,251,284,298,281,5,4,373,374,253,307,320,321,425,427,411,421,313,18,321,405,406,320,404,405,315,16,17,426,425,266,377,400,369,322,391,269,417,465,464,386,257,258,466,260,388,456,399,419,284,332,333,417,285,8,346,340,261,413,441,285,327,460,328,355,371,329,392,439,438,382,341,256,429,420,360,364,394,379,277,343,437,443,444,283,275,440,363,431,262,369,297,338,337,273,375,321,450,451,349,446,342,467,293,334,282,458,461,462,276,353,383,308,324,325,276,300,293,372,345,447,352,345,340,274,1,19,456,248,281,436,427,425,381,256,252,269,391,393,200,199,428,266,330,329,287,273,422,250,462,328,258,286,384,265,353,342,387,259,257,424,431,430,342,353,276,273,335,424,292,325,307,366,447,345,271,303,302,423,266,371,294,455,460,279,278,294,271,272,304,432,434,427,272,407,408,394,430,431,395,369,400,334,333,299,351,417,168,352,280,411,325,319,320,295,296,336,319,403,404,330,348,349,293,298,333,323,454,447,15,16,315,358,429,279,14,15,316,285,336,9,329,349,350,374,380,252,318,402,403,6,197,419,318,319,325,367,364,365,435,367,397,344,438,439,272,271,311,195,5,281,273,287,291,396,428,199,311,271,268,283,444,445,373,254,339,282,334,296,449,347,346,264,447,454,336,296,299,338,10,151,278,439,455,292,407,415,358,371,355,340,345,372,346,347,280,442,443,282,19,94,370,441,442,295,248,419,197,263,255,359,440,275,274,300,383,368,351,412,465,263,467,466,301,368,389,395,378,379,412,351,419,436,426,322,2,164,393,370,462,461,164,0,267,302,11,12,268,12,13,293,300,301,446,261,340,330,266,425,426,423,391,429,355,437,391,327,326,440,457,438,341,382,362,459,457,461,434,430,394,414,463,362,396,369,262,354,461,457,316,403,402,315,404,403,314,405,404,313,406,405,421,418,406,366,401,361,306,408,407,291,409,408,287,410,409,432,436,410,434,416,411,264,368,383,309,438,457,352,376,401,274,275,4,421,428,262,294,327,358,433,416,367,289,455,439,462,370,326,2,326,370,305,460,455,254,449,448,255,261,446,253,450,449,252,451,450,256,452,451,341,453,452,413,464,463,441,413,414,258,442,441,257,443,442,259,444,443,260,445,444,467,342,445,459,458,250,289,392,290,290,328,460,376,433,435,250,290,392,411,416,433,341,463,464,453,464,465,357,465,412,343,412,399,360,363,440,437,399,456,420,456,363,401,435,288,372,383,353,339,255,249,448,261,255,133,243,190,133,155,112,33,246,247,33,130,25,398,384,286,362,398,414,362,463,341,263,359,467,263,249,255,466,467,260,75,60,166,238,239,79,162,127,139,72,11,37,121,232,120,73,72,39,114,128,47,233,232,128,103,104,67,152,175,148,119,118,101,74,73,40,107,9,108,49,48,131,32,194,211,184,74,185,191,80,183,185,40,186,119,230,118,210,202,214,84,83,17,77,76,146,161,160,30,190,56,173,182,106,194,138,135,192,129,203,98,54,21,68,5,51,4,145,144,23,90,77,91,207,205,187,83,201,18,181,91,182,180,90,181,16,85,17,205,206,36,176,148,140,165,92,39,245,193,244,27,159,28,30,247,161,174,236,196,103,54,104,55,193,8,111,117,31,221,189,55,240,98,99,142,126,100,219,166,218,112,155,26,198,209,131,169,135,150,114,47,217,224,223,53,220,45,134,32,211,140,109,67,108,146,43,91,231,230,120,113,226,247,105,63,52,241,238,242,124,46,156,95,78,96,70,46,63,116,143,227,116,123,111,1,44,19,3,236,51,207,216,205,26,154,22,165,39,167,199,200,208,101,36,100,43,57,202,242,20,99,56,28,157,124,35,113,29,160,27,211,204,210,124,113,46,106,43,204,96,62,77,227,137,116,73,41,72,36,203,142,235,64,240,48,49,64,42,41,74,214,212,207,183,42,184,210,169,211,140,170,176,104,105,69,193,122,168,50,123,187,89,96,90,66,65,107,179,89,180,119,101,120,68,63,104,234,93,227,16,15,85,209,129,49,15,14,86,107,55,9,120,100,121,153,145,22,178,88,179,197,6,196,89,88,96,135,138,136,138,215,172,218,115,219,41,42,81,5,195,51,57,43,61,208,171,199,41,81,38,224,53,225,24,144,110,105,52,66,118,229,117,227,34,234,66,107,69,10,109,151,219,48,235,183,62,191,142,129,126,116,111,143,118,117,50,223,222,52,94,19,141,222,221,65,196,3,197,45,220,44,156,70,139,188,122,245,139,71,162,149,170,150,122,188,196,206,216,92,164,2,167,242,141,241,0,164,37,11,72,12,12,38,13,70,63,71,31,226,111,36,101,205,203,206,165,126,209,217,98,165,97,237,220,218,237,239,241,210,214,169,140,171,32,241,125,237,179,86,178,180,85,179,181,84,180,182,83,181,194,201,182,177,137,132,184,76,183,185,61,184,186,57,185,216,212,186,192,214,187,139,34,156,218,79,237,147,123,177,45,44,4,208,201,32,98,64,129,192,213,138,235,59,219,141,242,97,97,2,141,240,75,235,229,24,228,31,25,226,230,23,229,231,22,230,232,26,231,233,112,232,244,189,243,189,221,190,222,28,221,223,27,222,224,29,223,225,30,224,113,247,225,99,60,240,213,147,215,60,20,166,192,187,213,243,112,244,244,233,245,245,128,188,188,114,174,134,131,220,174,217,236,236,198,134,215,177,58,156,143,124,25,110,7,31,228,25,264,356,368,0,11,267,451,452,349,267,302,269,350,357,277,350,452,357,299,333,297,396,175,377,280,347,330,269,303,270,151,9,337,344,278,360,424,418,431,270,304,409,272,310,407,322,270,410,449,450,347,432,422,434,18,313,17,291,306,375,259,387,260,424,335,418,434,364,416,391,423,327,301,251,298,275,281,4,254,373,253,375,307,321,280,425,411,200,421,18,335,321,406,321,320,405,314,315,17,423,426,266,396,377,369,270,322,269,413,417,464,385,386,258,248,456,419,298,284,333,168,417,8,448,346,261,417,413,285,326,327,328,277,355,329,309,392,438,381,382,256,279,429,360,365,364,379,355,277,437,282,443,283,281,275,363,395,431,369,299,297,337,335,273,321,348,450,349,359,446,467,283,293,282,250,458,462,300,276,383,292,308,325,283,276,293,264,372,447,346,352,340,354,274,19,363,456,281,426,436,425,380,381,252,267,269,393,421,200,428,371,266,329,432,287,422,290,250,328,385,258,384,446,265,342,386,387,257,422,424,430,445,342,276,422,273,424,306,292,307,352,366,345,268,271,302,358,423,371,327,294,460,331,279,294,303,271,304,436,432,427,304,272,408,395,394,431,378,395,400,296,334,299,6,351,168,376,352,411,307,325,320,285,295,336,320,319,404,329,330,349,334,293,333,366,323,447,316,15,315,331,358,279,317,14,316,8,285,9,277,329,350,253,374,252,319,318,403,351,6,419,324,318,325,397,367,365,288,435,397,278,344,439,310,272,311,248,195,281,375,273,291,175,396,199,312,311,268,276,283,445,390,373,339,295,282,296,448,449,346,356,264,454,337,336,299,337,338,151,294,278,455,308,292,415,429,358,355,265,340,372,352,346,280,295,442,282,354,19,370,285,441,295,195,248,197,457,440,274,301,300,368,417,351,465,251,301,389,394,395,379,399,412,419,410,436,322,326,2,393,354,370,461,393,164,267,268,302,12,312,268,13,298,293,301,265,446,340,280,330,425,322,426,391,420,429,437,393,391,326,344,440,438,458,459,461,364,434,394,428,396,262,274,354,457,317,316,402,316,315,403,315,314,404,314,313,405,313,421,406,323,366,361,292,306,407,306,291,408,291,287,409,287,432,410,427,434,411,372,264,383,459,309,457,366,352,401,1,274,4,418,421,262,331,294,358,435,433,367,392,289,439,328,462,326,94,2,370,289,305,455,339,254,448,359,255,446,254,253,449,253,252,450,252,256,451,256,341,452,414,413,463,286,441,414,286,258,441,258,257,442,257,259,443,259,260,444,260,467,445,309,459,250,305,289,290,305,290,460,401,376,435,309,250,392,376,411,433,453,341,464,357,453,465,343,357,412,437,343,399,344,360,440,420,437,456,360,420,363,361,401,288,265,372,353,390,339,249,339,448,255];
+
+const faceVoxGeo = new THREE.BoxGeometry(FACE_CELL, FACE_CELL, FACE_CELL);
+const faceVoxMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff, roughness: 0.7, metalness: 0.0,    // plain white shell — no webcam texture imposed
+  emissive: 0x000000, emissiveIntensity: 0.0,         // no self-illumination — shaped by scene lighting
+  transparent: true, opacity: 0.32,
+  depthWrite: false                                   // wispy translucent blending — no hard self-occlusion
+});
+const faceVox = new THREE.InstancedMesh(faceVoxGeo, faceVoxMat, FACE_MAX_CUBES);
+faceVox.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+// per-instance color, fed from the live webcam frame
+faceVox.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(FACE_MAX_CUBES*3), 3);
+faceVox.instanceColor.setUsage(THREE.DynamicDrawUsage);
+faceVox.castShadow = true;
+faceVox.count = 0;
+faceGroup.add(faceVox);
+
+// per-column: key "gx,gy" -> [minGz, maxGz, gx, gy]. Pure shell — no color is sampled.
+const faceCols = new Map();
+function faceAddColumn(x, y, z) {
+  const gx = Math.round(x / FACE_CELL);
+  const gy = Math.round(y / FACE_CELL);
+  const gz = Math.round(z / FACE_CELL);
+  const key = gx + ',' + gy;
+  let c = faceCols.get(key);
+  if (!c) { faceCols.set(key, [gz, gz, gx, gy]); }
+  else {
+    if (gz < c[0]) c[0] = gz;
+    if (gz > c[1]) c[1] = gz;
+  }
+}
+
+function rebuildFaceVoxels(lm) {
+  faceCols.clear();
+  // pass 1: transform the 468 landmarks (u,v = their normalized image coords).
+  // Size / width / height / position are applied live via faceGroup's transform,
+  // so the voxel grid built here stays square & seamless at any size.
+  for (let i = 0; i < FACE_PTS; i++) {
+    const x = -(lm[i].x - 0.5) * FACE_SCALE;          // mirror X
+    const y = -(lm[i].y - 0.5) * FACE_SCALE;
+    const z = -lm[i].z * FACE_SCALE * 1.6;            // exaggerate depth for volume
+    faceLandmarks[i*3]=x; faceLandmarks[i*3+1]=y; faceLandmarks[i*3+2]=z;
+    faceAddColumn(x, y, z);
+  }
+  // pass 2: barycentric-fill every triangle interior (gap-free shell surface)
+  const F = faceLandmarks;
+  for (let t = 0; t < FACE_TRIS.length; t += 3) {
+    const A=FACE_TRIS[t], B=FACE_TRIS[t+1], C=FACE_TRIS[t+2];
+    const ia=A*3, ib=B*3, ic=C*3;
+    const ax=F[ia],ay=F[ia+1],az=F[ia+2];
+    const bx=F[ib],by=F[ib+1],bz=F[ib+2];
+    const cx=F[ic],cy=F[ic+1],cz=F[ic+2];
+    const eMax = Math.max(
+      Math.hypot(bx-ax,by-ay,bz-az),
+      Math.hypot(cx-ax,cy-ay,cz-az),
+      Math.hypot(cx-bx,cy-by,cz-bz));
+    const N = Math.max(1, Math.ceil(eMax / FACE_CELL));
+    const inv = 1/N;
+    for (let i=0;i<=N;i++){
+      for (let j=0;j<=N-i;j++){
+        const u=i*inv, w=j*inv;
+        faceAddColumn(ax+(bx-ax)*u+(cx-ax)*w,
+                      ay+(by-ay)*u+(cy-ay)*w,
+                      az+(bz-az)*u+(cz-az)*w);
+      }
+    }
+  }
+  // pass 3: fill a thin shell BEHIND the front surface (maxGz). Every voxel is
+  // pure white; the scene lighting + translucency give it sculpted shell form.
+  const shellCells = Math.max(2, Math.round(FACE_SHELL / FACE_CELL));
+  let count = 0;
+  for (const [, c] of faceCols) {
+    const minGz = c[0], maxGz = c[1], gx = c[2], gy = c[3];
+    const span = maxGz - minGz;
+    const depth = Math.min(span, shellCells);     // how far back from the front we fill
+    for (let d = 0; d <= depth; d++) {
+      if (count >= FACE_MAX_CUBES) break;
+      const gz = maxGz - d;                        // start at front, recede
+      _m.makeTranslation(gx * FACE_CELL, gy * FACE_CELL, gz * FACE_CELL);
+      faceVox.setMatrixAt(count, _m);
+      faceVox.instanceColor.setXYZ(count, 1, 1, 1); // base color white for all
+      count++;
+    }
+    if (count >= FACE_MAX_CUBES) break;
+  }
+  faceVox.count = count;
+  faceVox.instanceMatrix.needsUpdate = true;
+  faceVox.instanceColor.needsUpdate = true;
+}
+
+// Subtle volumetric "presence" behind the face so it reads as a looming head
+// (halo sphere removed — no more glowing orb behind the face)
+const halo = { material: { opacity: 0 } };   // stub so the breathing loop stays harmless
+
+// ============================================================
+//  VOXEL HANDS
+//  21 joints -> chunky voxel "bones". We voxel-fill each bone
+//  segment of the standard hand skeleton with cubes, plus a
+//  bigger glowing cube at each fingertip (the physics pushers).
+//  One InstancedMesh per hand for the bone cubes.
+// ============================================================
+const HAND_PTS = 21;
+const HAND_SCALE = 30;
+const HAND_VOX = 0.32;        // smaller cubes = much higher-res fingers
+const HAND_Z = -16, HAND_Y = 4;
+
+// standard MediaPipe hand bone connections
+const HAND_BONES = [
+  [0,1],[1,2],[2,3],[3,4],        // thumb
+  [0,5],[5,6],[6,7],[7,8],        // index
+  [5,9],[9,10],[10,11],[11,12],   // middle
+  [9,13],[13,14],[14,15],[15,16], // ring
+  [13,17],[17,18],[18,19],[19,20],// pinky
+  [0,17]                          // palm base
+];
+const TIP_IDX = [4,8,12,16,20];
+const MAX_BONE_CUBES = 22000; // high-res voxel hands need headroom
+
+function makeHand() {
+  const g = new THREE.Group();
+
+  const boneGeo = new THREE.BoxGeometry(HAND_VOX, HAND_VOX, HAND_VOX);
+  const boneMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, roughness: 0.7, metalness: 0.0,   // plain white shell, shaped by scene lighting
+    emissive: 0x000000, emissiveIntensity: 0.0,
+    transparent: true, opacity: 0.40,
+    depthWrite: false                                  // wispy translucent blending (matches the face)
+  });
+  const bones = new THREE.InstancedMesh(boneGeo, boneMat, MAX_BONE_CUBES);
+  bones.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  bones.castShadow = true;
+  bones.count = 0;
+  g.add(bones);
+
+  // fingertip pushers — invisible now (no glow). They only drive the physics.
+  const tips = TIP_IDX.map(() => {
+    const s = new THREE.Mesh(
+      new THREE.BoxGeometry(0.01, 0.01, 0.01),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    g.add(s); return s;
+  });
+
+  scene.add(g);
+  // joints[] holds current world-space joint positions (Vector3) for bone-fill + physics
+  const joints = Array.from({length: HAND_PTS}, () => new THREE.Vector3());
+  return { group: g, bones, tips, joints, present: false, smooth: null,
+           targetPos: new THREE.Vector3() };
+}
+const hands = [makeHand(), makeHand()];
+
+// fill the InstancedMesh `bones` with cubes forming THICK voxel fingers.
+// Each bone is sampled along its length; at each sample we stamp a small
+// cross-section of cells, snap everything to a shared grid, and dedup so
+// overlapping joints merge into one solid blocky hand. Positions are LOCAL.
+const HAND_CELL = HAND_VOX;            // grid step == cube size -> seamless
+const handCells = new Map();
+// Build a spherical cross-section from a WORLD-space finger radius, so finger
+// thickness stays constant as cell size shrinks (smaller cells = rounder digit).
+const FINGER_R = 0.6;                   // finger radius in world units (slimmer, realistic)
+const CROSS = [];
+{
+  const r = Math.max(1, Math.round(FINGER_R / HAND_CELL));
+  const r2 = (r + 0.4) * (r + 0.4);
+  for (let ox=-r; ox<=r; ox++)
+    for (let oy=-r; oy<=r; oy++)
+      for (let oz=-r; oz<=r; oz++)
+        if (ox*ox + oy*oy + oz*oz <= r2) CROSS.push([ox,oy,oz]);
+}
+
+const BONE_STEP = FINGER_R * 0.5;      // world-space spacing between sphere stamps (overlap = seamless)
+function rebuildHandVoxels(hand, localJoints) {
+  handCells.clear();
+  for (const [a,b] of HAND_BONES) {
+    const pa = localJoints[a], pb = localJoints[b];
+    const dist = pa.distanceTo(pb);
+    const steps = Math.max(1, Math.ceil(dist / BONE_STEP));
+    for (let s = 0; s <= steps; s++) {
+      _v.lerpVectors(pa, pb, s/steps);
+      const cx = Math.round(_v.x / HAND_CELL);
+      const cy = Math.round(_v.y / HAND_CELL);
+      const cz = Math.round(_v.z / HAND_CELL);
+      for (const [ox,oy,oz] of CROSS) {
+        handCells.set((cx+ox)+','+(cy+oy)+','+(cz+oz), 1);
+      }
+    }
+  }
+  let c = 0;
+  for (const key of handCells.keys()) {
+    if (c >= MAX_BONE_CUBES) break;
+    const [gx,gy,gz] = key.split(',');
+    _m.makeTranslation(gx*HAND_CELL, gy*HAND_CELL, gz*HAND_CELL);
+    hand.bones.setMatrixAt(c++, _m);
+  }
+  hand.bones.count = c;
+  hand.bones.instanceMatrix.needsUpdate = true;
+}
+
+// ---------- MEDIAPIPE ----------
+const video = document.getElementById('cam');
+let faceLM = null, handLM = null;
+const statusEl = document.getElementById('status');
+const trkEl = document.getElementById('trk');
+
+// The webcam still drives FACE + HAND tracking, but its pixels are never
+// painted onto the voxels — the watcher is a plain white shell of your shape.
+
+async function initVision() {
+  statusEl.textContent = 'summoning models…';
+  const fileset = await FilesetResolver.forVisionTasks(
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm');
+  faceLM = await FaceLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath:
+      'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+      delegate: 'GPU' },
+    runningMode: 'VIDEO', numFaces: 1
+  });
+
+  handLM = await HandLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath:
+      'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+      delegate: 'GPU' },
+    runningMode: 'VIDEO', numHands: 2
+  });
+  statusEl.textContent = 'requesting the eye…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+}
+
+let faceTracked = false;
+let faceSmooth = null;     // EMA-smoothed copy of the face landmarks (super-smooth motion)
+
+// local-space joint buffer reused per hand per frame
+const _localJoints = Array.from({length: HAND_PTS}, () => new THREE.Vector3());
+
+function processVideo(now) {
+  if (!faceLM || video.readyState < 2) return;
+
+  // FACE -> voxels (temporally smoothed so motion glides instead of jittering)
+  const f = faceLM.detectForVideo(video, now);
+  if (f.faceLandmarks && f.faceLandmarks.length) {
+    const raw = f.faceLandmarks[0];
+    const a = Math.max(0.04, 1 - settings.smooth);   // EMA factor (lower = smoother)
+    if (!faceSmooth || faceSmooth.length !== raw.length) {
+      faceSmooth = raw.map(p => ({ x: p.x, y: p.y, z: p.z }));
+    } else {
+      for (let i = 0; i < raw.length; i++) {
+        const s = faceSmooth[i], r = raw[i];
+        s.x += (r.x - s.x) * a; s.y += (r.y - s.y) * a; s.z += (r.z - s.z) * a;
+      }
+    }
+    rebuildFaceVoxels(faceSmooth);
+    faceTracked = true;
+  } else { faceTracked = false; faceSmooth = null; faceVox.count = 0; faceVox.instanceMatrix.needsUpdate = true; }
+
+  // HANDS -> voxel bones + fingertip pushers
+  const h = handLM.detectForVideo(video, now);
+  const n = h.landmarks ? h.landmarks.length : 0;
+  for (let hi = 0; hi < hands.length; hi++) {
+    const hand = hands[hi];
+    if (hi < n) {
+      const fresh = !hand.present;                    // first frame this hand re-appears
+      const raw = h.landmarks[hi];
+      // temporally smooth the hand landmarks too (matches the face)
+      const a = Math.max(0.04, 1 - settings.smooth);
+      if (!hand.smooth || hand.smooth.length !== raw.length) {
+        hand.smooth = raw.map(p => ({ x: p.x, y: p.y, z: p.z }));
+      } else {
+        for (let i = 0; i < raw.length; i++) {
+          const s = hand.smooth[i], r = raw[i];
+          s.x += (r.x - s.x) * a; s.y += (r.y - s.y) * a; s.z += (r.z - s.z) * a;
+        }
+      }
+      const lm = hand.smooth;
+      // hand centre -> eased target (snapped on first appearance so it doesn't slide in)
+      let cx=0, cy=0; for (const p of lm){ cx+=p.x; cy+=p.y; } cx/=21; cy/=21;
+      hand.targetPos.set((cx-0.5)*-30, HAND_Y + (0.5-cy)*16, HAND_Z);
+      if (fresh) hand.group.position.copy(hand.targetPos);
+
+      // local joint positions (mirror X, exaggerate depth)
+      for (let i=0;i<HAND_PTS;i++){
+        _localJoints[i].set(
+          -(lm[i].x-0.5)*HAND_SCALE,
+          -(lm[i].y-0.5)*HAND_SCALE,
+          -lm[i].z*HAND_SCALE*1.4
+        );
+      }
+      rebuildHandVoxels(hand, _localJoints);
+
+      // fingertip pusher cubes -> local, and cache WORLD pos for physics
+      TIP_IDX.forEach((ti, k) => {
+        const t = hand.tips[k];
+        t.position.copy(_localJoints[ti]);
+        hand.joints[k].copy(_localJoints[ti]).add(hand.group.position); // world
+      });
+      hand.group.visible = true; hand.present = true;
+    } else { hand.group.visible = false; hand.present = false; hand.smooth = null; }
+  }
+
+  const fp = faceTracked ? 'face' : '—';
+  const hp = n > 0 ? `${n} hand${n>1?'s':''}` : '';
+  trkEl.innerHTML = `tracking <span class="dot">/</span> ${[fp, hp].filter(Boolean).join(' + ') || '—'}`;
+}
+
+// ---------- LOOP ----------
+const clock = new THREE.Clock();
+let running = false;
+let lastTrack = 0;
+const TRACK_INTERVAL = 1000 / 30;     // re-voxelize at ~30fps; render stays at 60
+function loop() {
+  requestAnimationFrame(loop);
+  const t = clock.getElapsedTime();
+  const now = performance.now();
+  // tracking + voxel rebuild is the heavy work — run it at a capped rate,
+  // independent of the render framerate so the scene stays smooth at hi-res
+  if (running && now - lastTrack >= TRACK_INTERVAL) {
+    lastTrack = now;
+    processVideo(now);
+  }
+
+  // apply live settings (cheap, every frame so sliders feel instant)
+  faceVoxMat.opacity = settings.faceOpacity;
+  // hands stay pure white (shell), only opacity is live-adjustable
+  for (const hand of hands) {
+    hand.bones.material.opacity = settings.handOpacity;
+    // ease the hand group toward its tracked target for buttery motion
+    if (hand.present) hand.group.position.lerp(hand.targetPos, 0.35);
+  }
+  for (const c of clouds) c.material.opacity = c.userData.baseOpacity * settings.cloudOpacity;
+
+  // face size / shape / position — applied live via the faceGroup transform.
+  // No voxel rebuild needed, so dragging these sliders stays perfectly smooth.
+  faceGroup.scale.set(
+    settings.faceSize * settings.faceWidth,
+    settings.faceSize * settings.faceHeight,
+    settings.faceSize
+  );
+  faceGroup.position.set(settings.posX, settings.posY, 0);
+  faceGroup.rotation.x = settings.tilt * Math.PI / 180;   // pitch: + looks down, - looks up
+
+  // drift the clouds slowly across the sky; wrap around when they exit
+  for (const c of clouds) {
+    c.position.x += c.userData.speed * 0.02;
+    if (c.position.x > 200) c.position.x = -200;
+  }
+
+  // mortal camera — keep the face centered by aiming at the watcher itself.
+  // Height moves the face up/down on screen; zoom is true camera magnification.
+  const aimY = WATCHER_BASE_Y;
+  camera.position.x = Math.sin(t*0.18)*0.18;
+  camera.position.y = 4.0 + Math.sin(t*0.27)*0.08;
+  camera.position.z = 14;
+  camera.zoom = settings.zoom;
+  camera.lookAt(0, aimY, watcher.position.z);
+  camera.updateProjectionMatrix();
+
+  renderer.render(scene, camera);
+}
+loop();
+
+// ---------- SETTINGS WIRING ----------
+function bindSlider(id, valId, fmt, apply) {
+  const s = document.getElementById(id), v = document.getElementById(valId);
+  const update = () => { const x = parseFloat(s.value); apply(x); v.textContent = fmt(x); };
+  s.addEventListener('input', update); update();
+}
+bindSlider('s_sz', 'v_sz', x => x.toFixed(2)+'×', x => settings.faceSize = x);
+bindSlider('s_fw', 'v_fw', x => x.toFixed(2)+'×', x => settings.faceWidth = x);
+bindSlider('s_fh', 'v_fh', x => x.toFixed(2)+'×', x => settings.faceHeight = x);
+bindSlider('s_px', 'v_px', x => x.toFixed(1),     x => settings.posX = x);
+bindSlider('s_py', 'v_py', x => x.toFixed(1),     x => settings.posY = x);
+bindSlider('s_tl', 'v_tl', x => x.toFixed(0)+'°', x => settings.tilt = x);
+bindSlider('s_zm', 'v_zm', x => x.toFixed(2)+'×', x => settings.zoom = x);
+bindSlider('s_sm', 'v_sm', x => x.toFixed(2),     x => settings.smooth = x);
+bindSlider('s_fo', 'v_fo', x => x.toFixed(2),     x => settings.faceOpacity = x);
+bindSlider('s_ho', 'v_ho', x => x.toFixed(2),     x => settings.handOpacity = x);
+bindSlider('s_co', 'v_co', x => x.toFixed(2),     x => settings.cloudOpacity = x);
+
+// ---------- ENTER ----------
+document.getElementById('enter').addEventListener('click', async () => {
+  const gate = document.getElementById('gate');
+  const btn = document.getElementById('enter');
+  btn.disabled = true;
+  try {
+    await initVision();
+    running = true;
+    gate.classList.add('fade');
+    document.getElementById('hud').classList.remove('fade');
+    document.getElementById('panel').classList.remove('fade');
+    setTimeout(() => gate.remove(), 1100);
+  } catch (e) {
+    console.error('WATCHER INIT FAILED:', e);
+    btn.disabled = false;
+    btn.textContent = 'enter world anyway';
+    const reason = e.name === 'NotAllowedError' ? 'camera permission denied'
+      : e.name === 'NotFoundError' ? 'no camera found'
+      : (e.message || e.toString() || 'unknown error');
+    statusEl.innerHTML = 'failed: ' + reason + '<br><span style="opacity:.6">(click again to enter without tracking)</span>';
+    // second click: enter the world with no tracking, so the scene is still visible
+    btn.onclick = () => {
+      running = false;
+      gate.classList.add('fade');
+      document.getElementById('hud').classList.remove('fade');
+      document.getElementById('panel').classList.remove('fade');
+      setTimeout(() => gate.remove(), 1100);
+    };
+  }
+});
+
+// surface uncaught errors on screen too
+addEventListener('error', e => {
+  if (statusEl) statusEl.innerHTML = 'script error: ' + (e.message || 'see console');
+});
+addEventListener('unhandledrejection', e => {
+  if (statusEl) statusEl.innerHTML = 'load error: ' + (e.reason?.message || e.reason || 'see console');
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

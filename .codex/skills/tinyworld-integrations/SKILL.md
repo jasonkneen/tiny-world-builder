@@ -79,6 +79,17 @@ backend:
   includes `?party=`, `?room=`, or `?collab=`. Collaborate links should reuse a
   `/api/share` id as both the world snapshot id and the PartyKit room id:
   `/tiny-world-builder?share=<id>&party=<id>`.
+- Shared build/collab rooms are public-observer by default: second and later
+  PartyKit connections are admitted as `viewer` seats, not held in a lobby.
+  Host clients heartbeat public room metadata to `/api/collabs`; the home page
+  feed and `/collabs` page list those rooms with observer links
+  (`observe=1`). This public visibility must not grant edit authority; edits
+  still require a host-assigned role plus server-side island/zone checks.
+- Collaborative build zones are transient PartyKit room permission data, not
+  saved world cells. Host clients send `zones.set`; the server sanitizes zones,
+  stores editor `zoneIds`, and must gate every non-host `cell.set` against
+  assigned active zones. Client outlines/labels and local edit checks are UX and
+  desync prevention only; do not rely on them as the authority.
 - MMO economy/multiplayer extraction lives in `packages/tinyworld-mmo-core/`.
   It is a dependency-free ESM package for shared GOLD allowance, resource tax,
   ledger, join-command, and interest-snapshot contracts. Use it when wiring the

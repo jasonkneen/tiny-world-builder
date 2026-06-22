@@ -37,6 +37,9 @@
     if (typeof window.__showcaseTick === 'function') window.__showcaseTick(dt);
     if (typeof window.__tinyworldVdbTick === 'function') window.__tinyworldVdbTick(t);
     if (window.__tinyworldSubEdit && typeof window.__tinyworldSubEdit._tickExplode === 'function') window.__tinyworldSubEdit._tickExplode(dt);
+    if (window.__tinyworldWatcherLayer && typeof window.__tinyworldWatcherLayer.tick === 'function') {
+      try { window.__tinyworldWatcherLayer.tick(t, dt); } catch (_) {}
+    }
     repaintProfileEnd('tick.anim', tickStart);
 
     tickStart = repaintProfileBegin();

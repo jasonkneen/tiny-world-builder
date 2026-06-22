@@ -59,6 +59,11 @@ const RATE_LIMITS = {
   // Live flight transform: client self-throttles to ~15/s; this bucket lets the
   // sustained stream through while a raw socket cannot flood it.
   entity: { refill: 20, burst: 40 },
+  // Host build-zone edits are infrequent room-permission changes.
+  'zones.set': { refill: 3, burst: 8 },
+  // Admin watcher visual layer: host sends rounded MediaPipe landmark frames.
+  // Kept lower than entity because a frame carries more numbers.
+  watcher: { refill: 6, burst: 10 },
   // Chat messages: human typing rate, so a tight sustained cap with a small
   // burst is plenty. A raw socket cannot flood the room past this.
   chat: { refill: 4, burst: 10 },
@@ -145,6 +150,49 @@ function cleanSelection(value) {
       z: Math.round(cleanNumber(cell.z)),
     };
   }).filter(Boolean);
+}
+
+function cleanFloatArray(value, limit) {
+  if (!Array.isArray(value)) return null;
+  const out = [];
+  const n = Math.min(value.length, limit);
+  for (let i = 0; i < n; i++) {
+    const v = cleanNumber(value[i], NaN);
+    if (!Number.isFinite(v)) return null;
+    out.push(Math.round(v * 10000) / 10000);
+  }
+  return out;
+}
+
+function cleanWatcherSettings(value) {
+  const input = value && typeof value === 'object' ? value : {};
+  return {
+    faceSize: Math.max(0.6, Math.min(12, cleanNumber(input.faceSize, 1.5))),
+    faceWidth: Math.max(0.5, Math.min(2.5, cleanNumber(input.faceWidth, 1.15))),
+    faceHeight: Math.max(0.5, Math.min(2.5, cleanNumber(input.faceHeight, 1))),
+    posX: Math.max(-80, Math.min(80, cleanNumber(input.posX, 0))),
+    posY: Math.max(-20, Math.min(80, cleanNumber(input.posY, 7))),
+    posZ: Math.max(-120, Math.min(80, cleanNumber(input.posZ, -28))),
+    tilt: Math.max(-45, Math.min(45, cleanNumber(input.tilt, 40))),
+    zoom: Math.max(0.6, Math.min(8, cleanNumber(input.zoom, 1.4))),
+    smooth: Math.max(0, Math.min(0.95, cleanNumber(input.smooth, 0))),
+    faceOpacity: Math.max(0.03, Math.min(1, cleanNumber(input.faceOpacity, 0.09))),
+    handOpacity: Math.max(0.03, Math.min(1, cleanNumber(input.handOpacity, 0.4))),
+    cloudOpacity: Math.max(0, Math.min(1, cleanNumber(input.cloudOpacity, 1))),
+  };
+}
+
+function cleanWatcherFrame(value) {
+  if (!value || typeof value !== 'object') return null;
+  const face = cleanFloatArray(value.face, 468 * 3);
+  if (!face || face.length < 468 * 3) return null;
+  const hands = Array.isArray(value.hands) ? value.hands.slice(0, 2).map(h => cleanFloatArray(h, 21 * 3)).filter(h => h && h.length >= 21 * 3) : [];
+  return {
+    face,
+    hands,
+    settings: cleanWatcherSettings(value.settings),
+    ts: Date.now(),
+  };
 }
 
 // Validate an UNTRUSTED networked voxel-avatar descriptor (client -> server ->
@@ -311,6 +359,70 @@ function cleanIsland(value) {
 function inIsland(island, x, z) {
   if (!island) return false;
   return x >= island.minX && x <= island.maxX && z >= island.minZ && z <= island.maxZ;
+}
+
+function cleanZoneColor(value, fallback) {
+  const s = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : fallback;
+}
+
+function cleanBuildZone(value, index = 0) {
+  if (!value || typeof value !== 'object') return null;
+  const rect = cleanIsland(value);
+  if (!rect) return null;
+  const id = cleanText(value.id, 64).replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!id) return null;
+  const label = cleanText(value.label, 32) || ('Zone ' + (index + 1));
+  const palette = ['#36d576', '#4d8dff', '#ffbe55', '#d86bff', '#ff6b76', '#5ed6d0'];
+  return Object.assign({}, rect, {
+    id,
+    label,
+    active: value.active !== false,
+    color: cleanZoneColor(value.color, palette[index % palette.length]),
+  });
+}
+
+function cleanBuildZones(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (let i = 0; i < value.length && out.length < 32; i++) {
+    const zone = cleanBuildZone(value[i], out.length);
+    if (!zone || seen.has(zone.id)) continue;
+    seen.add(zone.id);
+    out.push(zone);
+  }
+  return out;
+}
+
+function cleanZoneIds(value, zoneMap) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of value) {
+    const id = cleanText(raw, 64).replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!id || seen.has(id)) continue;
+    if (zoneMap && !zoneMap.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+    if (out.length >= 32) break;
+  }
+  return out;
+}
+
+function inBuildZones(zoneMap, zoneIds, x, z) {
+  if (!zoneMap || !Array.isArray(zoneIds) || !zoneIds.length) return false;
+  for (const id of zoneIds) {
+    const zone = zoneMap.get(id);
+    if (zone && zone.active !== false && inIsland(zone, x, z)) return true;
+  }
+  return false;
+}
+
+function inEditorScope(seat, zoneMap, x, z) {
+  if (!seat) return false;
+  if (Array.isArray(seat.zoneIds) && seat.zoneIds.length) return inBuildZones(zoneMap, seat.zoneIds, x, z);
+  return inIsland(seat.island, x, z);
 }
 
 // ===================== Worlds MMO (playworlds-style) =====================
@@ -564,14 +676,17 @@ export default class TinyWorldParty {
     // The first connection becomes host. Only host messages (admit/decline/
     // kick/setRole) are honored.
     this.hostId = null;
-    // id -> { role, island }. Admitted participants (presence + edits flow).
+    // id -> { role, island, zoneIds }. Admitted participants (presence + edits flow).
     this.admitted = new Map();
     // id -> { id, name, presence }. Pending lobby members awaiting admit.
     this.lobby = new Map();
-    // id -> { role, island }. Remembered seats so a WS reconnect (stable _pk
+    // id -> { role, island, zoneIds }. Remembered seats so a WS reconnect (stable _pk
     // conn id) re-admits a returning member instead of re-lobbying them.
     // Cleared on kick/decline; kept across a normal disconnect.
     this.seats = new Map();
+    // Host-defined build zones for collaborative build rooms. These are
+    // transient room permission data, not saved world cells.
+    this.buildZones = new Map();
 
     // ---- Worlds MMO room state (only for 'world-' rooms) ----
     this.isWorldRoom = String((room && room.id) || '').startsWith(WORLD_ROOM_PREFIX);
@@ -613,6 +728,10 @@ export default class TinyWorldParty {
     return Array.from(this.lobby.values()).map(e => ({ id: e.id, name: e.name }));
   }
 
+  zoneList() {
+    return Array.from(this.buildZones.values());
+  }
+
   onConnect(conn) {
     if (this.isWorldRoom) {
       // World rooms have no host/lobby: everyone connects as a provisional
@@ -632,7 +751,7 @@ export default class TinyWorldParty {
     if (!this.hostId) {
       // First in the room is host: full rights, no lobby gate.
       this.hostId = conn.id;
-      this.admitted.set(conn.id, { role: 'host', island: null });
+      this.admitted.set(conn.id, { role: 'host', island: null, zoneIds: [] });
       conn.send(JSON.stringify({
         type: 'welcome',
         room: this.room.id,
@@ -640,6 +759,7 @@ export default class TinyWorldParty {
         role: 'host',
         admitted: true,
         peers: Array.from(this.presence.values()),
+        zones: this.zoneList(),
       }));
       return;
     }
@@ -647,30 +767,41 @@ export default class TinyWorldParty {
     // re-admit from the remembered seat instead of bouncing them to the lobby.
     const seat = this.seats.get(conn.id);
     if (seat) {
-      this.admitted.set(conn.id, { role: seat.role, island: seat.island });
+      this.admitted.set(conn.id, { role: seat.role, island: seat.island, zoneIds: seat.zoneIds || [] });
       conn.send(JSON.stringify({
         type: 'welcome',
         room: this.room.id,
         id: conn.id,
         role: seat.role,
+        island: seat.island || null,
+        zoneIds: seat.zoneIds || [],
         admitted: true,
         peers: Array.from(this.presence.values()),
+        zones: this.zoneList(),
       }));
       // A returning admitted member re-syncs to the host's current world via a
       // fresh snapshot (their local copy may be stale after the disconnect).
       if (this.hostId && this.hostId !== conn.id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
       return;
     }
-    // Everyone after the host starts in the lobby, un-admitted, no peers yet.
-    this.lobby.set(conn.id, { id: conn.id, name: '', presence: null });
+    // Public collab rooms default to viewable: everyone after the host joins as
+    // an admitted viewer/observer. The host can promote them later, but edit
+    // rights still go through role + zone/island checks below.
+    const viewerSeat = { role: 'viewer', island: null, zoneIds: [] };
+    this.admitted.set(conn.id, viewerSeat);
+    this.seats.set(conn.id, viewerSeat);
     conn.send(JSON.stringify({
       type: 'welcome',
       room: this.room.id,
       id: conn.id,
       role: 'viewer',
-      admitted: false,
-      peers: [],
+      island: null,
+      zoneIds: [],
+      admitted: true,
+      peers: Array.from(this.presence.values()),
+      zones: this.zoneList(),
     }));
+    if (this.hostId && this.hostId !== conn.id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
   }
 
   onMessage(message, sender) {
@@ -727,7 +858,7 @@ export default class TinyWorldParty {
       } else {
         const seat = this.admitted.get(sender.id);
         if (!seat || seat.role !== 'editor') return;
-        if (!inIsland(seat.island, op.x, op.z)) return;
+        if (!inEditorScope(seat, this.buildZones, op.x, op.z)) return;
       }
       op.userId = sender.id;
       this.broadcastToAdmitted({ type: 'cell.set', op }, sender.id);
@@ -752,6 +883,15 @@ export default class TinyWorldParty {
         p: cleanVec3(data.p),
         r: cleanVec3(data.r),
       }, sender.id);
+      return;
+    }
+
+    if (data.type === 'watcher') {
+      // Host-only transient visual layer. This never touches snapshots/cells.
+      if (sender.id !== this.hostId || !this.admitted.has(sender.id)) return;
+      const watcher = cleanWatcherFrame(data.watcher);
+      if (!watcher) return;
+      this.broadcastToAdmitted({ type: 'watcher', source: sender.id, watcher }, sender.id);
       return;
     }
 
@@ -853,6 +993,25 @@ export default class TinyWorldParty {
       return;
     }
 
+    if (data.type === 'zones.set') {
+      // Host-only transient build-zone definitions. The server stores the
+      // sanitized list so reconnecting/admitted peers inherit current scopes,
+      // and cell.set can enforce assigned active zones server-side.
+      if (sender.id !== this.hostId) return;
+      const zones = cleanBuildZones(data.zones);
+      this.buildZones = new Map(zones.map(zone => [zone.id, zone]));
+      for (const seat of this.admitted.values()) {
+        if (Array.isArray(seat.zoneIds)) seat.zoneIds = cleanZoneIds(seat.zoneIds, this.buildZones);
+      }
+      for (const [id, seat] of this.seats) {
+        if (Array.isArray(seat.zoneIds)) {
+          this.seats.set(id, Object.assign({}, seat, { zoneIds: cleanZoneIds(seat.zoneIds, this.buildZones) }));
+        }
+      }
+      this.broadcastToAdmitted({ type: 'zones', zones: this.zoneList() });
+      return;
+    }
+
     // ---- Host-only moderation. Honored only from the current host. ----
     if (data.type === 'admit') {
       if (sender.id !== this.hostId) return;
@@ -860,15 +1019,18 @@ export default class TinyWorldParty {
       const entry = this.lobby.get(id);
       if (!entry) return;
       const role = cleanRole(data.role);
-      const island = role === 'editor' ? cleanIsland(data.island) : null;
+      const zoneIds = role === 'editor' ? cleanZoneIds(data.zoneIds || data.zones, this.buildZones) : [];
+      const island = role === 'editor' && !zoneIds.length ? cleanIsland(data.island) : null;
       this.lobby.delete(id);
-      this.admitted.set(id, { role, island });
-      this.seats.set(id, { role, island });
+      this.admitted.set(id, { role, island, zoneIds });
+      this.seats.set(id, { role, island, zoneIds });
       if (this.hostId) this.sendTo(this.hostId, { type: 'lobby.leave', id });
       this.sendTo(id, {
         type: 'admitted',
         role,
         island,
+        zoneIds,
+        zones: this.zoneList(),
         peers: Array.from(this.presence.values()),
       });
       // Ask the host to ship this newly-admitted peer a full snapshot (world +
@@ -912,11 +1074,13 @@ export default class TinyWorldParty {
       const seat = this.admitted.get(id);
       if (!seat) return;
       const role = cleanRole(data.role);
-      const island = role === 'editor' ? cleanIsland(data.island) : null;
+      const zoneIds = role === 'editor' ? cleanZoneIds(data.zoneIds || data.zones, this.buildZones) : [];
+      const island = role === 'editor' && !zoneIds.length ? cleanIsland(data.island) : null;
       seat.role = role;
       seat.island = island;
-      this.seats.set(id, { role, island });
-      this.sendTo(id, { type: 'role', role, island, admitted: true });
+      seat.zoneIds = zoneIds;
+      this.seats.set(id, { role, island, zoneIds });
+      this.sendTo(id, { type: 'role', role, island, zoneIds, zones: this.zoneList(), admitted: true });
       return;
     }
   }
@@ -958,8 +1122,17 @@ export default class TinyWorldParty {
         const seat = this.admitted.get(next);
         seat.role = 'host';
         seat.island = null;
+        seat.zoneIds = [];
         this.hostId = next;
-        this.sendTo(next, { type: 'role', role: 'host', island: null, admitted: true, pending: this.pendingList() });
+        this.sendTo(next, {
+          type: 'role',
+          role: 'host',
+          island: null,
+          zoneIds: [],
+          zones: this.zoneList(),
+          admitted: true,
+          pending: this.pendingList(),
+        });
         this.sendTo(next, { type: 'lobby.list', pending: this.pendingList() });
         return;
       }
@@ -968,9 +1141,17 @@ export default class TinyWorldParty {
       for (const id of this.lobby.keys()) { oldest = id; break; }
       if (oldest) {
         this.lobby.delete(oldest);
-        this.admitted.set(oldest, { role: 'host', island: null });
+        this.admitted.set(oldest, { role: 'host', island: null, zoneIds: [] });
         this.hostId = oldest;
-        this.sendTo(oldest, { type: 'role', role: 'host', island: null, admitted: true, pending: this.pendingList() });
+        this.sendTo(oldest, {
+          type: 'role',
+          role: 'host',
+          island: null,
+          zoneIds: [],
+          zones: this.zoneList(),
+          admitted: true,
+          pending: this.pendingList(),
+        });
         this.sendTo(oldest, { type: 'lobby.list', pending: this.pendingList() });
       }
     }
@@ -1593,6 +1774,7 @@ export default class TinyWorldParty {
 export {
   cleanText, cleanNumber, cleanVec3, cleanCursor, cleanSelection,
   cleanPresence, cleanAvatar, cleanCell, cleanCellSet, cleanRole, cleanIsland,
+  cleanBuildZone, cleanBuildZones, cleanZoneIds, inBuildZones, inEditorScope,
   clampFloors, inIsland, takeToken, safeJson, RATE_LIMITS, MAX_CELL_COORD, MAX_FLOORS,
   // Worlds MMO pure helpers (authoritative game rules).
   cleanHarvestAction, actionDurationMs, isAdjacentStep, withinReach, taxSplit,

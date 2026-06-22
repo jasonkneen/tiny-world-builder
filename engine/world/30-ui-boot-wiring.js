@@ -2685,16 +2685,14 @@ syncTinyworldOwnerToolControls();
     // -- view modes --
     if (viewBtn && viewPopup) {
       function paintViewActive() {
-        const mode = (typeof cameraMode !== 'undefined') ? cameraMode : 'ortho';
-        // 'topdown' is a virtual mode (ortho + polar≈0). Detect it so the
-        // bird's-eye row stays highlighted instead of the Isometric row.
-        const isTopdown = (mode === 'ortho') && (typeof polar !== 'undefined') && polar < 0.05;
+        const mode = (typeof cameraMode !== 'undefined') ? cameraMode : 'perspective';
         viewPopup.querySelectorAll('.view-option').forEach(opt => {
+          if (opt.hidden) {
+            opt.classList.remove('active');
+            return;
+          }
           const v = opt.getAttribute('data-view');
-          let active = (v === mode);
-          if (v === 'topdown') active = isTopdown;
-          if (v === 'ortho')   active = (mode === 'ortho' && !isTopdown);
-          opt.classList.toggle('active', active);
+          opt.classList.toggle('active', v === mode);
         });
       }
       viewBtn.addEventListener('click', e => {
@@ -2706,6 +2704,7 @@ syncTinyworldOwnerToolControls();
         e.stopPropagation();
         const opt = e.target.closest('.view-option');
         if (!opt) return;
+        if (opt.hidden) return;
         const target = opt.getAttribute('data-view');
         if (typeof setCameraMode === 'function') {
           try { setCameraMode(target); } catch (err) { console.warn('[view] setCameraMode failed:', err); }
@@ -2716,15 +2715,42 @@ syncTinyworldOwnerToolControls();
     }
 
     // -- time / weather --
-    const TOD_GMT_SYNC_INTERVAL_MS = 10000;
+    const TOD_UK_SYNC_INTERVAL_MS = 10000;
+    const UK_TIME_ZONE = 'Europe/London';
     const SEASON_LS = 'tinyworld:season.v1';
     const WEATHER_LS = 'tinyworld:weather.v1';
     function clampTodMinutes(min) {
       return Math.max(0, Math.min(1439.999, Number(min) || 0));
     }
-    function gmtTodMinutes(now) {
+    function ukClockParts(now) {
       const d = now instanceof Date ? now : new Date();
-      return d.getUTCHours() * 60 + d.getUTCMinutes() + (d.getUTCSeconds() / 60);
+      try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: UK_TIME_ZONE,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }).formatToParts(d).reduce((acc, part) => {
+          acc[part.type] = part.value;
+          return acc;
+        }, {});
+        return {
+          hour: (Number(parts.hour) || 0) % 24,
+          minute: Number(parts.minute) || 0,
+          second: Number(parts.second) || 0,
+        };
+      } catch (_) {
+        return {
+          hour: d.getHours(),
+          minute: d.getMinutes(),
+          second: d.getSeconds(),
+        };
+      }
+    }
+    function ukTodMinutes(now) {
+      const parts = ukClockParts(now);
+      return parts.hour * 60 + parts.minute + (parts.second / 60);
     }
     function todClassFromMinutes(min) {
       if (min < 360 || min >= 1260) return 'tod-night'; // 21:00 - 06:00
@@ -2738,9 +2764,7 @@ syncTinyworldOwnerToolControls();
     function applyUiThemeMode() {
       const mode = ['auto', 'light', 'dark'].includes(uiThemeMode) ? uiThemeMode : 'auto';
       const afterHours = isUiAfterHours(currentTodMinutes);
-      // Light mode intentionally still darkens after hours: white/grey chrome
-      // disappears against bright night clouds and star maps.
-      const dark = mode === 'dark' || afterHours;
+      const dark = mode === 'dark' || (mode === 'auto' && afterHours);
       document.body.dataset.uiThemeMode = mode;
       document.body.classList.toggle('ui-theme-dark', dark);
       document.body.classList.toggle('ui-theme-light', !dark);
@@ -2756,7 +2780,7 @@ syncTinyworldOwnerToolControls();
       if (typeof updateAllBuildingWindowLights === 'function') updateAllBuildingWindowLights();
       if (typeof requestMinimapRepaint === 'function') requestMinimapRepaint();
     }
-    window.__tinyworldGmtTodMinutes = gmtTodMinutes;
+    window.__tinyworldUkTodMinutes = ukTodMinutes;
     function applySeason(seasonV) {
       document.body.classList.remove('season-spring','season-summer','season-autumn','season-winter');
       const normalized = seasonV === 'fall' ? 'autumn' : seasonV;
@@ -2954,7 +2978,7 @@ syncTinyworldOwnerToolControls();
     }
 
     let repaintTimeWeatherPopup = function () {};
-    let todMinutes = gmtTodMinutes();
+    let todMinutes = ukTodMinutes();
     let season = 'summer';
     let weather = 'clear';
     try {
@@ -2966,13 +2990,13 @@ syncTinyworldOwnerToolControls();
     applyTod(todMinutes);
     applySeason(season);
     applyWeather(weather);
-    function syncTodToGmt() {
-      todMinutes = gmtTodMinutes();
+    function syncTodToUkTime() {
+      todMinutes = ukTodMinutes();
       applyTod(todMinutes);
       repaintTimeWeatherPopup();
     }
-    window.__tinyworldSyncTodToGmt = syncTodToGmt;
-    setInterval(syncTodToGmt, TOD_GMT_SYNC_INTERVAL_MS);
+    window.__tinyworldSyncTodToUkTime = syncTodToUkTime;
+    setInterval(syncTodToUkTime, TOD_UK_SYNC_INTERVAL_MS);
     const uiThemeSelect = document.getElementById('ui-theme-mode');
     if (uiThemeSelect) {
       uiThemeSelect.value = ['auto', 'light', 'dark'].includes(uiThemeMode) ? uiThemeMode : 'auto';
@@ -3103,7 +3127,7 @@ syncTinyworldOwnerToolControls();
       }
       function paintReadout() {
         if (range) range.value = String(Math.floor(clampTodMinutes(todMinutes)));
-        if (readout) readout.textContent = formatTime(todMinutes) + ' GMT';
+        if (readout) readout.textContent = formatTime(todMinutes) + ' BST';
         if (intensityRange) intensityRange.value = String(Math.round(weatherIntensity * 100));
         if (intensityReadout) intensityReadout.textContent = Math.round(weatherIntensity * 100) + '%';
         if (splashesRange) splashesRange.value = String(Math.round(weatherSplashIntensity * 100));
@@ -3113,7 +3137,7 @@ syncTinyworldOwnerToolControls();
       if (range) {
         range.disabled = true;
         range.setAttribute('aria-readonly', 'true');
-        range.setAttribute('title', 'Synced live to GMT');
+        range.setAttribute('title', 'Synced live to UK/BST time');
       }
       paintPills(); paintReadout();
 
@@ -3125,7 +3149,7 @@ syncTinyworldOwnerToolControls();
       timePopup.addEventListener('click', e => e.stopPropagation());
       if (range) {
         range.addEventListener('input', () => {
-          syncTodToGmt();
+          syncTodToUkTime();
         });
       }
       if (seasonPills) {
@@ -3670,6 +3694,7 @@ syncTinyworldOwnerToolControls();
       if (!url || !result || !result.id) return url;
       const u = new URL(url);
       u.searchParams.set('party', result.id);
+      u.searchParams.set('observe', '1');
       return u.href;
     }
 
@@ -3806,7 +3831,7 @@ syncTinyworldOwnerToolControls();
           return;
         }
         input.value = shared.url;
-        status.textContent = 'Anyone with this link can join this world build.';
+        status.textContent = 'Anyone with this link can observe. The host can grant build access from the room.';
         copyBtn.disabled = false;
         openBtn.disabled = false;
         copyBtn.addEventListener('click', async () => {
@@ -4041,8 +4066,8 @@ syncTinyworldOwnerToolControls();
         }
       } catch (_) {}
       // Top-bar buttons
-      items.push({ group: 'Camera', label: 'Toggle perspective', hint: 'orbit vs orthographic', kbd: 'P', run: topBtnAction('persp') });
-      items.push({ group: 'Camera', label: 'Pick camera view…', hint: 'top-down / perspective / first-person', run: topBtnAction('view-modes') });
+      items.push({ group: 'Camera', label: 'Switch to perspective', hint: 'orbit camera', kbd: 'P', run: topBtnAction('persp') });
+      items.push({ group: 'Camera', label: 'Pick camera view…', hint: 'perspective / third-person / first-person', run: topBtnAction('view-modes') });
       items.push({ group: 'Camera', label: 'Center on home grid', hint: 'frame the home board', kbd: 'H', run: topBtnAction('home') });
       // Terrain — raise/lower the hovered cell
       items.push({ group: 'Terrain', label: 'Raise terrain at cursor', hint: 'terrainFloors +1 (max 8)', kbd: 'R', run: () => {

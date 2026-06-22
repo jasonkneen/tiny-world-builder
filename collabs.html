@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Browse publicly viewable Tiny World Builder collab builds and join as an observer." />
+<title>Public collab worlds - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/docs">Docs</a>
+      <a href="/roadmap">Roadmap</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Public collab worlds</h1>
+        <p>Watch active shared builds as an observer. Hosts can grant build access from inside their room.</p>
+      </div>
+    </section>
+
+    <section class="collab-worlds-section" aria-labelledby="collab-worlds-title">
+      <div class="section-head">
+        <h2 id="collab-worlds-title">More worlds</h2>
+        <p id="collab-worlds-summary">Loading active public rooms...</p>
+      </div>
+      <div class="collab-worlds-list" id="collab-worlds-list" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script src="scripts/collabs-page.js" defer></script>
+</body>
+</html>

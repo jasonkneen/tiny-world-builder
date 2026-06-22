@@ -139,7 +139,7 @@
 
     // ---- time & weather popup ----
     'time.title': 'Time & weather',
-    'time.timeOfDay': 'Time of day (GMT)',
+    'time.timeOfDay': 'Time of day (BST)',
     'time.season': 'Season',
     'time.weather': 'Weather',
     'time.intensity': 'Weather intensity',

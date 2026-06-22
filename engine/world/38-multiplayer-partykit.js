@@ -14,6 +14,9 @@
     const peerRoot = new THREE.Group();
     peerRoot.name = 'multiplayer-peers';
     xrWorldRoot.add(peerRoot);
+    const zoneRoot = new THREE.Group();
+    zoneRoot.name = 'multiplayer-build-zones';
+    xrWorldRoot.add(zoneRoot);
     let socket = null;
     let reconnectTimer = null;
     let reconnectDelay = 800;
@@ -45,6 +48,12 @@
     const flightGhosts = new Map();
     // Host-side flight broadcast self-throttle (~15/s). active:false bypasses it.
     let lastFlightSent = 0;
+    // Public collab registry heartbeat. Only the host publishes; the Netlify
+    // function expires stale rooms, so a hard refresh/offline host self-cleans.
+    const COLLAB_REGISTRY_MS = 30000;
+    let collabRegistryTimer = null;
+    let lastCollabRegistrySent = 0;
+    let lastCollabRegistryRttMs = null;
 
     // -------- lobby / roles / moderation state --------
     // SAFETY INVARIANT: default to ADMITTED. An un-upgraded server sends no
@@ -54,13 +63,19 @@
     let isHost = false;
     let myRole = null;            // null => un-upgraded/host-equivalent full rights.
     let myIsland = null;          // editor scope bounds { minX, maxX, minZ, maxZ }.
+    let myZoneIds = [];           // editor scope build-zone ids; supersedes myIsland when non-empty.
     let declined = false;         // declined/kicked => stop reconnecting.
     // Host-only: per-peer role tracking. Non-host clients have no wire path to
     // learn other peers' roles (presence is role-free by protocol), so only the
     // host renders role badges + the moderation menu from this map.
     const roleById = new Map();
+    const zoneIdsById = new Map();
+    const buildZones = new Map();
+    const BUILD_ZONE_PALETTE = ['#36d576', '#4d8dff', '#ffbe55', '#d86bff', '#ff6b76', '#5ed6d0'];
     let lobbyOverlayEl = null;
     let admitPanelEl = null;
+    let zoneToggleEl = null;
+    let zonePanelEl = null;
     const pendingLobby = new Map();   // id -> { id, name }
     const toastedLobby = new Set();   // ids we've already toasted for
     let moderationMenuEl = null;
@@ -89,6 +104,28 @@
       return x >= island.minX && x <= island.maxX && z >= island.minZ && z <= island.maxZ;
     }
 
+    function inBuildZones(zoneIds, x, z) {
+      if (!Array.isArray(zoneIds) || !zoneIds.length) return false;
+      for (const id of zoneIds) {
+        const zone = buildZones.get(id);
+        if (zone && zone.active !== false && inIsland(zone, x, z)) return true;
+      }
+      return false;
+    }
+
+    function cleanZoneIdsForClient(value) {
+      if (!Array.isArray(value)) return [];
+      const out = [];
+      const seen = new Set();
+      value.forEach(raw => {
+        const id = String(raw || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+        if (!id || seen.has(id) || !buildZones.has(id)) return;
+        seen.add(id);
+        out.push(id);
+      });
+      return out;
+    }
+
     // Single source of truth for "may this client edit cell (x,z)?". Used by
     // both sendCellSnapshot (broadcast gate) and applyTool (local-mutation
     // gate, via window.__tinyworldMultiplayer). DENY-on-explicit-restriction:
@@ -96,15 +133,22 @@
     function canEdit(x, z) {
       if (!admitted) return false;
       if (myRole === 'viewer' || myRole === 'player') return false;
-      if (myRole === 'editor') return inIsland(myIsland, Math.round(Number(x)), Math.round(Number(z)));
+      if (myRole === 'editor') {
+        const wx = Math.round(Number(x));
+        const wz = Math.round(Number(z));
+        if (!Number.isFinite(wx) || !Number.isFinite(wz)) return false;
+        if (myZoneIds.length) return inBuildZones(myZoneIds, wx, wz);
+        return inIsland(myIsland, wx, wz);
+      }
       return true;
     }
 
     // May this client interact with placed things (e.g. click a plane to fly)?
     // Player can; viewer cannot. Null/host/editor can.
-    function canInteract() {
+    function canInteract(x, z) {
       if (!admitted) return false;
       if (myRole === 'viewer') return false;
+      if (myRole === 'editor' && Number.isFinite(Number(x)) && Number.isFinite(Number(z))) return canEdit(x, z);
       return true;
     }
 
@@ -273,6 +317,100 @@
       };
     }
 
+    function collabWorldName() {
+      const label = document.getElementById('world-menu-label');
+      const name = label ? String(label.textContent || '').trim() : '';
+      if (name && name !== 'My world') return name.slice(0, 100);
+      return shareId ? ('Shared build ' + shareId.slice(0, 8)) : ('Shared build ' + roomId.slice(0, 8));
+    }
+
+    function collabLocationLabel() {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) return tz.slice(0, 80);
+      } catch (_) {}
+      return (navigator.language || 'Unknown').slice(0, 80);
+    }
+
+    function collabNetworkQuality(rttMs) {
+      if (Number.isFinite(Number(rttMs))) {
+        if (rttMs < 180) return 'good';
+        if (rttMs < 500) return 'fair';
+        return 'poor';
+      }
+      const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      const type = c && String(c.effectiveType || '').toLowerCase();
+      if (type === '4g') return 'good';
+      if (type === '3g') return 'fair';
+      if (type) return 'poor';
+      return 'unknown';
+    }
+
+    function collabCounts() {
+      let observers = 0;
+      let players = 0;
+      let editors = 0;
+      peers.forEach((_, id) => {
+        const role = roleById.get(id) || 'viewer';
+        if (role === 'editor') editors++;
+        else if (role === 'player') players++;
+        else observers++;
+      });
+      return { observerCount: observers, playerCount: players, editorCount: editors };
+    }
+
+    function stopCollabRegistry() {
+      if (collabRegistryTimer) clearInterval(collabRegistryTimer);
+      collabRegistryTimer = null;
+    }
+
+    async function publishCollabRegistry(force = false) {
+      if (!connected || !admitted || !isHost) {
+        stopCollabRegistry();
+        return;
+      }
+      const now = Date.now();
+      if (!force && now - lastCollabRegistrySent < COLLAB_REGISTRY_MS - 1000) return;
+      lastCollabRegistrySent = now;
+      const counts = collabCounts();
+      const started = performance && typeof performance.now === 'function' ? performance.now() : Date.now();
+      try {
+        const res = await fetch('/api/collabs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          credentials: 'same-origin',
+          keepalive: true,
+          body: JSON.stringify({
+            roomId,
+            shareId,
+            partyHost: multiplayerHost(),
+            name: collabWorldName(),
+            hostName: localName(),
+            location: collabLocationLabel(),
+            observerCount: counts.observerCount,
+            playerCount: counts.playerCount,
+            editorCount: counts.editorCount,
+            networkQuality: collabNetworkQuality(lastCollabRegistryRttMs),
+            rttMs: lastCollabRegistryRttMs,
+          }),
+        });
+        if (!res || !res.ok) return;
+        const ended = performance && typeof performance.now === 'function' ? performance.now() : Date.now();
+        lastCollabRegistryRttMs = Math.round(Math.max(0, ended - started));
+      } catch (_) {}
+    }
+
+    function updateCollabRegistry(force = false) {
+      if (!connected || !admitted || !isHost) {
+        stopCollabRegistry();
+        return;
+      }
+      if (!collabRegistryTimer) {
+        collabRegistryTimer = setInterval(() => publishCollabRegistry(false), COLLAB_REGISTRY_MS);
+      }
+      publishCollabRegistry(force);
+    }
+
     function schedulePresence(force = false) {
       if (presenceTimer) return;
       const wait = force ? 0 : Math.max(0, 90 - (Date.now() - lastPresenceSent));
@@ -337,6 +475,8 @@
         close: ['M6 6l12 12 M18 6L6 18'],
         // gear / dots (menu)
         menu: ['M5 12h.01 M12 12h.01 M19 12h.01'],
+        // rectangle/build zone
+        zone: ['M4 5h16v14H4z M8 5v14 M16 5v14 M4 10h16 M4 15h16'],
         // speech bubble (chat)
         chat: ['M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'],
         // paper plane (send)
@@ -392,7 +532,7 @@
           id,
           name: (peer.presence && peer.presence.name) || 'Builder',
           color: peer.color,
-          role: isHost ? (roleById.get(id) || null) : null,
+          role: isHost ? (roleById.get(id) || 'viewer') : null,
         });
       });
       const count = document.createElement('span');
@@ -409,7 +549,8 @@
         a.style.background = /^#[0-9a-fA-F]{3,8}$/.test(String(p.color)) ? p.color : '#3c82f7';
         a.textContent = avatarInitials(p.name);
         const roleSuffix = p.role ? ' — ' + roleLabel(p.role) : '';
-        a.title = (p.self ? p.name + ' (you)' : p.name) + roleSuffix;
+        const zoneSuffix = isHost && !p.self && p.role === 'editor' ? ' — ' + zoneSummary(zoneIdsById.get(p.id)) : '';
+        a.title = (p.self ? p.name + ' (you)' : p.name) + roleSuffix + zoneSuffix;
         if (p.role) {
           const badge = document.createElement('span');
           badge.className = 'mp-role-badge mp-role-' + p.role;
@@ -446,12 +587,321 @@
       return { minX: 0, maxX: g - 1, minZ: 0, maxZ: g - 1 };
     }
 
+    function sanitizeBuildZone(raw, index = 0) {
+      if (!raw || typeof raw !== 'object') return null;
+      const minX = Math.round(Number(raw.minX));
+      const maxX = Math.round(Number(raw.maxX));
+      const minZ = Math.round(Number(raw.minZ));
+      const maxZ = Math.round(Number(raw.maxZ));
+      if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) return null;
+      if (maxX < minX || maxZ < minZ) return null;
+      const id = String(raw.id || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+      if (!id) return null;
+      const label = String(raw.label || '').trim().slice(0, 32) || ('Zone ' + (index + 1));
+      const color = /^#[0-9a-fA-F]{6}$/.test(String(raw.color || ''))
+        ? String(raw.color)
+        : BUILD_ZONE_PALETTE[index % BUILD_ZONE_PALETTE.length];
+      return { id, label, active: raw.active !== false, color, minX, maxX, minZ, maxZ };
+    }
+
+    function buildZoneList() {
+      return Array.from(buildZones.values());
+    }
+
+    function zoneSummary(zoneIds) {
+      const ids = Array.isArray(zoneIds) ? zoneIds : [];
+      const names = ids.map(id => buildZones.get(id)).filter(Boolean).map(zone => zone.label);
+      if (!names.length) return 'No zones';
+      if (names.length <= 2) return names.join(', ');
+      return names.slice(0, 2).join(', ') + ' +' + (names.length - 2);
+    }
+
+    function selectedBuildZoneBounds() {
+      const sel = window.__tinyworldSelection;
+      if (!sel || !sel.cells || !sel.cells.size) return null;
+      const coords = sel.worldCoords ? sel.worldCoords() : [];
+      if (!coords || !coords.length) return null;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      coords.forEach(cell => {
+        const x = Math.round(Number(cell.x));
+        const z = Math.round(Number(cell.z));
+        if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
+      });
+      if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) return null;
+      return { minX, maxX, minZ, maxZ };
+    }
+
+    function sendBuildZones() {
+      if (!isHost) return;
+      sendMessage({ type: 'zones.set', zones: buildZoneList() });
+      updateCollabRegistry(true);
+    }
+
+    function applyBuildZones(list) {
+      buildZones.clear();
+      if (Array.isArray(list)) {
+        list.slice(0, 32).forEach((raw, index) => {
+          const zone = sanitizeBuildZone(raw, buildZones.size);
+          if (!zone || buildZones.has(zone.id)) return;
+          buildZones.set(zone.id, zone);
+        });
+      }
+      myZoneIds = cleanZoneIdsForClient(myZoneIds);
+      zoneIdsById.forEach((ids, id) => zoneIdsById.set(id, cleanZoneIdsForClient(ids)));
+      renderBuildZones();
+      renderAdmitPanel();
+      renderZonePanel();
+      renderRoster();
+    }
+
+    function createBuildZoneFromSelection() {
+      if (!isHost) return;
+      const bounds = selectedBuildZoneBounds();
+      if (!bounds) {
+        showToast('Select cells first, then add a build zone');
+        return;
+      }
+      const id = 'zone_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      const zone = Object.assign({}, bounds, {
+        id,
+        label: 'Zone ' + (buildZones.size + 1),
+        active: true,
+        color: BUILD_ZONE_PALETTE[buildZones.size % BUILD_ZONE_PALETTE.length],
+      });
+      buildZones.set(id, zone);
+      renderBuildZones();
+      renderZonePanel();
+      sendBuildZones();
+    }
+
+    function makeZoneLabelSprite(label, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 72;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '800 23px system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+      const text = String(label || 'Zone').slice(0, 28);
+      const width = Math.min(232, Math.max(84, ctx.measureText(text).width + 34));
+      ctx.fillStyle = 'rgba(11, 18, 32, 0.82)';
+      roundRect(ctx, (256 - width) / 2, 14, width, 40, 12);
+      ctx.fill();
+      ctx.strokeStyle = color || '#36d576';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 128, 35);
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.8, 0.5, 1);
+      sprite.renderOrder = 1510;
+      return sprite;
+    }
+
+    function renderBuildZones() {
+      clearGroup(zoneRoot);
+      buildZoneList().forEach(zone => {
+        if (zone.active === false) return;
+        const corners = [
+          { x: zone.minX, z: zone.minZ },
+          { x: zone.maxX, z: zone.minZ },
+          { x: zone.maxX, z: zone.maxZ },
+          { x: zone.minX, z: zone.maxZ },
+        ];
+        const points = corners.map(cell => tilePos(cell.x, cell.z));
+        const ys = corners.map(cell => cellY(cell.x, cell.z)).filter(Number.isFinite);
+        const y = (ys.length ? Math.max.apply(Math, ys) : 0.05) + 0.06;
+        const minX = Math.min.apply(Math, points.map(p => p.x)) - 0.5;
+        const maxX = Math.max.apply(Math, points.map(p => p.x)) + 0.5;
+        const minZ = Math.min.apply(Math, points.map(p => p.z)) - 0.5;
+        const maxZ = Math.max.apply(Math, points.map(p => p.z)) + 0.5;
+        const color = cssColorToHex(zone.color);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92, depthTest: false, depthWrite: false });
+        const fillMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.08, depthTest: false, depthWrite: false });
+        const group = new THREE.Group();
+        group.name = 'build-zone-' + zone.id;
+        const w = Math.max(0.08, maxX - minX);
+        const d = Math.max(0.08, maxZ - minZ);
+        const fill = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), fillMat);
+        fill.position.set((minX + maxX) / 2, y - 0.01, (minZ + maxZ) / 2);
+        fill.renderOrder = 1388;
+        group.add(fill);
+        const north = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, 0.06), mat);
+        const south = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, 0.06), mat);
+        const west = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.055, d), mat);
+        const east = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.055, d), mat);
+        north.position.set((minX + maxX) / 2, y, minZ);
+        south.position.set((minX + maxX) / 2, y, maxZ);
+        west.position.set(minX, y, (minZ + maxZ) / 2);
+        east.position.set(maxX, y, (minZ + maxZ) / 2);
+        [north, south, west, east].forEach(edge => { edge.renderOrder = 1395; group.add(edge); });
+        const label = makeZoneLabelSprite(zone.label, zone.color);
+        label.position.set((minX + maxX) / 2, y + 0.48, (minZ + maxZ) / 2);
+        group.add(label);
+        zoneRoot.add(group);
+      });
+    }
+
+    function ensureZoneToggle() {
+      if (zoneToggleEl) return zoneToggleEl;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mp-zone-toggle';
+      btn.dataset.posType = 'neutral';
+      btn.setAttribute('aria-label', 'Build zones');
+      btn.appendChild(svgGlyph('zone'));
+      const label = document.createElement('span');
+      label.textContent = 'Zones';
+      btn.appendChild(label);
+      btn.addEventListener('click', () => {
+        const panel = ensureZonePanel();
+        panel.classList.toggle('visible');
+        btn.classList.toggle('is-open', panel.classList.contains('visible'));
+        renderZonePanel();
+      });
+      document.body.appendChild(btn);
+      zoneToggleEl = btn;
+      return btn;
+    }
+
+    function updateZoneLauncher() {
+      const btn = ensureZoneToggle();
+      const show = connected && admitted && isHost;
+      btn.classList.toggle('visible', !!show);
+      if (!show && zonePanelEl) zonePanelEl.classList.remove('visible');
+      if (!show) btn.classList.remove('is-open');
+      if (show) renderZonePanel();
+    }
+
+    function ensureZonePanel() {
+      if (zonePanelEl) return zonePanelEl;
+      zonePanelEl = document.createElement('div');
+      zonePanelEl.className = 'mp-zone-panel';
+      const head = document.createElement('div');
+      head.className = 'mp-zone-head';
+      const title = document.createElement('span');
+      title.className = 'mp-zone-title';
+      title.textContent = 'Build zones';
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'mp-admit-close';
+      close.setAttribute('aria-label', 'Hide build zones');
+      close.appendChild(svgGlyph('close'));
+      close.addEventListener('click', () => {
+        zonePanelEl.classList.remove('visible');
+        if (zoneToggleEl) zoneToggleEl.classList.remove('is-open');
+      });
+      head.appendChild(title);
+      head.appendChild(close);
+      const actions = document.createElement('div');
+      actions.className = 'mp-zone-actions';
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'mp-btn mp-zone-add';
+      add.appendChild(svgGlyph('zone'));
+      const addLabel = document.createElement('span');
+      addLabel.textContent = 'Add selected area';
+      add.appendChild(addLabel);
+      add.addEventListener('click', createBuildZoneFromSelection);
+      actions.appendChild(add);
+      const list = document.createElement('div');
+      list.className = 'mp-zone-list';
+      zonePanelEl.appendChild(head);
+      zonePanelEl.appendChild(actions);
+      zonePanelEl.appendChild(list);
+      document.body.appendChild(zonePanelEl);
+      return zonePanelEl;
+    }
+
+    function renderZonePanel() {
+      if (!isHost) {
+        if (zonePanelEl) zonePanelEl.classList.remove('visible');
+        if (zoneToggleEl) zoneToggleEl.classList.remove('is-open');
+        return;
+      }
+      const panel = ensureZonePanel();
+      const add = panel.querySelector('.mp-zone-add');
+      if (add) add.disabled = !selectedBuildZoneBounds();
+      const list = panel.querySelector('.mp-zone-list');
+      if (!list) return;
+      list.textContent = '';
+      const zones = buildZoneList();
+      if (!zones.length) {
+        const empty = document.createElement('div');
+        empty.className = 'mp-zone-empty';
+        empty.textContent = 'Select cells, then add a build zone.';
+        list.appendChild(empty);
+        return;
+      }
+      zones.forEach(zone => {
+        const row = document.createElement('div');
+        row.className = 'mp-zone-row';
+        row.classList.toggle('is-off', zone.active === false);
+        const top = document.createElement('div');
+        top.className = 'mp-zone-rowtop';
+        const active = document.createElement('input');
+        active.type = 'checkbox';
+        active.checked = zone.active !== false;
+        active.addEventListener('change', () => {
+          zone.active = active.checked;
+          renderBuildZones();
+          sendBuildZones();
+          renderZonePanel();
+        });
+        const dot = document.createElement('span');
+        dot.className = 'mp-zone-dot';
+        dot.style.background = zone.color;
+        const label = document.createElement('input');
+        label.className = 'mp-zone-label';
+        label.type = 'text';
+        label.value = zone.label;
+        label.maxLength = 32;
+        label.addEventListener('change', () => {
+          zone.label = String(label.value || '').trim().slice(0, 32) || zone.label;
+          renderBuildZones();
+          sendBuildZones();
+          renderZonePanel();
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'mp-zone-delete';
+        del.setAttribute('aria-label', 'Delete zone');
+        del.appendChild(svgGlyph('close'));
+        del.addEventListener('click', () => {
+          buildZones.delete(zone.id);
+          zoneIdsById.forEach((ids, id) => zoneIdsById.set(id, cleanZoneIdsForClient(ids)));
+          renderBuildZones();
+          sendBuildZones();
+          renderZonePanel();
+          renderAdmitPanel();
+        });
+        top.appendChild(active);
+        top.appendChild(dot);
+        top.appendChild(label);
+        top.appendChild(del);
+        const meta = document.createElement('div');
+        meta.className = 'mp-zone-meta';
+        meta.textContent = zone.minX + ',' + zone.minZ + ' to ' + zone.maxX + ',' + zone.maxZ;
+        row.appendChild(top);
+        row.appendChild(meta);
+        list.appendChild(row);
+      });
+    }
+
     // Segmented role picker (Viewer / Editor / Player) in the app style.
     // Returns { el, value() }. Default selection = 'viewer'.
     function makeRolePicker(initial) {
       const seg = document.createElement('div');
       seg.className = 'mp-segmented';
       let value = initial && /^(viewer|editor|player)$/.test(initial) ? initial : 'viewer';
+      const listeners = [];
       const options = [
         { id: 'viewer', label: 'Viewer' },
         { id: 'editor', label: 'Editor' },
@@ -469,11 +919,52 @@
         b.addEventListener('click', () => {
           value = opt.id;
           buttons.forEach((btn, id) => btn.classList.toggle('is-active', id === value));
+          listeners.forEach(fn => fn(value));
         });
         buttons.set(opt.id, b);
         seg.appendChild(b);
       });
-      return { el: seg, value: () => value };
+      return {
+        el: seg,
+        value: () => value,
+        onChange: (fn) => { if (typeof fn === 'function') listeners.push(fn); },
+      };
+    }
+
+    function makeZonePicker(initialIds) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mp-zone-picker';
+      const current = new Set(Array.isArray(initialIds) ? initialIds : []);
+      const zones = buildZoneList();
+      if (!zones.length) {
+        const empty = document.createElement('div');
+        empty.className = 'mp-zone-empty';
+        empty.textContent = 'No build zones';
+        wrap.appendChild(empty);
+        return { el: wrap, value: () => [] };
+      }
+      zones.forEach(zone => {
+        const label = document.createElement('label');
+        label.className = 'mp-zone-choice';
+        if (zone.active === false) label.classList.add('is-off');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = zone.id;
+        input.checked = current.has(zone.id);
+        const dot = document.createElement('span');
+        dot.className = 'mp-zone-dot';
+        dot.style.background = zone.color;
+        const text = document.createElement('span');
+        text.textContent = zone.label + (zone.active === false ? ' (off)' : '');
+        label.appendChild(input);
+        label.appendChild(dot);
+        label.appendChild(text);
+        wrap.appendChild(label);
+      });
+      return {
+        el: wrap,
+        value: () => Array.from(wrap.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value),
+      };
     }
 
     // -------- lobby-wait overlay (shown to an un-admitted self) --------
@@ -561,6 +1052,11 @@
         nameEl.className = 'mp-admit-name';
         nameEl.textContent = entry.name || 'Guest';
         const picker = makeRolePicker('viewer');
+        const zonePicker = makeZonePicker([]);
+        zonePicker.el.classList.toggle('visible', picker.value() === 'editor');
+        picker.onChange((role) => {
+          zonePicker.el.classList.toggle('visible', role === 'editor');
+        });
         const actions = document.createElement('div');
         actions.className = 'mp-admit-actions';
         const admitBtn = document.createElement('button');
@@ -572,11 +1068,15 @@
         admitBtn.appendChild(admitLabel);
         admitBtn.addEventListener('click', () => {
           const role = picker.value();
-          const island = role === 'editor' ? homeIslandBounds() : null;
-          sendMessage({ type: 'admit', id: entry.id, role, island });
+          const zoneIds = role === 'editor' ? zonePicker.value() : [];
+          const island = role === 'editor' && !zoneIds.length && buildZones.size === 0 ? homeIslandBounds() : null;
+          sendMessage({ type: 'admit', id: entry.id, role, island, zoneIds });
           roleById.set(entry.id, role);
+          zoneIdsById.set(entry.id, zoneIds);
           pendingLobby.delete(entry.id);
           renderAdmitPanel();
+          renderRoster();
+          updateCollabRegistry(true);
         });
         const declineBtn = document.createElement('button');
         declineBtn.type = 'button';
@@ -598,6 +1098,7 @@
         top.appendChild(nameEl);
         row.appendChild(top);
         row.appendChild(picker.el);
+        row.appendChild(zonePicker.el);
         row.appendChild(actions);
         list.appendChild(row);
       });
@@ -620,6 +1121,12 @@
       menu.appendChild(title);
       const picker = makeRolePicker(roleById.get(id) || 'viewer');
       menu.appendChild(picker.el);
+      const zonePicker = makeZonePicker(zoneIdsById.get(id) || []);
+      zonePicker.el.classList.toggle('visible', picker.value() === 'editor');
+      picker.onChange((role) => {
+        zonePicker.el.classList.toggle('visible', role === 'editor');
+      });
+      menu.appendChild(zonePicker.el);
       const apply = document.createElement('button');
       apply.type = 'button';
       apply.className = 'mp-btn mp-btn-admit';
@@ -628,11 +1135,14 @@
       apply.appendChild(applyLabel);
       apply.addEventListener('click', () => {
         const role = picker.value();
-        const island = role === 'editor' ? homeIslandBounds() : null;
-        sendMessage({ type: 'setRole', id, role, island });
+        const zoneIds = role === 'editor' ? zonePicker.value() : [];
+        const island = role === 'editor' && !zoneIds.length && buildZones.size === 0 ? homeIslandBounds() : null;
+        sendMessage({ type: 'setRole', id, role, island, zoneIds });
         roleById.set(id, role);
+        zoneIdsById.set(id, zoneIds);
         closeModerationMenu();
         renderRoster();
+        updateCollabRegistry(true);
       });
       const kick = document.createElement('button');
       kick.type = 'button';
@@ -643,7 +1153,9 @@
       kick.addEventListener('click', () => {
         sendMessage({ type: 'kick', id });
         roleById.delete(id);
+        zoneIdsById.delete(id);
         closeModerationMenu();
+        updateCollabRegistry(true);
       });
       menu.appendChild(apply);
       menu.appendChild(kick);
@@ -1119,7 +1631,11 @@
       peers.delete(id);
       // A departed peer cannot still be "typing" — drop their indicator.
       clearTypingPeer(id);
+      if (window.__tinyworldWatcherLayer && typeof window.__tinyworldWatcherLayer.removeRemote === 'function') {
+        try { window.__tinyworldWatcherLayer.removeRemote(id); } catch (_) {}
+      }
       renderRoster();
+      updateCollabRegistry(true);
     }
 
     function clearGroup(group) {
@@ -1177,6 +1693,7 @@
       }
       updatePeerSelection(peer, presence.selection);
       renderRoster();
+      updateCollabRegistry(false);
     }
 
     function cleanCellForSend(cell) {
@@ -1240,22 +1757,26 @@
 
     // Apply a granted role/island/admitted state to local self-state, then
     // refresh dependent UI. Called from welcome / admitted / role.
-    function applySelfState(role, island, isAdmitted) {
+    function applySelfState(role, island, zoneIds, isAdmitted) {
       if (typeof role === 'string') {
         myRole = role;
         isHost = role === 'host';
       }
       myIsland = island && typeof island === 'object' ? island : (myRole === 'editor' ? myIsland : null);
+      myZoneIds = myRole === 'editor' ? cleanZoneIdsForClient(zoneIds) : [];
       admitted = isAdmitted;
       showLobbyOverlay(!admitted);
       if (admitted) {
         publishPresence(true);
         renderRoster();
       }
+      renderBuildZones();
       renderAdmitPanel();
       // Role/admitted just changed — refresh guest-menu hide + chat launcher.
       updateGuestMenuVisibility();
       updateChatAvailability();
+      updateZoneLauncher();
+      updateCollabRegistry(true);
     }
 
     function ingestPending(list) {
@@ -1301,7 +1822,7 @@
 
     function captureEnvState() {
       const env = {
-        // Legacy wire field: new clients ignore host time and follow GMT/UTC.
+        // Legacy wire field: new clients ignore host time and follow live UK/BST time.
         timeOfDay: (typeof currentTodMinutes === 'number') ? currentTodMinutes : 720,
         weather: activePillValue('weather-pills', 'data-weather') || 'clear',
         season: activePillValue('season-pills', 'data-season') || 'summer',
@@ -1329,7 +1850,7 @@
     // Drive module 30's OWN controls so its closure season/weather/todMinutes
     // and the lighting recompute stay consistent: click the matching pill and
     // dispatch 'input' on the sliders. Time-of-day is intentionally ignored:
-    // every client follows live GMT/UTC instead of a room host. Wrapped in applyingRemoteEnv so our own
+    // every client follows live UK/BST time instead of a room host. Wrapped in applyingRemoteEnv so our own
     // change listeners do not re-broadcast. Order: season -> weather ->
     // intensity -> splashes -> shield.
     function clickPill(containerId, attr, value) {
@@ -1675,11 +2196,14 @@
       if (!data || !data.type) return;
       if (data.type === 'welcome') {
         serverClientId = data.id || serverClientId;
+        applyBuildZones(data.zones);
         // SAFETY INVARIANT: default to admitted. Only an explicit admitted:false
         // puts us in the lobby-wait state. An un-upgraded server omits these
         // fields => admitted stays true, myRole stays null => behaves as today.
         admitted = (data.admitted !== false);
         if (typeof data.role === 'string') { myRole = data.role; isHost = data.role === 'host'; }
+        myIsland = data.island && typeof data.island === 'object' ? data.island : (myRole === 'editor' ? myIsland : null);
+        myZoneIds = myRole === 'editor' ? cleanZoneIdsForClient(data.zoneIds) : [];
         showLobbyOverlay(!admitted);
         (Array.isArray(data.peers) ? data.peers : []).forEach(updatePeerPresence);
         // Lobby clients still publish presence so the host learns their name.
@@ -1690,6 +2214,8 @@
         // so refresh guest-menu hide + chat launcher here too.
         updateGuestMenuVisibility();
         updateChatAvailability();
+        updateZoneLauncher();
+        updateCollabRegistry(true);
       } else if (data.type === 'lobby.join') {
         if (!data.id) return;
         const name = String(data.name || '');
@@ -1708,7 +2234,8 @@
       } else if (data.type === 'lobby.list') {
         ingestPending(data.pending);
       } else if (data.type === 'admitted') {
-        applySelfState(data.role, data.island || null, true);
+        applyBuildZones(data.zones);
+        applySelfState(data.role, data.island || null, data.zoneIds || [], true);
         (Array.isArray(data.peers) ? data.peers : []).forEach(updatePeerPresence);
       } else if (data.type === 'declined') {
         declined = true;
@@ -1722,14 +2249,18 @@
         // An admitted peer's role changed, or we were promoted to host. There
         // is no id field by protocol => this is always about US.
         const wasAdmitted = admitted;
-        applySelfState(data.role, data.island || null, data.admitted !== false);
+        applyBuildZones(data.zones);
+        applySelfState(data.role, data.island || null, data.zoneIds || [], data.admitted !== false);
         if (data.role === 'host' && Array.isArray(data.pending)) ingestPending(data.pending);
         if (!wasAdmitted && admitted) showToast('You are now ' + (roleLabel(myRole) || 'admitted'));
+      } else if (data.type === 'zones') {
+        applyBuildZones(data.zones);
       } else if (data.type === 'presence') {
         updatePeerPresence(data.presence);
       } else if (data.type === 'leave') {
         removePeer(data.id);
         roleById.delete(data.id);
+        zoneIdsById.delete(data.id);
         // A departing/kicked peer's flight ghost must vanish too (entity has no
         // active:false on an abrupt disconnect).
         removeFlightGhost(data.id);
@@ -1737,6 +2268,11 @@
         // Live entity transform (flying peer's plane). Applies for EVERYONE
         // except our own id — the host must see a guest's ghost and vice versa.
         applyRemoteEntity(data);
+      } else if (data.type === 'watcher') {
+        // Transient admin visual layer only: never persisted into cells/snapshots.
+        if (window.__tinyworldWatcherLayer && typeof window.__tinyworldWatcherLayer.applyRemote === 'function') {
+          try { window.__tinyworldWatcherLayer.applyRemote(data.source || data.id || '', data.watcher); } catch (_) {}
+        }
       } else if (data.type === 'cell.set') {
         applyRemoteCell(data.op);
       } else if (data.type === 'snapshot.request') {
@@ -1791,6 +2327,8 @@
         publishPresence(true);
         renderRoster();
         updateChatAvailability();
+        updateZoneLauncher();
+        updateCollabRegistry(true);
       });
       socket.addEventListener('message', handleMessage);
       socket.addEventListener('close', () => {
@@ -1801,6 +2339,8 @@
         // Hide the chat launcher + clear any lingering typing indicators while
         // disconnected; they refresh on reconnect / re-admit.
         updateChatAvailability();
+        updateZoneLauncher();
+        stopCollabRegistry();
         typingPeers.forEach((entry) => { if (entry && entry.timer) clearTimeout(entry.timer); });
         typingPeers.clear();
         renderTyping();
@@ -1829,7 +2369,10 @@
       if (!d || !Number.isFinite(Number(d.x)) || !Number.isFinite(Number(d.z))) return;
       sendCellSnapshot(d.x, d.z, d.cell);
     });
-    window.addEventListener('tinyworld:selection-changed', () => schedulePresence(true));
+    window.addEventListener('tinyworld:selection-changed', () => {
+      schedulePresence(true);
+      renderZonePanel();
+    });
     renderer.domElement.addEventListener('pointermove', () => {
       const c = localCursor();
       const key = c ? c.x + ',' + c.z : '';
@@ -1887,6 +2430,8 @@
       canInteract,
       canEditAny,
       role: () => myRole,
+      buildZones: () => buildZoneList(),
+      assignedZones: () => myZoneIds.slice(),
       isHost: () => isHost,
       // Sync-core hooks. broadcastEnv lets the host force an env re-broadcast
       // after a programmatic environment change (no DOM event); sendMessage is
