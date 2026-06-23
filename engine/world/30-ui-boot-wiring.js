@@ -1843,8 +1843,13 @@ syncTinyworldOwnerToolControls();
         if (user.emailVerified) {
           enterApp();
         } else {
-          showSuccess('Check your email to confirm your account, then sign in.');
-          showForm('login');
+          try {
+            await Auth.login(email, password);
+            enterApp();
+          } catch (_) {
+            showSuccess('Account created. You can sign in once the account is active.');
+            showForm('login');
+          }
         }
       } catch (err) {
         if (err instanceof Auth.AuthError) {
@@ -1916,7 +1921,7 @@ syncTinyworldOwnerToolControls();
     const topLoginBtn = document.getElementById('auth-login-btn-top');
     if (topLoginBtn) topLoginBtn.addEventListener('click', () => openLoginModal('Sign in to unlock AI, settings & cloud saves'));
 
-    // Handle auth callbacks (OAuth, recovery, confirmation, invite)
+    // Handle auth callbacks (OAuth, recovery, invite)
     async function processCallback() {
       try {
         const result = await Auth.handleAuthCallback();

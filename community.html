@@ -760,7 +760,8 @@
       const Auth = window.TinyWorldAuth;
       if (!Auth || typeof Auth.signup !== 'function') throw new Error('Sign-up is unavailable right now.');
       await Auth.signup(email, password, name ? { full_name: name, name } : undefined);
-      // Some Identity configs auto-confirm; try an immediate login so the session is live.
+      // Try an immediate login so new accounts enter the community without a
+      // separate verification step when Identity autoconfirm is enabled.
       try { await Auth.login(email, password, true); } catch (_) {}
     }
 
@@ -1413,14 +1414,14 @@
       try {
         if (loginMode === 'signup') {
           await emailSignup(email, password, byId('login-name').value.trim());
-          loginOk('Account created. If email confirmation is required, check your inbox, then sign in.');
+          loginOk('Account created. Signing in now.');
         } else {
           await emailLogin(email, password);
         }
         const A = window.TinyWorldAuth;
         const user = A && typeof A.getUser === 'function' ? await A.getUser() : null;
         if (user) { await afterAuthSuccess(); return; }
-        if (loginMode === 'login') loginErr('Could not start a session. Check your credentials or confirm your email.');
+        if (loginMode === 'login') loginErr('Could not start a session. Check your credentials.');
       } catch (err) {
         loginErr((err && (err.message || err.error)) || 'Sign-in failed. Please try again.');
       } finally { btn.disabled = false; }
