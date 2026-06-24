@@ -280,9 +280,11 @@ export default async function worldsFunction(request) {
       }
 
       if (action === 'unpublish') {
+        // Clear any template listing on unpublish so an unpublished world can't stay
+        // remixable (the remix path also re-checks status='published' under a row lock).
         const rows = await sql`
           UPDATE worlds
-          SET status = 'draft', updated_at = NOW()
+          SET status = 'draft', is_template = FALSE, template_price = NULL, template_author_id = NULL, updated_at = NOW()
           WHERE id = ${worldId} AND owner_profile_id = ${profile.id} AND status = 'published'
           RETURNING *
         `;
