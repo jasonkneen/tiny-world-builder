@@ -1,6 +1,11 @@
 {
   "feed": [
     {
+      "ts": "2026-06-24T20:53:16.370Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"mine/hunt/fish for coins — keep what you earn, carried into final economy\" -> plans/production-line/drafts/2026-06-24T20-53-mine-hunt-fish-for-coins-keep-what-you-earn-carr.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-24T19:54:47.186Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"richer early-preview starter worlds + awardable Prospector badge\" -> plans/production-line/drafts/2026-06-24T19-54-richer-early-preview-starter-worlds-awardable-pr.md. ECONOMY TRIPWIRE: netlify/database/migrations/20260625030000_reseed_preview_islands.sql"
@@ -11,5 +16,5 @@
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"safe-scope autonomous production-line loop (owner-approved)\" -> plans/production-line/drafts/2026-06-24T18-48-safe-scope-autonomous-production-line-loop-owner.md. No economy paths touched."
     }
   ],
-  "lastTick": "2026-06-24T19:54:47.186Z"
+  "lastTick": "2026-06-24T20:53:16.370Z"
 }
