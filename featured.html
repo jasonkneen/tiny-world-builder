@@ -285,12 +285,13 @@
       card.appendChild(cnv);
       card.appendChild(body);
 
-      // Defer rendering until after the card is in the DOM so clientWidth is valid.
-      requestAnimationFrame(function () {
-        try {
-          window.TinyWorldPreview.renderPreview(cnv, w.preview);
-        } catch (_) {}
-      });
+      // Render synchronously. The canvas has explicit fallback dimensions (560x350)
+      // so renderPreview does not need layout/clientWidth — and a synchronous draw
+      // works even in a background/unfocused tab, where requestAnimationFrame is
+      // throttled and would leave the previews blank until the tab gains focus.
+      try {
+        window.TinyWorldPreview.renderPreview(cnv, w.preview);
+      } catch (_) {}
 
       return card;
     }
