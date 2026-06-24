@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="TinyWorld Achievements — earn badges by publishing worlds and climbing the leaderboard." />
+<title>Achievements - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<style>
+/* ---- achievements / badges page ---- */
+.badges-section {
+  width: min(1100px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 8px 0 80px;
+}
+
+.badges-intro {
+  margin: 0 0 36px;
+  font-family: var(--body-font);
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 600px;
+  line-height: 1.6;
+}
+
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Glass card — matches featured/leaderboard idiom */
+.badge-card {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 2px rgba(20, 30, 50, 0.05),
+    0 18px 44px -16px rgba(40, 50, 80, 0.24);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.badge-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 2px 4px rgba(20, 30, 50, 0.07),
+    0 28px 56px -16px rgba(40, 50, 80, 0.30);
+}
+
+/* Tier-colored top stripe */
+.badge-tier-stripe {
+  height: 5px;
+  flex: 0 0 5px;
+}
+
+.badge-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 28px 18px;
+}
+
+.badge-icon {
+  width: 80px;
+  height: 80px;
+  flex: 0 0 80px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.5),
+    0 8px 24px -8px rgba(20, 30, 50, 0.28);
+  image-rendering: pixelated;
+}
+
+/* Force the inline SVG to fill the badge-icon box */
+.badge-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.badge-body {
+  padding: 0 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.badge-name {
+  font-family: var(--display-font);
+  font-size: 20px;
+  font-weight: 700;
+  color: #111b45;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.badge-criteria {
+  font-family: var(--body-font);
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.badge-tier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.7);
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  width: fit-content;
+}
+
+.badge-tier-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+}
+
+@media (max-width: 600px) {
+  .badges-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .badge-icon-wrap {
+    padding: 20px 20px 12px;
+  }
+  .badge-icon {
+    width: 60px;
+    height: 60px;
+    flex: 0 0 60px;
+  }
+  .badge-name { font-size: 16px; }
+  .badge-body { padding: 0 14px 18px; }
+}
+
+@media (max-width: 380px) {
+  .badges-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/leaderboard">Leaderboard</a>
+      <a href="/badges" aria-current="page">Badges</a>
+      <a href="/docs">Docs</a>
+      <a href="/roadmap">Roadmap</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Achievements</h1>
+        <p>Earn badges by publishing worlds and climbing the leaderboard.</p>
+      </div>
+    </section>
+
+    <section class="badges-section" aria-label="Achievement badges">
+      <p class="badges-intro">
+        Every world you publish brings you closer to the next milestone.
+        Badges are awarded based on your published world count and leaderboard rank.
+      </p>
+      <div class="badges-grid" id="badges-grid" aria-label="Achievement badges list">
+        <!-- populated by script below -->
+      </div>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to earn your first badge?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Start building</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script src="scripts/achievements.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    var grid = document.getElementById('badges-grid');
+    if (!grid || !window.TinyWorldAchievements) return;
+
+    var catalog = window.TinyWorldAchievements.catalog;
+
+    function buildCard(badge) {
+      var card = document.createElement('article');
+      card.className = 'badge-card';
+      card.setAttribute('aria-label', badge.name + ' badge');
+
+      // Tier stripe
+      var stripe = document.createElement('div');
+      stripe.className = 'badge-tier-stripe';
+      stripe.style.background = badge.tierColor;
+
+      // Icon wrapper
+      var iconWrap = document.createElement('div');
+      iconWrap.className = 'badge-icon-wrap';
+      var iconDiv = document.createElement('div');
+      iconDiv.className = 'badge-icon';
+      // SVG is static developer markup — not user data; innerHTML is safe here
+      // (mirrors the leaderboard medal pattern)
+      iconDiv.innerHTML = badge.svg;
+      iconWrap.appendChild(iconDiv);
+
+      // Body
+      var body = document.createElement('div');
+      body.className = 'badge-body';
+
+      var nameEl = document.createElement('h2');
+      nameEl.className = 'badge-name';
+      // textContent — safe for any label
+      nameEl.textContent = badge.name;
+
+      var criteriaEl = document.createElement('p');
+      criteriaEl.className = 'badge-criteria';
+      criteriaEl.textContent = badge.criteria;
+
+      var pill = document.createElement('span');
+      pill.className = 'badge-tier-pill';
+
+      var dot = document.createElement('span');
+      dot.className = 'badge-tier-dot';
+      dot.style.background = badge.tierColor;
+      dot.setAttribute('aria-hidden', 'true');
+
+      var pillLabel = document.createElement('span');
+      pillLabel.textContent = badge.tierLabel;
+
+      pill.appendChild(dot);
+      pill.appendChild(pillLabel);
+
+      body.appendChild(nameEl);
+      body.appendChild(criteriaEl);
+      body.appendChild(pill);
+
+      card.appendChild(stripe);
+      card.appendChild(iconWrap);
+      card.appendChild(body);
+
+      return card;
+    }
+
+    catalog.forEach(function (badge) {
+      grid.appendChild(buildCard(badge));
+    });
+
+  }());
+  </script>
+</body>
+</html>
