@@ -164,6 +164,37 @@ export function createGoldLedgerEvent(type, fields = {}, now = new Date()) {
   };
 }
 
+// E2: pure planner for the weekly holdings-based GOLD payout. Given a list of
+// holders ({ wallet, tinyworldHeld (WHOLE tokens), islandCount }), produce the
+// authoritative ALLOWANCE_RECALCULATED events for the current cycle. Side-effect
+// free and deterministic given `now` — the DB write + idempotency live in the
+// gold-payout function; this is the part we unit-test. Holders whose computed
+// allowance is 0 produce no event (the ledger CHECK requires amount > 0).
+export function computeWeeklyPayoutPlan(holders = [], { now = new Date(), policy = DEFAULT_ECONOMY_POLICY } = {}) {
+  const cycleId = currentCycleId(now, policy.cycleCadence);
+  const events = [];
+  let skippedZero = 0;
+  for (const h of Array.isArray(holders) ? holders : []) {
+    if (!h || !h.wallet) continue;
+    const allowance = calculateGoldAllowance({
+      tinyworldHeld: h.tinyworldHeld,
+      islandCount: h.islandCount,
+      now,
+    }, policy);
+    if (allowance.totalAllowance > 0) {
+      events.push(createGoldLedgerEvent('ALLOWANCE_RECALCULATED', {
+        wallet: String(h.wallet),
+        cycleId,
+        amount: allowance.totalAllowance,
+        reason: 'weekly-allowance',
+      }, now));
+    } else {
+      skippedZero += 1;
+    }
+  }
+  return { cycleId, events, skippedZero };
+}
+
 export function reduceGoldLedger(events = [], { wallet, cycleId } = {}) {
   const out = { wallet: wallet || '', cycleId: cycleId || '', allowance: 0, spent: 0, refunded: 0, available: 0 };
   for (const event of events) {
