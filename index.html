@@ -159,6 +159,27 @@
           </a>
         </div>
       </div>
+      <section class="world-carousel" id="world-carousel" aria-label="Featured worlds" hidden>
+        <div class="world-carousel-head">
+          <span class="world-carousel-label">Featured worlds</span>
+          <a class="world-carousel-browse" href="/worlds">
+            <span>Browse all</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div class="world-carousel-stage" aria-live="polite" aria-atomic="false">
+          <div class="world-carousel-track" id="world-carousel-track"></div>
+        </div>
+        <div class="world-carousel-controls" aria-label="Carousel controls">
+          <button type="button" class="world-carousel-btn" id="world-carousel-prev" aria-label="Previous world">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></svg>
+          </button>
+          <div class="world-carousel-dots" id="world-carousel-dots" role="tablist" aria-label="World slides"></div>
+          <button type="button" class="world-carousel-btn" id="world-carousel-next" aria-label="Next world">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+          </button>
+        </div>
+      </section>
       <aside class="hero-feed" id="hero-feed" aria-label="Live public collab worlds" hidden>
         <div class="hero-feed-head">
           <span class="hero-feed-live"><span class="hero-feed-dot"></span>Live</span>
@@ -339,5 +360,6 @@
   <script src="scripts/github-stars.js" defer></script>
   <script src="scripts/landing-auth-chip.js" defer></script>
   <script src="scripts/landing-feed.js" defer></script>
+  <script src="scripts/world-carousel.js" defer></script>
 </body>
 </html>

@@ -797,6 +797,196 @@ svg {
   }
 }
 
+/* -------- hero featured worlds carousel -------- */
+.world-carousel {
+  position: relative;
+  z-index: 1;
+  margin-top: 36px;
+  width: min(420px, 100%);
+}
+
+.world-carousel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.world-carousel-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #25304c;
+  opacity: 0.72;
+}
+
+.world-carousel-browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.14s ease;
+}
+.world-carousel-browse:hover { opacity: 0.78; }
+.world-carousel-browse svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.world-carousel-stage {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: rgba(7, 9, 17, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 48px -24px rgba(17, 27, 69, 0.6);
+}
+
+.world-carousel-track {
+  display: flex;
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-carousel-track { transition: none; }
+}
+
+.world-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.world-carousel-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 8 / 5;
+  image-rendering: pixelated;
+  background: #070911;
+}
+
+.world-carousel-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 9, 17, 0.9);
+}
+
+.world-carousel-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(235, 240, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display-font);
+}
+
+.world-carousel-open {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(58, 114, 200, 0.22);
+  border: 1px solid rgba(58, 114, 200, 0.42);
+  color: #a8c6ff;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  transition: background 0.14s ease;
+}
+.world-carousel-open:hover { background: rgba(58, 114, 200, 0.38); }
+
+.world-carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.world-carousel-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.52);
+  color: #25304c;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: background 0.14s ease;
+}
+.world-carousel-btn:hover { background: rgba(255, 255, 255, 0.76); }
+.world-carousel-btn:focus-visible {
+  outline: 2px solid rgba(21, 93, 212, 0.5);
+  outline-offset: 2px;
+}
+.world-carousel-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.world-carousel-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.world-carousel-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(17, 27, 69, 0.28);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.world-carousel-dot.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+.world-carousel-dot:focus-visible {
+  outline: 2px solid rgba(21, 93, 212, 0.5);
+  outline-offset: 2px;
+}
+
+/* On narrow screens the carousel sits in normal flow below the hero copy */
+@media (max-width: 1080px) {
+  .world-carousel {
+    width: min(420px, 100%);
+  }
+}
+
+@media (max-width: 540px) {
+  .world-carousel {
+    width: 100%;
+  }
+}
+
 .scroll-cue {
   position: absolute;
   left: 50%;
