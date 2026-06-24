@@ -276,25 +276,35 @@
       tierLabel: 'amber',
       svg: SVG_PROSPECTOR,
       worldsRequired: null,
-      rankRequired: null
+      rankRequired: null,
+      // Early-preview campaign: awarded when the builder has sold harvested
+      // resources for Earned GOLD at least once. Surfaced server-side as
+      // stats.soldResources and passed to earnedBadges(.., .., stats).
+      salesRequired: true
     }
   ];
 
   /* ------------------------------------------------------------------
-   * earnedBadges(worldsPublished, rank) -> string[]
+   * earnedBadges(worldsPublished, rank, stats) -> string[]
    *
    * Pure function. Returns array of earned badge ids.
    * worldsPublished: number of published worlds (or null/undefined)
    * rank: leaderboard rank position (1 = top; null/undefined = unranked)
+   * stats (optional): { soldResources: boolean } — extra award signals that
+   *   aren't derivable from worlds/rank (e.g. has sold resources for GOLD).
+   *   Backward compatible: callers that omit it keep their prior behaviour.
    * ------------------------------------------------------------------ */
-  function earnedBadges(worldsPublished, rank) {
+  function earnedBadges(worldsPublished, rank, stats) {
     var w = Number(worldsPublished) || 0;
     var r = (rank != null && rank !== '') ? Number(rank) : null;
+    var soldResources = !!(stats && stats.soldResources);
     var earned = [];
 
     for (var i = 0; i < CATALOG.length; i++) {
       var badge = CATALOG[i];
-      if (badge.worldsRequired !== null && w >= badge.worldsRequired) {
+      if (badge.salesRequired === true && soldResources) {
+        earned.push(badge.id);
+      } else if (badge.worldsRequired !== null && w >= badge.worldsRequired) {
         earned.push(badge.id);
       } else if (badge.rankRequired !== null && r !== null && r >= 1 && r <= badge.rankRequired) {
         earned.push(badge.id);

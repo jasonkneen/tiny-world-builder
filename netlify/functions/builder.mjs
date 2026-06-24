@@ -10,6 +10,9 @@ export const config = { path: '/api/builder' };
 // Columns are hand-picked in the SELECT; profileDto() is deliberately NOT used.
 const isMissingBuilderSchema = (err) =>
   isMissingRelations(err, ['profiles', 'worlds']);
+// resource_sales may be absent on older deploys; treat its absence as "no sales"
+// (Prospector simply not earned) rather than failing the whole profile card.
+const isMissingSalesSchema = (err) => isMissingRelations(err, ['resource_sales']);
 
 const MAX_WORLDS = 24;
 const MAX_PREVIEW_CELLS = 1200;
@@ -107,12 +110,26 @@ export default async function builder(request) {
       };
     }).filter((w) => Array.isArray(w.preview.cells) && w.preview.cells.length > 0);
 
+    // Prospector signal: has this builder ever sold harvested resources for GOLD?
+    // EXISTS keeps it to a single index probe (no row transfer). Degrades to false
+    // if resource_sales isn't present on this deploy.
+    let soldResources = false;
+    try {
+      const saleRows = await sql`
+        SELECT 1 FROM resource_sales WHERE profile_id = ${Number(profile.id)} LIMIT 1
+      `;
+      soldResources = Array.isArray(saleRows) && saleRows.length > 0;
+    } catch (saleErr) {
+      if (!isMissingSalesSchema(saleErr)) throw saleErr;
+    }
+
     return jsonResponse({
       username: String(profile.username || ''),
       displayName: String(profile.display_name || profile.username || ''),
       image: profile.image ? String(profile.image) : null,
       worldsPublished,
       rank,
+      soldResources,
       worlds,
     }, origin);
   } catch (err) {

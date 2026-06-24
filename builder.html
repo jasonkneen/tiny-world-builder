@@ -452,7 +452,7 @@
       root.appendChild(div);
     }
 
-    function renderBadges(worldsPublished, rank) {
+    function renderBadges(worldsPublished, rank, soldResources) {
       var section = document.createElement('div');
       section.className = 'builder-badges-section';
 
@@ -470,7 +470,7 @@
         return section;
       }
 
-      var earnedIds = achievements.earnedBadges(worldsPublished, rank);
+      var earnedIds = achievements.earnedBadges(worldsPublished, rank, { soldResources: !!soldResources });
       if (!earnedIds || !earnedIds.length) {
         var noNote = document.createElement('p');
         noNote.className = 'builder-no-badges';
@@ -659,7 +659,7 @@
       root.appendChild(band);
 
       // --- Badges ---
-      root.appendChild(renderBadges(data.worldsPublished, data.rank));
+      root.appendChild(renderBadges(data.worldsPublished, data.rank, data.soldResources));
 
       // --- Worlds ---
       root.appendChild(renderWorlds(data.worlds));
