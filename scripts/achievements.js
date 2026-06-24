@@ -119,6 +119,61 @@
     '<rect x="26" y="4" width="12" height="4" fill="#fff8a0"/>' +
   '</svg>';
 
+  var SVG_FIRST_SALE = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<rect width="64" height="64" rx="10" fill="#2b2410"/>' +
+    '<rect x="20" y="16" width="24" height="4" fill="#e8c84a"/>' +
+    '<rect x="16" y="20" width="32" height="8" fill="#e8c84a"/>' +
+    '<rect x="12" y="28" width="40" height="12" fill="#c9a227"/>' +
+    '<rect x="16" y="40" width="32" height="8" fill="#9f7d1e"/>' +
+    '<rect x="20" y="48" width="24" height="4" fill="#6f5618"/>' +
+    '<rect x="24" y="24" width="8" height="8" fill="#fff0a0"/>' +
+    '<rect x="32" y="20" width="8" height="4" fill="#fff0a0"/>' +
+    '<rect x="36" y="32" width="8" height="8" fill="#a57b16"/>' +
+    '<rect x="28" y="36" width="8" height="4" fill="#e8c84a"/>' +
+    '</svg>';
+
+  var SVG_TASTEMAKER = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<rect width="64" height="64" rx="10" fill="#14243f"/>' +
+    '<rect x="16" y="12" width="28" height="36" fill="#3a72c8"/>' +
+    '<rect x="20" y="16" width="20" height="28" fill="#5f98e8"/>' +
+    '<rect x="24" y="20" width="12" height="4" fill="#d7f0ff"/>' +
+    '<rect x="24" y="28" width="16" height="4" fill="#d7f0ff"/>' +
+    '<rect x="24" y="36" width="8" height="4" fill="#d7f0ff"/>' +
+    '<rect x="36" y="28" width="16" height="16" fill="#c9a227"/>' +
+    '<rect x="44" y="24" width="8" height="4" fill="#c9a227"/>' +
+    '<rect x="40" y="32" width="8" height="4" fill="#fff0a0"/>' +
+    '<rect x="44" y="40" width="8" height="4" fill="#8d6a18"/>' +
+    '</svg>';
+
+  var SVG_CONNECTOR = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<rect width="64" height="64" rx="10" fill="#102c30"/>' +
+    '<rect x="16" y="20" width="16" height="8" fill="#2db8b8"/>' +
+    '<rect x="12" y="28" width="8" height="16" fill="#2db8b8"/>' +
+    '<rect x="20" y="44" width="16" height="8" fill="#2db8b8"/>' +
+    '<rect x="20" y="28" width="12" height="8" fill="#84eeee"/>' +
+    '<rect x="32" y="28" width="8" height="8" fill="#e8c84a"/>' +
+    '<rect x="36" y="12" width="16" height="8" fill="#3a72c8"/>' +
+    '<rect x="44" y="20" width="8" height="16" fill="#3a72c8"/>' +
+    '<rect x="28" y="12" width="16" height="8" fill="#84eeee"/>' +
+    '<rect x="32" y="36" width="16" height="8" fill="#84eeee"/>' +
+    '</svg>';
+
+  var SVG_PROSPECTOR = '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<rect width="64" height="64" rx="10" fill="#2a1d15"/>' +
+    '<rect x="36" y="36" width="16" height="16" fill="#6d5a48"/>' +
+    '<rect x="40" y="32" width="12" height="4" fill="#9a8370"/>' +
+    '<rect x="44" y="40" width="8" height="8" fill="#c9a227"/>' +
+    '<rect x="48" y="36" width="4" height="4" fill="#e8c84a"/>' +
+    '<rect x="16" y="16" width="24" height="8" fill="#8f6b45"/>' +
+    '<rect x="24" y="24" width="8" height="8" fill="#8f6b45"/>' +
+    '<rect x="28" y="32" width="8" height="8" fill="#8f6b45"/>' +
+    '<rect x="32" y="40" width="8" height="8" fill="#8f6b45"/>' +
+    '<rect x="12" y="20" width="8" height="8" fill="#d0d7dc"/>' +
+    '<rect x="20" y="12" width="24" height="8" fill="#d0d7dc"/>' +
+    '<rect x="36" y="20" width="8" height="8" fill="#8f969b"/>' +
+    '<rect x="20" y="16" width="8" height="4" fill="#ffffff"/>' +
+    '</svg>';
+
   /* ------------------------------------------------------------------
    * Badge catalog — ordered by tier (ascending)
    * ------------------------------------------------------------------ */
@@ -182,6 +237,46 @@
       svg: SVG_TRAILBLAZER,
       worldsRequired: null,
       rankRequired: 3
+    },
+    {
+      id: 'first-sale',
+      name: 'First Sale',
+      criteria: 'Earn your first GOLD from a template sale',
+      tierColor: '#c9a227',
+      tierLabel: 'gold',
+      svg: SVG_FIRST_SALE,
+      worldsRequired: null,
+      rankRequired: null
+    },
+    {
+      id: 'tastemaker',
+      name: 'Tastemaker',
+      criteria: 'List a world as a paid template',
+      tierColor: '#3a72c8',
+      tierLabel: 'blue',
+      svg: SVG_TASTEMAKER,
+      worldsRequired: null,
+      rankRequired: null
+    },
+    {
+      id: 'connector',
+      name: 'Connector',
+      criteria: 'Refer a friend who joins',
+      tierColor: '#2db8b8',
+      tierLabel: 'teal',
+      svg: SVG_CONNECTOR,
+      worldsRequired: null,
+      rankRequired: null
+    },
+    {
+      id: 'prospector',
+      name: 'Prospector',
+      criteria: 'Sell harvested resources for GOLD',
+      tierColor: '#c87828',
+      tierLabel: 'amber',
+      svg: SVG_PROSPECTOR,
+      worldsRequired: null,
+      rankRequired: null
     }
   ];
 
