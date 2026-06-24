@@ -1,13 +1,10 @@
 // -------- landing hero featured worlds carousel --------
-// Fetches /api/worlds and renders published worlds as isometric canvas previews
-// that cycle in the home hero. The preview renderer is lifted verbatim from
-// engine/world/47-worlds-room.js (renderPreview + helpers) so thumbnails look
-// identical to the in-app world cards.
-//
-// NOTE: /api/worlds requires Tinyverse auth — anonymous visitors will receive
-// {worlds:[]} and the section stays hidden (same hideFeed pattern as landing-feed.js).
-// This is a known constraint; a public worlds feed endpoint is needed for the
-// carousel to be visible to landing-page visitors.
+// Fetches /api/worlds/featured (public, unauthenticated — published worlds only)
+// and renders them as isometric canvas previews that cycle in the home hero. The
+// preview renderer is lifted verbatim from engine/world/47-worlds-room.js
+// (renderPreview + helpers) so thumbnails look identical to the in-app world cards.
+// If the feed is empty or fails, the section stays hidden (hideFeed pattern from
+// landing-feed.js).
 (function () {
   'use strict';
 
@@ -307,14 +304,17 @@
   });
 
   function load() {
-    fetch('/api/worlds', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+    // Public discovery feed: /api/worlds/featured returns only published worlds
+    // with preview data and needs no auth, so it works for anonymous landing
+    // visitors (the auth-gated /api/worlds returns [] for them).
+    fetch('/api/worlds/featured', { headers: { Accept: 'application/json' } })
       .then(function (res) { return res && res.ok ? res.json() : null; })
       .then(function (data) {
         var all = data && Array.isArray(data.worlds) ? data.worlds : [];
-        var published = all.filter(function (w) {
-          return w.status === 'published' && w.preview && Array.isArray(w.preview.cells) && w.preview.cells.length > 0;
+        var ready = all.filter(function (w) {
+          return w && w.preview && Array.isArray(w.preview.cells) && w.preview.cells.length > 0;
         }).slice(0, 8);
-        render(published);
+        render(ready);
       })
       .catch(hideCarousel);
   }
