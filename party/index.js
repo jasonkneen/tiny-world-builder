@@ -1742,7 +1742,7 @@ export default class TinyWorldParty {
         headers: { 'Content-Type': 'application/json', 'x-worlds-token': token },
         body: JSON.stringify({ resources, taxPayouts, goldEvents: Object.fromEntries(this.pendingGold || new Map()) }),
       });
-      if (res.ok) { this.pendingResources.clear(); this.pendingTax.clear(); }
+      if (res.ok) { this.pendingResources.clear(); this.pendingTax.clear(); this.pendingGold?.clear(); }
     } catch (_) { /* keep buffered for the next flush */ }
   }
 

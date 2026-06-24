@@ -110,7 +110,7 @@ async function userFromBearerTokenValue(token) {
   // Resolve the identity verify host from trusted deploy config rather than the
   // incoming request URL so the validation target can never come from request
   // data. Fail closed when the site URL is unset.
-  const identityBase = process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL;
+  const identityBase = process.env.TINYWORLD_SITE_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL;
   if (!identityBase) return null;
   try {
     const identityUrl = new URL('/.netlify/identity/user', identityBase);

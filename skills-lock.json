@@ -7,6 +7,13 @@
       "skillPath": "skills/3d-modeling/SKILL.md",
       "computedHash": "dd0beea41a5f5711c6a8b209bb2218340ab7afabe26147eb1560e4d26d65f7c5"
     },
+    "fractal": {
+      "source": "Trampoline-AI/fractal",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/fractal/SKILL.md",
+      "computedHash": "0e1b0566ab4fca240eadaf913489950be022a3d0007e96e66f665dcbfd95f229"
+    },
     "lightweight-3d-effects": {
       "source": "freshtechbro/claudedesignskills",
       "sourceType": "github",
