@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Browse remixable template worlds and spend Earned GOLD to start with a great foundation." />
+<title>Template Marketplace - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<script>
+  (function landingAuthBootstrap() {
+    window.__tinyworldAuthReady = new Promise(function (resolve) {
+      window.__resolveTinyWorldAuthReady = resolve;
+      setTimeout(function () { resolve(false); }, 2500);
+    });
+  })();
+</script>
+<script id="tinyworld-auth-importmap" type="importmap">
+{
+  "imports": {
+    "@netlify/identity": "./vendor/netlify/identity.js",
+    "gotrue-js": "./vendor/netlify/gotrue.js"
+  }
+}
+</script>
+<script type="module" src="vendor/tinyworld-auth.js"></script>
+</head>
+<body>
+
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/leaderboard">Leaderboard</a>
+      <a href="/badges">Badges</a>
+      <a href="/templates" aria-current="page">Templates</a>
+      <a href="/docs">Docs</a>
+      <a href="/roadmap">Roadmap</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main class="templates-page">
+
+    <div class="templates-hero">
+      <h1>Template Marketplace</h1>
+      <p>Browse remixable worlds built by the community. Spend Earned GOLD to get your own editable copy.</p>
+      <div id="tmpl-balance-wrap" aria-live="polite">
+        <!-- Populated by JS: balance pill or sign-in nudge -->
+      </div>
+    </div>
+
+    <!-- Template card grid — populated by JS -->
+    <div class="templates-grid" id="tmpl-grid" role="list" aria-label="Template worlds">
+      <!-- cards injected here -->
+    </div>
+
+    <!-- Empty state (shown when no templates returned) -->
+    <div class="templates-empty" id="tmpl-empty" hidden>
+      No templates listed yet.
+    </div>
+
+  </main>
+
+  <!-- Confirm dialog (single shared instance, hidden by default) -->
+  <div class="tmpl-confirm-overlay" id="tmpl-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="tmpl-confirm-title">
+    <div class="tmpl-confirm-box">
+      <h2 class="tmpl-confirm-title" id="tmpl-confirm-title">Confirm Remix</h2>
+      <p class="tmpl-confirm-copy" id="tmpl-confirm-copy"></p>
+      <div class="tmpl-confirm-actions">
+        <button class="tmpl-confirm-cancel" id="tmpl-confirm-cancel" type="button">Cancel</button>
+        <button class="tmpl-confirm-ok" id="tmpl-confirm-ok" type="button">Remix</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/world-preview.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ---- SVG glyphs (static markup — innerHTML is fine here) ----
+    var COIN_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="9" fill="#f5c842" stroke="#c9a000" stroke-width="1.5"/><text x="10" y="14.5" font-size="11" font-weight="bold" text-anchor="middle" fill="#7a5a00" font-family="ui-monospace,monospace">G</text></svg>';
+    var REMIX_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+
+    // ---- State ----
+    var _templates = [];
+    var _balance = null;      // number or null (not signed in)
+    var _signedIn = false;
+    // Per-card idempotency keys: Map<templateId, string>
+    var _idempotencyKeys = new Map();
+
+    // ---- Helpers ----
+    function genIdempotencyKey() {
+      // crypto.randomUUID() produces 36-char UUID which matches /^[A-Za-z0-9._:-]{8,128}$/
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+      // Fallback for environments without crypto.randomUUID
+      return 'tmpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+    }
+
+    function getOrCreateKey(templateId) {
+      if (!_idempotencyKeys.has(templateId)) {
+        _idempotencyKeys.set(templateId, genIdempotencyKey());
+      }
+      return _idempotencyKeys.get(templateId);
+    }
+
+    function resetKey(templateId) {
+      _idempotencyKeys.delete(templateId);
+    }
+
+    // ---- Fetch balance ----
+    function fetchBalance() {
+      return fetch('/api/me/coins', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+        .then(function (r) {
+          if (r.status === 401) { _signedIn = false; return null; }
+          _signedIn = true;
+          return r.json();
+        })
+        .then(function (data) {
+          _balance = (data && typeof data.balance === 'number') ? data.balance : null;
+          return _balance;
+        })
+        .catch(function () { return null; });
+    }
+
+    // ---- Fetch templates ----
+    function fetchTemplates() {
+      return fetch('/api/worlds/featured?templates=1', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { return Array.isArray(data.templates) ? data.templates : []; })
+        .catch(function () { return []; });
+    }
+
+    // ---- Render balance pill ----
+    function renderBalance() {
+      var wrap = document.getElementById('tmpl-balance-wrap');
+      if (!wrap) return;
+      if (_signedIn && _balance !== null) {
+        var pill = document.createElement('div');
+        pill.className = 'tmpl-balance';
+        pill.innerHTML = COIN_SVG;
+        var span = document.createElement('span');
+        span.textContent = _balance.toLocaleString() + ' GOLD';
+        pill.appendChild(span);
+        wrap.innerHTML = '';
+        wrap.appendChild(pill);
+      } else if (!_signedIn) {
+        var nudge = document.createElement('p');
+        nudge.className = 'tmpl-balance-sign-in';
+        nudge.innerHTML = '';
+        var link = document.createElement('a');
+        link.href = '/tiny-world-builder';
+        link.textContent = 'Sign in';
+        nudge.appendChild(link);
+        var after = document.createTextNode(' to remix templates and spend Earned GOLD.');
+        nudge.appendChild(after);
+        wrap.innerHTML = '';
+        wrap.appendChild(nudge);
+      } else {
+        wrap.innerHTML = '';
+      }
+    }
+
+    // ---- Render card ----
+    function renderCard(tmpl) {
+      var card = document.createElement('div');
+      card.className = 'tmpl-card';
+      card.setAttribute('role', 'listitem');
+
+      // Canvas for isometric preview
+      var canvas = document.createElement('canvas');
+      canvas.className = 'tmpl-canvas';
+      canvas.width = 400;
+      canvas.height = 300;
+      canvas.setAttribute('aria-label', 'Preview of ' + tmpl.name);
+      card.appendChild(canvas);
+
+      // Body
+      var body = document.createElement('div');
+      body.className = 'tmpl-body';
+
+      // Name
+      var nameEl = document.createElement('h3');
+      nameEl.className = 'tmpl-name';
+      nameEl.textContent = tmpl.name;
+      body.appendChild(nameEl);
+
+      // Meta: author + remix count
+      var meta = document.createElement('div');
+      meta.className = 'tmpl-meta';
+      var authorEl = document.createElement('span');
+      authorEl.className = 'tmpl-author';
+      authorEl.textContent = 'by ' + tmpl.authorName;
+      var countEl = document.createElement('span');
+      countEl.className = 'tmpl-remix-count';
+      countEl.textContent = tmpl.remixCount + (tmpl.remixCount === 1 ? ' remix' : ' remixes');
+      meta.appendChild(authorEl);
+      meta.appendChild(countEl);
+      body.appendChild(meta);
+
+      // Price row
+      var priceRow = document.createElement('div');
+      priceRow.className = 'tmpl-price-row';
+      if (tmpl.templatePrice === 0) {
+        var freeEl = document.createElement('span');
+        freeEl.className = 'tmpl-price-free';
+        freeEl.textContent = 'Free';
+        priceRow.appendChild(freeEl);
+      } else {
+        priceRow.innerHTML = COIN_SVG;
+        var priceEl = document.createElement('span');
+        priceEl.textContent = tmpl.templatePrice.toLocaleString() + ' GOLD';
+        priceRow.appendChild(priceEl);
+      }
+      body.appendChild(priceRow);
+
+      // Status message area
+      var statusEl = document.createElement('div');
+      statusEl.className = 'tmpl-status';
+      statusEl.hidden = true;
+      body.appendChild(statusEl);
+
+      // Remix button
+      var btn = document.createElement('button');
+      btn.className = 'tmpl-remix-btn';
+      btn.type = 'button';
+      btn.innerHTML = REMIX_ICON_SVG;
+      var btnLabel = document.createElement('span');
+      btnLabel.textContent = tmpl.templatePrice === 0
+        ? 'Remix for free'
+        : 'Remix for ' + tmpl.templatePrice.toLocaleString() + ' GOLD';
+      btn.appendChild(btnLabel);
+
+      if (!_signedIn) {
+        btn.setAttribute('aria-label', 'Sign in to remix');
+        btn.disabled = false;
+        btn.addEventListener('click', function () {
+          window.location.href = '/tiny-world-builder';
+        });
+      } else {
+        btn.addEventListener('click', function () {
+          openConfirm(tmpl, btn, statusEl, btnLabel);
+        });
+      }
+
+      body.appendChild(btn);
+      card.appendChild(body);
+
+      // Draw preview synchronously after DOM insertion
+      requestAnimationFrame(function () {
+        if (window.TinyWorldPreview && tmpl.preview) {
+          try { window.TinyWorldPreview.renderPreview(canvas, tmpl.preview); } catch (_) {}
+        }
+      });
+
+      return card;
+    }
+
+    // ---- Render grid ----
+    function renderGrid() {
+      var grid = document.getElementById('tmpl-grid');
+      var empty = document.getElementById('tmpl-empty');
+      if (!grid) return;
+      grid.innerHTML = '';
+      if (!_templates.length) {
+        if (empty) empty.hidden = false;
+        return;
+      }
+      if (empty) empty.hidden = true;
+      _templates.forEach(function (tmpl) {
+        grid.appendChild(renderCard(tmpl));
+      });
+    }
+
+    // ---- Confirm dialog ----
+    var _confirmCallback = null;
+
+    function openConfirm(tmpl, btn, statusEl, btnLabel) {
+      var overlay = document.getElementById('tmpl-confirm');
+      var title = document.getElementById('tmpl-confirm-title');
+      var copy = document.getElementById('tmpl-confirm-copy');
+      var okBtn = document.getElementById('tmpl-confirm-ok');
+      var cancelBtn = document.getElementById('tmpl-confirm-cancel');
+      if (!overlay || !title || !copy || !okBtn || !cancelBtn) return;
+
+      // Set text via textContent for XSS safety
+      title.textContent = 'Confirm Remix';
+      copy.textContent = tmpl.templatePrice === 0
+        ? 'Remix "' + tmpl.name + '" for free?'
+        : 'Remix "' + tmpl.name + '" for ' + tmpl.templatePrice.toLocaleString() + ' GOLD?';
+
+      overlay.hidden = false;
+      okBtn.focus();
+
+      _confirmCallback = function () {
+        overlay.hidden = true;
+        doRemix(tmpl, btn, statusEl, btnLabel);
+      };
+
+      okBtn.onclick = function () {
+        if (_confirmCallback) _confirmCallback();
+        _confirmCallback = null;
+      };
+      cancelBtn.onclick = function () {
+        overlay.hidden = true;
+        _confirmCallback = null;
+      };
+      overlay.onclick = function (e) {
+        if (e.target === overlay) {
+          overlay.hidden = true;
+          _confirmCallback = null;
+        }
+      };
+    }
+
+    // ---- Perform remix ----
+    function doRemix(tmpl, btn, statusEl, btnLabel) {
+      var key = getOrCreateKey(tmpl.id);
+      btn.disabled = true;
+      statusEl.hidden = true;
+      statusEl.className = 'tmpl-status';
+      statusEl.innerHTML = '';
+
+      fetch('/api/worlds/remix', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ worldId: tmpl.id, idempotencyKey: key }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+        .then(function (res) {
+          if (res.data && res.data.ok) {
+            // Success — show link to builder; reset idempotency key for next attempt
+            resetKey(tmpl.id);
+            statusEl.hidden = false;
+            statusEl.className = 'tmpl-status tmpl-status-ok';
+            var msg = document.createTextNode('Remixed! Opening your copy… ');
+            statusEl.appendChild(msg);
+            var link = document.createElement('a');
+            link.href = '/tiny-world-builder';
+            link.textContent = 'Open builder';
+            statusEl.appendChild(link);
+            // Refresh balance
+            fetchBalance().then(renderBalance);
+          } else if (res.status === 402 || (res.data && res.data.reason === 'insufficient-coins')) {
+            // Not enough GOLD — keep key for retry (no charge happened)
+            statusEl.hidden = false;
+            statusEl.className = 'tmpl-status tmpl-status-warn';
+            var notEnough = document.createTextNode('Not enough GOLD — earn more in ');
+            statusEl.appendChild(notEnough);
+            var rewardsLink = document.createElement('a');
+            rewardsLink.href = '/rewards';
+            rewardsLink.textContent = 'Rewards';
+            statusEl.appendChild(rewardsLink);
+            btn.disabled = false;
+          } else {
+            // Other error — keep key safe, show friendly message
+            statusEl.hidden = false;
+            statusEl.className = 'tmpl-status tmpl-status-err';
+            var errText = (res.data && res.data.reason) ? res.data.reason : 'Something went wrong. Please try again.';
+            statusEl.textContent = errText;
+            btn.disabled = false;
+          }
+        })
+        .catch(function () {
+          statusEl.hidden = false;
+          statusEl.className = 'tmpl-status tmpl-status-err';
+          statusEl.textContent = 'Network error. Please try again.';
+          btn.disabled = false;
+        });
+    }
+
+    // ---- Main load ----
+    function load() {
+      return Promise.all([fetchTemplates(), fetchBalance()])
+        .then(function (results) {
+          _templates = results[0];
+          renderBalance();
+          renderGrid();
+
+          // Draw previews synchronously now that canvas nodes exist
+          // (renderCard schedules via rAF; re-run to catch any that resolved late)
+          var canvases = document.querySelectorAll('.tmpl-canvas');
+          canvases.forEach(function (c, i) {
+            var tmpl = _templates[i];
+            if (tmpl && window.TinyWorldPreview && tmpl.preview) {
+              try { window.TinyWorldPreview.renderPreview(c, tmpl.preview); } catch (_) {}
+            }
+          });
+        });
+    }
+
+    // Test seam
+    window._templatesLoad = load;
+
+    // Auto-boot on DOMContentLoaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+
+  }());
+  </script>
+
+</body>
+</html>
