@@ -1,10 +1,10 @@
-// -------- landing hero featured worlds carousel --------
-// Fetches /api/worlds/featured (public, unauthenticated — published worlds only)
-// and renders them as isometric canvas previews that cycle in the home hero. The
-// preview renderer lives in scripts/world-preview.js (window.TinyWorldPreview),
-// which must be loaded before this script.
-// If the feed is empty or fails, the section stays hidden (hideFeed pattern from
-// landing-feed.js).
+// -------- home page community worlds carousel --------
+// Fetches /api/home-worlds (public, unauthenticated — user-built builder worlds
+// shared via the Tiny World Builder share system) and renders them as isometric
+// canvas previews in a full-width strip directly under the hero. The preview
+// renderer lives in scripts/world-preview.js (window.TinyWorldPreview), which
+// must be loaded before this script.
+// If the feed is empty or fails, the section stays hidden (hideFeed pattern).
 (function () {
   'use strict';
 
@@ -25,38 +25,40 @@
   var INTERVAL = 5000;
   var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Each share opens in the builder at /tiny-world-builder?share=<id>.
+  // id is a TEXT (base64url) string — never numeric.
   function worldHref(w) {
-    var slug = String((w && w.slug) || '').trim();
-    if (!slug) return '/tiny-world-builder';
-    return '/tiny-world-builder?world=' + encodeURIComponent(slug);
+    var id = String((w && w.id) || '').trim();
+    if (!id) return '/tiny-world-builder';
+    return '/tiny-world-builder?share=' + encodeURIComponent(id);
   }
 
   function buildSlide(w, idx) {
     var slide = document.createElement('div');
     slide.className = 'world-carousel-slide';
     slide.setAttribute('role', 'group');
-    slide.setAttribute('aria-label', String(w.name || w.slug || 'World'));
+    slide.setAttribute('aria-label', String(w.name || 'World'));
     slide.dataset.idx = String(idx);
 
     var cnv = document.createElement('canvas');
     cnv.className = 'world-carousel-canvas';
-    // Set explicit pixel dimensions as fallback for renderPreview when slide
-    // is not yet visible (clientWidth may be 0 while display:none).
-    cnv.width = 320;
-    cnv.height = 200;
+    // Explicit pixel dimensions so renderPreview works while the slide may
+    // not yet be visible (clientWidth can be 0 before display:block).
+    cnv.width = 280;
+    cnv.height = 180;
 
     var info = document.createElement('div');
     info.className = 'world-carousel-info';
 
     var name = document.createElement('span');
     name.className = 'world-carousel-name';
-    name.textContent = String(w.name || w.slug || 'World');
+    name.textContent = String(w.name || 'World');
 
     var link = document.createElement('a');
     link.className = 'world-carousel-open';
     link.href = worldHref(w);
     link.textContent = 'Open world';
-    link.setAttribute('aria-label', 'Open ' + String(w.name || w.slug || 'world'));
+    link.setAttribute('aria-label', 'Open ' + String(w.name || 'world'));
 
     info.appendChild(name);
     info.appendChild(link);
@@ -64,6 +66,8 @@
     slide.appendChild(info);
 
     // Render preview onto canvas via the shared renderer module.
+    // Called synchronously (no rAF) so off-screen cards still render —
+    // rAF is throttled in background tabs.
     try {
       window.TinyWorldPreview.renderPreview(cnv, w.preview);
     } catch (_) {}
@@ -80,12 +84,20 @@
     }
   }
 
+  function cardStepPx() {
+    // Advance by one card's width + gap so multi-card views scroll cleanly.
+    var slide = track.querySelector('.world-carousel-slide');
+    if (!slide) return 0;
+    var slideW = slide.getBoundingClientRect().width || 290;
+    var gap = parseFloat(getComputedStyle(track).gap) || 16;
+    return slideW + gap;
+  }
+
   function goTo(idx, skipTimer) {
     var n = worlds.length;
     if (!n) return;
     current = ((idx % n) + n) % n;
-    // Slide via CSS transform on the track
-    track.style.transform = 'translateX(' + (-current * 100) + '%)';
+    track.style.transform = 'translateX(' + (-current * cardStepPx()) + 'px)';
     updateDots();
     if (!skipTimer) resetTimer();
   }
@@ -100,7 +112,6 @@
     if (!wList || !wList.length) { hideCarousel(); return; }
     worlds = wList;
 
-    // Build slides
     track.textContent = '';
     dotsEl.textContent = '';
 
@@ -132,17 +143,15 @@
   prevBtn.addEventListener('click', function () { goTo(current - 1); });
   nextBtn.addEventListener('click', function () { goTo(current + 1); });
 
-  // Keyboard nav on the track wrapper
   section.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowLeft') { goTo(current - 1); e.preventDefault(); }
     else if (e.key === 'ArrowRight') { goTo(current + 1); e.preventDefault(); }
   });
 
   function load() {
-    // Public discovery feed: /api/worlds/featured returns only published worlds
-    // with preview data and needs no auth, so it works for anonymous landing
-    // visitors (the auth-gated /api/worlds returns [] for them).
-    fetch('/api/worlds/featured', { headers: { Accept: 'application/json' } })
+    // Community discovery feed: /api/home-worlds returns public user-built
+    // worlds from world_shares — no auth required.
+    fetch('/api/home-worlds', { headers: { Accept: 'application/json' } })
       .then(function (res) { return res && res.ok ? res.json() : null; })
       .then(function (data) {
         var all = data && Array.isArray(data.worlds) ? data.worlds : [];

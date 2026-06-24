@@ -161,10 +161,30 @@
           </a>
         </div>
       </div>
-      <section class="world-carousel" id="world-carousel" aria-label="Featured worlds" hidden>
+      <aside class="hero-feed" id="hero-feed" aria-label="Live public collab worlds" hidden>
+        <div class="hero-feed-head">
+          <span class="hero-feed-live"><span class="hero-feed-dot"></span>Live</span>
+          <span class="hero-feed-title">Public collab builds</span>
+        </div>
+        <ul class="hero-feed-list" id="hero-feed-list"></ul>
+        <a class="hero-feed-foot" href="/collabs">
+          <span>More worlds</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </aside>
+      <a class="scroll-cue" href="#features" aria-label="Scroll to features">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </a>
+    </section>
+
+    <!-- Community worlds carousel — full-width strip of user-built shared worlds.
+         Data source: /api/home-worlds (world_shares table).
+         scripts/world-carousel.js populates this at runtime; stays hidden until data loads. -->
+    <section class="world-carousel" id="world-carousel" aria-label="Worlds from the community" hidden>
+      <div class="world-carousel-inner">
         <div class="world-carousel-head">
-          <span class="world-carousel-label">Featured worlds</span>
-          <a class="world-carousel-browse" href="/featured">
+          <span class="world-carousel-label">Worlds from the community</span>
+          <a class="world-carousel-browse" href="/templates">
             <span>Browse all</span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
           </a>
@@ -181,21 +201,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
           </button>
         </div>
-      </section>
-      <aside class="hero-feed" id="hero-feed" aria-label="Live public collab worlds" hidden>
-        <div class="hero-feed-head">
-          <span class="hero-feed-live"><span class="hero-feed-dot"></span>Live</span>
-          <span class="hero-feed-title">Public collab builds</span>
-        </div>
-        <ul class="hero-feed-list" id="hero-feed-list"></ul>
-        <a class="hero-feed-foot" href="/collabs">
-          <span>More worlds</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
-        </a>
-      </aside>
-      <a class="scroll-cue" href="#features" aria-label="Scroll to features">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-      </a>
+      </div>
     </section>
 
     <!-- The content below is a fallback; scripts/latest-news.js replaces the

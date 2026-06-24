@@ -797,41 +797,54 @@ svg {
   }
 }
 
-/* -------- hero featured worlds carousel -------- */
+/* -------- community worlds carousel — full-width strip under hero -------- */
+/* The section itself spans full viewport width; the inner wrapper constrains
+   content to the same 1200px grid used by .top-story-section. */
 .world-carousel {
-  position: relative;
-  z-index: 1;
-  margin-top: 36px;
-  width: min(420px, 100%);
+  width: 100%;
+  background: rgba(255, 255, 255, 0.48);
+  border-top: 1px solid rgba(255, 255, 255, 0.62);
+  border-bottom: 1px solid rgba(200, 210, 230, 0.36);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.82) inset,
+    0 8px 32px -16px rgba(40, 50, 80, 0.18);
+  padding: 28px 0 24px;
+}
+
+.world-carousel-inner {
+  width: min(1200px, calc(100% - 48px));
+  margin: 0 auto;
 }
 
 .world-carousel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
 
 .world-carousel-label {
-  font-size: 12px;
+  font-family: 'Pixelify Sans', var(--display-font), sans-serif;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #25304c;
-  opacity: 0.72;
+  color: #1a2a50;
 }
 
 .world-carousel-browse {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 650;
-  color: var(--accent);
+  color: var(--accent, #3a72c8);
   text-decoration: none;
   transition: opacity 0.14s ease;
 }
-.world-carousel-browse:hover { opacity: 0.78; }
+.world-carousel-browse:hover { opacity: 0.72; }
 .world-carousel-browse svg {
   width: 13px;
   height: 13px;
@@ -842,16 +855,16 @@ svg {
   stroke-linejoin: round;
 }
 
+/* Stage clips the sliding track. Full-width, shows ~3-4 cards at once.
+   Each card is ~290px wide with gaps; the track translates by card+gap px per step. */
 .world-carousel-stage {
   overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: rgba(7, 9, 17, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 18px 48px -24px rgba(17, 27, 69, 0.6);
+  border-radius: var(--radius-lg, 14px);
 }
 
 .world-carousel-track {
   display: flex;
+  gap: 16px;
   transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: transform;
 }
@@ -860,16 +873,24 @@ svg {
   .world-carousel-track { transition: none; }
 }
 
+/* Fixed card width; JS advances by (card-width + gap) pixels. */
 .world-carousel-slide {
-  flex: 0 0 100%;
+  flex: 0 0 290px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg, 14px);
+  overflow: hidden;
+  background: rgba(7, 9, 17, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 14px 40px -20px rgba(17, 27, 69, 0.55);
 }
 
 .world-carousel-canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 8 / 5;
+  aspect-ratio: 14 / 9;
   image-rendering: pixelated;
   background: #070911;
 }
@@ -879,29 +900,29 @@ svg {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 12px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 9, 17, 0.9);
+  padding: 9px 14px 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(7, 9, 17, 0.92);
 }
 
 .world-carousel-name {
   font-size: 13px;
   font-weight: 700;
-  color: rgba(235, 240, 255, 0.92);
+  color: rgba(235, 240, 255, 0.93);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--display-font);
+  font-family: var(--display-font, sans-serif);
 }
 
 .world-carousel-open {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 4px 11px;
   border-radius: 999px;
   background: rgba(58, 114, 200, 0.22);
-  border: 1px solid rgba(58, 114, 200, 0.42);
+  border: 1px solid rgba(58, 114, 200, 0.44);
   color: #a8c6ff;
   font-size: 11px;
   font-weight: 700;
@@ -915,26 +936,29 @@ svg {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .world-carousel-btn {
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(58, 114, 200, 0.36);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.72);
   color: #25304c;
   cursor: pointer;
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  transition: background 0.14s ease;
+  transition: background 0.14s ease, border-color 0.14s ease;
 }
-.world-carousel-btn:hover { background: rgba(255, 255, 255, 0.76); }
+.world-carousel-btn:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(58, 114, 200, 0.6);
+}
 .world-carousel-btn:focus-visible {
   outline: 2px solid rgba(21, 93, 212, 0.5);
   outline-offset: 2px;
@@ -951,7 +975,7 @@ svg {
 
 .world-carousel-dots {
   display: flex;
-  gap: 6px;
+  gap: 7px;
   align-items: center;
 }
 
@@ -961,30 +985,23 @@ svg {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(17, 27, 69, 0.28);
+  background: rgba(58, 114, 200, 0.22);
   cursor: pointer;
   transition: background 0.18s ease, transform 0.18s ease;
 }
 .world-carousel-dot.is-active {
-  background: var(--accent);
-  transform: scale(1.25);
+  background: var(--accent, #3a72c8);
+  transform: scale(1.3);
 }
 .world-carousel-dot:focus-visible {
   outline: 2px solid rgba(21, 93, 212, 0.5);
   outline-offset: 2px;
 }
 
-/* On narrow screens the carousel sits in normal flow below the hero copy */
-@media (max-width: 1080px) {
-  .world-carousel {
-    width: min(420px, 100%);
-  }
-}
-
-@media (max-width: 540px) {
-  .world-carousel {
-    width: 100%;
-  }
+@media (max-width: 600px) {
+  .world-carousel { padding: 20px 0 18px; }
+  .world-carousel-inner { width: calc(100% - 32px); }
+  .world-carousel-slide { flex: 0 0 calc(100% - 32px); }
 }
 
 .scroll-cue {
