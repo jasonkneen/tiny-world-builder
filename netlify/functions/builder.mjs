@@ -76,9 +76,18 @@ export default async function builder(request) {
       rank = Number(profile.rank) || null;
     }
 
-    // Fetch published worlds for this profile, bounded to MAX_WORLDS.
+    // Fetch published worlds for this profile, bounded to MAX_WORLDS. The cell array
+    // is sliced to MAX_PREVIEW_CELLS IN SQL so a public request can never force the
+    // full data JSON (up to 20MB/world) over the wire — only a preview-sized slice.
     const worldRows = await sql`
-      SELECT id, slug, name, grid_size, data
+      SELECT id, slug, name, grid_size,
+        COALESCE((
+          SELECT jsonb_agg(elem ORDER BY ord)
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(data->'cells') = 'array' THEN data->'cells' ELSE '[]'::jsonb END
+          ) WITH ORDINALITY AS t(elem, ord)
+          WHERE ord <= ${MAX_PREVIEW_CELLS}
+        ), '[]'::jsonb) AS cells
       FROM worlds
       WHERE owner_profile_id = ${Number(profile.id)}
         AND status = 'published'
@@ -88,10 +97,8 @@ export default async function builder(request) {
 
     const worlds = (worldRows || []).map((r) => {
       const gridSize = Math.max(1, Math.min(64, Number(r.grid_size) || 8));
-      const rawCells = (r.data && Array.isArray(r.data.cells))
-        ? r.data.cells.slice(0, MAX_PREVIEW_CELLS)
-        : [];
-      const previewData = normalizeWorldSelectionGateData({ ...r.data, cells: rawCells }, gridSize);
+      const rawCells = Array.isArray(r.cells) ? r.cells : [];
+      const previewData = normalizeWorldSelectionGateData({ cells: rawCells }, gridSize);
       return {
         slug: r.slug,
         name: r.name || 'Untitled world',
