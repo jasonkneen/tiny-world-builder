@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="See the top builders in Tiny World Builder — ranked by number of published worlds." />
+<title>Top Builders - Tiny World Builder</title>
+<link rel="icon" href="assets/twlogo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" />
+<link rel="stylesheet" href="styles/landing.css" />
+<style>
+/* ---- leaderboard page ---- */
+.leaderboard-section {
+  width: min(860px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 8px 0 80px;
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.leaderboard-head th {
+  padding: 0 16px 4px;
+  font-family: var(--body-font);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+}
+
+.leaderboard-head th.col-rank { width: 56px; text-align: center; }
+.leaderboard-head th.col-count { width: 120px; text-align: right; }
+
+.leaderboard-row td {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.58);
+  border-top: 1px solid rgba(255, 255, 255, 0.66);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.66);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  transition: background 0.12s ease;
+}
+
+.leaderboard-row td:first-child {
+  border-left: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  box-shadow:
+    1px 0 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 18px 44px -16px rgba(40, 50, 80, 0.18);
+}
+
+.leaderboard-row td:last-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  box-shadow:
+    -1px 0 0 rgba(255, 255, 255, 0.88) inset,
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 18px 44px -16px rgba(40, 50, 80, 0.18);
+}
+
+.leaderboard-row:hover td {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* top-3 medal accent — left border stripe */
+.leaderboard-row.rank-1 td:first-child { border-left-color: #c9a227; box-shadow: 3px 0 0 #c9a227 inset, 0 1px 0 rgba(255,255,255,.88) inset, 0 18px 44px -16px rgba(40,50,80,.18); }
+.leaderboard-row.rank-2 td:first-child { border-left-color: #8d9497; box-shadow: 3px 0 0 #8d9497 inset, 0 1px 0 rgba(255,255,255,.88) inset, 0 18px 44px -16px rgba(40,50,80,.18); }
+.leaderboard-row.rank-3 td:first-child { border-left-color: #a0522d; box-shadow: 3px 0 0 #a0522d inset, 0 1px 0 rgba(255,255,255,.88) inset, 0 18px 44px -16px rgba(40,50,80,.18); }
+
+.leaderboard-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-family: var(--display-font);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.leaderboard-rank-num { line-height: 1; }
+
+/* medal SVG glyphs */
+.leaderboard-medal {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.rank-1 .leaderboard-rank { color: #b8860b; }
+.rank-2 .leaderboard-rank { color: #707478; }
+.rank-3 .leaderboard-rank { color: #8b4513; }
+
+.leaderboard-builder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* avatar badge — image or initial */
+.leaderboard-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #2d7ef5, #7fd0ff);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 -4px 8px rgba(17, 51, 128, 0.14);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 850 14px/1 var(--body-font);
+  letter-spacing: 0.04em;
+}
+
+.leaderboard-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.leaderboard-name {
+  font-family: var(--display-font);
+  font-size: 17px;
+  font-weight: 700;
+  color: #111b45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaderboard-count {
+  text-align: right;
+  font-family: var(--display-font);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.leaderboard-count-label {
+  display: block;
+  font-family: var(--body-font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.leaderboard-empty {
+  padding: 72px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.60);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.86) inset,
+    0 16px 40px -18px rgba(40, 50, 80, 0.20);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+.leaderboard-empty-icon {
+  display: block;
+  margin: 0 auto 20px;
+  width: 48px;
+  height: 48px;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.leaderboard-empty h2 {
+  margin: 0 0 10px;
+  font-family: var(--display-font);
+  font-size: 26px;
+  color: #111b45;
+}
+
+.leaderboard-empty p {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.55;
+}
+
+.leaderboard-empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #2d7ef5 0%, var(--accent) 100%);
+  color: #fff;
+  font: 600 15px/1 var(--body-font);
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px -8px rgba(22, 76, 170, 0.5);
+  transition: filter 0.12s;
+}
+
+.leaderboard-empty-action:hover { filter: brightness(1.1); }
+
+.leaderboard-empty-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 600px) {
+  .leaderboard-head th.col-count { display: none; }
+  .leaderboard-row .col-count { display: none; }
+  .leaderboard-name { font-size: 15px; }
+}
+</style>
+</head>
+<body class="landing-page">
+  <header class="site-header" aria-label="Tiny World Builder">
+    <a class="site-logo" href="/" aria-label="Tiny World Builder home">
+      <img src="assets/twlogo-wordmark.png" alt="Tiny World Builder" width="1064" height="403" />
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="/#features">Features</a>
+      <a href="/#workflow">How it works</a>
+      <a href="/worlds">Worlds</a>
+      <a href="/leaderboard" aria-current="page">Leaderboard</a>
+      <a href="/docs">Docs</a>
+      <a href="/roadmap">Roadmap</a>
+      <a href="/features">Suggest</a>
+      <a href="/news">News</a>
+      <a href="https://github.com/jasonkneen/tiny-world-builder" rel="noopener noreferrer">GitHub</a>
+      <a class="nav-cta" href="/tiny-world-builder">Start building</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="page-hero-section" aria-labelledby="page-title">
+      <div class="page-hero-copy">
+        <h1 id="page-title">Top Builders</h1>
+        <p>The community's most prolific world-makers, ranked by published worlds.</p>
+      </div>
+    </section>
+
+    <section class="leaderboard-section" aria-label="Builder leaderboard">
+      <div id="leaderboard-container" aria-live="polite" aria-label="Top builders list">
+        <!-- populated by script -->
+      </div>
+    </section>
+
+    <section class="cta-section" aria-labelledby="cta-title">
+      <div class="cta-copy">
+        <h2 id="cta-title">Ready to build your tinyverse?</h2>
+      </div>
+      <div class="cta-actions">
+        <a class="primary-action" href="/tiny-world-builder">
+          <span>Open builder</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var container = document.getElementById('leaderboard-container');
+    if (!container) return;
+
+    // SVG medal glyphs for top-3 (all static markup, not user data)
+    var MEDALS = [
+      // gold
+      '<svg class="leaderboard-medal" viewBox="0 0 24 24" aria-label="Gold" fill="none" stroke="#c9a227" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>',
+      // silver
+      '<svg class="leaderboard-medal" viewBox="0 0 24 24" aria-label="Silver" fill="none" stroke="#8d9497" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>',
+      // bronze
+      '<svg class="leaderboard-medal" viewBox="0 0 24 24" aria-label="Bronze" fill="none" stroke="#a0522d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>',
+    ];
+
+    function showEmpty() {
+      var div = document.createElement('div');
+      div.className = 'leaderboard-empty';
+      // Static SVG icon — not user data, innerHTML is safe
+      div.innerHTML =
+        '<svg class="leaderboard-empty-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>' +
+        '<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>' +
+        '<path d="M4 22h16"/>' +
+        '<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>' +
+        '<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>' +
+        '<path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>' +
+        '</svg>';
+
+      var h2 = document.createElement('h2');
+      h2.textContent = 'No published worlds yet';
+      div.appendChild(h2);
+
+      var p = document.createElement('p');
+      p.textContent = 'Be the first to publish one — be the first on the board.';
+      div.appendChild(p);
+
+      var a = document.createElement('a');
+      a.className = 'leaderboard-empty-action';
+      a.href = '/tiny-world-builder';
+      // Static markup only — not user data
+      a.innerHTML = '<span>Start building</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+      div.appendChild(a);
+
+      container.textContent = '';
+      container.appendChild(div);
+    }
+
+    function initialLetter(name) {
+      // Get first alphanumeric char; fall back to '?'
+      var m = String(name || '').match(/[a-zA-Z0-9]/);
+      return m ? m[0].toUpperCase() : '?';
+    }
+
+    function buildRow(leader) {
+      var rank = Number(leader.rank);
+      var rankClass = rank <= 3 ? ' rank-' + rank : '';
+
+      var tr = document.createElement('tr');
+      tr.className = 'leaderboard-row' + rankClass;
+
+      // --- rank cell ---
+      var tdRank = document.createElement('td');
+      tdRank.className = 'col-rank';
+
+      var rankDiv = document.createElement('div');
+      rankDiv.className = 'leaderboard-rank';
+
+      if (rank >= 1 && rank <= 3) {
+        // Medal SVG — static markup, safe innerHTML
+        rankDiv.innerHTML = MEDALS[rank - 1];
+      }
+
+      var rankNum = document.createElement('span');
+      rankNum.className = 'leaderboard-rank-num';
+      rankNum.textContent = String(rank);
+      rankDiv.appendChild(rankNum);
+      tdRank.appendChild(rankDiv);
+
+      // --- builder cell ---
+      var tdBuilder = document.createElement('td');
+
+      var builderDiv = document.createElement('div');
+      builderDiv.className = 'leaderboard-builder';
+
+      // avatar: image or initial badge
+      var avatarDiv = document.createElement('div');
+      avatarDiv.className = 'leaderboard-avatar';
+      avatarDiv.setAttribute('aria-hidden', 'true');
+
+      if (leader.image) {
+        var img = document.createElement('img');
+        img.src = leader.image;                         // URL — setAttribute path
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        // Don't let a broken image expand the cell
+        img.onerror = function () { this.style.display = 'none'; };
+        avatarDiv.appendChild(img);
+      } else {
+        // textContent — XSS-safe initial letter
+        avatarDiv.textContent = initialLetter(leader.displayName || leader.username);
+      }
+
+      var nameEl = document.createElement('span');
+      nameEl.className = 'leaderboard-name';
+      // textContent — user-controlled field, never innerHTML
+      nameEl.textContent = String(leader.displayName || leader.username || 'Builder');
+
+      builderDiv.appendChild(avatarDiv);
+      builderDiv.appendChild(nameEl);
+      tdBuilder.appendChild(builderDiv);
+
+      // --- count cell ---
+      var tdCount = document.createElement('td');
+      tdCount.className = 'col-count';
+
+      var countNum = document.createElement('span');
+      countNum.className = 'leaderboard-count';
+      countNum.textContent = String(Number(leader.worldsPublished));
+
+      var countLabel = document.createElement('span');
+      countLabel.className = 'leaderboard-count-label';
+      countLabel.textContent = Number(leader.worldsPublished) === 1 ? 'world' : 'worlds';
+
+      tdCount.appendChild(countNum);
+      tdCount.appendChild(countLabel);
+
+      tr.appendChild(tdRank);
+      tr.appendChild(tdBuilder);
+      tr.appendChild(tdCount);
+
+      return tr;
+    }
+
+    function render(leaders) {
+      container.textContent = '';
+
+      if (!leaders || !leaders.length) {
+        showEmpty();
+        return;
+      }
+
+      // Table wrapper — static structure, safe innerHTML
+      var table = document.createElement('table');
+      table.className = 'leaderboard-table';
+      table.setAttribute('aria-label', 'Top builders');
+
+      var thead = document.createElement('thead');
+      thead.innerHTML =
+        '<tr class="leaderboard-head">' +
+        '<th class="col-rank" scope="col">Rank</th>' +
+        '<th scope="col">Builder</th>' +
+        '<th class="col-count" scope="col">Worlds</th>' +
+        '</tr>';
+
+      var tbody = document.createElement('tbody');
+      leaders.forEach(function (leader) {
+        tbody.appendChild(buildRow(leader));
+      });
+
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+
+    function load() {
+      fetch('/api/leaderboard', { headers: { Accept: 'application/json' } })
+        .then(function (res) { return res && res.ok ? res.json() : null; })
+        .then(function (data) {
+          var leaders = (data && Array.isArray(data.leaders)) ? data.leaders : [];
+          render(leaders);
+        })
+        .catch(function () { showEmpty(); });
+    }
+
+    // Expose as test seam (mirrors window._featuredLoad pattern)
+    window._leaderboardLoad = load;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -77,6 +77,11 @@
   status = 200
 
 [[redirects]]
+  from = "/leaderboard"
+  to = "/leaderboard.html"
+  status = 200
+
+[[redirects]]
   from = "/worlds"
   to = "/worlds.html"
   status = 200
