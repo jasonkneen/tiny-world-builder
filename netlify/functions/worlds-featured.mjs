@@ -28,15 +28,24 @@ export default async function worldsFeatured(request) {
       ORDER BY published_at DESC NULLS LAST, id DESC
       LIMIT ${limit}
     `;
+    // Bound the per-row work BEFORE normalization. A published world's `data` can be
+    // up to 20MB; on an unauthenticated route we must not iterate/allocate the whole
+    // blob. Clamp gridSize and slice the raw cell list to a small ceiling first — a
+    // preview only ever needs the first ~grid^2 cells anyway. (worldPreview also caps,
+    // but the cap must come before normalize, not after — Codex review finding.)
+    const MAX_PREVIEW_CELLS = 1200;
     const worlds = (rows || []).map((r) => {
-      const gridSize = Number(r.grid_size) || 8;
-      const previewData = normalizeWorldSelectionGateData(r.data, gridSize);
+      const gridSize = Math.max(1, Math.min(64, Number(r.grid_size) || 8));
+      const rawCells = (r.data && Array.isArray(r.data.cells))
+        ? r.data.cells.slice(0, MAX_PREVIEW_CELLS)
+        : [];
+      const previewData = normalizeWorldSelectionGateData({ ...r.data, cells: rawCells }, gridSize);
       return {
         id: Number(r.id),
         slug: r.slug,
         name: r.name || 'Untitled world',
         gridSize,
-        preview: { gridSize, cells: worldPreview(previewData) },
+        preview: { gridSize, cells: worldPreview(previewData, MAX_PREVIEW_CELLS) },
       };
     }).filter((w) => Array.isArray(w.preview.cells) && w.preview.cells.length > 0);
 
