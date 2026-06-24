@@ -49,6 +49,18 @@ export function toNonNegativeBigInt(value) {
   }
 }
 
+// Convert an on-chain atomic token amount (smallest units) to whole $TINYWORLD,
+// flooring fractional tokens. GOLD tiers are expressed in whole tokens, so this is
+// the bridge between wallet_accounts.token_balance_atomic and calculateGoldAllowance.
+// Uses BigInt throughout — a 100M-token balance at 9 decimals overflows Number.
+export function wholeTokensHeld(atomicAmount, decimals = 0) {
+  const atomic = toNonNegativeBigInt(atomicAmount);
+  const dec = Math.max(0, Math.min(36, Math.floor(Number(decimals) || 0)));
+  if (dec === 0) return atomic.toString();
+  const divisor = 10n ** BigInt(dec);
+  return (atomic / divisor).toString();
+}
+
 export function currentCycleId(now = new Date(), cadence = DEFAULT_ECONOMY_POLICY.cycleCadence) {
   const date = now instanceof Date ? now : new Date(now);
   const t = Number.isFinite(date.getTime()) ? date.getTime() : Date.now();
