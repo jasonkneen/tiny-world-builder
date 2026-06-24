@@ -61,19 +61,18 @@ export default async function meGold(request) {
         WHERE profile_id = ${profileId} AND verified_at IS NOT NULL
       `;
       walletLinked = (wallets || []).length > 0;
-      let atomicSum = 0n;
-      let decimals = 0;
+      // Convert each wallet to whole tokens with ITS OWN decimals, then sum — correct
+      // regardless of any per-row decimals inconsistency across linked wallets.
+      let wholeSum = 0n;
       for (const w of wallets || []) {
         // Reject hostile/garbled atomic strings rather than letting a wild value through.
         const raw = String(w.token_balance_atomic || "0").trim();
         if (/^[0-9]{1,40}$/.test(raw)) {
-          try { atomicSum += BigInt(raw); } catch (_) {}
+          try { wholeSum += BigInt(wholeTokensHeld(raw, Number(w.token_decimals) || 0)); } catch (_) {}
         }
-        const d = Number(w.token_decimals) || 0;
-        if (d > decimals) decimals = d;
         if (w.updated_at && (!balanceAsOf || w.updated_at > balanceAsOf)) balanceAsOf = w.updated_at;
       }
-      if (atomicSum > 0n) tinyworldHeld = wholeTokensHeld(atomicSum, decimals);
+      if (wholeSum > 0n) tinyworldHeld = wholeSum.toString();
     } catch (e) {}
 
     const base = calculateGoldAllowance({
