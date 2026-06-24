@@ -1,7 +1,7 @@
   // Tinyverse — universe map, buying, and world management (playworlds-style).
   //
   // A NEW mode layered beside the freeform builder: a "🌍 Worlds" launcher opens
-  // the universe map (world cards), where players buy unclaimed worlds with USDC,
+  // the universe map (world cards), where players enter owner-held early-preview islands
   // name/tax/build/publish their drafts, and enter published worlds to play.
   //
   // Reuses existing globals: window.__tinyworldCloudApiCall (cloud API + auth),
@@ -437,13 +437,6 @@
       return parts.length ? parts.join(' · ') : T('worlds.noResources');
     }
 
-    function worldValueText(w) {
-      const value = (w && (w.marketValueUsdc || (w.priceBreakdown && w.priceBreakdown.totalUsdc) || w.priceUsdc)) || '';
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) return '—';
-      return (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' USDC';
-    }
-
     function visibleWorlds() {
       const q = worldSearch || '';
       return worldsCache.filter(w => {
@@ -609,7 +602,6 @@
         el('div', {}, [el('b', { text: T('worlds.players') + ': ' }), document.createTextNode(String(w.activePlayers || 0))]),
         el('div', {}, [el('b', { text: T('worlds.tax') + ': ' }), document.createTextNode(w.taxPercent + '%')]), (w.taxCooldown && !w.taxCooldown.canChange) ? el('span', { style: 'font-size:10px;color:#f66;margin-left:6px', text: '(CD)' }) : null,
         el('div', {}, [el('b', { text: T('worlds.owner') + ': ' }), document.createTextNode(w.ownerName || '—')]),
-        el('div', {}, [el('b', { text: 'Value: ' }), document.createTextNode(worldValueText(w))]),
         el('div', { class: 'tw-worlds-resources' }, [el('b', { text: T('worlds.resources') + ': ' }), document.createTextNode(resourceStatsText(resources))]),
         el('div', { class: 'tw-worlds-ready' }, [el('b', { text: T('worlds.ready') + ': ' }), document.createTextNode(String(Math.max(0, Math.round(Number(resources.ready) || 0))) + ' ' + T('worlds.nodes'))]),
       ]);
@@ -622,9 +614,9 @@
         } else if (mine && w.status === 'published') {
           actions.appendChild(el('button', { class: 'tw-btn alt', text: T('worlds.manage'), onclick: (e) => { e.stopPropagation(); manageFlow(w); } }));
         }
-      } else if (w.status === 'unclaimed') {
-        actions.appendChild(el('button', { class: 'tw-btn', text: T('worlds.buy'), onclick: (e) => { e.stopPropagation(); buyFlow(w); } }));
-      } else if (w.status === 'published') {
+      } else if (w.status === 'unclaimed' || w.status === 'published') {
+        // Owner-held early-preview islands: players just ENTER and PLAY (resource
+        // gathering). No claim, no buy, no ownership transfer, no currency.
         actions.appendChild(el('button', { class: 'tw-btn go', text: T('worlds.enter'), onclick: (e) => { e.stopPropagation(); enterWorld(w); } }));
         if (mine) actions.appendChild(el('button', { class: 'tw-btn alt', text: T('worlds.manage'), onclick: (e) => { e.stopPropagation(); manageFlow(w); } }));
       } else if (w.status === 'draft' && mine) {
@@ -671,52 +663,6 @@
       return close;
     }
   
-    // ---- buy with USDC (Solana Pay) ----
-    async function buyFlow(w) {
-      if (!loggedIn()) { toast(T('worlds.loginNeeded')); return; }
-      const quote = await api('/api/worlds/claim', 'POST', { action: 'quote', worldId: w.id });
-      if (!quote || quote.error) { toast(quote && quote.error ? quote.error : T('worlds.error')); return; }
-      // Test mode: claim for real (records + ownership) without wallet/payment.
-      if (quote.bypass) {
-        modal(T('worlds.buy') + ' · ' + (w.name || w.slug), [
-          el('p', { text: quote.priceUsdc + ' USDC', style: 'font-size:22px;font-weight:700;margin:0' }),
-          el('p', { style: 'font-size:12px;opacity:.7;margin:8px 0', text: 'Test mode — payment is bypassed; ownership and records are written for real.' }),
-        ], [
-          { label: 'Claim (test — no payment)', cls: 'go', onClick: async (done) => {
-              const res = await api('/api/worlds/claim', 'POST', { action: 'confirm', worldId: w.id });
-              if (!res || res.error) { toast(res && res.error ? res.error : T('worlds.error')); return; }
-              toast(T('worlds.bought')); done(); loadWorlds();
-            } },
-          { label: T('worlds.close'), cls: 'alt', onClick: (done) => done() },
-        ]);
-        return;
-      }
-      const info = el('p', { text: quote.priceUsdc + ' USDC', style: 'font-size:22px;font-weight:700;margin:0' });
-      const linkWrap = el('div', { style: 'margin-top:12px;font-size:12px;opacity:.85' });
-      const sig = el('input', { placeholder: 'Transaction signature (for verification)' });
-      let intentId = 0;
-      const close = modal(T('worlds.buy') + ' · ' + (w.name || w.slug), [
-        info,
-        el('p', { style: 'font-size:12px;opacity:.7;margin:8px 0', text: 'Pay in USDC on Solana, then confirm to claim the world as your draft.' }),
-        linkWrap,
-        el('label', { text: 'Transaction signature' }), sig,
-      ], [
-        { label: T('worlds.payOpen'), cls: 'alt', onClick: async () => {
-            const pay = await api('/api/wallet/payments', 'POST', { action: 'create', amount: quote.priceUsdc, recipientWallet: quote.recipientWallet, tokenMint: quote.tokenMint });
-            if (!pay || pay.error) { toast(pay && pay.error ? pay.error : T('worlds.error')); return; }
-            intentId = pay.id;
-            linkWrap.textContent = '';
-            linkWrap.appendChild(el('a', { href: pay.solanaPayUrl, target: '_blank', rel: 'noopener', text: 'Open Solana Pay link', style: 'color:#9cc0ff' }));
-          } },
-        { label: T('worlds.buyConfirm'), onClick: async (done) => {
-            if (!intentId) { toast('Create the payment first'); return; }
-            const res = await api('/api/worlds/claim', 'POST', { action: 'confirm', worldId: w.id, paymentIntentId: intentId, signature: sig.value.trim() });
-            if (!res || res.error) { toast(res && res.error ? res.error : T('worlds.error')); return; }
-            toast(T('worlds.bought')); done(); loadWorlds();
-          } },
-      ]);
-      void close;
-    }
   
     // ---- manage (name / tax / publish / unpublish) ----
     function manageFlow(w) {
