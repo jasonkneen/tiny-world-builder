@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { requireAuthUser } from './lib/auth.mjs';
-import { requireTinyverseAccess } from './lib/tinyverse-access.mjs';
 import { ensureProfile } from './lib/profiles.mjs';
 import { getSql, isDatabaseUnavailable, isMissingRelations } from './lib/db.mjs';
 import { corsResponse, errorResponse, jsonResponse, readJson, sameOriginWriteGuard } from './lib/http.mjs';
@@ -14,6 +13,22 @@ export const config = { path: '/api/me/resources/sell' };
 // server-authoritative; the client only names amounts. Atomic + idempotent: the player
 // is advisory-locked, resources are debited FOR UPDATE, GOLD credited, and a durable
 // resource_sales row gates replays.
+//
+// Early-preview campaign (P+O): selling is OPEN to any signed-in player (P — no
+// tinyverse gate), and Tinyverse-access (lobby_access) accounts earn a GOLD
+// MULTIPLIER on each sale (O). Earned GOLD is an in-app integer point balance, not
+// a monetary value and not the on-chain $TINYWORLD token. The multiplier scales the
+// integer payout only; all idempotency/lock/atomic guarantees are unchanged.
+export const TINYVERSE_GOLD_MULTIPLIER = 2; // O: lobby_access accounts earn 2x (integer-safe)
+
+// O multiplier math (pure, integer-safe) — exported so the payout rule is unit-tested.
+// Earned GOLD is an integer point balance; the multiplier scales the integer payout.
+export function goldForSale(baseGold, lobbyAccess) {
+  const base = Math.max(0, Math.floor(Number(baseGold) || 0));
+  const mult = lobbyAccess ? TINYVERSE_GOLD_MULTIPLIER : 1;
+  return { gold: base * mult, multiplier: mult };
+}
+
 const isMissingSchema = (err) => isMissingRelations(err, ['player_resources', 'resource_sales', 'coin_balances', 'coin_ledger']);
 
 export default async function resourcesSell(request) {
@@ -22,10 +37,9 @@ export default async function resourcesSell(request) {
   if (request.method !== 'POST') return errorResponse('Method not allowed', 405, origin);
   if (!sameOriginWriteGuard(request)) return errorResponse('Forbidden', 403, origin);
 
+  // P: signed-in is enough — NO requireTinyverseAccess gate. The public can sell.
   const auth = await requireAuthUser(request, origin);
   if (auth.response) return auth.response;
-  const tvGate = requireTinyverseAccess(auth.user, origin);
-  if (tvGate) return tvGate;
 
   let body;
   try { body = await readJson(request); } catch (_) { return errorResponse('invalid-json', 400, origin); }
@@ -33,11 +47,8 @@ export default async function resourcesSell(request) {
   const idempotencyKey = String((body && body.idempotencyKey) || '').trim();
   if (idempotencyKey.length < 8 || idempotencyKey.length > 200) return errorResponse('invalid-idempotency-key', 400, origin);
 
-  const { amounts, totalUnits, gold } = computeResourceSale(body && body.amounts);
-  if (totalUnits <= 0 || gold <= 0) return errorResponse('nothing-to-sell', 400, origin);
-  // Bound a single sale to the coin credit cap so an oversized sale fails cleanly (400)
-  // rather than rolling back the transaction with an invalid-amount 500.
-  if (gold > MAX_COIN_AMOUNT) return errorResponse('sale-too-large', 400, origin);
+  const { amounts, totalUnits, gold: baseGold } = computeResourceSale(body && body.amounts);
+  if (totalUnits <= 0 || baseGold <= 0) return errorResponse('nothing-to-sell', 400, origin);
 
   // Fixed-length coin ref so a long key can never overflow the ref limit.
   const coinRef = 'sell:' + createHash('sha256').update(`${auth.user && auth.user.sub}:${idempotencyKey}`).digest('hex').slice(0, 48);
@@ -46,6 +57,13 @@ export default async function resourcesSell(request) {
     const sql = getSql();
     const profile = await ensureProfile(auth.user);
     const buyerId = Number(profile.id);
+
+    // O: Tinyverse-access (lobby_access) accounts earn a GOLD multiplier on the sale.
+    // Applied server-side AFTER the profile is known; integer math (coins are integers).
+    const { gold, multiplier } = goldForSale(baseGold, profile.lobby_access);
+    // Bound the FINAL (post-multiplier) payout to the coin credit cap so an oversized
+    // sale fails cleanly (400) instead of rolling back with an invalid-amount 500.
+    if (gold > MAX_COIN_AMOUNT) return errorResponse('sale-too-large', 400, origin);
 
     const result = await coinsTransaction(sql, async ({ credit, tx }) => {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${'coin:' + buyerId})::bigint)`;
@@ -81,7 +99,7 @@ export default async function resourcesSell(request) {
         INSERT INTO resource_sales (profile_id, fish, meat, plants, ore, gold_credited, idempotency_key)
         VALUES (${buyerId}, ${amounts.fish}, ${amounts.meat}, ${amounts.plants}, ${amounts.ore}, ${gold}, ${idempotencyKey})
       `;
-      return { ok: true, gold, balance: c.balance, sold: amounts };
+      return { ok: true, gold, baseGold, multiplier, balance: c.balance, sold: amounts };
     });
 
     if (!result.ok) {

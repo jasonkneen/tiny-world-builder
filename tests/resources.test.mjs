@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeResourceSale, RESOURCE_GOLD_RATES, isSellableResource } from '../netlify/functions/lib/resources.mjs';
+import { goldForSale, TINYVERSE_GOLD_MULTIPLIER } from '../netlify/functions/resources-sell.mjs';
 
 test('server-authoritative rates compute the right gold', () => {
   const r = computeResourceSale({ fish: 10, meat: 5, plants: 4, ore: 2 });
@@ -36,4 +37,24 @@ test('isSellableResource guards the type list', () => {
   assert.equal(isSellableResource('ore'), true);
   assert.equal(isSellableResource('gold'), false);
   assert.equal(isSellableResource('__proto__'), false);
+});
+
+// O multiplier — Tinyverse-access (lobby_access) accounts earn more GOLD per sale.
+test('public (no lobby_access) earns base gold, multiplier 1', () => {
+  const r = goldForSale(30, false);
+  assert.equal(r.gold, 30);
+  assert.equal(r.multiplier, 1);
+});
+
+test('Tinyverse-access earns the multiplier on the base gold', () => {
+  const r = goldForSale(30, true);
+  assert.equal(r.multiplier, TINYVERSE_GOLD_MULTIPLIER);
+  assert.equal(r.gold, 30 * TINYVERSE_GOLD_MULTIPLIER);
+});
+
+test('multiplier math is integer-safe and never negative', () => {
+  assert.deepEqual(goldForSale(0, true), { gold: 0, multiplier: TINYVERSE_GOLD_MULTIPLIER });
+  assert.deepEqual(goldForSale(-50, true), { gold: 0, multiplier: TINYVERSE_GOLD_MULTIPLIER });
+  assert.deepEqual(goldForSale(7.9, true), { gold: 7 * TINYVERSE_GOLD_MULTIPLIER, multiplier: TINYVERSE_GOLD_MULTIPLIER });
+  assert.deepEqual(goldForSale('abc', false), { gold: 0, multiplier: 1 });
 });
