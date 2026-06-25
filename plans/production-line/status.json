@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-25T15:17:52.538Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-25T15-17-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-25T13:58:09.877Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-25T13-58-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-24T08:55:00Z",
       "kind": "review",
       "text": "Codex adversarial security pass #1 -> BLOCK. Caught a real latent CRITICAL: /api/me/gold used the wrong auth shape and 500'd for everyone. Fixed."
-    },
-    {
-      "ts": "2026-06-24T08:50:00Z",
-      "kind": "build",
-      "text": "E1 built: wholeTokensHeld() BigInt helper (6 unit tests) + gold.mjs derives allowance from real verified-wallet balance. Removed the hardcoded 22m demo."
     }
   ],
-  "lastTick": "2026-06-25T13:58:09.877Z"
+  "lastTick": "2026-06-25T15:17:52.538Z"
 }
