@@ -40,6 +40,9 @@
     if (window.__tinyworldWatcherLayer && typeof window.__tinyworldWatcherLayer.tick === 'function') {
       try { window.__tinyworldWatcherLayer.tick(t, dt); } catch (_) {}
     }
+    if (typeof window.__tinyworldAnimalTick === 'function') {
+      try { window.__tinyworldAnimalTick(t, dt); } catch (_) {}
+    }
     repaintProfileEnd('tick.anim', tickStart);
 
     tickStart = repaintProfileBegin();

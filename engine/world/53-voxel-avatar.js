@@ -665,15 +665,17 @@
       }
 
       function addSwordGear(parent) {
+        // Sword scaled up ~1.5x (dimensions AND offsets together) so it reads clearly in the
+        // hand — the old slim 0.36-wide blade was barely visible at avatar scale.
         const g = grp(parent, 0, -0.7, 1.35); g.name = 'avatar-gear-sword';
-        const grip = gearBox(0.34, 1.15, 0.34, 'avatarGearLeather', 0x5c3a26);
-        grip.position.y = -0.15; g.add(grip);
-        const guard = gearBox(1.75, 0.24, 0.28, 'avatarGearGold', 0xd9a441);
-        guard.position.y = -0.82; g.add(guard);
-        const blade = gearBox(0.36, 4.5, 0.16, 'avatarGearSteel', 0xcfd8e6);
-        blade.position.y = -3.15; g.add(blade);
-        const tip = gearCone(0.34, 0.7, 4, 'avatarGearSteel', 0xcfd8e6);
-        tip.position.y = -5.75; tip.rotation.z = Math.PI; g.add(tip);
+        const grip = gearBox(0.51, 1.72, 0.51, 'avatarGearLeather', 0x5c3a26);
+        grip.position.y = -0.22; g.add(grip);
+        const guard = gearBox(2.62, 0.36, 0.42, 'avatarGearGold', 0xd9a441);
+        guard.position.y = -1.23; g.add(guard);
+        const blade = gearBox(0.54, 6.75, 0.24, 'avatarGearSteel', 0xcfd8e6);
+        blade.position.y = -4.72; g.add(blade);
+        const tip = gearCone(0.51, 1.05, 4, 'avatarGearSteel', 0xcfd8e6);
+        tip.position.y = -8.62; tip.rotation.z = Math.PI; g.add(tip);
       }
       function addStaffGear(parent) {
         const g = grp(parent, 0, -1.25, 1.1); g.name = 'avatar-gear-staff';

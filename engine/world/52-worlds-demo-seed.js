@@ -1,9 +1,17 @@
-  // Tinyverse — demo resource seeder for local development.
-  // When entering a world on localhost that has no harvestable cells, injects a
-  // compact set of resource cells (water, stone, plant, animal) so foraging works
-  // out-of-the-box without the owner having to manually add terrain.
-  // Mutates world.data.cells BEFORE the WebSocket opens, so the augmented cells
-  // are sent in world.join and the server derives nodes from them.
+  // Tinyverse — demo world seeder for local development.
+  // When entering a world on localhost that has no harvestable cells, lays out a
+  // RICH scene so the demo feels alive out of the box: clustered voxel-stamp trees
+  // (oak grove / pine cluster / cherry), bushes and flowers as undergrowth, a piled
+  // rock highland on raised terrain, a low water pond beside it, a crop patch, and a
+  // central meadow of grazing animals (which amble + swing their legs via 70-animal-anim).
+  // Harvest still works: water = fish, stone = ore, crops = plants, animals = hunt.
+  //
+  // Layout keeps all BLOCKING props (trees/rocks/voxel-builds) in the four corners and
+  // off the central cross, so the cells the player emerges onto from the selection gate
+  // (see 47's settleAfterGateArrival) stay walkable.
+  //
+  // Mutates world.data.cells BEFORE the WebSocket opens, so the augmented cells are sent
+  // in world.join and the server derives nodes from them.
   // Guard: ONLY runs on localhost / 127.0.0.1. Never runs in production.
   (function wireWorldsDemoSeed() {
     'use strict';
@@ -37,37 +45,6 @@
       return used;
     }
 
-    // Place `count` cells of given terrain/kind in a corner area, skipping used cells.
-    function placeInCorner(existing, g, ox, oz, dx, dz, terrain, kind, count) {
-      const added = [];
-      let placed = 0;
-      for (let step = 0; step < g && placed < count; step++) {
-        const x = ox + dx * step;
-        const z = oz + dz * step;
-        if (x < 0 || x >= g || z < 0 || z >= g) continue;
-        if (!existing.has(x + ',' + z)) {
-          added.push(kind ? [x, z, terrain, kind] : [x, z, terrain]);
-          existing.add(x + ',' + z);
-          placed++;
-        }
-      }
-      return added;
-    }
-
-    // Build a small water body (3 cells in an L-shape) at given origin.
-    function placeWater(existing, g, ox, oz) {
-      const added = [];
-      const candidates = [[ox, oz], [ox + 1, oz], [ox, oz + 1]];
-      for (const [x, z] of candidates) {
-        if (x < 0 || x >= g || z < 0 || z >= g) continue;
-        if (!existing.has(x + ',' + z)) {
-          added.push([x, z, 'water']);
-          existing.add(x + ',' + z);
-        }
-      }
-      return added;
-    }
-
     function seedResources(world) {
       if (!world) return null;
       if (!world.data || typeof world.data !== 'object') world.data = { v: 4, gridSize: world.gridSize || 8, cells: [] };
@@ -79,30 +56,98 @@
       const g = world.gridSize || 8;
       const used = usedPositions(cells);
       const added = [];
+      const cx = Math.floor(g / 2), cz = Math.floor(g / 2);
 
-      // Water body in top-left corner (fish node).
-      added.push(...placeWater(used, g, 0, 0));
+      const inBounds = (x, z) => x >= 0 && z >= 0 && x < g && z < g;
+      // Place one cell. opts: { terrainFloors, floors, build } where `build` is a
+      // voxel-build stamp id. Emits the most compact tuple the schema allows.
+      function put(x, z, terrain, kind, opts) {
+        x = Math.round(x); z = Math.round(z);
+        if (!inBounds(x, z)) return false;
+        const key = x + ',' + z;
+        if (used.has(key)) return false;
+        used.add(key);
+        const tf = (opts && opts.terrainFloors) || 1;
+        const floors = (opts && opts.floors) || 1;
+        const build = opts && opts.build;
+        if (build) {
+          added.push([x, z, terrain, 'voxel-build', floors, null, tf, null, null, null, { voxelBuildId: build }]);
+        } else if (tf > 1 || floors > 1) {
+          added.push([x, z, terrain, kind || null, floors, null, tf]);
+        } else if (kind) {
+          added.push([x, z, terrain, kind]);
+        } else {
+          added.push([x, z, terrain]);
+        }
+        return true;
+      }
+      // Scatter a kind across a list of [x,z] offsets from an anchor.
+      function scatter(ax, az, offsets, terrain, kind, opts) {
+        for (const [dx, dz] of offsets) put(ax + dx, az + dz, terrain, kind, opts);
+      }
 
-      // Stone cells along the bottom edge (ore nodes).
-      added.push(...placeInCorner(used, g, 0, g - 1, 1, 0, 'stone', null, 3));
+      // ---------- TOP-LEFT: forest grove (voxel-stamp trees + undergrowth) ----------
+      // The "nice" multi-tree voxel stamps, spaced so each reads as its own clump.
+      put(1, 1, 'grass', null, { build: 'oak-grove-build' });
+      put(Math.min(cx - 1, 3), 1, 'grass', null, { build: 'pine-cluster-build' });
+      put(1, Math.min(cz - 1, 3), 'grass', null, { build: 'cherry-tree-build' });
+      // Single voxel trees filling the canopy (taller via floors), then low cover.
+      scatter(0, 0, [[2, 0], [0, 2], [2, 2]], 'grass', 'tree', { floors: 2 });
+      scatter(0, 0, [[3, 0], [0, 3]], 'grass', 'tree');
+      scatter(0, 0, [[1, 2], [2, 1], [3, 2], [2, 3]], 'grass', 'bush');
+      scatter(0, 0, [[0, 1], [1, 0], [3, 3]], 'grass', 'flower');
 
-      // Crop cells in the top-right corner (plant nodes).
-      added.push(...placeInCorner(used, g, g - 1, 0, 0, 1, 'grass', 'crop', 2));
-      added.push(...placeInCorner(used, g, g - 2, 0, 0, 1, 'grass', 'wheat', 1));
+      // ---------- TOP-RIGHT: crop patch (plant harvest) ----------
+      const rx = g - 2;
+      put(rx, 1, 'grass', null, { build: 'crop-patch-build' });
+      scatter(rx, 0, [[0, 2], [1, 2]], 'grass', 'wheat');
+      scatter(rx, 0, [[-1, 1], [0, 3]], 'grass', 'corn');
+      put(rx, Math.min(cz - 1, 3), 'grass', 'pumpkin');
+      put(rx - 1, 2, 'grass', 'sunflower');
+      put(rx + 1 < g ? rx + 1 : rx, 0, 'grass', 'carrot');
+      scatter(rx, 0, [[0, 0], [-1, 3]], 'grass', 'tuft');
 
-      // Animals near center-right (hunt node).
-      const cx = Math.max(0, g - 3), cz = Math.floor(g / 2);
-      const animalSpots = [[cx, cz], [cx + 1, cz]];
-      const animalKinds = ['cow', 'sheep'];
-      animalSpots.forEach(([x, z], i) => {
-        if (x >= g || z >= g || used.has(x + ',' + z)) return;
-        added.push([x, z, 'grass', animalKinds[i % animalKinds.length]]);
-        used.add(x + ',' + z);
-      });
+      // ---------- BOTTOM-LEFT: rock highland (piled rock on RAISED terrain) ----------
+      const bz = g - 2;
+      // A small plateau of raised stone (water sits lower beside it for contrast).
+      put(1, bz, 'stone', null, { terrainFloors: 3 });
+      put(2, bz, 'stone', null, { terrainFloors: 3 });
+      put(1, bz - 1, 'stone', null, { terrainFloors: 2 });
+      put(2, bz - 1, 'stone', null, { terrainFloors: 2 });
+      // Heaped rocks on top of / around the plateau — adjacency merges them into a pile.
+      put(1, bz, 'stone', 'rock', { terrainFloors: 3 });
+      put(2, bz, 'stone', 'rock', { terrainFloors: 3 });
+      put(1, bz - 1, 'stone', 'rock', { terrainFloors: 2 });
+      put(0, bz, 'grass', 'rock');
+      put(0, bz - 1, 'grass', null, { build: 'rock-outcrop-build' });
+      if (cx - 1 >= 3) put(3, bz, 'grass', 'rock');
+
+      // ---------- BOTTOM-RIGHT: low water pond (fish) ----------
+      const wx = cx + 1;
+      for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1], [2, 1]]) {
+        put(wx + dx, bz - 1 + dz, 'water', null);
+      }
+      // A few rocks at the waterline.
+      put(wx - 1, bz, 'grass', 'rock');
+      put(wx, bz - 2, 'grass', 'bush');
+
+      // ---------- CENTRE: grazing meadow (animals + standable ground cover) ----------
+      // Animals + tufts/flowers only here — all standable, so the spawn cross stays clear.
+      const meadow = [
+        [cx - 1, cz - 1, 'cow'], [cx + 1, cz, 'cow'],
+        [cx, cz + 1, 'sheep'], [cx + 1, cz + 1, 'sheep'], [cx - 1, cz + 1, 'sheep'],
+      ];
+      for (const [x, z, kind] of meadow) {
+        // never drop an animal on the centre gate cell itself
+        if (x === cx && z === cz) continue;
+        put(x, z, 'grass', kind);
+      }
+      scatter(cx, cz, [[-1, 0], [0, -1], [1, -1], [2, 0], [-2, 0]], 'grass', 'tuft');
+      scatter(cx, cz, [[1, -1], [-1, -1], [0, 2]], 'grass', 'flower');
 
       if (added.length > 0) {
         data.cells = [...cells, ...added];
-        console.log('[demo-seed] Seeded', added.length, 'resource cells into world', world.slug);
+        console.log('[demo-seed] Seeded rich demo world (' + added.length + ' cells) into', world.slug);
       }
       return added;
     }
