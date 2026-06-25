@@ -537,11 +537,23 @@ function isStandableObjectKind(kind) {
   return kind === 'bush' || kind === 'flower' || kind === 'tuft';
 }
 
+// Supported home-board sizes (mirrors client HOME_GRID_OPTIONS / HOME_GRID_MAX,
+// capped at 20x20). The renderer only knows this discrete set; an off-list size
+// (older 18x18 / 22x22 seeds) makes the client's board, movement clamp, and
+// stargate diverge from the server's authoritative grid. Snap UP to the nearest
+// legal option that covers the content (18 -> 20, 22 -> 20) so the server's move
+// bounds and the broadcast gridSize match what the client can render.
+function snapWorldGridSize(n) {
+  const v = Math.max(1, Math.round(Number(n) || 0));
+  for (const size of [8, 10, 12, 16, 20]) if (size >= v) return size;
+  return 20;
+}
+
 // Build the authoritative world state (node map + water bodies + standable terrain)
 // from a world.schema.json v4 cells array. `rng` lets tests make ore tiers
 // deterministic. Empty cells (the default grid) are walkable grass.
 function deriveWorldState(data, rng = Math.random) {
-  const gridSize = Math.max(1, Math.round(Number(data && data.gridSize) || 8));
+  const gridSize = snapWorldGridSize((data && data.gridSize) || 8);
   const cells = data && Array.isArray(data.cells) ? data.cells : [];
   const byXZ = new Map();
   for (const c of cells) {

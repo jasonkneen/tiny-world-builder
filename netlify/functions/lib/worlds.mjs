@@ -27,10 +27,24 @@ function worldCellX(cell) { return Array.isArray(cell) ? cell[0] : (cell && cell
 function worldCellZ(cell) { return Array.isArray(cell) ? cell[1] : (cell && cell.z); }
 function worldCellKind(cell) { return Array.isArray(cell) ? cell[3] : (cell && cell.kind); }
 function worldCellTerrain(cell) { return Array.isArray(cell) ? cell[2] : (cell && cell.terrain); }
+// Supported home-board sizes (mirrors the client HOME_GRID_OPTIONS / HOME_GRID_MAX).
+// The client renderer is capped at 20x20 with this discrete set, so the server must
+// not serve or persist a size outside it — older seeds shipped 18x18 / 22x22, which
+// the client cannot render faithfully (board, movement, and stargate diverge). Snap
+// any off-list size UP to the nearest legal option that covers it, capped at 20.
+const WORLD_GRID_OPTIONS = [8, 10, 12, 16, 20];
+const WORLD_GRID_MAX = 20;
+export function snapWorldGridSize(n) {
+  const v = Math.max(1, Math.round(Number(n) || 0));
+  for (const size of WORLD_GRID_OPTIONS) if (size >= v) return size;
+  return WORLD_GRID_MAX;
+}
 export function effectiveWorldGridSize(data, gridSizeHint) {
   const fromData = data && typeof data === 'object' ? Number(data.gridSize) : NaN;
   const fromHint = Number(gridSizeHint);
-  return Math.max(1, Math.round(Number.isFinite(fromData) && fromData > 0 ? fromData : (Number.isFinite(fromHint) && fromHint > 0 ? fromHint : 8)));
+  const raw = Number.isFinite(fromData) && fromData > 0 ? fromData
+    : (Number.isFinite(fromHint) && fromHint > 0 ? fromHint : 8);
+  return snapWorldGridSize(raw);
 }
 function worldSelectionGateCell(gridSize) {
   const center = Math.floor(Math.max(1, gridSize) / 2);

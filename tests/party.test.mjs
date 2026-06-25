@@ -688,24 +688,26 @@ test('worldPreview emits sparse terrain/kind tuples for the card minimap', () =>
 });
 
 test('normalizeWorldSelectionGateData strips legacy stargates and guarantees one center picker gate', () => {
+  // gridSize 8 -> center gate cell is floor(8/2) = (4,4). (An off-list size like 6
+  // would snap up to 8, which is exactly the cap behaviour we now enforce.)
   const normalized = normalizeWorldSelectionGateData({
-    v: 4, gridSize: 6,
+    v: 4, gridSize: 8,
     cells: [
       { x: 0, z: 0, terrain: 'grass', kind: 'stargate', dest: 'old-world' },
       { x: 1, z: 1, terrain: 'stone', kind: 'stargate', dest: 'old-world' },
       [2, 2, 'dirt', 'stargate', undefined, '__world-picker'],
-      { x: 3, z: 3, terrain: 'stone', kind: 'rock' },
-      { x: 4, z: 4, terrain: 'water' },
+      { x: 4, z: 4, terrain: 'stone', kind: 'rock' },
+      { x: 6, z: 6, terrain: 'water' },
     ],
   });
   const gates = normalized.cells.filter(c => c && (Array.isArray(c) ? c[3] : c.kind) === 'stargate');
   assert.equal(gates.length, 1);
-  assert.deepEqual(gates[0], { x: 3, z: 3, terrain: 'grass', kind: 'stargate', dest: '__world-picker' });
+  assert.deepEqual(gates[0], { x: 4, z: 4, terrain: 'grass', kind: 'stargate', dest: '__world-picker' });
   assert.equal(normalized.cells.some(c => c && c.x === 0 && c.z === 0), false, 'old stargate removed');
   assert.equal(normalized.cells.some(c => c && c.x === 1 && c.z === 1 && c.terrain === 'stone' && !c.kind), true, 'non-grass stargate terrain stays');
   assert.equal(normalized.cells.some(c => Array.isArray(c) && c[0] === 2 && c[1] === 2 && c[2] === 'dirt' && !c[3]), true, 'array stargate terrain stays without kind');
-  assert.equal(normalized.cells.some(c => c && c.x === 3 && c.z === 3 && c.kind === 'rock'), false, 'center object is replaced by the required gate');
-  assert.equal(normalized.cells.some(c => c && c.x === 4 && c.z === 4 && c.terrain === 'water'), true, 'unrelated terrain stays');
+  assert.equal(normalized.cells.some(c => c && c.x === 4 && c.z === 4 && c.kind === 'rock'), false, 'center object is replaced by the required gate');
+  assert.equal(normalized.cells.some(c => c && c.x === 6 && c.z === 6 && c.terrain === 'water'), true, 'unrelated terrain stays');
 });
 
 test('build joins are plain play seats and world.refresh is ignored', async () => {

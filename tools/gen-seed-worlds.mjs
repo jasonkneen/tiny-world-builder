@@ -98,8 +98,19 @@ function connectedWaterBodies(cells) {
   return bodies;
 }
 
+// Supported home-board sizes (mirrors client HOME_GRID_OPTIONS / HOME_GRID_MAX,
+// capped at 20x20). Seed authors may pick any nominal size; snap it UP to the
+// nearest legal option so we never ship a world the renderer can't size faithfully
+// (off-list 18/22 made the board, movement, and stargate diverge in-game).
+const GRID_OPTIONS = [8, 10, 12, 16, 20];
+function snapGrid(n) {
+  const v = Math.max(1, Math.round(Number(n) || 0));
+  for (const size of GRID_OPTIONS) if (size >= v) return size;
+  return 20;
+}
+
 function buildRichWorld(a) {
-  const g = a.grid;
+  const g = snapGrid(a.grid);
   const rng = mulberry32(hashSeed(a.slug));
   const occupied = new Set();
   const cells = [];

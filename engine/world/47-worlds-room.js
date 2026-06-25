@@ -258,7 +258,16 @@ function computeTaxCooldown(lastTaxChangeAt) {
       try { window.__tinyworldIsHubWorld = (w && w.slug === 'tinyverse-nexus'); } catch (_) {}
       rememberActiveTinyverseSession(w && w.slug);
       selectionGateArrivalPending = true;
-      gridSize = Math.max(1, Math.round(Number((w.data && w.data.gridSize) || w.gridSize || 8)));
+      // Resolve the SAME grid size the terrain/board uses (applyState -> coerceGridSize),
+      // so movement clamp, stargate cell, and worldRoomTilePos can't diverge from the
+      // rendered ground. coerceGridSize snaps off-list sizes (e.g. 18, 22) to a legal
+      // option; falling back to the raw value here would re-introduce the mismatch.
+      {
+        const raw = (w.data && w.data.gridSize) || w.gridSize || 8;
+        gridSize = (typeof coerceGridSize === 'function')
+          ? coerceGridSize(raw, 8)
+          : Math.max(1, Math.round(Number(raw)));
+      }
       taxPercent = w.taxPercent != null ? w.taxPercent : null;
       taxCooldown = w.taxCooldown || (w.lastTaxChange ? computeTaxCooldown(w.lastTaxChange) : null);
       cells = w.data && Array.isArray(w.data.cells) ? w.data.cells : [];
@@ -430,7 +439,12 @@ function computeTaxCooldown(lastTaxChangeAt) {
           break;
         case 'world.state':
           sawWorldState = true;
-          gridSize = d.gridSize || gridSize; taxPercent = d.taxPercent != null ? d.taxPercent : taxPercent;
+          // Snap the server's broadcast grid to the same legal size the terrain
+          // renders at (a warm PartyKit room cached before the cap fix can still
+          // push a raw off-list size like 18); otherwise movement/gate diverge
+          // from the board. coerceGridSize lives in 01-render-core's shared scope.
+          if (d.gridSize) gridSize = (typeof coerceGridSize === 'function') ? coerceGridSize(d.gridSize, gridSize) : (d.gridSize || gridSize);
+          taxPercent = d.taxPercent != null ? d.taxPercent : taxPercent;
           you = Object.assign(you, d.you || {});
           if (typeof you.role === 'string') role = you.role;
           nodes = d.nodes || {}; animals = d.animals || [];

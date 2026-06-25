@@ -5,8 +5,27 @@ import {
   deriveTerrainCounts,
   effectiveWorldGridSize,
   normalizeWorldSelectionGateData,
+  snapWorldGridSize,
   worldDto,
 } from '../netlify/functions/lib/worlds.mjs';
+
+test('snapWorldGridSize snaps off-list sizes UP to the nearest legal option, capped at 20', () => {
+  // Legal options are 8/10/12/16/20 (client renderer cap).
+  assert.equal(snapWorldGridSize(8), 8);
+  assert.equal(snapWorldGridSize(16), 16);
+  assert.equal(snapWorldGridSize(20), 20);
+  assert.equal(snapWorldGridSize(18), 20);  // 11 seeded worlds were 18x18
+  assert.equal(snapWorldGridSize(22), 20);  // mixed-hollow was 22x22, > cap
+  assert.equal(snapWorldGridSize(14), 16);
+  assert.equal(snapWorldGridSize(5), 8);
+});
+
+test('effectiveWorldGridSize never returns an off-list size (18/22 -> 20)', () => {
+  assert.equal(effectiveWorldGridSize({ gridSize: 18, cells: [] }, 18), 20);
+  assert.equal(effectiveWorldGridSize({ cells: [] }, 22), 20);
+  // A legal size is preserved unchanged.
+  assert.equal(effectiveWorldGridSize({ gridSize: 16, cells: [] }, 16), 16);
+});
 
 test('effectiveWorldGridSize prefers saved payload gridSize over stale row metadata', () => {
   const data = { v: 4, gridSize: 8, cells: [[0, 0, 'water']] };

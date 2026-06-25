@@ -19,9 +19,22 @@
     return Number.isInteger(n) && HOME_GRID_OPTION_SET.has(n);
   }
 
+  // Snap any positive integer to the nearest LEGAL grid option that COVERS it
+  // (rounds up), clamped to the supported range. Off-list world sizes (older
+  // seeds shipped 18x18 / 22x22) MUST resolve to a real option here — otherwise
+  // coerceGridSize used to discard them and return the stale leftover GRID from
+  // the previously-visited world, so the rendered board, movement clamp, and
+  // stargate placement disagreed (board shown too small, avatar sunken off the
+  // terrain, gate unreachable). 18 -> 20, 22 -> 20 (capped at HOME_GRID_MAX).
+  function snapGridSize(n) {
+    for (const size of HOME_GRID_OPTIONS) if (size >= n) return size;
+    return HOME_GRID_MAX;
+  }
+
   function coerceGridSize(value, fallback = HOME_GRID_DEFAULT) {
     const n = parseInt(value, 10);
     if (isValidGridSize(n)) return n;
+    if (Number.isFinite(n) && n > 0) return snapGridSize(n);
     return isValidGridSize(fallback) ? fallback : HOME_GRID_DEFAULT;
   }
 
