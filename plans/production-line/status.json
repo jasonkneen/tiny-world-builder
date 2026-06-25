@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-25T13:09:33.282Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-25T13-09-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-25T12:04:58.872Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-25T12-04-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-24T08:48:30Z",
       "kind": "shipped",
       "text": "ANNOUNCE shipped: news post 'We switched on the production line' merged (PR #73) and live on /news. Codex review: SHIP."
-    },
-    {
-      "ts": "2026-06-24T08:46:00Z",
-      "kind": "review",
-      "text": "Codex adversarial review of the announcement diff: well-formed HTML, no financial/returns claims. Verdict SHIP."
     }
   ],
-  "lastTick": "2026-06-25T12:04:58.872Z"
+  "lastTick": "2026-06-25T13:09:33.282Z"
 }
