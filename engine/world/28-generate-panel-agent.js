@@ -96,6 +96,9 @@
     const openBtn = document.getElementById('generate');
     const closeBtn = document.getElementById('gen-close');
     const goBtn = document.getElementById('gen-go');
+    const applyPreviewBtn = document.getElementById('gen-apply');
+    const regeneratePreviewBtn = document.getElementById('gen-regenerate');
+    const discardPreviewBtn = document.getElementById('gen-discard');
     const promptEl = document.getElementById('gen-prompt');
     const providerEl = document.getElementById('gen-provider');
     const modelEl = document.getElementById('gen-model');
@@ -134,6 +137,172 @@
     const planetDropControl = document.getElementById('gen-planet-drop-control');
     const planetDropEl = document.getElementById('gen-planet-drop');
     const planetDropValueEl = document.getElementById('gen-planet-drop-value');
+    const genActionsEl = goBtn ? goBtn.closest('.gen-actions') : null;
+
+    const _genPreviewState = { data: null, meta: null, group: null, mats: [], geoms: [] };
+
+    function _genPreviewCellKey(x, z) { return String(x) + ',' + String(z); }
+
+    function _genPreviewNormalizeCell(entry) {
+      if (Array.isArray(entry)) {
+        return {
+          x: +entry[0],
+          z: +entry[1],
+          terrain: entry[2] || 'grass',
+          kind: entry[3] || null,
+          floors: entry[4] || 1,
+          buildingType: entry[5] || null,
+          terrainFloors: entry[6] || 1,
+          fenceSide: entry[7] || null,
+        };
+      }
+      if (!entry || typeof entry !== 'object') return null;
+      return {
+        x: +entry.x,
+        z: +entry.z,
+        terrain: entry.terrain || 'grass',
+        kind: entry.kind || null,
+        floors: entry.floors || 1,
+        buildingType: entry.buildingType || null,
+        terrainFloors: entry.terrainFloors || 1,
+        fenceSide: entry.fenceSide || null,
+      };
+    }
+
+    function _genPreviewCellSignature(cell) {
+      if (!cell) return 'empty';
+      return [
+        cell.terrain || 'grass',
+        cell.kind || '',
+        cell.floors || 1,
+        cell.buildingType || '',
+        cell.terrainFloors || 1,
+        cell.fenceSide || '',
+      ].join('|');
+    }
+
+    function _genPreviewDispose() {
+      if (_genPreviewState.group && _genPreviewState.group.parent) {
+        _genPreviewState.group.parent.remove(_genPreviewState.group);
+      }
+      _genPreviewState.geoms.forEach(geom => { if (geom && typeof geom.dispose === 'function') geom.dispose(); });
+      _genPreviewState.mats.forEach(mat => { if (mat && typeof mat.dispose === 'function') mat.dispose(); });
+      _genPreviewState.data = null;
+      _genPreviewState.meta = null;
+      _genPreviewState.group = null;
+      _genPreviewState.geoms = [];
+      _genPreviewState.mats = [];
+    }
+
+    function _genPreviewSetControls(pending) {
+      if (genActionsEl) genActionsEl.classList.toggle('preview-pending', !!pending);
+      [applyPreviewBtn, regeneratePreviewBtn, discardPreviewBtn].forEach(btn => {
+        if (btn) btn.hidden = !pending;
+      });
+      if (goBtn) goBtn.hidden = !!pending;
+    }
+
+    function _genPreviewStage(data, meta) {
+      _genPreviewDispose();
+      if (!data || !Array.isArray(data.cells) || typeof THREE === 'undefined' || !xrWorldRoot) return false;
+      const gridSize = coerceGridSize(data.gridSize, GRID);
+      const baseSig = _genPreviewCellSignature({ terrain: 'grass', terrainFloors: 1 });
+      const existing = new Map();
+      for (let x = 0; x < Math.min(GRID, HOME_GRID_MAX); x++) {
+        for (let z = 0; z < Math.min(GRID, HOME_GRID_MAX); z++) {
+          const cell = world && world[x] && world[x][z];
+          existing.set(_genPreviewCellKey(x, z), _genPreviewCellSignature(cell));
+        }
+      }
+      const proposed = new Map();
+      data.cells.forEach(entry => {
+        const cell = _genPreviewNormalizeCell(entry);
+        if (!cell || !Number.isFinite(cell.x) || !Number.isFinite(cell.z)) return;
+        proposed.set(_genPreviewCellKey(cell.x, cell.z), cell);
+      });
+
+      const group = new THREE.Group();
+      group.name = 'generation-preview-diff';
+      group.renderOrder = 1300;
+      const addMat = new THREE.MeshBasicMaterial({ color: 0x48d77a, transparent: true, opacity: 0.34, depthWrite: false, depthTest: true });
+      const changeMat = new THREE.MeshBasicMaterial({ color: 0x4fa7ff, transparent: true, opacity: 0.34, depthWrite: false, depthTest: true });
+      const removeMat = new THREE.MeshBasicMaterial({ color: 0xff6b5a, transparent: true, opacity: 0.24, depthWrite: false, depthTest: true });
+      const objectMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.44, depthWrite: false, depthTest: true });
+      _genPreviewState.mats.push(addMat, changeMat, removeMat, objectMat);
+      const tileGeom = new THREE.BoxGeometry(TILE * 0.86, 0.06, TILE * 0.86);
+      const objectGeom = new THREE.BoxGeometry(TILE * 0.42, 0.55, TILE * 0.42);
+      _genPreviewState.geoms.push(tileGeom, objectGeom);
+
+      let added = 0, changed = 0, removed = 0;
+      proposed.forEach((cell, key) => {
+        const currentSig = existing.get(key);
+        const nextSig = _genPreviewCellSignature(cell);
+        const isAdd = !currentSig || currentSig === baseSig;
+        if (currentSig === nextSig) return;
+        if (isAdd) added++; else changed++;
+        const y = 0.12 + Math.max(0, (cell.terrainFloors || 1) - 1) * 0.18;
+        const tile = new THREE.Mesh(tileGeom, isAdd ? addMat : changeMat);
+        tile.position.set(cell.x - gridSize / 2 + 0.5, y, cell.z - gridSize / 2 + 0.5);
+        tile.renderOrder = 1301;
+        group.add(tile);
+        if (cell.kind) {
+          const obj = new THREE.Mesh(objectGeom, objectMat);
+          obj.position.set(cell.x - gridSize / 2 + 0.5, y + 0.33, cell.z - gridSize / 2 + 0.5);
+          obj.renderOrder = 1302;
+          group.add(obj);
+        }
+      });
+      existing.forEach((sig, key) => {
+        if (proposed.has(key) || sig === baseSig) return;
+        const parts = key.split(',');
+        const x = +parts[0];
+        const z = +parts[1];
+        if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+        const tile = new THREE.Mesh(tileGeom, removeMat);
+        tile.position.set(x - gridSize / 2 + 0.5, 0.15, z - gridSize / 2 + 0.5);
+        tile.renderOrder = 1301;
+        group.add(tile);
+        removed++;
+      });
+      xrWorldRoot.add(group);
+      _genPreviewState.data = data;
+      _genPreviewState.meta = meta || {};
+      _genPreviewState.group = group;
+      _genPreviewSetControls(true);
+      setStatus('preview ready · +' + added + ' / ~' + changed + ' / −' + removed, 'done');
+      return true;
+    }
+
+    function _genPreviewCommit() {
+      const data = _genPreviewState.data;
+      const meta = _genPreviewState.meta || {};
+      if (!data) return false;
+      _genPreviewDispose();
+      _genPreviewSetControls(false);
+      if (typeof setCameraMode === 'function') setCameraMode('perspective');
+      const ok = applyState(data, {
+        sliced: true,
+        keepCamera: true,
+        renderOrigin: meta.renderOrigin || undefined,
+      });
+      if (!ok) {
+        setStatus('renderer rejected the preview', 'error');
+        return false;
+      }
+      if (meta.landscapeStyle === 'landscape' && landscapeEngineInstance) {
+        initLandscapeMesh();
+        rebuildTerrainRender();
+      }
+      setStatus('applied · seed: ' + (meta.seed || 'random') + (meta.planetDrop ? ' · planet ' + meta.planetDrop + 'm below' : ''), '');
+      if (window.__tinyworldAgent) window.__tinyworldAgent.say('Applied the generated preview.');
+      return true;
+    }
+
+    function _genPreviewDiscard(message) {
+      _genPreviewDispose();
+      _genPreviewSetControls(false);
+      setStatus(message || 'preview discarded', '');
+    }
 
     function selectedPlanetDrop() {
       const fallback = planetLandscapeConfig && Number.isFinite(Number(planetLandscapeConfig.drop))
@@ -509,7 +678,10 @@
       openTinyModal(modal, promptEl);
     }
 
-    function close() { closeTinyModal(modal); }
+    function close() {
+      _genPreviewDiscard('preview discarded');
+      closeTinyModal(modal);
+    }
     openGenerateModal = opts => {
       open();
       if (!opts) return;
@@ -550,6 +722,17 @@
     });
     modelEl.addEventListener('change', saveProviderState);
     keyEl.addEventListener('input', saveProviderState);
+
+    if (applyPreviewBtn) applyPreviewBtn.addEventListener('click', () => {
+      _genPreviewCommit();
+    });
+    if (discardPreviewBtn) discardPreviewBtn.addEventListener('click', () => {
+      _genPreviewDiscard('preview discarded');
+    });
+    if (regeneratePreviewBtn) regeneratePreviewBtn.addEventListener('click', () => {
+      _genPreviewDiscard('regenerating…');
+      goBtn.click();
+    });
 
     goBtn.addEventListener('click', async () => {
       const promptRaw = promptEl.value.trim();
@@ -724,35 +907,18 @@
           progress.say('Adding ' + planetBiome + ' LandscapeEngine planet underlay ' + planetDrop + 'm below the floating board…');
         }
         const receivedCells = data && Array.isArray(data.cells) ? data.cells.length : 0;
-        progress.say('Received JSON with ' + receivedCells + ' cells. Switching back to perspective and slicing the build into terrain, then objects.');
+        progress.say('Received JSON with ' + receivedCells + ' cells. Building holographic diff preview…');
         hidePlanOverlay();
         if (typeof setCameraMode === 'function') setCameraMode('perspective');
-        const buildMsg = progress.say('Rendering terrain base layer… 0%');
-        const ok = applyState(data, {
-          sliced: true,
-          keepCamera: true,
+        const ok = _genPreviewStage(data, {
+          seed: effectiveSeed,
           renderOrigin: { x: target.x, z: target.z },
-          onProgress(info) {
-            const pct = Math.round((info.done / Math.max(1, info.total)) * 100);
-            const phase = info.phase === 'detail' ? 'objects and details' : (info.phase === 'base' ? 'terrain base layer' : 'board');
-            if (window.__tinyworldAgent) {
-              window.__tinyworldAgent.update(buildMsg, 'Rendering ' + phase + '… ' + pct + '%');
-            }
-          },
-          onDone() {
-            if (window.__tinyworldAgent) {
-              window.__tinyworldAgent.update(buildMsg, 'Done — generated world built from validated JSON.');
-            }
-          },
+          landscapeStyle: landscapeStyleEl ? landscapeStyleEl.value : '',
+          planetDrop: wantsPlanetLandscape ? planetDrop : 0,
         });
-        if (!ok) throw new Error('renderer rejected the scene');
-        // Activate landscape mesh after applyState created the engine
-        if (landscapeStyleEl && landscapeStyleEl.value === 'landscape' && landscapeEngineInstance) {
-          initLandscapeMesh();
-          rebuildTerrainRender();
-        }
-        setStatus('done · seed: ' + effectiveSeed + (wantsPlanetLandscape ? ' · planet ' + planetDrop + 'm below' : ''), '');
-        progress.done(wantsPlanetLandscape ? 'Building completed with planet underlay.' : 'Building completed.');
+        if (!ok) throw new Error('preview rejected the scene');
+        modal.hidden = false;
+        progress.done('Preview ready — inspect the holographic diff, then Apply, Regenerate, or Discard.');
       } catch (err) {
         if (err && (err.name === 'AbortError' || (err instanceof DOMException && err.name === 'AbortError'))) return;
         console.error('generate failed:', err);
@@ -772,6 +938,7 @@
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !modal.hidden) close();
     });
+    _genPreviewSetControls(false);
     loadProviderState();
   })();
 

@@ -14,6 +14,7 @@ Use the existing board intent contract:
 - Duplicate, paste, and latest-template placement should be preview-first: copy/normalize the payload into a pending placement state, show a holographic representation following hover (clone live meshes when available; otherwise use a lightweight clipboard footprint), and commit only on the next board click. Keep Escape as a cancel path and keep any immediate helper explicitly opt-in/fallback-only.
 - Radial color changes should be preview-first: swatches should arm a tinted hologram for the selected object/cells and commit through `updateSelectedBoardObjects()` only on the next board click; Escape cancels.
 - Radial Generate should be contextual: summarize the current selection/selected object into the generator prompt/status instead of opening a blank generic modal. Do not imply a scoped apply unless the generator actually supports one; phrase it as context for the preview.
+- Generate should be preview-first: after the model returns validated world JSON, stage it as a holographic diff overlay with Apply / Regenerate / Discard controls. Do not call `applyState()` until the user applies the preview; discard must dispose preview geometries/materials.
 
 - Selected-cell rotation should be preview-first too: radial/keyboard rotate arms a holographic rotated clone, commits the real `sel.rotate()` on the next board click, and cancels with Escape. Keep immediate rotation as an explicit fallback only.
 
