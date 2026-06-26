@@ -1708,12 +1708,14 @@
 
   .brush-mode-dock {
     position: fixed;
-    left: 24px;
-    bottom: 78px;
+    top: 78px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 15;
     display: flex;
     align-items: stretch;
     gap: 8px;
+    width: max-content;
     max-width: min(calc(100vw - 48px), 720px);
     padding: 8px;
     border-radius: 20px;
@@ -1842,10 +1844,12 @@
   }
   @media (max-width: 980px) {
     .brush-mode-dock {
-      left: 12px;
-      right: 12px;
-      bottom: 78px;
-      max-width: none;
+      top: 72px;
+      left: 50%;
+      right: auto;
+      bottom: auto;
+      width: calc(100vw - 24px);
+      max-width: 720px;
       overflow-x: auto;
       scrollbar-width: none;
       padding: 7px;
@@ -9897,9 +9901,11 @@
     }
     .controls { left: 6px; width: 36px; }
     .brush-mode-dock {
-      left: 8px;
-      right: 8px;
-      bottom: 116px;
+      top: 64px;
+      left: 50%;
+      right: auto;
+      bottom: auto;
+      width: calc(100vw - 16px);
     }
     .brush-mode-dock-kicker { font-size: 11px; }
     .toolbar { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); max-width: calc(100vw - 16px); }
