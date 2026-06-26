@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-26T17:54:39.137Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add fill/scatter brush modes with preview UI\" -> plans/production-line/drafts/2026-06-26T17-54-add-fill-scatter-brush-modes-with-preview-ui.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-26T16:56:55.973Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add line/rectangle brush preview modes\" -> plans/production-line/drafts/2026-06-26T16-56-add-line-rectangle-brush-preview-modes.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-24T14:30:00Z",
       "kind": "decision",
       "text": "Owner made the two pivotal token-economics calls: D1 wallet-held fresh snapshot (defeats stacking), D2 two-balance model (non-transferable Allowance GOLD + transferable Earned GOLD for template sales/referrals). The entire economy half is now unblocked to build to preview-ready. See ECONOMY-DECISIONS.md."
-    },
-    {
-      "ts": "2026-06-24T14:25:00Z",
-      "kind": "shipped",
-      "text": "G4 shipped to prod (PR #83): public builder profile at /builder (worlds + earned badges + rank). Codex caught a DoS (full data JSON over the wire) -> bounded cells in SQL; smoke-tested against the LIVE DB (query OK). Reached from leaderboard rows."
     }
   ],
-  "lastTick": "2026-06-26T16:56:55.973Z"
+  "lastTick": "2026-06-26T17:54:39.137Z"
 }
