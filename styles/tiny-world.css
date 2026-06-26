@@ -6778,7 +6778,8 @@
   .btn.confirm-destructive:hover { background: #a23a2b; }
 
   /* Strong primary action button for Generate (matches weight of destructive reset button) */
-  #gen-go {
+  #gen-go,
+  #gen-apply {
     background: #3a72c8;
     border-color: #2f5aa3;
     color: #fff;
@@ -6786,8 +6787,19 @@
     padding: 8px 18px;
     border-radius: 10px;
   }
-  #gen-go:hover {
+  #gen-go:hover,
+  #gen-apply:hover {
     background: #2f5aa3;
+  }
+  #gen-discard {
+    background: #f7ddd8;
+    border-color: #d37b6c;
+    color: #8f3528;
+    font-weight: 700;
+  }
+  #gen-discard:hover { background: #efc6bf; }
+  .gen-actions.preview-pending #gen-go {
+    display: none;
   }
   .range-row {
     display: grid;

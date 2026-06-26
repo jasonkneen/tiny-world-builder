@@ -999,9 +999,12 @@
         </div>
       </div>
 
-      <div class="help-line">Replaces the current world. Model and API key live in Settings → AI.</div>
+      <div class="help-line">Generate now previews a holographic diff first. Apply the preview only when it looks right.</div>
       <div class="modal-foot gen-actions">
         <span id="gen-status"></span>
+        <button class="btn gen-preview-action" id="gen-discard" type="button" hidden>Discard</button>
+        <button class="btn gen-preview-action" id="gen-regenerate" type="button" hidden>Regenerate</button>
+        <button class="btn gen-preview-action" id="gen-apply" type="button" hidden>Apply preview</button>
         <button class="btn" id="gen-go" type="button">Generate</button>
       </div>
     </form>
