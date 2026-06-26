@@ -12,6 +12,8 @@
     "smoke": "node tools/smoke-static.js",
     "perf": "node tools/perf-probe.js",
     "vendor:three": "node tools/build-three-vendor.mjs",
+    "stats:random-island": "node tools/random-island-stats.mjs",
+    "sample:random-island": "node tools/random-island-samples.mjs",
     "db:local": "tools/db-local.sh",
     "party:dev": "partykit dev party/index.js --port 1999",
     "party:dev:open": "partykit dev party/index.js --port 1999 --var WORLDS_JOIN_SECRET= --var WORLDS_SERVICE_TOKEN=",

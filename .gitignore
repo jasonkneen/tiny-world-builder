@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .tinyworld-ai-logs/
+stats-runs/
+random-island-runs/
 .grok/
 context.md
 models/stamp-defaults.local.json

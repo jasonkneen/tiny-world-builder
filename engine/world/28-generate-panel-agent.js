@@ -607,7 +607,7 @@
         const effectiveSeed = seed || randomSeed();
         if (!seed && seedEl) seedEl.value = effectiveSeed;
         goBtn.disabled = true;
-        setStatus('generating offline…', 'busy');
+        setStatus('generating random island…', 'busy');
         try {
           applyGenerationAutofillSetting(disableAutofill);
           const data = useLandscape
@@ -617,7 +617,7 @@
             data.planetLandscape = planetLandscapeStateFromSelection(effectiveSeed, planetBiome, planetStyleMode, planetDrop);
           }
           const err = (typeof validateWorld === 'function') ? validateWorld(data) : null;
-          if (err) throw new Error('procedural schema: ' + err);
+          if (err) throw new Error('random island schema: ' + err);
           if (typeof applyState === 'function' && !applyState(data, { sliced: true })) {
             throw new Error('renderer rejected the procedural scene');
           }
@@ -636,7 +636,7 @@
           if (wantsPlanetLandscape && typeof setCameraMode === 'function') setCameraMode('perspective');
           setStatus('done · seed: ' + effectiveSeed + (wantsPlanetLandscape ? ' · planet ' + planetDrop + 'm below' : ''), '');
         } catch (err) {
-          console.error('procedural generate failed:', err);
+          console.error('random island generate failed:', err);
           setStatus(String(err.message || err).slice(0, 140), 'error');
         } finally {
           goBtn.disabled = false;

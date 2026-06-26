@@ -4742,6 +4742,27 @@
     transition: opacity 0.5s ease;
   }
   body.showcase .controls #showcase-mode { opacity: 1; pointer-events: auto; }
+  body.new-world-reveal-open .controls,
+  body.new-world-reveal-open .toolbar,
+  body.new-world-reveal-open .appbar,
+  body.new-world-reveal-open #invite-top-btn,
+  body.new-world-reveal-open .tool-palette,
+  body.new-world-reveal-open .flyout,
+  body.new-world-reveal-open #layers-toggle,
+  body.new-world-reveal-open #layers-panel,
+  body.new-world-reveal-open #agent-input,
+  body.new-world-reveal-open #agent-panel,
+  body.new-world-reveal-open #agent-panel-handle,
+  body.new-world-reveal-open #crowd-panel,
+  body.new-world-reveal-open #crowd-panel-handle,
+  body.new-world-reveal-open .minimap-wrap,
+  body.new-world-reveal-open .sound-panel,
+  body.new-world-reveal-open #stamp-builder-panel,
+  body.new-world-reveal-open .unsaved-banner {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+  }
   .showcase-exit {
     position: fixed;
     top: 18px;
@@ -6382,6 +6403,208 @@
   }
   .world-menu-foot-btn svg { flex: 0 0 auto; }
   .world-menu-foot-btn:hover { background: var(--chrome-hover-bg); }
+
+  .new-world-reveal {
+    position: fixed;
+    inset: 0;
+    z-index: 72;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: clamp(16px, 3vw, 36px);
+    pointer-events: none;
+  }
+  .new-world-reveal[hidden] { display: none; }
+  .new-world-reveal-card {
+    position: relative;
+    width: min(420px, calc(100vw - 32px));
+    max-height: min(720px, calc(100vh - 32px));
+    overflow: auto;
+    pointer-events: auto;
+    color: #243047;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 24px 70px -24px rgba(25, 35, 60, 0.42);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    padding: 18px;
+    animation: new-world-reveal-in 0.26s ease-out;
+  }
+  @keyframes new-world-reveal-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .new-world-reveal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(93, 106, 130, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.68);
+    color: #536176;
+    cursor: pointer;
+    font: 18px/1 ui-sans-serif, system-ui, sans-serif;
+  }
+  .new-world-reveal-close:hover { color: #243047; background: rgba(255, 255, 255, 0.9); }
+  .new-world-reveal-kicker {
+    margin-right: 34px;
+    color: #536176;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .new-world-reveal-name {
+    margin: 5px 34px 8px 0;
+    font-family: 'Fraunces', serif;
+    font-size: clamp(26px, 4vw, 36px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    color: #182238;
+  }
+  .new-world-reveal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .new-world-reveal-meta span,
+  .new-world-reveal-traits span {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(72, 89, 120, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.66);
+    color: #40506a;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+  .new-world-reveal-step-count {
+    margin-top: 4px;
+    color: #6a7690;
+    font: 700 10px/1 ui-monospace, 'SF Mono', Menlo, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .new-world-reveal-step-title {
+    margin: 6px 0 3px;
+    font-size: 17px;
+    line-height: 1.15;
+    color: #1d2940;
+  }
+  .new-world-reveal-step-body {
+    min-height: 42px;
+    margin: 0 0 14px;
+    color: #536176;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .new-world-reveal-stats {
+    display: grid;
+    gap: 7px;
+    margin: 12px 0;
+  }
+  .new-world-reveal-stat {
+    display: grid;
+    grid-template-columns: minmax(78px, 0.72fr) minmax(96px, 1fr) 42px;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #536176;
+  }
+  .new-world-reveal-stat.active {
+    color: #1d2940;
+    font-weight: 800;
+  }
+  .new-world-reveal-stat > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .new-world-reveal-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(91, 108, 130, 0.14);
+    overflow: hidden;
+  }
+  .new-world-reveal-bar span {
+    display: block;
+    height: 100%;
+    width: var(--value);
+    border-radius: inherit;
+    background: var(--bar);
+    transition: width 0.28s ease;
+  }
+  .new-world-reveal-stat strong {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .new-world-reveal-traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .new-world-reveal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .new-world-reveal-actions button {
+    min-height: 34px;
+    border-radius: 8px;
+    padding: 0 12px;
+    font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .new-world-reveal-secondary {
+    border: 1px solid rgba(83, 97, 118, 0.18);
+    color: #536176;
+    background: rgba(255, 255, 255, 0.56);
+  }
+  .new-world-reveal-primary {
+    border: 1px solid rgba(35, 94, 184, 0.32);
+    color: #fff;
+    background: #276ad8;
+    box-shadow: 0 8px 22px -12px rgba(39, 106, 216, 0.7);
+  }
+  .new-world-reveal-secondary:hover { color: #243047; background: rgba(255, 255, 255, 0.86); }
+  .new-world-reveal-primary:hover { background: #1f5fc5; }
+  body.ui-theme-dark .new-world-reveal-card {
+    color: #ecf3ff;
+    background: rgba(22, 28, 42, 0.82);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.12) inset,
+      0 24px 70px -24px rgba(0, 0, 0, 0.62);
+  }
+  body.ui-theme-dark .new-world-reveal-name,
+  body.ui-theme-dark .new-world-reveal-step-title,
+  body.ui-theme-dark .new-world-reveal-stat.active {
+    color: #f7fbff;
+  }
+  body.ui-theme-dark .new-world-reveal-kicker,
+  body.ui-theme-dark .new-world-reveal-step-count,
+  body.ui-theme-dark .new-world-reveal-step-body,
+  body.ui-theme-dark .new-world-reveal-stat {
+    color: #b9c5d9;
+  }
+  body.ui-theme-dark .new-world-reveal-meta span,
+  body.ui-theme-dark .new-world-reveal-traits span,
+  body.ui-theme-dark .new-world-reveal-close,
+  body.ui-theme-dark .new-world-reveal-secondary {
+    color: #d9e5f8;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.13);
+  }
 
   /* --- Command palette (⌘K) --- */
   .palette-overlay {

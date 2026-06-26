@@ -84,3 +84,74 @@ For Auto suggestions:
 - Return candidate actions, not coordinates.
 - Suggestions should be reusable across several placements.
 - Include a varied ranked batch: one structural option, one terrain/path option, one nature/detail option, and one intensify/repeat option when useful.
+
+Offline random island generation:
+
+- `generateProceduralWorld()` is the public entry point used by the Generate
+  panel and command palette, but it delegates to `generateRandomIslandWorld()`.
+- The random island generator ports the `tiny-markov/island-lab` flow into
+  TinyWorld schema cells: connected island mask, archetype terrain/object
+  weights, water/bridge/path passes, then a deliberate token-to-native mapping.
+- Keep emitted cells complete v4 object cells: `x`, `z`, `terrain`, `kind`,
+  `floors`, `terrainFloors`, `buildingType`, and `fenceSide`.
+- Map lab-only tokens explicitly to real renderer support. Examples:
+  watchtower/castle -> `kind:"house"` with `buildingType:"tower"`,
+  manor -> `kind:"house"` with `buildingType:"manor"`, lamp -> `lamp-post`,
+  berries -> `bush`, ore -> `crystal`, water-bridge -> `bridge` on water.
+  Do not invent unsupported `kind` values just because the lab catalogue has
+  a matching label.
+- Generated placed objects should set `appearance.objectStyle = "voxel"` so
+  the in-app test exercises the existing voxel asset factories instead of the
+  standalone lab's flat preview tokens.
+- Archetypes are authored through a deterministic feature-grammar pass before
+  residual scatter. Preserve that meaning layer: pastoral = enclosed fields and
+  pasture, forest = grove/trail, quarry = connected stone/ore seam, river =
+  crossing plus irrigated bank, village = plaza/roads/house block, fortress =
+  keep/wall/gate, ruins = relic cluster, harbor = shore/dock/inland path. Do
+  not regress this to pure weighted random placement.
+- Resource placement has a dedicated semantic pass after archetype grammar and
+  before residual scatter. Crops should read as fenced plots, animals as fenced
+  pens, homes/manors as path-connected places, trees/berries as groves,
+  stone/crystal as seams, and ruins/totems as relic sites. Residual scatter is
+  for small accents only, not the primary source of meaningful resources.
+- Towers are owned by the corner landmark pass, not by archetype scatter:
+  generated `watchtower`/`castle` tokens should resolve to corner-adjacent
+  `kind:"house", buildingType:"tower"` cells with the count profile
+  0/1/2/3/4 = 6.25%/50%/25%/12.5%/6.25%.
+- Terrain is also composed through motifs before paths and object placement:
+  broad land terrain comes from deterministic smooth noise fields, then water
+  gets one protected composition motif (edge inlet, lake, or river) plus a small
+  edge-water bias instead of a moat-like fill. Stone gets ridge/seam walks,
+  dirt/prairie get field/meadow patches, and sand grows from shoreline
+  adjacency. Keep this motif layer ahead of archetype object grammar so terrain
+  meaning supports the later props.
+- Water bridges are a late validation layer, not a water decoration. Put rivers
+  or lakes down first, carve/extend path roads next, then place `water-bridge`
+  only when the water cell has `path` on opposite banks horizontally or
+  vertically and water continues under the bridge on the perpendicular axis.
+  A harbor edge/dock should use waterfront path/shore composition unless it is
+  a true road crossing over a visible water channel.
+- Keep generated large building variants spaced out. Lab tokens that map to
+  forced TinyWorld house variants (`manor`, `watchtower`/`castle` -> tower-like
+  houses) need a buffer from ordinary house clusters because their rendered
+  meshes can occupy more visual footprint than one logical cell.
+- The world menu's `New world` action is the in-app Tinyverse-style test path
+  for the offline generator: it chooses a random archetype/seed, applies the
+  generated TinyWorld state, saves it as a named local world slot, then opens
+  the cinematic economy reveal. Keep economy scoring derived from the loaded
+  TinyWorld cells, not from pre-mapping lab tokens, so the stats describe the
+  real rendered assets.
+- Economy reveal profile data comes from `buildRandomIslandEconomyProfile()`.
+  It mirrors island-lab's Food / Materials / Commerce / Defense / Charm,
+  gold/day, rarity, traits, synergies, and feature highlight groups, but it is
+  presentation/runtime data rather than part of the saved world schema.
+  Rarity is archetype-relative after normalized scoring so a strong forest or
+  ruins island can be rare without needing village-level absolute commerce.
+- Random-island statistical profiles should be produced with
+  `npm run stats:random-island -- --samples=10000`. Each run writes a
+  timestamped JSON artifact under ignored `stats-runs/random-island/` and
+  refreshes `stats-runs/random-island/latest.json`.
+- Random-island visual/aesthetic samples should be produced with
+  `npm run sample:random-island -- --count=16`. Each run writes seeds, terrain
+  glyph maps, water components, economy profile data, and full world JSON under
+  ignored `random-island-runs/`.

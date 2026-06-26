@@ -625,304 +625,2003 @@
     return (responseParts || []).map(part => part.text || '').join('\n');
   }
 
-  // Item 4 — procedural map generator (offline, deterministic). Emits a
-  // v=4 world directly from seed + biome composition + elevation profile.
-  // Ports the *concept* of OWB's biome / elevation / scatter pipeline
-  // into tinyworld's selected grid schema without touching the render pipeline.
-  // Algorithm:
-  //   1. Two Mulberry32-derived noise fields (terrain & elevation) sampled
-  //      per (x,z) on the home grid plus a small smoothing pass for
-  //      coherence (4-neighbour average).
-  //   2. Rank cells by terrain noise, slice by cumulative biome %, then
-  //      paint terrain + kind per biome bucket.
-  //   3. Rank cells by elevation noise, slice by cumulative elevation %,
-  //      then assign terrainFloors (plains=1, hills=2..3, mountains=4..7).
-  //   4. Place settlement cells with cluster-friendly hints so houses
-  //      auto-promote when adjacent (handled by setCell's clustering).
-  function generateProceduralWorld({ seed, biomes, elevation, gridSize }) {
+  // Item 4 — random island generator (offline, deterministic). This ports the
+  // tiny-markov/island-lab prototype into TinyWorld's v=4 schema: first build a
+  // connected island mask and archetype-specific prop plan, then translate lab
+  // object tokens into native terrain/kind/buildingType/appearance fields.
+  function generateRandomIslandWorld({ seed, biomes, elevation, gridSize, archetype }) {
     const size = coerceGridSize(gridSize, GRID);
-    const rng = makeMulberry32(seed || randomSeed());
+    const effectiveSeed = String(seed || (typeof randomSeed === 'function' ? randomSeed() : 'tiny-1'));
+    const biomeMix = Object.assign({ grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 }, biomes || {});
+    const elevMix = Object.assign({ plains: 55, hills: 30, mountains: 15 }, elevation || {});
 
-    // ---- fbm value noise (OWB-style coherent terrain) ----------------
-    // Each octave is a low-frequency value-noise lattice; we accumulate
-    // them with halving amplitude so the result is smooth large
-    // features + small detail — the same recipe OWB uses for its
-    // heightmap.  All sampling goes through the seeded `rng` so the
-    // result is deterministic per seed.
-    function makeValueLayer(cellsAcross) {
-      const grid = new Float32Array((cellsAcross + 1) * (cellsAcross + 1));
-      for (let i = 0; i < grid.length; i++) grid[i] = rng();
-      return { grid, cellsAcross };
-    }
-    function smoothstep(t) { return t * t * (3 - 2 * t); }
-    function sampleLayer(layer, u, v) {
-      // u, v in [0..1] map to lattice coords
-      const x = u * layer.cellsAcross;
-      const z = v * layer.cellsAcross;
-      const x0 = Math.floor(x), z0 = Math.floor(z);
-      const x1 = Math.min(layer.cellsAcross, x0 + 1);
-      const z1 = Math.min(layer.cellsAcross, z0 + 1);
-      const tx = smoothstep(x - x0);
-      const tz = smoothstep(z - z0);
-      const w = layer.cellsAcross + 1;
-      const a = layer.grid[x0 + z0 * w];
-      const b = layer.grid[x1 + z0 * w];
-      const c = layer.grid[x0 + z1 * w];
-      const d = layer.grid[x1 + z1 * w];
-      return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
-    }
-    function fbm(octaves, baseCells, persistence) {
-      const layers = [];
-      let cells = baseCells;
-      for (let o = 0; o < octaves; o++) {
-        layers.push(makeValueLayer(cells));
-        cells = Math.max(2, Math.floor(cells * 2));
+    function xmur3IslandSeed(str) {
+      let h = 1779033703 ^ str.length;
+      for (let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
       }
-      return (u, v) => {
-        let total = 0, amp = 1, sum = 0;
-        for (let o = 0; o < octaves; o++) {
-          total += sampleLayer(layers[o], u, v) * amp;
-          sum += amp;
+      return function hash() {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+      };
+    }
+    function islandMulberry32(n) {
+      return function random() {
+        let t = (n += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function islandRngFromSeed(value) {
+      return islandMulberry32(xmur3IslandSeed(String(value))());
+    }
+    function clampNumber(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+    function clampIntLocal(value, min, max, fallback) {
+      const n = Math.round(Number(value));
+      return Math.min(max, Math.max(min, Number.isFinite(n) ? n : fallback));
+    }
+    function pct(source, key, fallback) {
+      const n = Number(source && source[key]);
+      return clampNumber(Number.isFinite(n) ? n : fallback, 0, 100);
+    }
+    function indexFor(x, y) {
+      return y * size + x;
+    }
+    function xyFor(index) {
+      return { x: index % size, y: Math.floor(index / size) };
+    }
+    function inBounds(x, y) {
+      return x >= 0 && x < size && y >= 0 && y < size;
+    }
+    function neighbors(index, diagonal = false) {
+      const { x, y } = xyFor(index);
+      const steps = diagonal
+        ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+        : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      return steps
+        .map(([dx, dy]) => [x + dx, y + dy])
+        .filter(([nx, ny]) => inBounds(nx, ny))
+        .map(([nx, ny]) => indexFor(nx, ny));
+    }
+    function cellRand(index, salt) {
+      const { x, y } = xyFor(index);
+      return islandRngFromSeed(effectiveSeed + '|cell|' + x + '|' + y + '|' + salt)();
+    }
+    function weightedPick(weights, rng, fallback) {
+      const entries = Object.entries(weights || {}).filter(([, weight]) => Number(weight) > 0);
+      const total = entries.reduce((sum, [, weight]) => sum + Number(weight), 0);
+      if (!entries.length || total <= 0) return fallback;
+      let roll = rng() * total;
+      for (const [id, weight] of entries) {
+        roll -= Number(weight);
+        if (roll <= 0) return id;
+      }
+      return entries[entries.length - 1][0];
+    }
+    function smoothNoiseStep(t) {
+      return t * t * (3 - 2 * t);
+    }
+    function makeValueNoiseLayer(cellsAcross, sourceRng) {
+      const grid = [];
+      const width = cellsAcross + 1;
+      for (let i = 0; i < width * width; i++) grid.push(sourceRng());
+      return { cellsAcross, grid, width };
+    }
+    function sampleValueNoiseLayer(layer, u, v) {
+      const sx = u * layer.cellsAcross;
+      const sy = v * layer.cellsAcross;
+      const x0 = Math.floor(sx);
+      const y0 = Math.floor(sy);
+      const x1 = Math.min(layer.cellsAcross, x0 + 1);
+      const y1 = Math.min(layer.cellsAcross, y0 + 1);
+      const tx = smoothNoiseStep(sx - x0);
+      const ty = smoothNoiseStep(sy - y0);
+      const a = layer.grid[y0 * layer.width + x0];
+      const b = layer.grid[y0 * layer.width + x1];
+      const c = layer.grid[y1 * layer.width + x0];
+      const d = layer.grid[y1 * layer.width + x1];
+      return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+    }
+    function makeFieldSampler(salt, baseCells, octaves, persistence) {
+      const fieldRng = islandRngFromSeed(effectiveSeed + '|field|' + salt);
+      const layers = [];
+      let cellsAcross = Math.max(2, baseCells);
+      for (let octave = 0; octave < octaves; octave++) {
+        layers.push(makeValueNoiseLayer(cellsAcross, fieldRng));
+        cellsAcross = Math.max(2, Math.floor(cellsAcross * 1.85));
+      }
+      return function sampleField(index) {
+        const { x, y } = xyFor(index);
+        const u = size <= 1 ? 0 : x / (size - 1);
+        const v = size <= 1 ? 0 : y / (size - 1);
+        let total = 0;
+        let amp = 1;
+        let ampTotal = 0;
+        for (const layer of layers) {
+          total += sampleValueNoiseLayer(layer, u, v) * amp;
+          ampTotal += amp;
           amp *= persistence;
         }
-        return total / sum;
+        return ampTotal ? total / ampTotal : 0.5;
       };
     }
 
-    // Three fields: heightmap (terrain shape), moisture (biome tint),
-    // and decoration noise (where to scatter trees/flowers).
-    const baseCells = Math.max(2, Math.floor(size / 6));
-    const heightFn = fbm(4, baseCells, 0.55);
-    const moistFn  = fbm(3, baseCells, 0.6);
-    const decoFn   = fbm(2, Math.max(3, baseCells), 0.5);
+    const terrainIds = ['water', 'grass', 'prairie', 'path', 'dirt', 'stone', 'sand', 'cliff'];
+    const objectDefs = [
+      { id: 'watchtower', allowed: ['grass', 'stone', 'cliff', 'path'] },
+      { id: 'house', allowed: ['grass', 'prairie', 'path', 'dirt'] },
+      { id: 'manor', footprint: { w: 2, h: 1 }, allowed: ['grass', 'prairie', 'path', 'dirt'] },
+      { id: 'manor-wing', hidden: true, footprintPart: true, allowed: [] },
+      { id: 'tree', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'garden', allowed: ['grass', 'prairie', 'dirt', 'path'] },
+      { id: 'stone', allowed: ['grass', 'stone', 'cliff', 'dirt'] },
+      { id: 'ore', allowed: ['stone', 'cliff'] },
+      { id: 'well', allowed: ['grass', 'prairie', 'path', 'dirt'] },
+      { id: 'fence', allowed: ['grass', 'prairie', 'path', 'dirt'] },
+      { id: 'castle', allowed: ['grass', 'stone', 'cliff', 'path'] },
+      { id: 'bridge', allowed: ['path', 'grass', 'dirt', 'sand'] },
+      { id: 'water-bridge', allowed: ['water'] },
+      { id: 'crop', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'corn', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'wheat', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'pumpkin', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'carrot', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'sunflower', allowed: ['grass', 'prairie'] },
+      { id: 'logs', allowed: ['grass', 'dirt', 'path'] },
+      { id: 'flower', allowed: ['grass', 'prairie'] },
+      { id: 'berries', allowed: ['grass', 'prairie', 'dirt'] },
+      { id: 'cow', allowed: ['grass', 'prairie'] },
+      { id: 'sheep', allowed: ['grass', 'prairie'] },
+      { id: 'lamp', allowed: ['path', 'grass'] },
+      { id: 'spotlight', allowed: ['path', 'stone', 'cliff'] },
+      { id: 'ruins', allowed: ['grass', 'stone', 'cliff', 'dirt'] },
+      { id: 'crystal', allowed: ['stone', 'cliff', 'grass'] },
+      { id: 'totem', allowed: ['grass', 'prairie', 'stone'] },
+    ];
+    const objectById = new Map(objectDefs.map(object => [object.id, object]));
+    const archetypes = {
+      pastoral: {
+        terrain: { grass: 5, prairie: 5, dirt: 1, path: 1, stone: 0.5, sand: 0.7 },
+        objects: { sheep: 4, cow: 3, wheat: 2, corn: 1.5, garden: 1.6, flower: 1.5, house: 1.2, tree: 1, fence: 1, berries: 1 },
+      },
+      forest: {
+        terrain: { grass: 6, prairie: 1, dirt: 2, stone: 0.8, cliff: 0.4, path: 0.4 },
+        objects: { tree: 6, berries: 2, flower: 1.5, stone: 1, ore: 0.4, crystal: 0.4, house: 0.6, garden: 0.8 },
+      },
+      quarry: {
+        terrain: { stone: 5, cliff: 3, dirt: 2, grass: 1.5, path: 1, sand: 0.3 },
+        objects: { stone: 4, ore: 3, crystal: 1.3, watchtower: 1, ruins: 0.8, spotlight: 0.8, tree: 0.5 },
+      },
+      river: {
+        terrain: { grass: 3, prairie: 2, sand: 2, path: 1.2, dirt: 1, stone: 0.8 },
+        objects: { 'water-bridge': 3, bridge: 1.2, cow: 1.4, crop: 2, garden: 1.3, flower: 1.5, tree: 1.2, house: 1, lamp: 0.8 },
+      },
+      village: {
+        terrain: { grass: 3, path: 3, prairie: 1.2, dirt: 1.4, stone: 0.8, sand: 0.4 },
+        objects: { house: 4, manor: 1.6, lamp: 2, garden: 1.8, crop: 1.5, fence: 1.3, tree: 1.2, flower: 1.2, watchtower: 0.8 },
+      },
+      fortress: {
+        terrain: { cliff: 3, stone: 3, path: 2, grass: 1.5, dirt: 1 },
+        objects: { watchtower: 4, castle: 2.5, fence: 4, spotlight: 2, stone: 1.5, lamp: 1, house: 0.8 },
+      },
+      ruins: {
+        terrain: { grass: 2.5, stone: 2.5, dirt: 2, cliff: 1, path: 0.8, prairie: 0.5 },
+        objects: { ruins: 4, totem: 2, crystal: 1.5, stone: 2, ore: 0.8, berries: 1.2, tree: 1, flower: 0.8 },
+      },
+      harbor: {
+        terrain: { sand: 3.5, grass: 2, path: 2, prairie: 1, stone: 0.8, dirt: 0.6 },
+        objects: { 'water-bridge': 3, bridge: 1.8, house: 2, lamp: 1.6, fence: 1.2, crop: 1, garden: 1, flower: 1, tree: 0.8 },
+      },
+    };
 
-    // ---- island falloff: drop heights at the edges so the world
-    //      naturally rims with water like OWB.  Strength scales with
-    //      the user-chosen water % — more water = sharper rim.
-    const waterPct = Math.max(0, Math.min(80, Number(biomes.water) || 10));
-    const rimStrength = 0.45 + waterPct * 0.012; // ~0.55 at 10% water, up to ~1.4 at 80%
-    function islandShape(x, z) {
-      const cx = (size - 1) / 2;
-      const cz = (size - 1) / 2;
-      const dx = (x - cx) / cx;
-      const dz = (z - cz) / cz;
-      // Squared distance in [0..2]; raise to a power for a softer plateau.
-      const d2 = (dx * dx + dz * dz) / 2;
-      return 1 - Math.pow(d2, 1.4) * rimStrength;
+    function chooseArchetypeKey() {
+      const explicit = String(archetype || '').trim().toLowerCase();
+      if (explicit && explicit !== 'auto' && archetypes[explicit]) return explicit;
+      const grass = pct(biomeMix, 'grass', 55);
+      const forest = pct(biomeMix, 'forest', 20);
+      const water = pct(biomeMix, 'water', 10);
+      const dirt = pct(biomeMix, 'dirt', 10);
+      const settlement = pct(biomeMix, 'settlement', 5);
+      const hills = pct(elevMix, 'hills', 30);
+      const mountains = pct(elevMix, 'mountains', 15);
+      const weights = {
+        pastoral: grass * 0.35 + dirt * 0.65 + Math.max(0, 25 - water) * 0.25,
+        forest: forest * 1.45 + grass * 0.12,
+        quarry: mountains * 0.75 + hills * 0.28,
+        river: water * 0.7 + dirt * 0.18,
+        village: settlement * 1.25 + grass * 0.12,
+        fortress: settlement * 0.5 + mountains * 0.45,
+        ruins: hills * 0.32 + mountains * 0.28 + forest * 0.12,
+        harbor: water * 1.05 + settlement * 0.26,
+      };
+      return weightedPick(weights, islandRngFromSeed(effectiveSeed + '|archetype'), 'pastoral');
     }
 
-    const heightField = [];
-    const moistField  = [];
-    const decoField   = [];
-    for (let x = 0; x < size; x++) {
-      heightField[x] = [];
-      moistField[x]  = [];
-      decoField[x]   = [];
-      for (let z = 0; z < size; z++) {
-        const u = x / (size - 1);
-        const v = z / (size - 1);
-        const h = heightFn(u, v) * islandShape(x, z);
-        heightField[x][z] = h;
-        moistField[x][z]  = moistFn(u, v);
-        decoField[x][z]   = decoFn(u, v);
-      }
-    }
-    // Backwards-compat shims for older code below that referenced
-    // terrainNoise/elevNoise lookups.
-    const terrainNoise = moistField;
-    const elevNoise    = heightField;
+    const archetypeKey = chooseArchetypeKey();
+    const archetypeDef = archetypes[archetypeKey] || archetypes.pastoral;
+    const waterPct = pct(biomeMix, 'water', 10);
+    const waterArchetypeBias = archetypeKey === 'harbor' ? 0.055 : archetypeKey === 'river' ? 0.035 : 0;
+    const waterLevel = clampNumber(
+      0.095 + waterPct * 0.0024 + waterArchetypeBias,
+      0.075,
+      archetypeKey === 'harbor' ? 0.27 : archetypeKey === 'river' ? 0.22 : 0.18
+    );
+    const pathDensity = clampNumber(0.22 + pct(biomeMix, 'settlement', 5) * 0.0065 + pct(biomeMix, 'dirt', 10) * 0.0018 + pct(biomeMix, 'water', 10) * 0.0012, 0.08, 0.78);
+    const featureDensity = clampNumber(
+      0.26
+      + pct(biomeMix, 'forest', 20) * 0.0038
+      + pct(biomeMix, 'dirt', 10) * 0.0018
+      + pct(biomeMix, 'settlement', 5) * 0.0034
+      + pct(biomeMix, 'grass', 55) * 0.0012,
+      0.24,
+      0.74
+    );
+    const rng = islandRngFromSeed(effectiveSeed + '|' + archetypeKey + '|' + waterLevel.toFixed(3) + '|' + pathDensity.toFixed(3) + '|' + featureDensity.toFixed(3));
+    const fieldScale = Math.max(2, Math.floor(size / 4));
+    const terrainFields = {
+      moisture: makeFieldSampler('moisture', fieldScale, 3, 0.58),
+      meadow: makeFieldSampler('meadow', fieldScale, 3, 0.55),
+      ridge: makeFieldSampler('ridge', Math.max(2, Math.floor(size / 5)), 4, 0.54),
+      settlement: makeFieldSampler('settlement', fieldScale, 2, 0.62),
+    };
 
-    // Flatten + sort to bucket cells.
-    const cellList = [];
-    for (let x = 0; x < size; x++)
-      for (let z = 0; z < size; z++)
-        cellList.push({ x, z, n: terrainNoise[x][z], e: elevNoise[x][z] });
-
-    const total = cellList.length;
-    // Order biome buckets so water sits at the lowest noise and
-    // settlement sits at the highest — produces water shores at the
-    // bottom of "valleys" and towns on "highlands".
-    const biomeOrder = ['water', 'dirt', 'grass', 'forest', 'settlement'];
-    const sortedByNoise = cellList.slice().sort((a, b) => a.n - b.n);
-    const biomeBuckets = {};
-    let cursor = 0;
-    for (const k of biomeOrder) {
-      const pct = Math.max(0, Math.min(100, Number(biomes[k]) || 0));
-      const count = Math.round(total * pct / 100);
-      biomeBuckets[k] = sortedByNoise.slice(cursor, cursor + count);
-      cursor += count;
+    function fieldWeightForTerrain(terrain, index) {
+      const moisture = terrainFields.moisture(index);
+      const meadow = terrainFields.meadow(index);
+      const ridge = terrainFields.ridge(index);
+      const settlement = terrainFields.settlement(index);
+      if (terrain === 'grass') return 0.74 + moisture * 0.42 + (1 - settlement) * 0.16;
+      if (terrain === 'prairie') return 0.58 + meadow * 0.82 + (1 - Math.abs(moisture - 0.46) * 2) * 0.28;
+      if (terrain === 'dirt') return 0.56 + (1 - moisture) * 0.34 + meadow * 0.34 + settlement * 0.18;
+      if (terrain === 'stone') return 0.42 + ridge * 0.92 + (1 - moisture) * 0.18;
+      if (terrain === 'cliff') return 0.32 + ridge * 1.15;
+      if (terrain === 'path') return 0.25 + settlement * 0.62;
+      if (terrain === 'sand') return 0.22 + (1 - moisture) * 0.34;
+      return 1;
     }
-    // Round-off — push the remainder to grass (or the first non-empty
-    // bucket) so 64 cells always get assigned.
-    if (cursor < total) {
-      const overflow = sortedByNoise.slice(cursor);
-      (biomeBuckets.grass || biomeBuckets[biomeOrder.find(k => biomeBuckets[k].length > 0)] || []).push(...overflow);
-    }
-
-    // Elevation buckets — ranked by elev noise (independent of biome).
-    const elevOrder = ['plains', 'hills', 'mountains'];
-    const sortedByElev = cellList.slice().sort((a, b) => a.e - b.e);
-    const elevBuckets = {};
-    cursor = 0;
-    for (const k of elevOrder) {
-      const pct = Math.max(0, Math.min(100, Number(elevation[k]) || 0));
-      const count = Math.round(total * pct / 100);
-      elevBuckets[k] = new Set(sortedByElev.slice(cursor, cursor + count).map(c => c.x + ',' + c.z));
-      cursor += count;
-    }
-
-    function elevTier(x, z) {
-      const k = x + ',' + z;
-      if (elevBuckets.mountains && elevBuckets.mountains.has(k)) return 'mountains';
-      if (elevBuckets.hills && elevBuckets.hills.has(k)) return 'hills';
-      return 'plains';
-    }
-    // Build a smoothed terrainFloors grid: pick a per-cell target based on
-    // tier, then clamp every cell so it differs from its 4 neighbours by
-    // at most 1.  Result is a continuous heightmap — no sawtooth edges
-    // between plains and mountain cells.
-    const tfGrid = [];
-    for (let x = 0; x < size; x++) {
-      tfGrid[x] = [];
-      for (let z = 0; z < size; z++) {
-        const tier = elevTier(x, z);
-        tfGrid[x][z] = (tier === 'mountains') ? (4 + Math.floor(rng() * 3))
-                     : (tier === 'hills')     ? (2 + Math.floor(rng() * 2))
-                     : 1;
-      }
-    }
-    // Several smoothing passes — each pass clamps every cell to be within
-    // ±1 of its lowest neighbour so terraces appear naturally.
-    for (let pass = 0; pass < 4; pass++) {
-      for (let x = 0; x < size; x++) {
-        for (let z = 0; z < size; z++) {
-          let minN = Infinity;
-          if (x > 0)        minN = Math.min(minN, tfGrid[x-1][z]);
-          if (x < size - 1) minN = Math.min(minN, tfGrid[x+1][z]);
-          if (z > 0)        minN = Math.min(minN, tfGrid[x][z-1]);
-          if (z < size - 1) minN = Math.min(minN, tfGrid[x][z+1]);
-          if (minN === Infinity) continue;
-          if (tfGrid[x][z] > minN + 1) tfGrid[x][z] = minN + 1;
+    function terrainForBiomeField(index, options = {}) {
+      let bestTerrain = 'grass';
+      let bestScore = -Infinity;
+      for (const [terrain, weight] of Object.entries(archetypeDef.terrain || {})) {
+        let nextWeight = Number(weight) * fieldWeightForTerrain(terrain, index);
+        if (options.noPath && terrain === 'path') nextWeight *= 0.25;
+        const score = nextWeight + cellRand(index, 'terrain-jitter-' + terrain) * 0.1;
+        if (score > bestScore) {
+          bestScore = score;
+          bestTerrain = terrain;
         }
       }
+      return bestTerrain;
     }
-    function elevFloors(x, z) {
-      return tfGrid[x] && tfGrid[x][z] ? tfGrid[x][z] : 1;
+    function replacementLandTerrain(index) {
+      const terrain = terrainForBiomeField(index, { noPath: true });
+      if (terrain === 'cliff') return 'stone';
+      if (terrain === 'path') return 'grass';
+      return terrain || 'grass';
     }
 
-    const out = { v: 4, gridSize: size, cells: [] };
+    function createLandMask() {
+      const total = size * size;
+      const maxLandRatio = archetypeKey === 'harbor' ? 0.82 : archetypeKey === 'river' ? 0.88 : 0.92;
+      const minLandRatio = archetypeKey === 'harbor' ? 0.58 : archetypeKey === 'river' ? 0.62 : 0.68;
+      const target = clampIntLocal(Math.round(total * (1 - waterLevel)), Math.ceil(total * minLandRatio), Math.floor(total * maxLandRatio), Math.round(total * 0.82));
+      const centerA = Math.max(0, Math.min(size - 1, Math.floor((size - 1) / 2)));
+      const centerB = Math.max(0, Math.min(size - 1, Math.ceil((size - 1) / 2)));
+      const startX = rng() < 0.5 ? centerA : centerB;
+      const startY = rng() < 0.5 ? centerA : centerB;
+      const land = new Set([indexFor(startX, startY)]);
+      const guardMax = Math.max(800, total * 80);
+      const center = (size - 1) / 2;
+      const radius = Math.max(1, (size - 1) * 0.72);
+      let guard = 0;
+      while (land.size < target && guard < guardMax) {
+        guard++;
+        const source = [...land][Math.floor(rng() * land.size)];
+        const options = neighbors(source, true);
+        const next = options[Math.floor(rng() * options.length)];
+        const { x, y } = xyFor(next);
+        const centerBias = 1 - Math.hypot(x - center, y - center) / radius;
+        if (rng() < 0.38 + centerBias * 0.44) land.add(next);
+      }
+      return land;
+    }
 
-    function pushCell(x, z, terrain, kind, floors, terrainFloors, buildingType, fenceSide) {
-      out.cells.push({
-        x, z,
-        terrain: terrain || 'grass',
-        kind: kind || null,
-        floors: floors || 1,
-        terrainFloors: terrainFloors || 1,
-        buildingType: buildingType || null,
-        fenceSide: fenceSide || null,
+    function edgeIndexFor(side, n) {
+      if (side === 0) return indexFor(n, 0);
+      if (side === 1) return indexFor(size - 1, n);
+      if (side === 2) return indexFor(size - 1 - n, size - 1);
+      return indexFor(0, size - 1 - n);
+    }
+    function isEdgeIndex(index) {
+      const { x, y } = xyFor(index);
+      return x === 0 || y === 0 || x === size - 1 || y === size - 1;
+    }
+    function terrainCells(cells, terrain) {
+      return cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => cell && cell.terrain === terrain)
+        .map(({ index }) => index);
+    }
+    function terrainEdgeCount(cells, terrain) {
+      return terrainCells(cells, terrain).filter(isEdgeIndex).length;
+    }
+    function clearMotifCell(cells, index, terrain) {
+      if (!cells[index]) return;
+      cells[index].terrain = terrain;
+      cells[index].object = null;
+      cells[index].footprint = null;
+      cells[index].footprintParent = null;
+    }
+    function paintTerrainPatch(cells, centerIndex, terrain, count, options = {}) {
+      if (centerIndex < 0 || !cells[centerIndex]) return [];
+      const painted = [];
+      const seen = new Set();
+      const queue = [centerIndex];
+      while (queue.length && painted.length < count) {
+        const choice = Math.floor(rng() * queue.length);
+        const index = queue.splice(choice, 1)[0];
+        if (seen.has(index) || !cells[index]) continue;
+        seen.add(index);
+        if (!options.includeWater && cells[index].terrain === 'water' && terrain !== 'water') continue;
+        clearMotifCell(cells, index, terrain);
+        painted.push(index);
+        for (const next of neighbors(index, options.diagonal !== false)) {
+          if (!seen.has(next) && rng() < (options.spread == null ? 0.68 : options.spread)) queue.push(next);
+        }
+      }
+      return painted;
+    }
+    function paintTerrainWalk(cells, startIndex, terrain, count, options = {}) {
+      if (startIndex < 0 || !cells[startIndex]) return [];
+      const painted = [];
+      const used = new Set();
+      let index = startIndex;
+      let direction = options.direction || null;
+      for (let step = 0; step < count && index >= 0 && cells[index]; step++) {
+        if (!options.includeWater && cells[index].terrain === 'water' && terrain !== 'water') break;
+        clearMotifCell(cells, index, terrain);
+        painted.push(index);
+        used.add(index);
+        const { x, y } = xyFor(index);
+        if (!direction || rng() < (options.turnChance == null ? 0.34 : options.turnChance)) {
+          direction = rng() < 0.5
+            ? [rng() < 0.5 ? -1 : 1, 0]
+            : [0, rng() < 0.5 ? -1 : 1];
+        }
+        let nx = clampIntLocal(x + direction[0], 0, size - 1, x);
+        let ny = clampIntLocal(y + direction[1], 0, size - 1, y);
+        let nextIndex = indexFor(nx, ny);
+        if (used.has(nextIndex) || (!options.includeWater && cells[nextIndex].terrain === 'water' && terrain !== 'water')) {
+          const candidates = neighbors(index)
+            .filter(next => !used.has(next) && (options.includeWater || terrain === 'water' || cells[next].terrain !== 'water'));
+          if (!candidates.length) break;
+          nextIndex = candidates[Math.floor(rng() * candidates.length)];
+        }
+        index = nextIndex;
+      }
+      return painted;
+    }
+    function waterComponentKinds(cells) {
+      const water = new Set(terrainCells(cells, 'water'));
+      const seen = new Set();
+      const kinds = { edge: 0, lake: 0, river: 0 };
+      for (const start of water) {
+        if (seen.has(start)) continue;
+        const stack = [start];
+        const component = [];
+        let touchesTop = false;
+        let touchesBottom = false;
+        let touchesLeft = false;
+        let touchesRight = false;
+        while (stack.length) {
+          const index = stack.pop();
+          if (seen.has(index) || !water.has(index)) continue;
+          seen.add(index);
+          component.push(index);
+          const { x, y } = xyFor(index);
+          touchesTop = touchesTop || y === 0;
+          touchesBottom = touchesBottom || y === size - 1;
+          touchesLeft = touchesLeft || x === 0;
+          touchesRight = touchesRight || x === size - 1;
+          for (const next of neighbors(index)) if (!seen.has(next) && water.has(next)) stack.push(next);
+        }
+        const touchesEdge = touchesTop || touchesBottom || touchesLeft || touchesRight;
+        if (touchesEdge) kinds.edge++;
+        if (!touchesEdge && component.length >= Math.max(3, Math.floor(size * 0.36))) kinds.lake++;
+        if ((touchesTop && touchesBottom) || (touchesLeft && touchesRight)) kinds.river++;
+      }
+      return kinds;
+    }
+    function waterBudgetRatio() {
+      const base = 0.105 + pct(biomeMix, 'water', 10) * 0.0016;
+      const bias = archetypeKey === 'harbor' ? 0.055 : archetypeKey === 'river' ? 0.04 : 0;
+      return clampNumber(base + bias, 0.1, archetypeKey === 'harbor' ? 0.28 : archetypeKey === 'river' ? 0.24 : 0.19);
+    }
+    function protectedTouchesEdge(protectedWater) {
+      for (const index of protectedWater) if (isEdgeIndex(index)) return true;
+      return false;
+    }
+    function addProtectedWater(protectedWater, indexes) {
+      for (const index of indexes || []) {
+        if (index >= 0 && cellsInBoundsIndex(index)) protectedWater.add(index);
+      }
+    }
+    function cellsInBoundsIndex(index) {
+      return Number.isInteger(index) && index >= 0 && index < size * size;
+    }
+    function applyWaterEdgeMotif(cells, forceSize) {
+      const side = Math.floor(rng() * 4);
+      const minimum = archetypeKey === 'harbor' ? 3 : 2;
+      const length = forceSize || Math.max(minimum, Math.floor(size * (archetypeKey === 'harbor' ? 0.4 : 0.18 + rng() * 0.18)));
+      const start = Math.floor(rng() * Math.max(1, size - length + 1));
+      const painted = [];
+      for (let n = start; n < Math.min(size, start + length); n++) {
+        const index = edgeIndexFor(side, n);
+        clearMotifCell(cells, index, 'water');
+        painted.push(index);
+        for (const near of neighbors(index)) {
+          if (cells[near].terrain !== 'water' && rng() < (archetypeKey === 'harbor' ? 0.44 : 0.2)) {
+            clearMotifCell(cells, near, 'sand');
+          }
+        }
+      }
+      return painted;
+    }
+    function applyWaterLakeMotif(cells) {
+      const center = nearestFeatureIndex(
+        cells,
+        (cell, index) => cell && cell.terrain !== 'water' && !isEdgeIndex(index),
+        (size - 1) / 2 + (rng() < 0.5 ? -1 : 1),
+        (size - 1) / 2 + (rng() < 0.5 ? -1 : 1)
+      );
+      const count = Math.max(3, Math.floor(size * (0.34 + rng() * 0.18)));
+      const lake = paintTerrainPatch(cells, center, 'water', count, { spread: 0.7, includeWater: true, diagonal: false });
+      for (const index of lake) {
+        for (const near of neighbors(index)) {
+          if (cells[near].terrain !== 'water' && rng() < 0.24) clearMotifCell(cells, near, rng() < 0.5 ? 'sand' : 'prairie');
+        }
+      }
+      return lake;
+    }
+    function applyWaterRiverMotif(cells) {
+      const vertical = rng() < 0.5;
+      const startLane = 1 + Math.floor(rng() * Math.max(1, size - 2));
+      let lane = startLane;
+      const length = Math.max(size, Math.floor(size * (archetypeKey === 'river' ? 1.05 : 0.72)));
+      const painted = [];
+      for (let step = 0; step < length; step++) {
+        const progress = Math.min(size - 1, step);
+        const x = vertical ? lane : progress;
+        const y = vertical ? progress : lane;
+        const index = indexFor(x, y);
+        clearMotifCell(cells, index, 'water');
+        painted.push(index);
+        if (rng() < 0.46) {
+          const nextLane = clampIntLocal(lane + (rng() < 0.5 ? -1 : 1), 1, Math.max(1, size - 2), lane);
+          if (nextLane !== lane) {
+            const connector = vertical ? indexFor(nextLane, y) : indexFor(x, nextLane);
+            clearMotifCell(cells, connector, 'water');
+            painted.push(connector);
+          }
+          lane = nextLane;
+        }
+      }
+      return painted;
+    }
+    function distanceToProtectedWater(index, protectedWater) {
+      if (!protectedWater.size) return size * 2;
+      const { x, y } = xyFor(index);
+      let best = Infinity;
+      for (const protectedIndex of protectedWater) {
+        const point = xyFor(protectedIndex);
+        best = Math.min(best, Math.abs(x - point.x) + Math.abs(y - point.y));
+      }
+      return best;
+    }
+    function pruneWaterToBudget(cells, protectedWater) {
+      const waterIndexes = terrainCells(cells, 'water');
+      const budget = Math.max(protectedWater.size, Math.round(cells.length * waterBudgetRatio()));
+      const candidates = waterIndexes
+        .filter(index => !protectedWater.has(index))
+        .map(index => ({
+          index,
+          distance: distanceToProtectedWater(index, protectedWater),
+          keepScore: distanceToProtectedWater(index, protectedWater)
+            - (isEdgeIndex(index) ? 0.5 : 0)
+            + cellRand(index, 'water-keep') * 0.35,
+          pruneScore: distanceToProtectedWater(index, protectedWater)
+            + (isEdgeIndex(index) ? 2.5 : 0)
+            + cellRand(index, 'water-prune') * 0.4,
+        }))
+        .sort((a, b) => a.keepScore - b.keepScore);
+      const extraLimit = Math.max(0, budget - protectedWater.size);
+      const expansionLimit = archetypeKey === 'harbor' ? 2 : 1;
+      const keepExtra = new Set(candidates
+        .filter(entry => entry.distance <= expansionLimit)
+        .slice(0, extraLimit)
+        .map(entry => entry.index));
+      let excess = Math.max(0, waterIndexes.length - budget);
+      const pruneFirst = candidates
+        .filter(entry => !keepExtra.has(entry.index))
+        .sort((a, b) => b.pruneScore - a.pruneScore);
+      for (const entry of pruneFirst) {
+        clearMotifCell(cells, entry.index, isEdgeIndex(entry.index) && rng() < 0.55 ? 'sand' : replacementLandTerrain(entry.index));
+      }
+      excess = Math.max(0, terrainCells(cells, 'water').length - budget);
+      if (excess <= 0) return;
+      const overflow = candidates
+        .filter(entry => keepExtra.has(entry.index))
+        .sort((a, b) => b.pruneScore - a.pruneScore);
+      for (const entry of overflow) {
+        if (excess <= 0) break;
+        clearMotifCell(cells, entry.index, isEdgeIndex(entry.index) && rng() < 0.55 ? 'sand' : replacementLandTerrain(entry.index));
+        excess--;
+      }
+    }
+    function choosePrimaryWaterMotif(waterChance) {
+      if (archetypeKey === 'river') return 'river';
+      if (archetypeKey === 'harbor') return 'edge';
+      return weightedPick({
+        lake: 0.44 + waterChance * 0.22,
+        edge: 0.38,
+        river: 0.12 + waterChance * 0.34,
+      }, rng, 'edge');
+    }
+    function applyWaterComposition(cells, waterChance) {
+      const protectedWater = new Set();
+      const primary = choosePrimaryWaterMotif(waterChance);
+      if (primary === 'river') addProtectedWater(protectedWater, applyWaterRiverMotif(cells));
+      else if (primary === 'lake') addProtectedWater(protectedWater, applyWaterLakeMotif(cells));
+      else addProtectedWater(protectedWater, applyWaterEdgeMotif(cells));
+      if (!protectedTouchesEdge(protectedWater)) {
+        addProtectedWater(protectedWater, applyWaterEdgeMotif(cells, Math.max(1, Math.floor(size * 0.14))));
+      }
+      if (terrainEdgeCount(cells, 'water') === 0) {
+        addProtectedWater(protectedWater, applyWaterEdgeMotif(cells, Math.max(1, Math.floor(size * 0.14))));
+      }
+      pruneWaterToBudget(cells, protectedWater);
+    }
+    function applyTerrainMotifs(cells) {
+      const waterChance = pct(biomeMix, 'water', 10) / 100;
+      const mountainChance = (pct(elevMix, 'mountains', 15) + pct(elevMix, 'hills', 30) * 0.45) / 100;
+      const dirtChance = pct(biomeMix, 'dirt', 10) / 100;
+      const forestChance = pct(biomeMix, 'forest', 20) / 100;
+      const centerTarget = (size - 1) / 2;
+
+      applyWaterComposition(cells, waterChance);
+
+      const meadowAnchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, centerTarget);
+      if (meadowAnchor >= 0 && (archetypeKey === 'pastoral' || rng() < 0.2 + pct(biomeMix, 'grass', 55) / 240)) {
+        paintTerrainPatch(cells, meadowAnchor, 'prairie', Math.max(4, Math.floor(size * 0.65)), { spread: 0.72 });
+      }
+
+      const dirtAnchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.28, size * 0.66);
+      if (dirtAnchor >= 0 && (['pastoral', 'river', 'village'].indexOf(archetypeKey) !== -1 || rng() < 0.18 + dirtChance * 0.65)) {
+        paintTerrainPatch(cells, dirtAnchor, 'dirt', Math.max(3, Math.floor(size * (0.36 + dirtChance))), { spread: 0.66 });
+      }
+
+      const stoneAnchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.72, size * 0.32);
+      if (stoneAnchor >= 0 && (['quarry', 'fortress', 'ruins'].indexOf(archetypeKey) !== -1 || rng() < 0.16 + mountainChance * 0.7)) {
+        const ridge = paintTerrainWalk(cells, stoneAnchor, rng() < 0.45 ? 'cliff' : 'stone', Math.max(4, Math.floor(size * (0.48 + mountainChance))), { turnChance: 0.28 });
+        for (const index of ridge) {
+          for (const near of neighbors(index)) {
+            if (cells[near].terrain !== 'water' && rng() < 0.26) clearMotifCell(cells, near, 'stone');
+          }
+        }
+      }
+
+      if (archetypeKey === 'forest' || rng() < 0.12 + forestChance * 0.55) {
+        const groveAnchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.25, size * 0.25);
+        if (groveAnchor >= 0) paintTerrainPatch(cells, groveAnchor, 'grass', Math.max(4, Math.floor(size * 0.55)), { spread: 0.7 });
+      }
+
+      for (const waterIndex of terrainCells(cells, 'water')) {
+        for (const near of neighbors(waterIndex)) {
+          if (cells[near].terrain !== 'water' && rng() < (archetypeKey === 'harbor' ? 0.36 : 0.14)) {
+            clearMotifCell(cells, near, 'sand');
+          }
+        }
+      }
+
+      return waterComponentKinds(cells);
+    }
+
+    function carvePaths(cells) {
+      const landIndexes = cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => cell.terrain !== 'water')
+        .map(({ index }) => index);
+      if (!landIndexes.length) return;
+
+      const center = landIndexes.reduce((best, index) => {
+        const { x, y } = xyFor(index);
+        const dist = Math.abs(x - (size - 1) / 2) + Math.abs(y - (size - 1) / 2);
+        return dist < best.dist ? { index, dist } : best;
+      }, { index: landIndexes[0], dist: Infinity }).index;
+
+      const pathCount = archetypeKey === 'village' || archetypeKey === 'fortress' ? 3 : 1 + Math.round(pathDensity * 3);
+      for (let route = 0; route < pathCount; route++) {
+        const target = landIndexes[Math.floor(rng() * landIndexes.length)];
+        let { x, y } = xyFor(center);
+        const end = xyFor(target);
+        let guard = 0;
+        while ((x !== end.x || y !== end.y) && guard < size * 3) {
+          guard++;
+          const index = indexFor(x, y);
+          if (cells[index].terrain !== 'water') cells[index].terrain = 'path';
+          if (rng() < 0.5 && x !== end.x) x += Math.sign(end.x - x);
+          else if (y !== end.y) y += Math.sign(end.y - y);
+          else if (x !== end.x) x += Math.sign(end.x - x);
+        }
+      }
+
+      for (const index of landIndexes) {
+        if (cells[index].terrain !== 'water' && rng() < pathDensity * 0.08) cells[index].terrain = 'path';
+      }
+    }
+
+    function objectAllowed(objectId, terrainId) {
+      const object = objectById.get(objectId);
+      return !!(object && !object.hidden && object.allowed.indexOf(terrainId) !== -1);
+    }
+    function isBuildingObjectId(objectId) {
+      return objectId === 'house' || objectId === 'manor' || objectId === 'watchtower' || objectId === 'castle';
+    }
+    function isLargeBuildingObjectId(objectId) {
+      return objectId === 'manor' || objectId === 'watchtower' || objectId === 'castle';
+    }
+    function isTowerObjectId(objectId) {
+      return objectId === 'watchtower' || objectId === 'castle';
+    }
+    function isCropObjectId(objectId) {
+      return ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower'].indexOf(objectId) !== -1;
+    }
+    function isAnimalObjectId(objectId) {
+      return objectId === 'cow' || objectId === 'sheep';
+    }
+    function isRelicObjectId(objectId) {
+      return objectId === 'ruins' || objectId === 'totem';
+    }
+    function isScatterAccentObjectId(objectId) {
+      return ['tree', 'garden', 'stone', 'berries', 'flower', 'lamp', 'spotlight'].indexOf(objectId) !== -1;
+    }
+    function placementHasIndex(placement, index) {
+      return placement && placement.indexOf(index) !== -1;
+    }
+    function spacingAllowsBuilding(cells, placement, objectId) {
+      if (!isBuildingObjectId(objectId)) return true;
+      const strict = isLargeBuildingObjectId(objectId);
+      for (const index of placement) {
+        const around = neighbors(index, strict);
+        for (const near of around) {
+          if (placementHasIndex(placement, near)) continue;
+          const neighborObject = cells[near] && cells[near].object;
+          if (!neighborObject || /-wing$/.test(neighborObject)) continue;
+          if (isLargeBuildingObjectId(neighborObject)) return false;
+          if (strict && isBuildingObjectId(neighborObject)) return false;
+        }
+      }
+      return true;
+    }
+    function canUseCellForPlacement(cells, index, objectId) {
+      const cell = cells[index];
+      return cell && !cell.object && objectAllowed(objectId, cell.terrain);
+    }
+    function placementIndexesFor(cells, index, objectId) {
+      const object = objectById.get(objectId);
+      if (!object || object.hidden) return null;
+      const footprint = object.footprint || { w: 1, h: 1 };
+      if (footprint.w === 1 && footprint.h === 1) {
+        if (!canUseCellForPlacement(cells, index, objectId)) return null;
+        const placement = [index];
+        return spacingAllowsBuilding(cells, placement, objectId) ? placement : null;
+      }
+      if (footprint.w === 2 && footprint.h === 1) {
+        const { x, y } = xyFor(index);
+        const candidates = [
+          [index, inBounds(x + 1, y) ? indexFor(x + 1, y) : -1],
+          [inBounds(x - 1, y) ? indexFor(x - 1, y) : -1, index],
+        ];
+        return candidates.find(pair => (
+          pair.every(cellIndex => canUseCellForPlacement(cells, cellIndex, objectId))
+          && spacingAllowsBuilding(cells, pair, objectId)
+        )) || null;
+      }
+      return null;
+    }
+    function placeObjectAt(cells, index, objectId) {
+      const placement = placementIndexesFor(cells, index, objectId);
+      if (!placement) return false;
+      const object = objectById.get(objectId);
+      const footprint = object.footprint || { w: 1, h: 1 };
+      const [root, ...parts] = placement;
+      cells[root].object = objectId;
+      cells[root].footprint = footprint;
+      for (const partIndex of parts) {
+        cells[partIndex].object = objectId + '-wing';
+        cells[partIndex].footprintParent = root;
+      }
+      return true;
+    }
+    function clearObjectsWhere(cells, predicate) {
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (!cell || !cell.object || !predicate(cell.object, cell, index)) continue;
+        clearGeneratedObject(cells, index);
+      }
+    }
+    function distanceBetweenIndexes(a, b) {
+      const pa = xyFor(a);
+      const pb = xyFor(b);
+      return Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y);
+    }
+    function nearestPathIndex(cells, fromIndex) {
+      let best = -1;
+      let bestScore = Infinity;
+      for (let index = 0; index < cells.length; index++) {
+        if (!cells[index] || cells[index].terrain !== 'path') continue;
+        const score = distanceBetweenIndexes(fromIndex, index) + rng() * 0.2;
+        if (score < bestScore) {
+          best = index;
+          bestScore = score;
+        }
+      }
+      return best;
+    }
+    function openNeighborForPath(cells, index) {
+      const footprint = new Set([index]);
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i] && cells[i].footprintParent === index) footprint.add(i);
+      }
+      const options = [];
+      for (const part of footprint) {
+        for (const next of neighbors(part)) {
+          if (footprint.has(next) || options.indexOf(next) !== -1) continue;
+          if (cells[next] && cells[next].terrain !== 'water' && !cells[next].object) options.push(next);
+        }
+      }
+      options
+        .sort((a, b) => distanceBetweenIndexes(a, index) - distanceBetweenIndexes(b, index) + rng() * 0.2);
+      return options.length ? options[0] : -1;
+    }
+    function connectFeatureToPath(cells, featureIndex) {
+      if (featureIndex < 0 || !cells[featureIndex]) return;
+      const target = nearestPathIndex(cells, featureIndex);
+      if (target < 0) return;
+      const start = cells[featureIndex].object ? openNeighborForPath(cells, featureIndex) : featureIndex;
+      if (start < 0) return;
+      setFeatureTerrain(cells, start, 'path');
+      if (start !== target) carveFeaturePath(cells, start, target);
+    }
+    function placeFenceRing(cells, centerIndex, radius, limit, preferredTerrain) {
+      const ring = featureRingIndexes(centerIndex, radius)
+        .filter(index => cells[index] && cells[index].terrain !== 'water' && !cells[index].object);
+      let placed = 0;
+      for (const index of ring) {
+        if (placed >= limit) break;
+        if (forcePlaceObject(cells, index, 'fence', preferredTerrain || (cells[index].terrain === 'path' ? 'grass' : cells[index].terrain))) placed++;
+      }
+      return placed;
+    }
+    function towerCountForSeed() {
+      const roll = islandRngFromSeed(effectiveSeed + '|corner-tower-count')();
+      if (roll < 0.0625) return 0;
+      if (roll < 0.5625) return 1;
+      if (roll < 0.8125) return 2;
+      if (roll < 0.9375) return 3;
+      return 4;
+    }
+    function shuffledTowerCorners() {
+      const list = [
+        { x: 0, y: 0 },
+        { x: size - 1, y: 0 },
+        { x: size - 1, y: size - 1 },
+        { x: 0, y: size - 1 },
+      ];
+      const cornerRng = islandRngFromSeed(effectiveSeed + '|corner-tower-order');
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(cornerRng() * (i + 1));
+        const t = list[i];
+        list[i] = list[j];
+        list[j] = t;
+      }
+      return list;
+    }
+    function towerCandidatesForCorner(cells, corner) {
+      const maxCornerReach = Math.max(3, Math.floor(size * 0.28));
+      return cells
+        .map((cell, index) => ({ cell, index, point: xyFor(index) }))
+        .filter(({ cell, point }) => (
+          cell
+          && cell.terrain !== 'water'
+          && Math.abs(point.x - corner.x) + Math.abs(point.y - corner.y) <= maxCornerReach
+          && (!cell.object || (!isBuildingObjectId(cell.object) && cell.object !== 'bridge' && cell.object !== 'water-bridge'))
+        ))
+        .map(entry => {
+          const dx = Math.abs(entry.point.x - corner.x);
+          const dy = Math.abs(entry.point.y - corner.y);
+          const edgeBonus = (entry.point.x === 0 || entry.point.y === 0 || entry.point.x === size - 1 || entry.point.y === size - 1) ? -0.75 : 0;
+          const objectPenalty = entry.cell.object ? 0.65 : 0;
+          return Object.assign(entry, { score: Math.max(dx, dy) * 2 + dx + dy + edgeBonus + objectPenalty + rng() * 0.2 });
+        })
+        .sort((a, b) => a.score - b.score)
+        .map(entry => entry.index);
+    }
+    function placeTowerNearCorner(cells, corner) {
+      for (const index of towerCandidatesForCorner(cells, corner)) {
+        if (!spacingAllowsBuilding(cells, [index], 'watchtower')) continue;
+        if (forcePlaceObject(cells, index, 'watchtower', cells[index].terrain === 'path' ? 'path' : 'stone')) {
+          cells[index].motif = 'corner-tower';
+          return true;
+        }
+      }
+      return false;
+    }
+    function applyCornerTowerMotif(cells) {
+      clearObjectsWhere(cells, objectId => isTowerObjectId(objectId));
+      const count = towerCountForSeed();
+      const corners = shuffledTowerCorners();
+      let placed = 0;
+      for (const corner of corners) {
+        if (placed >= count) break;
+        if (placeTowerNearCorner(cells, corner)) placed++;
+      }
+    }
+    function cropPlotAnchor(cells) {
+      const preferred = archetypeKey === 'river'
+        ? nearestWaterEdgePair(cells)
+        : null;
+      if (preferred && preferred.land >= 0) return preferred.land;
+      const targetX = archetypeKey === 'pastoral' ? size * 0.36 : size * 0.32;
+      const targetY = archetypeKey === 'pastoral' ? size * 0.58 : size * 0.62;
+      return nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', targetX, targetY);
+    }
+    function applyCropPlotMotif(cells) {
+      clearObjectsWhere(cells, objectId => isCropObjectId(objectId) || objectId === 'garden');
+      const anchor = cropPlotAnchor(cells);
+      if (anchor < 0) return false;
+      const cropIds = archetypeKey === 'pastoral'
+        ? ['wheat', 'corn', 'crop', 'sunflower', 'pumpkin']
+        : archetypeKey === 'river'
+          ? ['crop', 'wheat', 'carrot', 'flower']
+          : ['crop', 'wheat', 'corn', 'pumpkin'];
+      const plot = featureIndexesNear(anchor, 1)
+        .filter(index => cells[index] && cells[index].terrain !== 'water')
+        .slice(0, Math.max(4, Math.min(6, Math.ceil(size * 0.55))));
+      for (let i = 0; i < plot.length; i++) {
+        const index = plot[i];
+        setFeatureTerrain(cells, index, 'dirt');
+        forcePlaceObject(cells, index, cropIds[i % cropIds.length], 'dirt');
+        cells[index].motif = 'crop-plot';
+      }
+      placeFenceRing(cells, anchor, 2, Math.max(4, Math.min(8, size)), 'grass');
+      connectFeatureToPath(cells, anchor);
+      return plot.length > 0;
+    }
+    function animalPenAnchor(cells) {
+      return nearestFeatureIndex(
+        cells,
+        cell => cell && cell.terrain !== 'water',
+        archetypeKey === 'pastoral' ? size * 0.65 : size * 0.72,
+        archetypeKey === 'pastoral' ? size * 0.42 : size * 0.58
+      );
+    }
+    function applyAnimalPenMotif(cells) {
+      clearObjectsWhere(cells, objectId => isAnimalObjectId(objectId));
+      const anchor = animalPenAnchor(cells);
+      if (anchor < 0) return false;
+      const herd = featureIndexesNear(anchor, 1)
+        .filter(index => cells[index] && cells[index].terrain !== 'water')
+        .slice(0, Math.max(3, Math.min(5, Math.ceil(size * 0.42))));
+      for (let i = 0; i < herd.length; i++) {
+        const index = herd[i];
+        setFeatureTerrain(cells, index, 'prairie');
+        forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie');
+        cells[index].motif = 'animal-pen';
+      }
+      placeFenceRing(cells, anchor, 2, Math.max(5, Math.min(9, size + 1)), 'grass');
+      connectFeatureToPath(cells, anchor);
+      return herd.length > 0;
+    }
+    function offsetIndex(index, dx, dy) {
+      const point = xyFor(index);
+      const x = point.x + dx;
+      const y = point.y + dy;
+      return inBounds(x, y) ? indexFor(x, y) : -1;
+    }
+    function applySettlementBlockMotif(cells) {
+      if (archetypeKey !== 'village') return false;
+      clearObjectsWhere(cells, objectId => objectId === 'house' || objectId === 'manor');
+      const anchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', (size - 1) / 2, (size - 1) / 2);
+      if (anchor < 0) return false;
+      const plaza = featureIndexesNear(anchor, 1).filter(index => cells[index] && cells[index].terrain !== 'water').slice(0, Math.max(4, Math.floor(size * 0.5)));
+      plaza.forEach(index => setFeatureTerrain(cells, index, 'path'));
+      const houseOffsets = [[-1, -2], [0, -2], [1, -2], [-2, -1], [-2, 0]];
+      let houses = 0;
+      for (const [dx, dy] of houseOffsets) {
+        const index = offsetIndex(anchor, dx, dy);
+        if (index < 0 || !cells[index] || cells[index].terrain === 'water') continue;
+        if (forcePlaceObject(cells, index, 'house', 'grass')) {
+          cells[index].motif = 'settlement-block';
+          houses++;
+        }
+        if (houses >= Math.max(3, Math.floor(size * 0.42))) break;
+      }
+      const manorOffsets = [[2, 1], [2, -1], [-1, 2], [1, 2]];
+      for (const [dx, dy] of manorOffsets) {
+        const index = offsetIndex(anchor, dx, dy);
+        if (index < 0 || !cells[index] || cells[index].terrain === 'water') continue;
+        if (forcePlaceObject(cells, index, 'manor', 'grass')) {
+          cells[index].motif = 'settlement-block';
+          break;
+        }
+      }
+      plaza.slice(0, 2).forEach(index => {
+        if (cells[index] && !cells[index].object) forcePlaceObject(cells, index, 'lamp', 'path');
+      });
+      return houses > 0;
+    }
+    function applyPathsideHomeMotif(cells) {
+      if (archetypeKey !== 'river' && archetypeKey !== 'harbor') return false;
+      if (cells.some(cell => cell && (cell.object === 'house' || cell.object === 'manor'))) return false;
+      const paths = cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => cell && cell.terrain === 'path')
+        .sort((a, b) => {
+          const ca = xyFor(a.index);
+          const cb = xyFor(b.index);
+          const center = (size - 1) / 2;
+          const da = Math.abs(ca.x - center) + Math.abs(ca.y - center) + rng() * 0.2;
+          const db = Math.abs(cb.x - center) + Math.abs(cb.y - center) + rng() * 0.2;
+          return da - db;
+        });
+      for (const { index } of paths) {
+        const home = openNeighborForPath(cells, index);
+        if (home >= 0 && forcePlaceObject(cells, home, 'house', 'grass')) {
+          cells[home].motif = 'pathside-home';
+          return true;
+        }
+      }
+      return false;
+    }
+    function applyGroveMotif(cells) {
+      if (archetypeKey !== 'forest' && archetypeKey !== 'ruins') return false;
+      clearObjectsWhere(cells, objectId => objectId === 'tree' || objectId === 'berries');
+      const anchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.28, size * 0.3);
+      if (anchor < 0) return false;
+      const grove = featureIndexesNear(anchor, Math.max(1, Math.floor(size * 0.16)))
+        .filter(index => cells[index] && cells[index].terrain !== 'water')
+        .slice(0, Math.max(5, Math.floor(size * 0.8)));
+      for (let i = 0; i < grove.length; i++) {
+        const index = grove[i];
+        setFeatureTerrain(cells, index, i % 4 === 0 ? 'dirt' : 'grass');
+        forcePlaceObject(cells, index, i % 4 === 0 ? 'berries' : i % 5 === 0 ? 'flower' : 'tree', cells[index].terrain);
+        cells[index].motif = 'grove';
+      }
+      connectFeatureToPath(cells, anchor);
+      return grove.length > 0;
+    }
+    function applyQuarrySeamMotif(cells) {
+      if (archetypeKey !== 'quarry' && archetypeKey !== 'fortress') return false;
+      clearObjectsWhere(cells, objectId => objectId === 'stone' || objectId === 'ore' || objectId === 'crystal');
+      const anchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.65, size * 0.35);
+      if (anchor < 0) return false;
+      const seam = paintTerrainWalk(cells, anchor, rng() < 0.45 ? 'cliff' : 'stone', Math.max(5, Math.floor(size * 0.78)), { turnChance: 0.34 });
+      for (let i = 0; i < seam.length; i++) {
+        const index = seam[i];
+        forcePlaceObject(cells, index, i % 4 === 0 ? 'crystal' : i % 3 === 0 ? 'ore' : 'stone', cells[index].terrain);
+        cells[index].motif = 'quarry-seam';
+      }
+      connectFeatureToPath(cells, anchor);
+      return seam.length > 0;
+    }
+    function applyRelicSiteMotif(cells) {
+      if (archetypeKey !== 'ruins') return false;
+      clearObjectsWhere(cells, objectId => isRelicObjectId(objectId) || objectId === 'crystal');
+      const anchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size * 0.58, size * 0.48);
+      if (anchor < 0) return false;
+      const site = featureIndexesNear(anchor, 1).filter(index => cells[index] && cells[index].terrain !== 'water').slice(0, Math.max(5, Math.floor(size * 0.65)));
+      for (let i = 0; i < site.length; i++) {
+        const index = site[i];
+        setFeatureTerrain(cells, index, i % 3 === 0 ? 'stone' : 'dirt');
+        forcePlaceObject(cells, index, i % 3 === 0 ? 'totem' : i % 3 === 1 ? 'ruins' : 'crystal', cells[index].terrain);
+        cells[index].motif = 'relic-site';
+      }
+      connectFeatureToPath(cells, anchor);
+      return site.length > 0;
+    }
+    function connectBuildingsToPaths(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (!cell || (cell.object !== 'house' && cell.object !== 'manor')) continue;
+        if (neighbors(index).some(next => cells[next] && cells[next].terrain === 'path')) continue;
+        connectFeatureToPath(cells, index);
+      }
+    }
+    function applyResourceMotifPass(cells) {
+      applyCornerTowerMotif(cells);
+      applySettlementBlockMotif(cells);
+      if (['pastoral', 'river', 'village', 'harbor'].indexOf(archetypeKey) !== -1) applyCropPlotMotif(cells);
+      if (archetypeKey === 'pastoral' || (archetypeKey === 'river' && rng() < 0.45)) applyAnimalPenMotif(cells);
+      applyPathsideHomeMotif(cells);
+      applyGroveMotif(cells);
+      applyQuarrySeamMotif(cells);
+      applyRelicSiteMotif(cells);
+      connectBuildingsToPaths(cells);
+    }
+
+    function waterChannelUnderBridge(cells, index, axis) {
+      if (!cells[index] || cells[index].terrain !== 'water') return false;
+      const { x, y } = xyFor(index);
+      if (axis === 'x') {
+        return inBounds(x, y - 1) && inBounds(x, y + 1)
+          && cells[indexFor(x, y - 1)].terrain === 'water'
+          && cells[indexFor(x, y + 1)].terrain === 'water';
+      }
+      return inBounds(x - 1, y) && inBounds(x + 1, y)
+        && cells[indexFor(x - 1, y)].terrain === 'water'
+        && cells[indexFor(x + 1, y)].terrain === 'water';
+    }
+    function waterCrossingBanks(cells, index, requireChannel = false) {
+      if (!cells[index] || cells[index].terrain !== 'water') return null;
+      const { x, y } = xyFor(index);
+      if (inBounds(x - 1, y) && inBounds(x + 1, y)) {
+        const west = indexFor(x - 1, y);
+        const east = indexFor(x + 1, y);
+        if (cells[west].terrain !== 'water' && cells[east].terrain !== 'water' && (!requireChannel || waterChannelUnderBridge(cells, index, 'x'))) {
+          return { axis: 'x', a: west, b: east };
+        }
+      }
+      if (inBounds(x, y - 1) && inBounds(x, y + 1)) {
+        const north = indexFor(x, y - 1);
+        const south = indexFor(x, y + 1);
+        if (cells[north].terrain !== 'water' && cells[south].terrain !== 'water' && (!requireChannel || waterChannelUnderBridge(cells, index, 'z'))) {
+          return { axis: 'z', a: north, b: south };
+        }
+      }
+      return null;
+    }
+    function waterRoadBridgeAxis(cells, index) {
+      const banks = waterCrossingBanks(cells, index, true);
+      if (!banks) return null;
+      if (cells[banks.a].terrain === 'path' && cells[banks.b].terrain === 'path') return banks.axis;
+      return null;
+    }
+    function setPathBank(cells, index) {
+      if (!cells[index] || cells[index].terrain === 'water') return;
+      setFeatureTerrain(cells, index, 'path');
+    }
+    function extendRoadAwayFromWater(cells, waterIndex, bankIndex) {
+      if (!cells[waterIndex] || !cells[bankIndex]) return;
+      const water = xyFor(waterIndex);
+      const bank = xyFor(bankIndex);
+      const dx = Math.sign(bank.x - water.x);
+      const dy = Math.sign(bank.y - water.y);
+      const nextX = bank.x + dx;
+      const nextY = bank.y + dy;
+      if (!inBounds(nextX, nextY)) return;
+      const nextIndex = indexFor(nextX, nextY);
+      if (cells[nextIndex] && cells[nextIndex].terrain !== 'water') setFeatureTerrain(cells, nextIndex, 'path');
+    }
+    function prepareRoadBridge(cells, waterIndex) {
+      const banks = waterCrossingBanks(cells, waterIndex, true);
+      if (!banks) return null;
+      setPathBank(cells, banks.a);
+      setPathBank(cells, banks.b);
+      extendRoadAwayFromWater(cells, waterIndex, banks.a);
+      extendRoadAwayFromWater(cells, waterIndex, banks.b);
+      return banks;
+    }
+    function clearGeneratedObject(cells, index) {
+      if (!cells[index]) return;
+      cells[index].object = null;
+      cells[index].footprint = null;
+      cells[index].footprintParent = null;
+    }
+    function placeRoadBridgeAt(cells, index) {
+      if (!waterRoadBridgeAxis(cells, index)) return false;
+      clearGeneratedObject(cells, index);
+      return placeObjectAt(cells, index, 'water-bridge');
+    }
+    function placeBridgeCandidates(cells, forceChance) {
+      for (let index = 0; index < cells.length; index++) {
+        if (cells[index].terrain !== 'water') continue;
+        if (waterRoadBridgeAxis(cells, index) && rng() < forceChance) placeRoadBridgeAt(cells, index);
+      }
+    }
+    function bridgeChannelPlan(centerIndex, axis) {
+      const { x, y } = xyFor(centerIndex);
+      if (axis === 'x') {
+        if (!inBounds(x - 1, y) || !inBounds(x + 1, y) || !inBounds(x, y - 1) || !inBounds(x, y + 1)) return null;
+        return {
+          water: [centerIndex, indexFor(x, y - 1), indexFor(x, y + 1)],
+          path: [indexFor(x - 1, y), indexFor(x + 1, y)],
+        };
+      }
+      if (!inBounds(x, y - 1) || !inBounds(x, y + 1) || !inBounds(x - 1, y) || !inBounds(x + 1, y)) return null;
+      return {
+        water: [centerIndex, indexFor(x - 1, y), indexFor(x + 1, y)],
+        path: [indexFor(x, y - 1), indexFor(x, y + 1)],
+      };
+    }
+    function bridgePlanClearable(cells, plan) {
+      if (!plan) return false;
+      return plan.water.concat(plan.path).every(index => {
+        const objectId = cells[index] && cells[index].object;
+        return cells[index] && (!objectId || (!isBuildingObjectId(objectId) && objectId !== 'bridge' && objectId !== 'water-bridge'));
       });
     }
-
-    function biomeOfCell(x, z) {
-      for (const k of biomeOrder) {
-        if (biomeBuckets[k] && biomeBuckets[k].some(c => c.x === x && c.z === z)) return k;
+    function ensureRoadBridgeCrossing(cells) {
+      if (archetypeKey !== 'river' && archetypeKey !== 'harbor') return false;
+      const existing = firstFeatureWaterCrossing(cells);
+      if (existing >= 0) {
+        const banks = prepareRoadBridge(cells, existing);
+        if (banks) return placeRoadBridgeAt(cells, existing);
       }
-      return 'grass';
+      const center = (size - 1) / 2;
+      const water = terrainCells(cells, 'water');
+      const candidates = cells
+        .map((cell, index) => ({ cell, index, point: xyFor(index) }))
+        .filter(({ cell, point }) => cell && point.x > 0 && point.y > 0 && point.x < size - 1 && point.y < size - 1)
+        .map(entry => {
+          const nearestWater = water.reduce((best, waterIndex) => Math.min(best, distanceBetweenIndexes(entry.index, waterIndex)), size * 2);
+          const centerScore = Math.abs(entry.point.x - center) + Math.abs(entry.point.y - center);
+          return Object.assign(entry, { score: nearestWater * 2 + centerScore + rng() * 0.2 });
+        })
+        .sort((a, b) => a.score - b.score);
+      for (const { index } of candidates) {
+        const axes = rng() < 0.5 ? ['x', 'z'] : ['z', 'x'];
+        for (const axis of axes) {
+          const plan = bridgeChannelPlan(index, axis);
+          if (!bridgePlanClearable(cells, plan)) continue;
+          for (const waterIndex of plan.water) clearMotifCell(cells, waterIndex, 'water');
+          for (const pathIndex of plan.path) setFeatureTerrain(cells, pathIndex, 'path');
+          return placeRoadBridgeAt(cells, index);
+        }
+      }
+      return false;
     }
-
-    // Quick lookup map (avoid the .some loop above for every cell).
-    const biomeLookup = {};
-    for (const k of biomeOrder) {
-      for (const c of (biomeBuckets[k] || [])) biomeLookup[c.x + ',' + c.z] = k;
-    }
-    function fastBiome(x, z) { return biomeLookup[x + ',' + z] || 'grass'; }
-
-    // First pass — paint terrain by biome. Elevation is expressed through
-    // terrainFloors, not by blanketing the board with rock props. Water cells
-    // suppress hosted kinds (no kinds float, per the schema).
-    for (let x = 0; x < size; x++) {
-      for (let z = 0; z < size; z++) {
-        const biome = fastBiome(x, z);
-        const tier = elevTier(x, z);
-        const tf = elevFloors(x, z);
-        let terrain = 'grass';
-        let kind = null;
-        let floors = 1;
-        let bType = null;
-
-        if (biome === 'water') {
-          terrain = 'water';
-        } else if (biome === 'dirt') {
-          terrain = 'dirt';
-          // Sprinkle some crops at moderate density.
-          if (rng() < 0.45) {
-            const cropKinds = ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower'];
-            kind = cropKinds[Math.floor(rng() * cropKinds.length)];
-            floors = 1 + Math.floor(rng() * 2);
-          }
-        } else if (biome === 'grass') {
-          terrain = 'grass';
-          // Occasional decoration on plains: tuft / flower / bush / animal.
-          const roll = rng();
-          if (tier === 'plains' && roll < 0.12)      { kind = 'tuft'; }
-          else if (tier === 'plains' && roll < 0.18) { kind = 'flower'; }
-          else if (tier === 'plains' && roll < 0.22) { kind = 'bush'; }
-          else if (tier === 'plains' && roll < 0.26) { kind = 'cow'; }
-          else if (tier === 'plains' && roll < 0.30) { kind = 'sheep'; }
-        } else if (biome === 'forest') {
-          terrain = 'grass';
-          if (tier === 'plains' || (tier === 'hills' && rng() < 0.18)) {
-            kind = 'tree';
-            floors = 1 + Math.floor(rng() * 3);
-          }
-        } else if (biome === 'settlement') {
-          terrain = (tier === 'mountains') ? 'grass' : 'path';
-          if (rng() < 0.7) {
-            kind = 'house';
-            floors = 1 + Math.floor(rng() * 3);
-            // Mountain-biome settlements turn into towers.
-            if (tier === 'mountains') bType = 'tower';
-          }
-        }
-
-        // Suppress kinds on water + lava (bridges are placed later if needed).
-        if (terrain === 'water' || terrain === 'lava') { kind = null; bType = null; }
-
-        // Stilts fix — any kind that isn't 'rock' sits on flat ground.
-        // Elevation manifests as raised BARE terrain cells (grass / stone
-        // hills, snow caps), not as pillars under objects.
-        let effectiveTf = tf;
-        if (kind && kind !== 'rock') effectiveTf = 1;
-
-        // Promote mountain-tier bare grass cells to stone or snow caps so
-        // hills actually read as different material, not just taller grass.
-        if (!kind && tier === 'mountains' && terrain === 'grass') {
-          terrain = (rng() < 0.65) ? 'stone' : 'snow';
-        }
-        if (!kind && tier === 'hills' && terrain === 'grass' && rng() < 0.22) {
-          terrain = 'stone';
-        }
-        // Rare lava pockets inside mountain biomes — a small volcanic
-        // accent, only on bare elevated cells.
-        if (!kind && tier === 'mountains' && terrain === 'stone' && rng() < 0.08) {
-          terrain = 'lava';
-        }
-        // Beach band: water-edge plains become sand cells.
-        if (!kind && tier === 'plains' && terrain === 'grass') {
-          if (biomeLookup[(x - 1) + ',' + z] === 'water'
-           || biomeLookup[(x + 1) + ',' + z] === 'water'
-           || biomeLookup[x + ',' + (z - 1)] === 'water'
-           || biomeLookup[x + ',' + (z + 1)] === 'water') {
-            if (rng() < 0.7) terrain = 'sand';
-          }
-        }
-
-        pushCell(x, z, terrain, kind, floors, effectiveTf, bType, null);
+    function scrubInvalidWaterBridges(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        if (!cells[index] || cells[index].object !== 'water-bridge') continue;
+        if (!waterRoadBridgeAxis(cells, index)) clearGeneratedObject(cells, index);
       }
     }
 
+    function featureIndexesNear(centerIndex, radius) {
+      const center = xyFor(centerIndex);
+      const out = [];
+      for (let y = center.y - radius; y <= center.y + radius; y++) {
+        for (let x = center.x - radius; x <= center.x + radius; x++) {
+          if (!inBounds(x, y)) continue;
+          const distance = Math.abs(x - center.x) + Math.abs(y - center.y);
+          if (distance <= radius + 1) out.push(indexFor(x, y));
+        }
+      }
+      return out.sort((a, b) => {
+        const ca = xyFor(a);
+        const cb = xyFor(b);
+        const da = Math.abs(ca.x - center.x) + Math.abs(ca.y - center.y) + rng() * 0.2;
+        const db = Math.abs(cb.x - center.x) + Math.abs(cb.y - center.y) + rng() * 0.2;
+        return da - db;
+      });
+    }
+    function featureRingIndexes(centerIndex, radius) {
+      const center = xyFor(centerIndex);
+      const out = [];
+      for (let y = center.y - radius; y <= center.y + radius; y++) {
+        for (let x = center.x - radius; x <= center.x + radius; x++) {
+          if (!inBounds(x, y)) continue;
+          if (Math.max(Math.abs(x - center.x), Math.abs(y - center.y)) !== radius) continue;
+          out.push(indexFor(x, y));
+        }
+      }
+      return out.sort(() => rng() - 0.5);
+    }
+    function nearestFeatureIndex(cells, predicate, targetX, targetY) {
+      let best = -1;
+      let bestScore = Infinity;
+      for (let index = 0; index < cells.length; index++) {
+        if (!predicate(cells[index], index)) continue;
+        const { x, y } = xyFor(index);
+        const score = Math.abs(x - targetX) + Math.abs(y - targetY) + rng() * 0.45;
+        if (score < bestScore) {
+          best = index;
+          bestScore = score;
+        }
+      }
+      return best;
+    }
+    function setFeatureTerrain(cells, index, terrain) {
+      if (!cells[index]) return;
+      cells[index].terrain = terrain;
+      cells[index].object = null;
+      cells[index].footprint = null;
+      cells[index].footprintParent = null;
+    }
+    function forcePlaceObject(cells, index, objectId, preferredTerrain) {
+      const object = objectById.get(objectId);
+      if (!object || object.hidden || !cells[index]) return false;
+      const terrain = preferredTerrain && object.allowed.indexOf(preferredTerrain) !== -1
+        ? preferredTerrain
+        : object.allowed.indexOf(cells[index].terrain) !== -1
+          ? cells[index].terrain
+          : object.allowed[0];
+      if (!terrain) return false;
+      const footprint = object.footprint || { w: 1, h: 1 };
+      function prepare(cellIndex) {
+        if (!cells[cellIndex]) return false;
+        cells[cellIndex].terrain = terrain;
+        cells[cellIndex].object = null;
+        cells[cellIndex].footprint = null;
+        cells[cellIndex].footprintParent = null;
+        return true;
+      }
+      if (footprint.w === 2 && footprint.h === 1) {
+        const { x, y } = xyFor(index);
+        const pairs = [
+          [index, inBounds(x + 1, y) ? indexFor(x + 1, y) : -1],
+          [inBounds(x - 1, y) ? indexFor(x - 1, y) : -1, index],
+        ];
+        for (const pair of pairs) {
+          if (pair.some(cellIndex => cellIndex < 0 || !cells[cellIndex])) continue;
+          pair.forEach(prepare);
+          if (placeObjectAt(cells, index, objectId)) return true;
+        }
+        return false;
+      }
+      prepare(index);
+      return placeObjectAt(cells, index, objectId);
+    }
+    function carveFeaturePath(cells, startIndex, endIndex) {
+      if (startIndex < 0 || endIndex < 0) return;
+      let { x, y } = xyFor(startIndex);
+      const end = xyFor(endIndex);
+      const waterCrossings = [];
+      let guard = 0;
+      while ((x !== end.x || y !== end.y) && guard < size * 4) {
+        guard++;
+        const index = indexFor(x, y);
+        if (cells[index].terrain === 'water') waterCrossings.push(index);
+        else setFeatureTerrain(cells, index, 'path');
+        if (x !== end.x && (rng() < 0.58 || y === end.y)) x += Math.sign(end.x - x);
+        else if (y !== end.y) y += Math.sign(end.y - y);
+      }
+      const endCell = cells[endIndex];
+      if (endCell && endCell.terrain !== 'water') setFeatureTerrain(cells, endIndex, 'path');
+      for (const index of waterCrossings) placeRoadBridgeAt(cells, index);
+    }
+    function firstFeatureWaterCrossing(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        if (waterCrossingBanks(cells, index, true)) return index;
+      }
+      return -1;
+    }
+    function nearestWaterEdgePair(cells) {
+      const center = (size - 1) / 2;
+      let best = null;
+      let bestScore = Infinity;
+      for (let index = 0; index < cells.length; index++) {
+        if (cells[index].terrain !== 'water') continue;
+        for (const landIndex of neighbors(index)) {
+          if (!cells[landIndex] || cells[landIndex].terrain === 'water') continue;
+          const { x, y } = xyFor(landIndex);
+          const score = Math.abs(x - center) + Math.abs(y - center) + rng() * 0.35;
+          if (score < bestScore) {
+            best = { water: index, land: landIndex };
+            bestScore = score;
+          }
+        }
+      }
+      return best;
+    }
+    function applyArchetypeGrammar(cells) {
+      const centerTarget = (size - 1) / 2;
+      const anchor = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, centerTarget);
+      if (anchor < 0) return;
+      const radius = Math.max(1, Math.floor(size * 0.18));
+      const broadRadius = Math.max(2, Math.floor(size * 0.25));
+
+      function applyPastoral() {
+        const meadow = featureIndexesNear(anchor, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(7, size));
+        for (const index of meadow) setFeatureTerrain(cells, index, rng() < 0.68 ? 'prairie' : 'dirt');
+        const cropIds = ['wheat', 'corn', 'crop', 'sunflower'];
+        meadow.slice(0, Math.max(3, Math.floor(size * 0.45))).forEach((index, i) => forcePlaceObject(cells, index, cropIds[i % cropIds.length], cells[index].terrain));
+        meadow.slice(Math.max(3, Math.floor(size * 0.45)), Math.max(6, Math.floor(size * 0.8))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie'));
+        const ring = featureRingIndexes(anchor, Math.min(broadRadius + 1, Math.max(2, Math.floor(size * 0.33))));
+        ring.slice(0, Math.max(4, size)).forEach(index => {
+          if (cells[index] && cells[index].terrain !== 'water') forcePlaceObject(cells, index, 'fence', cells[index].terrain === 'path' ? 'grass' : cells[index].terrain);
+        });
+        const house = nearestFeatureIndex(cells, (cell, index) => cell && cell.terrain !== 'water' && meadow.indexOf(index) === -1, 1, centerTarget);
+        if (house >= 0) {
+          forcePlaceObject(cells, house, 'house', 'grass');
+          carveFeaturePath(cells, house, anchor);
+        }
+      }
+
+      function applyForest() {
+        const grove = featureIndexesNear(anchor, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(8, Math.floor(size * 1.2)));
+        for (const index of grove) setFeatureTerrain(cells, index, rng() < 0.76 ? 'grass' : 'dirt');
+        const trailStart = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', 0, size - 1);
+        carveFeaturePath(cells, trailStart, anchor);
+        grove.slice(0, Math.max(5, Math.floor(size * 0.75))).forEach(index => forcePlaceObject(cells, index, 'tree', cells[index].terrain));
+        grove.slice(Math.max(5, Math.floor(size * 0.75))).forEach((index, i) => forcePlaceObject(cells, index, i % 3 === 0 ? 'flower' : 'berries', cells[index].terrain));
+        const stone = grove.find(index => !cells[index].object);
+        if (stone >= 0) forcePlaceObject(cells, stone, rng() < 0.35 ? 'crystal' : 'stone', rng() < 0.35 ? 'stone' : 'grass');
+      }
+
+      function applyQuarry() {
+        const pit = featureIndexesNear(anchor, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(8, Math.floor(size * 1.1)));
+        for (const index of pit) setFeatureTerrain(cells, index, rng() < 0.45 ? 'cliff' : 'stone');
+        const seam = [anchor];
+        while (seam.length < Math.max(5, Math.floor(size * 0.75))) {
+          const last = seam[seam.length - 1];
+          const next = neighbors(last)
+            .filter(index => cells[index] && cells[index].terrain !== 'water' && seam.indexOf(index) === -1)
+            .sort((a, b) => {
+              const ca = xyFor(a);
+              const cb = xyFor(b);
+              const center = xyFor(anchor);
+              const da = Math.abs(ca.x - center.x) + Math.abs(ca.y - center.y) + rng() * 0.4;
+              const db = Math.abs(cb.x - center.x) + Math.abs(cb.y - center.y) + rng() * 0.4;
+              return da - db;
+            })[0];
+          if (typeof next !== 'number') break;
+          seam.push(next);
+        }
+        const access = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', 0, centerTarget);
+        carveFeaturePath(cells, access, anchor);
+        seam.forEach((index, i) => {
+          setFeatureTerrain(cells, index, i % 2 ? 'stone' : 'cliff');
+          forcePlaceObject(cells, index, i % 3 === 0 ? 'ore' : i % 4 === 0 ? 'crystal' : 'stone', cells[index].terrain);
+        });
+        const lookout = featureRingIndexes(anchor, Math.min(broadRadius, 3)).find(index => cells[index] && cells[index].terrain !== 'water');
+        if (lookout >= 0) forcePlaceObject(cells, lookout, rng() < 0.55 ? 'spotlight' : 'stone', 'stone');
+      }
+
+      function applyRiver() {
+        const bridge = firstFeatureWaterCrossing(cells);
+        const banks = bridge >= 0 ? prepareRoadBridge(cells, bridge) : null;
+        const pair = banks ? { water: bridge, land: banks.a } : nearestWaterEdgePair(cells);
+        if (!pair || pair.land < 0) return;
+        const bank = featureIndexesNear(pair.land, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(7, size));
+        bank.slice(0, Math.max(4, Math.floor(size * 0.65))).forEach((index, i) => {
+          setFeatureTerrain(cells, index, i % 2 ? 'dirt' : 'prairie');
+          forcePlaceObject(cells, index, i % 3 === 0 ? 'garden' : 'crop', cells[index].terrain);
+        });
+        const house = bank.find(index => !cells[index].object);
+        if (house >= 0) forcePlaceObject(cells, house, 'house', 'grass');
+        const lamp = bank.find(index => cells[index] && !cells[index].object);
+        if (lamp >= 0) forcePlaceObject(cells, lamp, 'lamp', 'path');
+        if (banks) {
+          carveFeaturePath(cells, banks.a, anchor);
+          setPathBank(cells, banks.a);
+          setPathBank(cells, banks.b);
+          placeRoadBridgeAt(cells, bridge);
+        }
+      }
+
+      function applyVillage() {
+        const plaza = featureIndexesNear(anchor, radius).filter(index => cells[index].terrain !== 'water');
+        plaza.slice(0, Math.max(4, Math.floor(size * 0.45))).forEach(index => setFeatureTerrain(cells, index, 'path'));
+        const roads = [
+          nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', 0, centerTarget),
+          nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size - 1, centerTarget),
+          nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, 0),
+        ];
+        roads.forEach(road => carveFeaturePath(cells, road, anchor));
+        const lots = featureRingIndexes(anchor, Math.min(broadRadius, 3)).filter(index => cells[index] && cells[index].terrain !== 'water');
+        lots.slice(0, Math.max(5, Math.floor(size * 0.75))).forEach((index, i) => forcePlaceObject(cells, index, i === 0 ? 'manor' : 'house', i % 2 ? 'grass' : 'path'));
+        plaza.slice(0, 2).forEach(index => forcePlaceObject(cells, index, 'lamp', 'path'));
+        lots.slice(Math.max(5, Math.floor(size * 0.75)), Math.max(8, size)).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'garden' : 'flower', 'grass'));
+      }
+
+      function applyFortress() {
+        const keep = featureIndexesNear(anchor, radius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(4, Math.floor(size * 0.45)));
+        keep.forEach(index => setFeatureTerrain(cells, index, rng() < 0.6 ? 'cliff' : 'stone'));
+        keep.slice(0, 3).forEach((index, i) => forcePlaceObject(cells, index, i === 0 ? 'spotlight' : 'stone', cells[index].terrain));
+        const wall = featureRingIndexes(anchor, Math.min(broadRadius, 3)).filter(index => cells[index] && cells[index].terrain !== 'water');
+        wall.slice(0, Math.max(8, size)).forEach((index, i) => forcePlaceObject(cells, index, i % 5 === 0 ? 'spotlight' : 'fence', i % 5 === 0 ? 'stone' : 'grass'));
+        const gate = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, size - 1);
+        carveFeaturePath(cells, gate, anchor);
+        const light = wall.find(index => cells[index] && !cells[index].object);
+        if (light >= 0) forcePlaceObject(cells, light, 'spotlight', 'stone');
+      }
+
+      function applyRuins() {
+        const site = featureIndexesNear(anchor, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(8, size));
+        site.forEach((index, i) => setFeatureTerrain(cells, index, i % 3 === 0 ? 'stone' : i % 3 === 1 ? 'dirt' : 'grass'));
+        site.slice(0, Math.max(4, Math.floor(size * 0.6))).forEach((index, i) => forcePlaceObject(cells, index, i % 3 === 0 ? 'totem' : i % 3 === 1 ? 'ruins' : 'crystal', cells[index].terrain === 'dirt' ? 'grass' : cells[index].terrain));
+        site.slice(Math.max(4, Math.floor(size * 0.6))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'tree' : 'berries', cells[index].terrain));
+        const entry = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', size - 1, 0);
+        carveFeaturePath(cells, entry, anchor);
+      }
+
+      function applyHarbor() {
+        const bridge = firstFeatureWaterCrossing(cells);
+        const banks = bridge >= 0 ? prepareRoadBridge(cells, bridge) : null;
+        const pair = banks ? { water: bridge, land: banks.a } : nearestWaterEdgePair(cells);
+        if (!pair) return;
+        const shore = featureIndexesNear(pair.land, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(7, size));
+        shore.forEach((index, i) => setFeatureTerrain(cells, index, i < 3 ? 'path' : 'sand'));
+        shore.slice(0, Math.max(3, Math.floor(size * 0.5))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'lamp' : 'house', i % 2 ? 'path' : 'sand'));
+        shore.slice(Math.max(3, Math.floor(size * 0.5)), Math.max(6, Math.floor(size * 0.9))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'fence' : 'garden', cells[index].terrain));
+        const inland = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, centerTarget);
+        carveFeaturePath(cells, pair.land, inland);
+        if (banks) {
+          setPathBank(cells, banks.a);
+          setPathBank(cells, banks.b);
+          placeRoadBridgeAt(cells, bridge);
+        }
+      }
+
+      const appliers = {
+        pastoral: applyPastoral,
+        forest: applyForest,
+        quarry: applyQuarry,
+        river: applyRiver,
+        village: applyVillage,
+        fortress: applyFortress,
+        ruins: applyRuins,
+        harbor: applyHarbor,
+      };
+      if (appliers[archetypeKey]) appliers[archetypeKey]();
+    }
+
+    function placeObjects(cells) {
+      function logicalObjectCount() {
+        return cells.filter(cell => cell && cell.object && !/-wing$/.test(cell.object)).length;
+      }
+      const scatterLimit = Math.max(8, Math.ceil(size * (
+        archetypeKey === 'village' ? 1.75
+          : archetypeKey === 'fortress' ? 1.7
+            : archetypeKey === 'pastoral' ? 1.9
+              : archetypeKey === 'river' || archetypeKey === 'harbor' ? 1.6
+                : 1.45
+      )));
+      let placedCount = logicalObjectCount();
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (cell.object || cell.terrain === 'water') continue;
+        if (placedCount >= scatterLimit) continue;
+        const densityBoost = cell.terrain === 'path' ? 0.18 : 0;
+        if (rng() > (featureDensity * 0.34 + densityBoost * 0.55)) continue;
+        let objectId = null;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const candidate = weightedPick(archetypeDef.objects, rng, null);
+          if (candidate && isScatterAccentObjectId(candidate) && placementIndexesFor(cells, index, candidate)) {
+            objectId = candidate;
+            break;
+          }
+        }
+        if (objectId && placeObjectAt(cells, index, objectId)) placedCount++;
+      }
+
+      if (archetypeKey === 'village' || archetypeKey === 'fortress') {
+        const pathCells = cells
+          .map((cell, index) => ({ cell, index }))
+          .filter(({ cell }) => cell.terrain === 'path' && !cell.object);
+        let coreCount = cells.filter(cell => cell && ['house', 'manor', 'watchtower', 'castle'].indexOf(cell.object) !== -1).length;
+        const coreLimit = archetypeKey === 'fortress'
+          ? Math.max(5, Math.ceil(size * 0.8))
+          : Math.max(6, Math.ceil(size * 0.95));
+        for (const { index } of pathCells.slice(0, Math.ceil(size * 0.7))) {
+          if (coreCount >= coreLimit || placedCount >= scatterLimit + 2) break;
+          if (!cells[index].object && rng() < 0.75) {
+            if (placeObjectAt(cells, index, 'house')) {
+              coreCount++;
+              placedCount++;
+            }
+          }
+        }
+      }
+
+      if (archetypeKey === 'pastoral') {
+        const meadowCells = cells
+          .map((cell, index) => ({ cell, index }))
+          .filter(({ cell, index }) => cell.terrain === 'prairie' && !cell.object && neighbors(index).some(next => cells[next] && cells[next].object === 'fence'));
+        for (const { index } of meadowCells.slice(0, Math.max(3, Math.ceil(size * 0.38)))) {
+          if (rng() < 0.82) placeObjectAt(cells, index, rng() < 0.55 ? 'sheep' : 'cow');
+        }
+      }
+    }
+
+    function makeCells() {
+      const land = createLandMask();
+      const cells = Array.from({ length: size * size }, (_, index) => {
+        if (!land.has(index)) return { terrain: 'water', object: null };
+        return { terrain: terrainForBiomeField(index), object: null };
+      });
+      applyTerrainMotifs(cells);
+      carvePaths(cells);
+      applyArchetypeGrammar(cells);
+      applyResourceMotifPass(cells);
+      ensureRoadBridgeCrossing(cells);
+      applyPathsideHomeMotif(cells);
+      placeBridgeCandidates(cells, archetypeKey === 'river' || archetypeKey === 'harbor' ? 1 : 0.35);
+      placeObjects(cells);
+      connectBuildingsToPaths(cells);
+      scrubInvalidWaterBridges(cells);
+      return cells;
+    }
+
+    function terrainForLabCell(cell) {
+      if (!cell || terrainIds.indexOf(cell.terrain) === -1) return 'grass';
+      if (cell.terrain === 'prairie') return 'grass';
+      if (cell.terrain === 'cliff') return 'stone';
+      return cell.terrain;
+    }
+    function fenceSideFor(cells, index) {
+      const { x, y } = xyFor(index);
+      const same = neighbors(index).filter(i => cells[i] && cells[i].object === 'fence');
+      const eastWest = same.some(i => xyFor(i).y === y);
+      const northSouth = same.some(i => xyFor(i).x === x);
+      if (eastWest && !northSouth) return 'center-x';
+      if (northSouth && !eastWest) return 'center-z';
+      return cellRand(index, 'fence-side') < 0.5 ? 'center-x' : 'center-z';
+    }
+    function mapLabObject(cells, index) {
+      const objectId = cells[index] && cells[index].object;
+      if (!objectId || /-wing$/.test(objectId)) {
+        return { kind: null, floors: 1, buildingType: null, fenceSide: null, appearance: null };
+      }
+      const objectStyle = { objectStyle: 'voxel' };
+      const floors = (min, max, salt) => min + Math.floor(cellRand(index, salt) * (max - min + 1));
+      if (objectId === 'watchtower') return { kind: 'house', floors: floors(2, 3, 'watchtower'), buildingType: 'tower', fenceSide: null, appearance: objectStyle };
+      if (objectId === 'house') return { kind: 'house', floors: floors(1, 2, 'house'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'manor') return { kind: 'house', floors: floors(2, 3, 'manor'), buildingType: 'manor', fenceSide: null, appearance: objectStyle };
+      if (objectId === 'castle') return { kind: 'house', floors: floors(4, 5, 'castle'), buildingType: 'tower', fenceSide: null, appearance: objectStyle };
+      if (objectId === 'tree') return { kind: 'tree', floors: floors(1, 3, 'tree'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'garden' || objectId === 'flower') return { kind: 'flower', floors: floors(1, 3, 'flower'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'stone') return { kind: 'rock', floors: floors(1, 3, 'stone'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'ore' || objectId === 'crystal') return { kind: 'crystal', floors: floors(2, 4, 'crystal'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'fence') return { kind: 'fence', floors: floors(1, archetypeKey === 'fortress' ? 4 : 2, 'fence'), buildingType: null, fenceSide: fenceSideFor(cells, index), appearance: objectStyle };
+      if (objectId === 'bridge' || objectId === 'water-bridge') return { kind: 'bridge', floors: 1, buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'crop' || objectId === 'corn' || objectId === 'wheat' || objectId === 'pumpkin' || objectId === 'carrot' || objectId === 'sunflower') {
+        return { kind: objectId, floors: floors(1, 3, objectId), buildingType: null, fenceSide: null, appearance: objectStyle };
+      }
+      if (objectId === 'berries') return { kind: 'bush', floors: floors(1, 3, 'berries'), buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'cow' || objectId === 'sheep') return { kind: objectId, floors: 1, buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'lamp') return { kind: 'lamp-post', floors: 1, buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'spotlight') return { kind: 'spotlight', floors: 1, buildingType: null, fenceSide: null, appearance: objectStyle };
+      if (objectId === 'ruins' || objectId === 'totem') return { kind: objectId, floors: floors(1, 3, objectId), buildingType: null, fenceSide: null, appearance: objectStyle };
+      return { kind: null, floors: 1, buildingType: null, fenceSide: null, appearance: null };
+    }
+    function terrainFloorsFor(cell, index, mapped) {
+      const terrain = cell && cell.terrain;
+      const kind = mapped && mapped.kind;
+      const rockLike = kind === 'rock' || kind === 'crystal' || kind === 'totem' || kind === 'ruins';
+      if (kind && !rockLike) return 1;
+      if (terrain === 'water' || terrain === 'path' || terrain === 'dirt' || terrain === 'sand' || terrain === 'prairie') return 1;
+      const hills = pct(elevMix, 'hills', 30);
+      const mountains = pct(elevMix, 'mountains', 15);
+      if (terrain === 'cliff') {
+        const max = clampIntLocal(3 + mountains / 18, 3, 7, 4);
+        return floorsByRand(index, 2, max, 'cliff-height');
+      }
+      if (terrain === 'stone') {
+        if (cellRand(index, 'stone-height') < (mountains + hills * 0.5) / 130) return floorsByRand(index, 2, 5, 'stone-height-hi');
+        return 1;
+      }
+      if (!kind && terrain === 'grass' && cellRand(index, 'grass-hill') < hills / 380) return 2;
+      return 1;
+    }
+    function floorsByRand(index, min, max, salt) {
+      return min + Math.floor(cellRand(index, salt) * (max - min + 1));
+    }
+
+    const labCells = makeCells();
+    const out = { v: 4, gridSize: size, cells: [] };
+    for (let index = 0; index < labCells.length; index++) {
+      const { x, y } = xyFor(index);
+      const cell = labCells[index];
+      const mapped = mapLabObject(labCells, index);
+      let terrain = terrainForLabCell(cell);
+      if (terrain === 'water' && mapped.kind && mapped.kind !== 'bridge') {
+        mapped.kind = null;
+        mapped.floors = 1;
+        mapped.buildingType = null;
+        mapped.fenceSide = null;
+        mapped.appearance = null;
+      }
+      const entry = {
+        x,
+        z: y,
+        terrain,
+        kind: mapped.kind,
+        floors: mapped.floors || 1,
+        terrainFloors: terrainFloorsFor(cell, index, mapped),
+        buildingType: mapped.kind === 'house' ? (mapped.buildingType || null) : null,
+        fenceSide: mapped.kind === 'fence' ? (mapped.fenceSide || 'center-x') : null,
+      };
+      if (mapped.appearance) entry.appearance = mapped.appearance;
+      out.cells.push(entry);
+    }
     return out;
   }
+
+  function buildRandomIslandEconomyProfile(data, options = {}) {
+    const statDefs = [
+      { id: 'food', label: 'Food', color: '#219963' },
+      { id: 'materials', label: 'Materials', color: '#7b8794' },
+      { id: 'commerce', label: 'Commerce', color: '#ce8a15' },
+      { id: 'defense', label: 'Defense', color: '#536276' },
+      { id: 'charm', label: 'Charm', color: '#2473e6' },
+    ];
+    const archetypes = {
+      pastoral: { label: 'Pastoral', bestUse: 'Farming and wool', traits: ['Meadow Economy', 'Gentle Terrain'] },
+      forest: { label: 'Forest', bestUse: 'Wood and charm', traits: ['Deep Grove', 'Wood Reserve'] },
+      quarry: { label: 'Quarry', bestUse: 'Materials', traits: ['Stone Veins', 'Rough Ground'] },
+      river: { label: 'River', bestUse: 'Food and trade', traits: ['River Crossing', 'Fresh Water'] },
+      village: { label: 'Village', bestUse: 'Commerce', traits: ['House Cluster', 'Trade Footpaths'] },
+      fortress: { label: 'Fortress', bestUse: 'Defense', traits: ['Watch Posts', 'Guarded Edge'] },
+      ruins: { label: 'Ruins', bestUse: 'Rare traits', traits: ['Ancient Remains', 'Mystic Finds'] },
+      harbor: { label: 'Harbor', bestUse: 'Trade and charm', traits: ['Coastal Trade', 'Open Shore'] },
+    };
+    const statWeights = Object.assign({
+      food: 1,
+      materials: 1,
+      commerce: 1,
+      defense: 1,
+      charm: 1,
+    }, options.economy || {});
+    const cells = Array.isArray(data && data.cells) ? data.cells : [];
+    const gridSize = coerceGridSize(data && data.gridSize, GRID);
+    const seed = String(options.seed || (data && data.seed) || 'tiny-1');
+    const explicitArchetype = String(options.archetype || options.archetypeKey || '').trim().toLowerCase();
+    const archetypeKey = archetypes[explicitArchetype] ? explicitArchetype : inferRandomIslandArchetypeFromCells(cells);
+    const archetype = archetypes[archetypeKey] || archetypes.pastoral;
+    const byCoord = new Map();
+    const stats = Object.fromEntries(statDefs.map(stat => [stat.id, 0]));
+    const counts = {};
+    const terrains = {};
+    const statCells = Object.fromEntries(statDefs.map(stat => [stat.id, []]));
+    const synergies = [];
+    let synergyBonus = 0;
+
+    function xmur3NameHash(str) {
+      let h = 1779033703 ^ str.length;
+      for (let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
+      }
+      return function hash() {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        return (h ^= h >>> 16) >>> 0;
+      };
+    }
+    function nameRand(str) {
+      let n = xmur3NameHash(str)();
+      return function next() {
+        let t = (n += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function makeName() {
+      const rng = nameRand(seed + '|name|' + archetypeKey);
+      const prefixes = {
+        pastoral: ['Moss', 'Meadow', 'Clover', 'Wool', 'Green'],
+        forest: ['Pine', 'Fern', 'Oak', 'Moss', 'Canopy'],
+        quarry: ['Stone', 'Granite', 'Slate', 'Iron', 'Cliff'],
+        river: ['Brook', 'River', 'Moss', 'Willow', 'Bridge'],
+        village: ['Hearth', 'Market', 'Lantern', 'Cottage', 'Moss'],
+        fortress: ['Watch', 'Iron', 'Shield', 'High', 'Stone'],
+        ruins: ['Relic', 'Moon', 'Elder', 'Totem', 'Crystal'],
+        harbor: ['Shoal', 'Salt', 'Dock', 'Tide', 'Harbor'],
+      };
+      const suffixes = ['Hamlet', 'Shoal', 'Rise', 'Watch', 'Crossing', 'Haven', 'Crown', 'Hollow', 'Reach'];
+      const prefixList = prefixes[archetypeKey] || prefixes.pastoral;
+      const prefix = prefixList[Math.floor(rng() * prefixList.length)];
+      const suffix = suffixes[Math.floor(rng() * suffixes.length)];
+      return prefix + (suffix === 'Crossing' ? 'bridge' : '') + ' ' + suffix;
+    }
+    function addStats(target, source, factor, cell) {
+      const f = Number.isFinite(Number(factor)) ? Number(factor) : 1;
+      for (const stat of statDefs) {
+        const v = (source && Number(source[stat.id])) || 0;
+        if (!v) continue;
+        target[stat.id] += v * f;
+        if (cell) statCells[stat.id].push({ x: cell.x, z: cell.z });
+      }
+    }
+    function terrainStats(cell) {
+      const terrain = cell && cell.terrain;
+      if (terrain === 'water') return { food: 0.4, charm: 0.8 };
+      if (terrain === 'path') return { commerce: 0.5 };
+      if (terrain === 'dirt') return { materials: 0.2 };
+      if (terrain === 'stone') return { materials: 1.1, defense: (cell.terrainFloors || 1) >= 3 ? 0.5 : 0 };
+      if (terrain === 'sand') return { charm: 0.2 };
+      if (terrain === 'snow') return { charm: 0.2 };
+      return { charm: 0.3 };
+    }
+    function economyObjectId(cell) {
+      if (!cell || !cell.kind) return null;
+      if (cell.kind === 'house') {
+        if (cell.buildingType === 'manor') return 'manor';
+        if (cell.buildingType === 'tower' || cell.buildingType === 'turret') return 'watchtower';
+        return 'house';
+      }
+      if (cell.kind === 'lamp-post') return 'lamp';
+      if (cell.kind === 'rock' || cell.kind === 'stone' || cell.kind === 'pebble') return 'stone';
+      if (cell.kind === 'crystal') return 'crystal';
+      if (cell.kind === 'bush' || cell.kind === 'shrub') return 'berries';
+      if (cell.kind === 'flower' || cell.kind === 'sunflower') return cell.kind;
+      if (cell.kind === 'crop' || cell.kind === 'corn' || cell.kind === 'wheat' || cell.kind === 'pumpkin' || cell.kind === 'carrot') return cell.kind;
+      if (cell.kind === 'bridge' || cell.kind === 'fence' || cell.kind === 'tree' || cell.kind === 'cow' || cell.kind === 'sheep' || cell.kind === 'spotlight' || cell.kind === 'ruins' || cell.kind === 'totem') return cell.kind;
+      return null;
+    }
+    function objectStats(id) {
+      if (id === 'watchtower') return { defense: 2.8, commerce: 0.4 };
+      if (id === 'house') return { commerce: 1.8, charm: 0.8 };
+      if (id === 'manor') return { commerce: 3.8, charm: 1.4, defense: 0.4 };
+      if (id === 'tree') return { materials: 1.0, charm: 0.9 };
+      if (id === 'stone') return { materials: 1.0 };
+      if (id === 'crystal') return { materials: 0.8, charm: 2.0 };
+      if (id === 'fence') return { defense: 1.1 };
+      if (id === 'bridge') return { commerce: 1.2, charm: 0.6 };
+      if (id === 'crop') return { food: 1.6 };
+      if (id === 'corn') return { food: 2.0 };
+      if (id === 'wheat') return { food: 1.9 };
+      if (id === 'pumpkin') return { food: 1.5, charm: 0.4 };
+      if (id === 'carrot') return { food: 1.5 };
+      if (id === 'sunflower') return { food: 0.4, charm: 1.8 };
+      if (id === 'flower') return { charm: 1.2 };
+      if (id === 'berries') return { food: 0.7, charm: 0.8 };
+      if (id === 'cow') return { food: 2.2, charm: 0.2 };
+      if (id === 'sheep') return { food: 1.2, charm: 1.0 };
+      if (id === 'lamp') return { commerce: 0.4, charm: 0.7 };
+      if (id === 'spotlight') return { defense: 1.0, charm: 0.2 };
+      if (id === 'ruins') return { materials: 0.5, defense: 0.4, charm: 1.2 };
+      if (id === 'totem') return { defense: 0.8, charm: 1.2 };
+      return null;
+    }
+    function cellAt(x, z) {
+      return byCoord.get(x + ',' + z) || null;
+    }
+    function neighborsOf(cell, diagonal = false) {
+      const steps = diagonal
+        ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+        : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const out = [];
+      for (const [dx, dz] of steps) {
+        const c = cellAt(cell.x + dx, cell.z + dz);
+        if (c) out.push(c);
+      }
+      return out;
+    }
+    function waterAdjacent(cell) {
+      return neighborsOf(cell).some(neighbor => neighbor.terrain === 'water');
+    }
+    function edgeCell(cell) {
+      return cell.x === 0 || cell.z === 0 || cell.x === gridSize - 1 || cell.z === gridSize - 1;
+    }
+    function pushUnique(list, value) {
+      if (list.indexOf(value) === -1) list.push(value);
+    }
+    function addSynergy(label, bonus, source, extra) {
+      synergyBonus += bonus;
+      pushUnique(synergies, label);
+      if (source) {
+        for (const stat of statDefs) {
+          if (extra && extra[stat.id]) statCells[stat.id].push({ x: source.x, z: source.z });
+        }
+      }
+    }
+    function sampleCells(predicate, limit) {
+      return cells
+        .filter(cell => cell && Number.isInteger(cell.x) && Number.isInteger(cell.z) && predicate(cell, economyObjectId(cell)))
+        .slice(0, limit || 10)
+        .map(cell => ({ x: cell.x, z: cell.z }));
+    }
+    function inferRandomIslandArchetypeFromCells(sourceCells) {
+      const countsLocal = {};
+      for (const c of sourceCells || []) {
+        const id = economyObjectId(c);
+        if (id) countsLocal[id] = (countsLocal[id] || 0) + 1;
+      }
+      if ((countsLocal.watchtower || 0) + (countsLocal.fence || 0) + (countsLocal.spotlight || 0) >= 4) return 'fortress';
+      if ((countsLocal.bridge || 0) >= 2) return 'harbor';
+      if ((countsLocal.crystal || 0) + (countsLocal.ruins || 0) + (countsLocal.totem || 0) >= 3) return 'ruins';
+      if ((countsLocal.stone || 0) + (countsLocal.crystal || 0) >= 5) return 'quarry';
+      if ((countsLocal.tree || 0) + (countsLocal.berries || 0) >= 5) return 'forest';
+      if ((countsLocal.house || 0) + (countsLocal.manor || 0) >= 3) return 'village';
+      if ((countsLocal.cow || 0) + (countsLocal.sheep || 0) >= 3) return 'pastoral';
+      return 'river';
+    }
+
+    for (const cell of cells) {
+      if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) continue;
+      byCoord.set(cell.x + ',' + cell.z, cell);
+      terrains[cell.terrain] = (terrains[cell.terrain] || 0) + 1;
+      const id = economyObjectId(cell);
+      if (id) counts[id] = (counts[id] || 0) + 1;
+      addStats(stats, terrainStats(cell), 1, cell);
+      addStats(stats, objectStats(id), Math.max(1, Number(cell.floors) || 1) > 1 && id !== 'cow' && id !== 'sheep' ? 1 + Math.min(0.6, ((Number(cell.floors) || 1) - 1) * 0.12) : 1, cell);
+    }
+
+    for (const cell of cells) {
+      if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) continue;
+      const id = economyObjectId(cell);
+      const nearby = neighborsOf(cell);
+      if (id === 'sheep' && nearby.some(neighbor => neighbor.terrain === 'grass')) {
+        stats.food += 0.8;
+        stats.charm += 0.5;
+        addSynergy('Sheep Meadow', 1.2, cell, { food: 0.8, charm: 0.5 });
+      }
+      if (id === 'cow' && (waterAdjacent(cell) || cell.terrain === 'grass')) {
+        stats.food += 1.0;
+        addSynergy('Watered Pasture', 1.1, cell, { food: 1.0 });
+      }
+      if ((id === 'house' || id === 'manor') && nearby.some(neighbor => neighbor.terrain === 'path')) {
+        const bonus = id === 'manor' ? 1.9 : 1.1;
+        stats.commerce += bonus;
+        addSynergy(id === 'manor' ? 'Manor Road' : 'Connected House', bonus, cell, { commerce: bonus });
+      }
+      if ((id === 'watchtower' || id === 'fence' || id === 'spotlight') && (edgeCell(cell) || cell.terrain === 'stone' || (cell.terrainFloors || 1) >= 3)) {
+        stats.defense += 1.2;
+        addSynergy('Guarded Edge', 1.0, cell, { defense: 1.2 });
+      }
+      if ((id === 'tree' || id === 'stone' || id === 'crystal') && nearby.some(neighbor => economyObjectId(neighbor) === id)) {
+        const materials = id === 'crystal' ? 0.8 : 0.45;
+        stats.materials += materials;
+        if (id === 'tree') stats.charm += 0.3;
+        addSynergy(id === 'tree' ? 'Wood Cluster' : 'Stone Cluster', 0.6, cell, { materials, charm: id === 'tree' ? 0.3 : 0 });
+      }
+      if ((id === 'flower' || id === 'sunflower') && waterAdjacent(cell)) {
+        stats.charm += 0.9;
+        addSynergy('Water Gardens', 0.7, cell, { charm: 0.9 });
+      }
+      if (id === 'bridge') {
+        const horizontal = cellAt(cell.x - 1, cell.z) && cellAt(cell.x + 1, cell.z)
+          && cellAt(cell.x - 1, cell.z).terrain !== 'water'
+          && cellAt(cell.x + 1, cell.z).terrain !== 'water';
+        const vertical = cellAt(cell.x, cell.z - 1) && cellAt(cell.x, cell.z + 1)
+          && cellAt(cell.x, cell.z - 1).terrain !== 'water'
+          && cellAt(cell.x, cell.z + 1).terrain !== 'water';
+        if (horizontal || vertical) {
+          stats.commerce += 1.4;
+          stats.charm += 0.8;
+          addSynergy('Bridge Crossing', 1.8, cell, { commerce: 1.4, charm: 0.8 });
+        }
+      }
+      if (['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower'].indexOf(id) !== -1 && waterAdjacent(cell)) {
+        stats.food += 0.9;
+        addSynergy('Irrigated Crops', 0.8, cell, { food: 0.9 });
+      }
+      if (id === 'crystal' && cell.terrain === 'stone') {
+        stats.materials += 0.8;
+        addSynergy('Crystal Vein', 0.7, cell, { materials: 0.8 });
+      }
+    }
+
+    const traits = archetype.traits.slice();
+    if ((counts.sheep || 0) >= 2) traits.push('Sheep Meadows');
+    if ((counts.cow || 0) >= 2) traits.push('Cattle Pasture');
+    if ((counts.tree || 0) + (counts.berries || 0) >= 5) traits.push('Wood Lots');
+    if ((counts.stone || 0) + (counts.crystal || 0) >= 5) traits.push('Rich Quarry');
+    if ((counts.house || 0) >= 3) traits.push('House Cluster');
+    if ((counts.manor || 0) >= 1) traits.push('Manor Estate');
+    if ((counts.watchtower || 0) + (counts.fence || 0) + (counts.spotlight || 0) >= 4) traits.push('Defensive Ring');
+    if ((counts.bridge || 0) >= 1 && (terrains.water || 0) >= 8) traits.push('Bridge Crossing');
+    if ((counts.ruins || 0) + (counts.totem || 0) + (counts.crystal || 0) >= 3) traits.push('Ancient Mystery');
+    if ((counts.flower || 0) + (counts.sunflower || 0) >= 3) traits.push('Bloom Gardens');
+    if ((terrains.water || 0) >= Math.max(8, Math.round(cells.length * 0.22))) traits.push('Coastal Shape');
+    if ((terrains.path || 0) >= Math.max(6, Math.round(cells.length * 0.11))) traits.push('Readable Roads');
+    if (stats.defense < 4 && ((counts.house || 0) >= 2 || (counts.manor || 0) >= 1)) traits.push('Weak Walls');
+
+    const roundedStats = Object.fromEntries(Object.entries(stats).map(([key, value]) => [key, Number(value.toFixed(1))]));
+    const weighted = (
+      roundedStats.food * (Number(statWeights.food) || 0) * 1.05
+      + roundedStats.materials * (Number(statWeights.materials) || 0) * 0.95
+      + roundedStats.commerce * (Number(statWeights.commerce) || 0) * 0.9
+      + Math.min(roundedStats.defense, 28) * (Number(statWeights.defense) || 0) * 0.65
+      + roundedStats.charm * (Number(statWeights.charm) || 0) * 0.82
+    );
+    const finalTraits = [...new Set(traits)].slice(0, 6);
+    const traitBonus = finalTraits.length * 1.2;
+    const cappedSynergyBonus = Math.min(synergyBonus, 14);
+    const potential = Math.max(1, Math.round(weighted + cappedSynergyBonus * 1.05 + traitBonus));
+    const rarityScore = weighted + cappedSynergyBonus * 1.05 + traitBonus;
+    const rarityThresholds = {
+      pastoral: { uncommon: 88.8, rare: 96.8, epic: 103.3, legendary: 109.7 },
+      forest: { uncommon: 74.7, rare: 81.2, epic: 87.2, legendary: 96.6 },
+      quarry: { uncommon: 99.4, rare: 106.1, epic: 111.5, legendary: 117.8 },
+      river: { uncommon: 96.5, rare: 101.8, epic: 106.0, legendary: 110.6 },
+      village: { uncommon: 99.3, rare: 106.3, epic: 110.8, legendary: 114.3 },
+      fortress: { uncommon: 91.8, rare: 98.6, epic: 104.1, legendary: 109.7 },
+      ruins: { uncommon: 76.2, rare: 82.9, epic: 88.7, legendary: 94.6 },
+      harbor: { uncommon: 84.1, rare: 93.5, epic: 99.1, legendary: 102.9 },
+      global: { uncommon: 90.0, rare: 99.0, epic: 106.0, legendary: 112.0 },
+    };
+    const rarityBand = rarityThresholds[archetypeKey] || rarityThresholds.global;
+    const rarity = rarityScore >= rarityBand.legendary ? 'Legendary'
+      : rarityScore >= rarityBand.epic ? 'Epic'
+        : rarityScore >= rarityBand.rare ? 'Rare'
+          : rarityScore >= rarityBand.uncommon ? 'Uncommon'
+            : 'Common';
+    const topStats = statDefs
+      .map(stat => ({ id: stat.id, label: stat.label, color: stat.color, value: roundedStats[stat.id] || 0 }))
+      .sort((a, b) => b.value - a.value);
+    const highlights = [
+      {
+        id: 'overview',
+        stat: topStats[0].id,
+        cells: sampleCells(() => true, 12),
+      },
+      {
+        id: 'commerce',
+        stat: 'commerce',
+        cells: sampleCells((cell, id) => cell.terrain === 'path' || id === 'house' || id === 'manor' || id === 'lamp' || id === 'bridge', 10),
+      },
+      {
+        id: 'food',
+        stat: 'food',
+        cells: sampleCells((cell, id) => ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'cow', 'sheep', 'berries'].indexOf(id) !== -1 || cell.terrain === 'water', 10),
+      },
+      {
+        id: 'materials',
+        stat: 'materials',
+        cells: sampleCells((cell, id) => id === 'tree' || id === 'stone' || id === 'crystal' || cell.terrain === 'stone' || cell.terrain === 'dirt', 10),
+      },
+      {
+        id: 'defense',
+        stat: 'defense',
+        cells: sampleCells((cell, id) => id === 'watchtower' || id === 'fence' || id === 'spotlight' || (cell.terrainFloors || 1) >= 3, 10),
+      },
+      {
+        id: 'charm',
+        stat: 'charm',
+        cells: sampleCells((cell, id) => id === 'flower' || id === 'sunflower' || id === 'tree' || id === 'crystal' || id === 'totem' || id === 'ruins' || cell.terrain === 'water' || cell.terrain === 'sand', 10),
+      },
+      {
+        id: 'summary',
+        stat: topStats[0].id,
+        cells: topStats.slice(0, 3).flatMap(stat => statCells[stat.id] || []).slice(0, 14),
+      },
+    ].map(step => ({
+      id: step.id,
+      stat: step.stat,
+      cells: step.cells && step.cells.length ? step.cells : sampleCells(() => true, 10),
+    }));
+
+    return {
+      seed,
+      archetypeKey,
+      archetype: archetype.label,
+      bestUse: archetype.bestUse,
+      name: makeName(),
+      stats: roundedStats,
+      statDefs,
+      counts,
+      terrains,
+      synergyBonus: Number(synergyBonus.toFixed(1)),
+      synergies: synergies.slice(0, 8),
+      traits: finalTraits,
+      economy: {
+        weighted: Number(weighted.toFixed(1)),
+        traitBonus: Number(traitBonus.toFixed(1)),
+        potential,
+        rarityScore: Number(rarityScore.toFixed(1)),
+        rarity,
+        rarityScope: 'archetype',
+      },
+      topStats,
+      highlights,
+    };
+  }
+
+  function generateProceduralWorld({ seed, biomes, elevation, gridSize, archetype }) {
+    return generateRandomIslandWorld({ seed, biomes, elevation, gridSize, archetype });
+  }
   // Expose for tests / command palette.
+  window.__buildRandomIslandEconomyProfile = buildRandomIslandEconomyProfile;
+  window.__generateRandomIslandWorld = generateRandomIslandWorld;
   window.__generateProceduralWorld = generateProceduralWorld;

@@ -55,6 +55,11 @@ Validation:
 - Selection-panel property chips should apply immediate local changes through `setCell` when the renderer supports the property; do not fake direct controls by only writing prompts.
 - Houses placed on `path` or `water` must preserve that terrain and render on an underpass/stilt base; do not coerce those tiles back to grass.
 - Same-terrain repeat placement should be visible before refresh/reload.
+- House clusters only merge plain `kind: 'house'` cells with no `buildingType`.
+  Forced variants such as `manor`, `tower`, `turret`, and `skyscraper` are
+  visual cluster boundaries; do not let linear/composite/square cluster
+  detection traverse through them, or the merged house mesh can overlap the
+  separate forced-variant mesh.
 
 ## Terrain Styling Options (Low-poly vs Voxel)
 

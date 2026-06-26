@@ -3920,6 +3920,441 @@ syncTinyworldOwnerToolControls();
       twCloudQueueLocalWorldSync();
     }
 
+    function worldMenuRevealText(key, fallback, params) {
+      const raw = (typeof window.tx === 'function') ? window.tx(key, fallback) : fallback;
+      return String(raw).replace(/\{(\w+)\}/g, (whole, name) => (
+        params && Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : whole
+      ));
+    }
+
+    function randomIslandSeedForWorldMenu() {
+      const labels = ['mossbridge', 'stonefall', 'cloverdock', 'pinewatch', 'saltmeadow', 'relicshoal', 'lanternbay', 'crownmeadow'];
+      const n = Math.floor(Math.random() * 90000) + 10000;
+      return labels[Math.floor(Math.random() * labels.length)] + '-' + n;
+    }
+
+    function randomIslandArchetypeForWorldMenu() {
+      const keys = ['pastoral', 'forest', 'quarry', 'river', 'village', 'fortress', 'ruins', 'harbor'];
+      return keys[Math.floor(Math.random() * keys.length)];
+    }
+
+    function randomIslandMixForWorldMenu(archetypeKey) {
+      const mixes = {
+        pastoral: {
+          biomes: { grass: 55, forest: 10, water: 8, dirt: 22, settlement: 5 },
+          elevation: { plains: 70, hills: 24, mountains: 6 },
+        },
+        forest: {
+          biomes: { grass: 35, forest: 44, water: 8, dirt: 10, settlement: 3 },
+          elevation: { plains: 48, hills: 40, mountains: 12 },
+        },
+        quarry: {
+          biomes: { grass: 18, forest: 10, water: 6, dirt: 26, settlement: 8 },
+          elevation: { plains: 20, hills: 42, mountains: 38 },
+        },
+        river: {
+          biomes: { grass: 35, forest: 14, water: 32, dirt: 14, settlement: 5 },
+          elevation: { plains: 64, hills: 28, mountains: 8 },
+        },
+        village: {
+          biomes: { grass: 30, forest: 12, water: 10, dirt: 16, settlement: 32 },
+          elevation: { plains: 60, hills: 30, mountains: 10 },
+        },
+        fortress: {
+          biomes: { grass: 20, forest: 8, water: 8, dirt: 20, settlement: 44 },
+          elevation: { plains: 22, hills: 38, mountains: 40 },
+        },
+        ruins: {
+          biomes: { grass: 26, forest: 20, water: 10, dirt: 24, settlement: 20 },
+          elevation: { plains: 34, hills: 42, mountains: 24 },
+        },
+        harbor: {
+          biomes: { grass: 24, forest: 8, water: 38, dirt: 10, settlement: 20 },
+          elevation: { plains: 62, hills: 28, mountains: 10 },
+        },
+      };
+      return mixes[archetypeKey] || mixes.village;
+    }
+
+    function dismissWelcomeLaunchForNewWorld() {
+      const welcome = document.getElementById('welcome-modal');
+      if (welcome) {
+        welcome.hidden = true;
+        welcome.setAttribute('aria-hidden', 'true');
+      }
+      document.body.classList.remove('welcome-launch-open');
+    }
+
+    let newWorldRevealState = null;
+    let newWorldRevealHighlight = null;
+    let newWorldRevealCameraToken = 0;
+
+    function randomIslandRarityLabel(rarity) {
+      const key = 'newworld.rarity.' + String(rarity || '').toLowerCase();
+      return worldMenuRevealText(key, rarity || 'Common');
+    }
+
+    function randomIslandStatLabel(statId, fallback) {
+      return worldMenuRevealText('newworld.stat.' + statId, fallback || statId);
+    }
+
+    function clearNewWorldRevealHighlight() {
+      if (!newWorldRevealHighlight) return;
+      if (newWorldRevealHighlight.parent) newWorldRevealHighlight.parent.remove(newWorldRevealHighlight);
+      const geos = new Set();
+      const mats = new Set();
+      newWorldRevealHighlight.traverse(node => {
+        if (node.geometry) geos.add(node.geometry);
+        if (node.material) mats.add(node.material);
+      });
+      geos.forEach(geo => { try { geo.dispose(); } catch (_) {} });
+      mats.forEach(mat => { try { mat.dispose(); } catch (_) {} });
+      newWorldRevealHighlight = null;
+    }
+
+    function newWorldRevealCellY(cell) {
+      try {
+        const entry = cellMeshes[cell.x + ',' + cell.z];
+        const root = entry && (entry.object || entry.tile);
+        if (root && typeof THREE !== 'undefined') {
+          const box = new THREE.Box3().setFromObject(root);
+          if (Number.isFinite(box.max.y)) return box.max.y + 0.045;
+        }
+      } catch (_) {}
+      return 0.34;
+    }
+
+    function paintNewWorldRevealHighlight(step) {
+      clearNewWorldRevealHighlight();
+      if (!step || !Array.isArray(step.cells) || !step.cells.length) return;
+      if (typeof THREE === 'undefined' || typeof worldGroup === 'undefined') return;
+      const group = new THREE.Group();
+      group.name = 'new-world-reveal-highlight';
+      group.userData.noPointerPick = true;
+      const colorByStat = {
+        food: 0x2faa6e,
+        materials: 0x7b8794,
+        commerce: 0xd79225,
+        defense: 0x55657e,
+        charm: 0x2473e6,
+      };
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorByStat[step.stat] || 0x2f7df6,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const geo = new THREE.RingGeometry(0.42, 0.52, 32);
+      const used = new Set();
+      step.cells.slice(0, 14).forEach(cell => {
+        if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) return;
+        const key = cell.x + ',' + cell.z;
+        if (used.has(key)) return;
+        used.add(key);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        const pos = typeof tilePos === 'function'
+          ? tilePos(cell.x, cell.z)
+          : new THREE.Vector3(cell.x - GRID / 2 + 0.5, 0, cell.z - GRID / 2 + 0.5);
+        mesh.position.set(pos.x, newWorldRevealCellY(cell), pos.z);
+        group.add(mesh);
+      });
+      if (!group.children.length) {
+        geo.dispose();
+        mat.dispose();
+        return;
+      }
+      worldGroup.add(group);
+      newWorldRevealHighlight = group;
+    }
+
+    function averageNewWorldRevealCells(cells) {
+      const valid = (cells || []).filter(cell => cell && Number.isInteger(cell.x) && Number.isInteger(cell.z));
+      if (!valid.length) return { x: 0, z: 0 };
+      const sum = valid.reduce((acc, cell) => {
+        const pos = typeof tilePos === 'function'
+          ? tilePos(cell.x, cell.z)
+          : { x: cell.x - GRID / 2 + 0.5, z: cell.z - GRID / 2 + 0.5 };
+        acc.x += pos.x;
+        acc.z += pos.z;
+        return acc;
+      }, { x: 0, z: 0 });
+      return { x: sum.x / valid.length, z: sum.z / valid.length };
+    }
+
+    function animateNewWorldRevealCamera(stepIndex, step) {
+      if (!step || typeof updateCamera !== 'function') return;
+      const focus = averageNewWorldRevealCells(step.cells);
+      const token = ++newWorldRevealCameraToken;
+      const start = {
+        tx: (typeof target !== 'undefined' && target) ? target.x : 0,
+        ty: (typeof target !== 'undefined' && target) ? target.y : 0,
+        tz: (typeof target !== 'undefined' && target) ? target.z : 0,
+        az: (typeof azimuth === 'number') ? azimuth : -0.78,
+        po: (typeof polar === 'number') ? polar : 0.9,
+        vs: (typeof viewSize === 'number') ? viewSize : 8,
+      };
+      const end = {
+        tx: focus.x,
+        ty: 0,
+        tz: focus.z,
+        az: -0.82 + stepIndex * 0.18,
+        po: 0.78,
+        vs: Math.max(5.4, Math.min(8.6, GRID * (stepIndex === 0 ? 0.92 : 0.72))),
+      };
+      if (typeof setCameraMode === 'function' && typeof cameraMode !== 'undefined' && cameraMode === 'ortho') {
+        try { setCameraMode('perspective'); } catch (_) {}
+      }
+      const startMs = performance.now();
+      function shortAngleDelta(a, b) {
+        let d = b - a;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        return d;
+      }
+      function tick(now) {
+        if (token !== newWorldRevealCameraToken) return;
+        const t = Math.min(1, (now - startMs) / 720);
+        const u = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        if (typeof target !== 'undefined' && target) {
+          target.set(
+            start.tx + (end.tx - start.tx) * u,
+            start.ty + (end.ty - start.ty) * u,
+            start.tz + (end.tz - start.tz) * u
+          );
+        }
+        if (typeof azimuth !== 'undefined') azimuth = start.az + shortAngleDelta(start.az, end.az) * u;
+        if (typeof polar !== 'undefined') polar = start.po + (end.po - start.po) * u;
+        if (typeof viewSize !== 'undefined') viewSize = start.vs + (end.vs - start.vs) * u;
+        updateCamera();
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function ensureNewWorldRevealOverlay() {
+      let overlay = document.getElementById('new-world-reveal');
+      if (overlay) return overlay;
+      overlay = document.createElement('div');
+      overlay.id = 'new-world-reveal';
+      overlay.className = 'new-world-reveal';
+      overlay.hidden = true;
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'false');
+      overlay.innerHTML =
+        '<section class="new-world-reveal-card">' +
+          '<button type="button" class="new-world-reveal-close"></button>' +
+          '<div class="new-world-reveal-kicker"></div>' +
+          '<h2 class="new-world-reveal-name"></h2>' +
+          '<div class="new-world-reveal-meta"></div>' +
+          '<div class="new-world-reveal-step-count"></div>' +
+          '<h3 class="new-world-reveal-step-title"></h3>' +
+          '<p class="new-world-reveal-step-body"></p>' +
+          '<div class="new-world-reveal-stats"></div>' +
+          '<div class="new-world-reveal-traits"></div>' +
+          '<div class="new-world-reveal-actions">' +
+            '<button type="button" class="new-world-reveal-secondary"></button>' +
+            '<button type="button" class="new-world-reveal-primary"></button>' +
+          '</div>' +
+        '</section>';
+      document.body.appendChild(overlay);
+      overlay.querySelector('.new-world-reveal-close').addEventListener('click', closeNewWorldReveal);
+      overlay.querySelector('.new-world-reveal-secondary').addEventListener('click', closeNewWorldReveal);
+      overlay.querySelector('.new-world-reveal-primary').addEventListener('click', () => {
+        if (!newWorldRevealState) return;
+        if (newWorldRevealState.step >= newWorldRevealState.steps.length - 1) {
+          closeNewWorldReveal();
+          return;
+        }
+        newWorldRevealState.step++;
+        renderNewWorldReveal();
+      });
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) closeNewWorldReveal();
+      });
+      return overlay;
+    }
+
+    function closeNewWorldReveal() {
+      const overlay = document.getElementById('new-world-reveal');
+      if (overlay) overlay.hidden = true;
+      document.body.classList.remove('new-world-reveal-open');
+      newWorldRevealState = null;
+      clearNewWorldRevealHighlight();
+    }
+
+    function renderNewWorldReveal() {
+      if (!newWorldRevealState) return;
+      dismissWelcomeLaunchForNewWorld();
+      const overlay = ensureNewWorldRevealOverlay();
+      const profile = newWorldRevealState.profile;
+      const steps = newWorldRevealState.steps;
+      const index = Math.max(0, Math.min(steps.length - 1, newWorldRevealState.step));
+      const step = steps[index];
+      const stat = (profile.topStats || []).find(s => s.id === step.stat) || (profile.topStats && profile.topStats[0]) || { id: 'charm', label: 'Charm', value: 0 };
+      const params = {
+        name: profile.name,
+        archetype: profile.archetype,
+        rarity: randomIslandRarityLabel(profile.economy.rarity),
+        gold: profile.economy.potential,
+        stat: randomIslandStatLabel(stat.id, stat.label),
+        value: Number(stat.value || 0).toFixed(1),
+        traits: (profile.traits || []).slice(0, 3).join(', '),
+      };
+      overlay.querySelector('.new-world-reveal-close').setAttribute('aria-label', worldMenuRevealText('newworld.close', 'Close'));
+      overlay.querySelector('.new-world-reveal-close').textContent = '×';
+      overlay.querySelector('.new-world-reveal-kicker').textContent = worldMenuRevealText('newworld.kicker', 'New world discovered');
+      overlay.querySelector('.new-world-reveal-name').textContent = profile.name;
+      const meta = overlay.querySelector('.new-world-reveal-meta');
+      meta.innerHTML = '';
+      [
+        randomIslandRarityLabel(profile.economy.rarity),
+        profile.archetype,
+        worldMenuRevealText('newworld.goldDay', '{gold} gold/day', params),
+      ].forEach(text => {
+        const pill = document.createElement('span');
+        pill.textContent = text;
+        meta.appendChild(pill);
+      });
+      overlay.querySelector('.new-world-reveal-step-count').textContent = worldMenuRevealText('newworld.stepCount', 'Step {n}/{total}', {
+        n: index + 1,
+        total: steps.length,
+      });
+      overlay.querySelector('.new-world-reveal-step-title').textContent = worldMenuRevealText('newworld.step.' + step.id + '.title', step.title, params);
+      overlay.querySelector('.new-world-reveal-step-body').textContent = worldMenuRevealText('newworld.step.' + step.id + '.body', step.body, params);
+
+      const statsEl = overlay.querySelector('.new-world-reveal-stats');
+      statsEl.innerHTML = '';
+      const max = Math.max(...(profile.statDefs || []).map(def => profile.stats[def.id] || 0), 1);
+      (profile.statDefs || []).forEach(def => {
+        const row = document.createElement('div');
+        row.className = 'new-world-reveal-stat' + (def.id === step.stat ? ' active' : '');
+        const label = document.createElement('span');
+        label.textContent = randomIslandStatLabel(def.id, def.label);
+        const bar = document.createElement('span');
+        bar.className = 'new-world-reveal-bar';
+        bar.style.setProperty('--bar', def.color);
+        bar.style.setProperty('--value', Math.round(((profile.stats[def.id] || 0) / max) * 100) + '%');
+        const fill = document.createElement('span');
+        bar.appendChild(fill);
+        const value = document.createElement('strong');
+        value.textContent = Number(profile.stats[def.id] || 0).toFixed(1);
+        row.appendChild(label);
+        row.appendChild(bar);
+        row.appendChild(value);
+        statsEl.appendChild(row);
+      });
+
+      const traitsEl = overlay.querySelector('.new-world-reveal-traits');
+      traitsEl.innerHTML = '';
+      (profile.traits || []).forEach(trait => {
+        const chip = document.createElement('span');
+        chip.textContent = trait;
+        traitsEl.appendChild(chip);
+      });
+      overlay.querySelector('.new-world-reveal-secondary').textContent = worldMenuRevealText('newworld.skip', 'Skip');
+      overlay.querySelector('.new-world-reveal-primary').textContent = index >= steps.length - 1
+        ? worldMenuRevealText('newworld.done', 'Enter world')
+        : worldMenuRevealText('newworld.next', 'Next');
+      overlay.hidden = false;
+      document.body.classList.add('new-world-reveal-open');
+      paintNewWorldRevealHighlight(step);
+      animateNewWorldRevealCamera(index, step);
+    }
+
+    function openNewWorldReveal(profile) {
+      const topStat = profile.topStats && profile.topStats[0] ? profile.topStats[0] : { id: 'charm' };
+      function highlightCells(id) {
+        const h = profile.highlights && profile.highlights.find(item => item.id === id);
+        return h ? h.cells : [];
+      }
+      const steps = [
+        {
+          id: 'overview',
+          stat: topStat.id,
+          title: 'Island revealed',
+          body: '{name} is a {rarity} {archetype} island earning {gold} gold/day.',
+          cells: highlightCells('overview'),
+        },
+        {
+          id: 'commerce',
+          stat: 'commerce',
+          title: 'Trade routes',
+          body: 'Paths, homes, bridges, and lamps drive {value} {stat}.',
+          cells: highlightCells('commerce'),
+        },
+        {
+          id: 'food',
+          stat: 'food',
+          title: 'Food engine',
+          body: 'Crops, animals, berries, and water produce {value} {stat}.',
+          cells: highlightCells('food'),
+        },
+        {
+          id: 'materials',
+          stat: 'materials',
+          title: 'Materials',
+          body: 'Stone, trees, and crystal veins produce {value} {stat}.',
+          cells: highlightCells('materials'),
+        },
+        {
+          id: 'defense',
+          stat: 'defense',
+          title: 'Defense',
+          body: 'Towers, fences, elevation, and lights produce {value} {stat}.',
+          cells: highlightCells('defense'),
+        },
+        {
+          id: 'charm',
+          stat: 'charm',
+          title: 'Charm',
+          body: 'Water, flowers, trees, and relics produce {value} {stat}.',
+          cells: highlightCells('charm'),
+        },
+        {
+          id: 'summary',
+          stat: topStat.id,
+          title: 'Ready for Tinyverse',
+          body: 'Top traits: {traits}. This world is saved and ready to explore.',
+          cells: highlightCells('summary'),
+        },
+      ];
+      newWorldRevealState = { profile, steps, step: 0 };
+      renderNewWorldReveal();
+    }
+
+    function createRandomIslandWorldFromMenu() {
+      if (typeof generateProceduralWorld !== 'function' || typeof applyState !== 'function') {
+        twToast(worldMenuRevealText('newworld.generatorUnavailable', 'Random island generator is unavailable.'), 'err');
+        return;
+      }
+      const seed = randomIslandSeedForWorldMenu();
+      const archetype = randomIslandArchetypeForWorldMenu();
+      const mix = randomIslandMixForWorldMenu(archetype);
+      const data = generateProceduralWorld({
+        seed,
+        archetype,
+        biomes: mix.biomes,
+        elevation: mix.elevation,
+        gridSize: GRID,
+      });
+      const profile = typeof buildRandomIslandEconomyProfile === 'function'
+        ? buildRandomIslandEconomyProfile(data, { seed, archetype })
+        : { name: 'New world', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } };
+      dismissWelcomeLaunchForNewWorld();
+      leaveWorldRoomForMenuLoad();
+      if (!applyState(data)) {
+        twToast(worldMenuRevealText('newworld.generatorFailed', 'Random island generation failed.'), 'err');
+        return;
+      }
+      saveAsNew(profile.name);
+      paintLabel();
+      paintList();
+      close();
+      setTimeout(() => openNewWorldReveal(profile), 180);
+    }
+
     async function worldMenuAccessToken() {
       const Auth = window.TinyWorldAuth;
       if (!Auth) return null;
@@ -4211,10 +4646,7 @@ syncTinyworldOwnerToolControls();
       btn.addEventListener('click', () => {
         const action = btn.getAttribute('data-action');
         if (action === 'new') {
-          const clearBtn = document.getElementById('clear');
-          if (clearBtn) clearBtn.click();
-          setActiveWorldId('');
-          paintLabel(); paintList();
+          createRandomIslandWorldFromMenu();
         } else if (action === 'duplicate') {
           const active = findMenuActiveWorld();
           const baseName = (active && active.name) || 'World';
@@ -4401,7 +4833,7 @@ syncTinyworldOwnerToolControls();
         if (typeof openGenerateModal === 'function') openGenerateModal();
         else topBtnAction('generate')();
       } });
-      items.push({ group: 'World', label: 'Generate procedurally (offline)', hint: 'seed + biomes, no LLM', run: () => {
+      items.push({ group: 'World', label: 'Generate random island (offline)', hint: 'seeded archetype island, no LLM', run: () => {
         try {
           const state = (typeof window.__genState === 'function') ? window.__genState() : null;
           const seed = (state && state.seed) || randomSeed();
@@ -4452,6 +4884,12 @@ syncTinyworldOwnerToolControls();
       return score;
     }
 
+    function escapePaletteText(s) {
+      const d = document.createElement('div');
+      d.textContent = String(s || '');
+      return d.innerHTML;
+    }
+
     function refresh() {
       const q = input.value.trim();
       filtered = entries
@@ -4481,20 +4919,20 @@ syncTinyworldOwnerToolControls();
       const safeColor = (c) => /^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? c : null;
       filtered.forEach((e, i) => {
         if (e.group !== lastGroup) {
-          html += '<div class="palette-group">' + escapeName(e.group) + '</div>';
+          html += '<div class="palette-group">' + escapePaletteText(e.group) + '</div>';
           lastGroup = e.group;
         }
         const sw = safeColor(e.swatch);
         const icon = sw
           ? '<span class="swatch" style="background:' + sw + '"></span>'
           : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>';
-        const hint = e.hint ? '<div class="palette-item-hint">' + escapeName(e.hint) + '</div>' : '';
-        const kbd  = e.kbd  ? '<span class="palette-item-kbd">' + escapeName(e.kbd) + '</span>' : '';
+        const hint = e.hint ? '<div class="palette-item-hint">' + escapePaletteText(e.hint) + '</div>' : '';
+        const kbd  = e.kbd  ? '<span class="palette-item-kbd">' + escapePaletteText(e.kbd) + '</span>' : '';
         html += '<div class="palette-item' + (i === cursor ? ' active' : '') +
                 '" role="option" data-i="' + i + '">' +
                 '<span class="palette-item-icon">' + icon + '</span>' +
                 '<div class="palette-item-body">' +
-                  '<div class="palette-item-label">' + escapeName(e.label) + '</div>' + hint +
+                  '<div class="palette-item-label">' + escapePaletteText(e.label) + '</div>' + hint +
                 '</div>' + kbd +
                 '</div>';
       });

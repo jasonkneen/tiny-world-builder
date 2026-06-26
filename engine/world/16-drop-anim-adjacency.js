@@ -388,6 +388,14 @@
     return false;
   }
 
+  function isClusterableHouseCell(cell) {
+    return !!(cell && cell.kind === 'house' && !cell.buildingType);
+  }
+
+  function isClusterableHouseAt(x, z) {
+    return isClusterableHouseCell(getWorldCell(x, z));
+  }
+
   // Detect a "composite" topology — a long main wing plus 1+ single-cell
   // perpendicular branches (L-shape, T-shape, +-shape). Returns null if the
   // cluster doesn't fit this shape (e.g. solid 2x2 square, multi-cell branches).
@@ -519,30 +527,33 @@
   //   { kind: 'composite', isAnchor, topology }
   //   { kind: 'solo',      isAnchor: true,   anchorX, anchorZ }
   function findHouseCluster(x, z) {
+    if (!isClusterableHouseAt(x, z)) {
+      return { kind: 'solo', isAnchor: true, anchorX: x, anchorZ: z };
+    }
     if (isTurretHouse(x, z)) {
       return { kind: 'turret', isAnchor: true, anchorX: x, anchorZ: z };
     }
     let xMin = x, xMax = x;
-    while (getWorldCell(xMin - 1, z).kind === 'house') xMin--;
-    while (getWorldCell(xMax + 1, z).kind === 'house') xMax++;
+    while (isClusterableHouseAt(xMin - 1, z)) xMin--;
+    while (isClusterableHouseAt(xMax + 1, z)) xMax++;
     let zMin = z, zMax = z;
-    while (getWorldCell(x, zMin - 1).kind === 'house') zMin--;
-    while (getWorldCell(x, zMax + 1).kind === 'house') zMax++;
+    while (isClusterableHouseAt(x, zMin - 1)) zMin--;
+    while (isClusterableHouseAt(x, zMax + 1)) zMax++;
     const xLen = xMax - xMin + 1, zLen = zMax - zMin + 1;
 
     if (xLen > 1 && zLen === 1) {
       let pure = true;
       for (let i = xMin; i <= xMax && pure; i++) {
-        if (getWorldCell(i, z - 1).kind === 'house' ||
-            getWorldCell(i, z + 1).kind === 'house') pure = false;
+        if (isClusterableHouseAt(i, z - 1) ||
+            isClusterableHouseAt(i, z + 1)) pure = false;
       }
       if (pure) return { kind: 'linear', isAnchor: x === xMin, length: xLen, orientation: 'x', anchorX: xMin, anchorZ: z };
     }
     if (zLen > 1 && xLen === 1) {
       let pure = true;
       for (let j = zMin; j <= zMax && pure; j++) {
-        if (getWorldCell(x - 1, j).kind === 'house' ||
-            getWorldCell(x + 1, j).kind === 'house') pure = false;
+        if (isClusterableHouseAt(x - 1, j) ||
+            isClusterableHouseAt(x + 1, j)) pure = false;
       }
       if (pure) return { kind: 'linear', isAnchor: z === zMin, length: zLen, orientation: 'z', anchorX: x, anchorZ: zMin };
     }
@@ -606,7 +617,7 @@
       const k = c.x + ',' + c.z;
       if (seen.has(k)) continue;
       seen.add(k);
-      if (getWorldCell(c.x, c.z).kind !== 'house') continue;
+      if (!isClusterableHouseAt(c.x, c.z)) continue;
       const turret = isTurretHouse(c.x, c.z);
       if (turret && !c.isStart) continue;
       result.push({ x: c.x, z: c.z });

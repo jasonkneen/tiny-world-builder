@@ -1,0 +1,474 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+
+import { buildEngineFns } from './helpers/extract-fn.mjs';
+
+const generatorPath = path.resolve('engine/world/26-ai-generation.js');
+const preamble = `
+  const GRID = 8;
+  function coerceGridSize(value, fallback) {
+    const n = Number(value);
+    return [8, 10, 12, 16, 20].includes(n) ? n : fallback;
+  }
+  function randomSeed() { return 'tiny-1'; }
+`;
+
+const {
+  generateRandomIslandWorld,
+  buildRandomIslandEconomyProfile,
+} = buildEngineFns(generatorPath, ['generateRandomIslandWorld', 'buildRandomIslandEconomyProfile'], preamble);
+
+const DEFAULT_BIOMES = { grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 };
+const DEFAULT_ELEVATION = { plains: 55, hills: 30, mountains: 15 };
+const ALLOWED_TERRAINS = new Set(['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow']);
+const ALLOWED_KINDS = new Set([null, 'house', 'tree', 'fence', 'rock', 'bridge', 'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'tuft', 'flower', 'bush', 'cow', 'sheep', 'lamp-post', 'spotlight', 'voxel-build', 'model-stamp', 'artifact', 'relic', 'crystal', 'totem', 'ruins', 'stargate']);
+const REQUIRED_CELL_KEYS = ['x', 'z', 'terrain', 'kind', 'floors', 'terrainFloors', 'buildingType', 'fenceSide'];
+const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
+const ANIMAL_KINDS = new Set(['cow', 'sheep']);
+
+function makeIsland(overrides = {}) {
+  return generateRandomIslandWorld({
+    seed: 'mossbridge-12345',
+    biomes: DEFAULT_BIOMES,
+    elevation: DEFAULT_ELEVATION,
+    gridSize: 8,
+    ...overrides,
+  });
+}
+
+test('random island generator is deterministic and emits complete v4 cells', () => {
+  const first = makeIsland();
+  const second = makeIsland();
+
+  assert.deepEqual(first, second);
+  assert.equal(first.v, 4);
+  assert.equal(first.gridSize, 8);
+  assert.equal(first.cells.length, 64);
+
+  const seen = new Set();
+  for (const cell of first.cells) {
+    for (const key of REQUIRED_CELL_KEYS) assert.ok(Object.hasOwn(cell, key), 'missing ' + key);
+    assert.ok(Number.isInteger(cell.x) && cell.x >= 0 && cell.x < 8);
+    assert.ok(Number.isInteger(cell.z) && cell.z >= 0 && cell.z < 8);
+    const coord = cell.x + ',' + cell.z;
+    assert.equal(seen.has(coord), false, 'duplicate cell ' + coord);
+    seen.add(coord);
+    assert.ok(ALLOWED_TERRAINS.has(cell.terrain), 'terrain ' + cell.terrain);
+    assert.ok(ALLOWED_KINDS.has(cell.kind), 'kind ' + cell.kind);
+    assert.ok(Number.isInteger(cell.floors) && cell.floors >= 1 && cell.floors <= 8);
+    assert.ok(Number.isInteger(cell.terrainFloors) && cell.terrainFloors >= 1 && cell.terrainFloors <= 8);
+    if (cell.kind !== 'house') assert.equal(cell.buildingType, null);
+    if (cell.kind !== 'fence') assert.equal(cell.fenceSide, null);
+    if (cell.appearance) assert.equal(cell.appearance.objectStyle, 'voxel');
+  }
+});
+
+test('explicit archetypes map lab props to native TinyWorld assets', () => {
+  const island = makeIsland({
+    seed: 'test-village',
+    archetype: 'village',
+    biomes: { grass: 25, forest: 15, water: 10, dirt: 15, settlement: 35 },
+  });
+  const kinds = new Set(island.cells.map(cell => cell.kind).filter(Boolean));
+
+  assert.ok(kinds.has('house'), 'village should place houses');
+  assert.ok(kinds.has('lamp-post') || kinds.has('fence') || kinds.has('flower'), 'village should include mapped props');
+  assert.ok(island.cells.some(cell => cell.appearance && cell.appearance.objectStyle === 'voxel'), 'mapped props should request voxel assets');
+  for (const kind of kinds) assert.ok(ALLOWED_KINDS.has(kind), 'unexpected kind ' + kind);
+});
+
+test('random island generator respects supported app grid sizes', () => {
+  const island = makeIsland({ gridSize: 16, seed: 'wide-harbor', archetype: 'harbor' });
+  assert.equal(island.gridSize, 16);
+  assert.equal(island.cells.length, 256);
+  assert.ok(island.cells.some(cell => cell.terrain === 'water'), 'harbor should include water');
+  assert.ok(island.cells.some(cell => cell.kind), 'harbor should include placed assets');
+});
+
+test('random island economy profile names and scores the loaded TinyWorld cells', () => {
+  const island = makeIsland({
+    seed: 'market-haven',
+    archetype: 'village',
+    biomes: { grass: 30, forest: 12, water: 10, dirt: 16, settlement: 32 },
+  });
+  const profile = buildRandomIslandEconomyProfile(island, { seed: 'market-haven', archetype: 'village' });
+
+  assert.equal(profile.seed, 'market-haven');
+  assert.equal(profile.archetypeKey, 'village');
+  assert.equal(profile.archetype, 'Village');
+  assert.match(profile.name, /\S+\s+\S+/);
+  assert.ok(profile.economy.potential >= 1);
+  assert.ok(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].includes(profile.economy.rarity));
+  for (const key of ['food', 'materials', 'commerce', 'defense', 'charm']) {
+    assert.equal(typeof profile.stats[key], 'number');
+  }
+  assert.ok(profile.traits.length > 0);
+  assert.ok(profile.topStats.length === 5);
+  assert.ok(profile.highlights.some(step => step.id === 'commerce' && step.cells.length > 0));
+  for (const step of profile.highlights) {
+    for (const cell of step.cells) {
+      assert.ok(Number.isInteger(cell.x));
+      assert.ok(Number.isInteger(cell.z));
+    }
+  }
+});
+
+const ARCHETYPE_MIXES = {
+  pastoral: {
+    biomes: { grass: 55, forest: 10, water: 8, dirt: 22, settlement: 5 },
+    elevation: { plains: 70, hills: 24, mountains: 6 },
+    signature: ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'cow', 'sheep', 'fence'],
+  },
+  forest: {
+    biomes: { grass: 35, forest: 44, water: 8, dirt: 10, settlement: 3 },
+    elevation: { plains: 48, hills: 40, mountains: 12 },
+    signature: ['tree', 'bush', 'flower'],
+  },
+  quarry: {
+    biomes: { grass: 18, forest: 10, water: 6, dirt: 26, settlement: 8 },
+    elevation: { plains: 20, hills: 42, mountains: 38 },
+    signature: ['rock', 'crystal'],
+  },
+  river: {
+    biomes: { grass: 35, forest: 14, water: 32, dirt: 14, settlement: 5 },
+    elevation: { plains: 64, hills: 28, mountains: 8 },
+    signature: ['bridge', 'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'flower', 'house'],
+  },
+  village: {
+    biomes: { grass: 30, forest: 12, water: 10, dirt: 16, settlement: 32 },
+    elevation: { plains: 60, hills: 30, mountains: 10 },
+    signature: ['house', 'lamp-post', 'flower'],
+  },
+  fortress: {
+    biomes: { grass: 20, forest: 8, water: 8, dirt: 20, settlement: 44 },
+    elevation: { plains: 22, hills: 38, mountains: 40 },
+    signature: ['house', 'fence', 'spotlight'],
+  },
+  ruins: {
+    biomes: { grass: 26, forest: 20, water: 10, dirt: 24, settlement: 20 },
+    elevation: { plains: 34, hills: 42, mountains: 24 },
+    signature: ['ruins', 'totem', 'crystal', 'tree', 'bush'],
+  },
+  harbor: {
+    biomes: { grass: 24, forest: 8, water: 38, dirt: 10, settlement: 20 },
+    elevation: { plains: 62, hills: 28, mountains: 10 },
+    signature: ['bridge', 'house', 'lamp-post', 'fence'],
+  },
+};
+
+function adjacentCells(cells, cell) {
+  const byCoord = new Map(cells.map(entry => [entry.x + ',' + entry.z, entry]));
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dz]) => byCoord.get((cell.x + dx) + ',' + (cell.z + dz)))
+    .filter(Boolean);
+}
+
+function cellsWithin(cells, cell, distance) {
+  return cells.filter(entry => (
+    entry !== cell
+    && Math.abs(entry.x - cell.x) + Math.abs(entry.z - cell.z) <= distance
+  ));
+}
+
+function nearCell(cells, cell, predicate, distance = 1) {
+  return cellsWithin(cells, cell, distance).some(predicate);
+}
+
+function waterComponents(island) {
+  const water = new Set(island.cells.filter(cell => cell.terrain === 'water').map(cell => cell.x + ',' + cell.z));
+  const seen = new Set();
+  const components = [];
+  for (const start of water) {
+    if (seen.has(start)) continue;
+    const stack = [start];
+    const cells = [];
+    let touchesTop = false;
+    let touchesBottom = false;
+    let touchesLeft = false;
+    let touchesRight = false;
+    while (stack.length) {
+      const key = stack.pop();
+      if (seen.has(key) || !water.has(key)) continue;
+      seen.add(key);
+      cells.push(key);
+      const [x, z] = key.split(',').map(Number);
+      touchesTop = touchesTop || z === 0;
+      touchesBottom = touchesBottom || z === island.gridSize - 1;
+      touchesLeft = touchesLeft || x === 0;
+      touchesRight = touchesRight || x === island.gridSize - 1;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        stack.push((x + dx) + ',' + (z + dz));
+      }
+    }
+    components.push({
+      size: cells.length,
+      edge: touchesTop || touchesBottom || touchesLeft || touchesRight,
+      river: (touchesTop && touchesBottom) || (touchesLeft && touchesRight),
+    });
+  }
+  return components;
+}
+
+function sameTerrainAdjacencyRatio(island) {
+  let compared = 0;
+  let matching = 0;
+  for (const cell of island.cells) {
+    if (cell.terrain === 'water') continue;
+    for (const neighbor of adjacentCells(island.cells, cell)) {
+      if (neighbor.terrain === 'water') continue;
+      compared++;
+      if (neighbor.terrain === cell.terrain) matching++;
+    }
+  }
+  return compared ? matching / compared : 0;
+}
+
+function isLargeGeneratedBuilding(cell) {
+  return cell && cell.kind === 'house' && ['manor', 'tower', 'turret', 'skyscraper'].includes(cell.buildingType);
+}
+
+function isTowerCell(cell) {
+  return cell && cell.kind === 'house' && cell.buildingType === 'tower';
+}
+
+function cornerDistance(island, cell) {
+  const max = island.gridSize - 1;
+  return Math.min(
+    Math.abs(cell.x - 0) + Math.abs(cell.z - 0),
+    Math.abs(cell.x - max) + Math.abs(cell.z - 0),
+    Math.abs(cell.x - max) + Math.abs(cell.z - max),
+    Math.abs(cell.x - 0) + Math.abs(cell.z - max)
+  );
+}
+
+function pathConnectedBuilding(island, cell) {
+  return cell.terrain === 'path' || adjacentCells(island.cells, cell).some(neighbor => neighbor.terrain === 'path');
+}
+
+function waterBridgeHasRoadBanksAndChannel(island, cell) {
+  const byCoord = new Map(island.cells.map(entry => [entry.x + ',' + entry.z, entry]));
+  function terrainAt(x, z) {
+    const entry = byCoord.get(x + ',' + z);
+    return entry && entry.terrain;
+  }
+  const horizontal = terrainAt(cell.x - 1, cell.z) === 'path'
+    && terrainAt(cell.x + 1, cell.z) === 'path'
+    && terrainAt(cell.x, cell.z - 1) === 'water'
+    && terrainAt(cell.x, cell.z + 1) === 'water';
+  const vertical = terrainAt(cell.x, cell.z - 1) === 'path'
+    && terrainAt(cell.x, cell.z + 1) === 'path'
+    && terrainAt(cell.x - 1, cell.z) === 'water'
+    && terrainAt(cell.x + 1, cell.z) === 'water';
+  return horizontal || vertical;
+}
+
+test('explicit archetypes produce grouped signature features', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    const island = makeIsland({
+      seed: 'grammar-' + archetype,
+      archetype,
+      biomes: config.biomes,
+      elevation: config.elevation,
+    });
+    const signature = new Set(config.signature);
+    const featureCells = island.cells.filter(cell => (
+      signature.has(cell.kind)
+      && !(cell.kind === 'house' && cell.buildingType === 'tower' && archetype !== 'fortress')
+    ));
+    const grouped = featureCells.filter(cell => adjacentCells(island.cells, cell).some(neighbor => (
+      signature.has(neighbor.kind)
+      || ((archetype === 'river' || archetype === 'harbor') && neighbor.terrain === 'water')
+    )));
+
+    assert.ok(featureCells.length >= 5, archetype + ' should emit enough signature features');
+    assert.ok(grouped.length / featureCells.length >= 0.4, archetype + ' signature features should be spatially grouped');
+
+    if (archetype === 'village') assert.ok(island.cells.filter(cell => cell.kind === 'house').length >= 4, 'village should include a house block');
+    if (archetype === 'river') assert.ok(island.cells.some(cell => cell.kind === 'bridge'), 'river should include a crossing');
+    if (archetype === 'harbor') {
+      assert.ok(
+        island.cells.some(cell => cell.terrain === 'path' && adjacentCells(island.cells, cell).some(neighbor => neighbor.terrain === 'water')),
+        'harbor should include a waterfront road'
+      );
+    }
+  }
+});
+
+test('water terrain motifs include edge bias plus lake and river variants', () => {
+  let samples = 0;
+  let edgeWater = 0;
+  let lakeLike = 0;
+  let riverLike = 0;
+
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 8; i++) {
+      const island = makeIsland({
+        seed: 'water-motif-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      const components = waterComponents(island);
+      samples++;
+      if (components.some(component => component.edge)) edgeWater++;
+      if (components.some(component => !component.edge && component.size >= 3)) lakeLike++;
+      if (components.some(component => component.river)) riverLike++;
+    }
+  }
+
+  assert.ok(edgeWater >= Math.ceil(samples * 0.9), 'water should strongly prefer at least one edge cell');
+  assert.ok(lakeLike >= 1, 'seed sweep should include at least one lake-like interior water motif');
+  assert.ok(riverLike >= 1, 'seed sweep should include at least one river-like spanning water motif');
+});
+
+test('water composition stays readable instead of moat-like', () => {
+  const caps = {
+    river: 0.27,
+    harbor: 0.31,
+  };
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 8; i++) {
+      const island = makeIsland({
+        seed: 'water-composition-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      const waterCells = island.cells.filter(cell => cell.terrain === 'water');
+      const components = waterComponents(island);
+      const cap = caps[archetype] || 0.23;
+
+      assert.ok(waterCells.length / island.cells.length <= cap, archetype + ' should not overfill with water');
+      assert.ok(components.length <= 3, archetype + ' should keep water to one main motif plus a small edge touch');
+    }
+  }
+});
+
+test('biome terrain fields create smooth terrain neighborhoods', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    const island = makeIsland({
+      seed: 'biome-smooth-' + archetype,
+      archetype,
+      biomes: config.biomes,
+      elevation: config.elevation,
+    });
+    assert.ok(
+      sameTerrainAdjacencyRatio(island) >= 0.34,
+      archetype + ' should have visible same-terrain neighborhoods'
+    );
+  }
+});
+
+test('water bridges only appear when connecting path roads', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 8; i++) {
+      const island = makeIsland({
+        seed: 'road-bridge-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      for (const cell of island.cells) {
+        if (cell.kind !== 'bridge' || cell.terrain !== 'water') continue;
+        assert.ok(
+          waterBridgeHasRoadBanksAndChannel(island, cell),
+          archetype + ' water bridge at ' + cell.x + ',' + cell.z + ' should connect path on opposite banks over a visible water channel'
+        );
+      }
+    }
+  }
+});
+
+test('generated large building variants keep a buffer from house clusters', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 8; i++) {
+      const island = makeIsland({
+        seed: 'building-buffer-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      for (const cell of island.cells) {
+        if (!isLargeGeneratedBuilding(cell)) continue;
+        for (const neighbor of adjacentCells(island.cells, cell)) {
+          assert.notEqual(
+            neighbor.kind,
+            'house',
+            archetype + ' large building at ' + cell.x + ',' + cell.z + ' should not touch house at ' + neighbor.x + ',' + neighbor.z
+          );
+        }
+      }
+    }
+  }
+});
+
+test('resource motif pass composes fenced crop plots and animal pens', () => {
+  for (let i = 0; i < 12; i++) {
+    const island = makeIsland({
+      seed: 'resource-motif-pastoral-' + i,
+      archetype: 'pastoral',
+      biomes: ARCHETYPE_MIXES.pastoral.biomes,
+      elevation: ARCHETYPE_MIXES.pastoral.elevation,
+    });
+    const cropCells = island.cells.filter(cell => CROP_KINDS.has(cell.kind));
+    const animalCells = island.cells.filter(cell => ANIMAL_KINDS.has(cell.kind));
+    const fencedCrops = cropCells.filter(cell => nearCell(island.cells, cell, neighbor => neighbor.kind === 'fence', 2));
+    const pennedAnimals = animalCells.filter(cell => nearCell(island.cells, cell, neighbor => neighbor.kind === 'fence', 2));
+
+    assert.ok(cropCells.length >= 4, 'pastoral should include a crop plot');
+    assert.ok(animalCells.length >= 3, 'pastoral should include a herd');
+    assert.ok(fencedCrops.length / cropCells.length >= 0.65, 'most crops should read as a fenced plot');
+    assert.ok(pennedAnimals.length / animalCells.length >= 0.65, 'most animals should read as a fenced pen');
+  }
+});
+
+test('generated homes and estates are path-connected', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    const island = makeIsland({
+      seed: 'path-connected-buildings-' + archetype,
+      archetype,
+      biomes: config.biomes,
+      elevation: config.elevation,
+    });
+    const buildings = island.cells.filter(cell => cell.kind === 'house' && cell.buildingType !== 'tower');
+    if (!buildings.length) continue;
+    const connected = buildings.filter(cell => pathConnectedBuilding(island, cell));
+
+    assert.ok(
+      connected.length / buildings.length >= 0.8,
+      archetype + ' houses/manors should have visible path access'
+    );
+  }
+});
+
+test('generated towers are corner landmarks with the requested count profile', () => {
+  const buckets = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+  const samples = 640;
+  const archetypes = Object.keys(ARCHETYPE_MIXES);
+  for (let i = 0; i < samples; i++) {
+    const archetype = archetypes[i % archetypes.length];
+    const config = ARCHETYPE_MIXES[archetype];
+    const island = makeIsland({
+      seed: 'corner-tower-profile-' + i,
+      archetype,
+      biomes: config.biomes,
+      elevation: config.elevation,
+    });
+    const towers = island.cells.filter(isTowerCell);
+    assert.ok(towers.length <= 4, archetype + ' should never emit more than four towers');
+    for (const tower of towers) {
+      assert.ok(
+        cornerDistance(island, tower) <= 3,
+        archetype + ' tower at ' + tower.x + ',' + tower.z + ' should be a corner landmark'
+      );
+    }
+    buckets[towers.length] = (buckets[towers.length] || 0) + 1;
+  }
+
+  assert.ok(buckets[0] / samples >= 0.03 && buckets[0] / samples <= 0.1, 'zero tower bucket should stay near 6.25%');
+  assert.ok(buckets[1] / samples >= 0.42 && buckets[1] / samples <= 0.58, 'one tower bucket should stay near 50%');
+  assert.ok(buckets[2] / samples >= 0.18 && buckets[2] / samples <= 0.32, 'two tower bucket should stay near 25%');
+  assert.ok(buckets[3] / samples >= 0.08 && buckets[3] / samples <= 0.18, 'three tower bucket should stay near 12.5%');
+  assert.ok(buckets[4] / samples >= 0.03 && buckets[4] / samples <= 0.1, 'four tower bucket should stay near 6.25%');
+});
