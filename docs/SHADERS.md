@@ -1,8 +1,10 @@
 # Shaders & GPU FX
 
 Tiny World Builder is stylized low-poly, so its shaders favour cheap,
-fully-procedural effects (hash-noise / fbm, no texture fetches, no extra render
-targets) over physically-based realism. The techniques are lifted and adapted
+fully-procedural effects (hash-noise / fbm) over physically-based realism. The
+enhanced water reflection pass is the explicit exception: it uses one shared
+planar render target so water can sample the real scene instead of a fake
+highlight. The techniques are lifted and adapted
 from [lettier/3d-game-shaders-for-beginners](https://github.com/lettier/3d-game-shaders-for-beginners)
 (lighting, fog, normal mapping, posterization, dithering, outlining) and tuned to
 sit next to the cel-shaded terrain.
@@ -12,7 +14,7 @@ sit next to the cel-shaded terrain.
 | System | File | Notes |
 | --- | --- | --- |
 | Terrain (sand / cel low-poly) | `engine/landscape/shaders.js` | `SAND_FS`, `LOWPOLY_FS`; ripple normals, sparkle, rim, hemi, fog/haze |
-| Ocean water plane | `engine/landscape/water.js` | flowing ripples, foam, fresnel, Blinn-Phong glint, depth tint |
+| Ocean water plane | `engine/landscape/water.js` | planar scene reflection, refractive bend, flowing ripples, foam, fresnel, Blinn-Phong glint, depth tint |
 | Voxel-world waterfalls / water flow | `engine/world/05-tile-factory.js` | curtain + surface shader sheets, batched foam puffs |
 | Reusable FX library | `engine/world/45-shader-fx.js` | `window.TinyShaderFX` — water, waterfall, foam, smoke, explosion, wear |
 | Island side strata, propeller blur disc, shield | various `engine/world/*` | bespoke ShaderMaterials |
@@ -33,6 +35,10 @@ upgrades, at roughly the same GPU cost as the old single-layer ripple:
   feeding both lighting and reflection.
 - **Blinn-Phong sun glint** (`specPower`) plus a soft broad sheen.
 - **Fresnel sky reflection** mixing `skyBottom`→`skyTop`.
+- **Planar scene reflection** from `tw-water-planar-reflection`, sampled through
+  `reflectionMatrix`.
+- **Refractive bend** using `refract(-viewDir, norm, 0.7502)` to steer local
+  colour/caustic variation.
 - **Foam** (`foamColor`, `foamAmount`) on animated wave crests and as a shoreline
   ring at the island runway edge.
 - **Depth tint** with a hint of subsurface back-glow on the shallow colour.
@@ -50,11 +56,13 @@ persisted as `tinyworld:render:enhancedWater`) that works in **every** environme
   enhancement is injected at the one chokepoint every water material flows
   through — `applyFlowingWaterUVs` in `engine/world/04-textures.js`. It keeps the
   material a `MeshLambertMaterial` (so colour shades, flow direction, and the
-  wear slider keep working) and, via `onBeforeCompile`, adds an animated ripple
-  normal → moving light/dark bands, fresnel sky sheen, sharp Blinn-Phong sun
-  glints and foam — masked to upward-facing faces so the tile sides stay calm. A
-  shared `uWaterTime` uniform (advanced in `tickWaterTextureFlow`) drives them
-  all, and a `customProgramCacheKey` makes the toggle recompile cleanly at runtime.
+  wear slider keep working) and, via `onBeforeCompile`, projects each water
+  vertex into the shared planar reflection texture, then layers refractive bend,
+  ripple-normal sheen, sharp Blinn-Phong sun glints, and crest foam — masked to
+  upward-facing faces so the tile sides stay calm. The refractive map sample uses
+  the same world-flow UV assigned to `vMapUv`, not raw mesh `vUv`. A shared
+  `uWaterTime` uniform (advanced in `tickWaterTextureFlow`) drives the motion, and
+  a `customProgramCacheKey` makes the toggle recompile cleanly at runtime.
 - **LandscapeEngine ocean** (`engine/landscape/water.js`): the same toggle drives a
   `uEnhance` uniform that scales the foam / sheen / subsurface terms, so turning it
   off falls back toward the simpler original look.

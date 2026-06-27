@@ -173,6 +173,11 @@
   //      its position and shadow camera follow `target` every frame so
   //      shadows render correctly anywhere on the world, not just near
   //      the home board origin.
+  // Environment multiplier lifts all non-shadowing scene light without making
+  // the sun harsher or increasing shadow-map cost.
+  const ENVIRONMENT_LIGHT_MULTIPLIER = 2.0;
+  const DIRECTIONAL_SUN_INTENSITY_MULTIPLIER = 1.4;
+
   // Low ambient floor — just enough so shadowed sides aren't pitch black.
   const ambient = new THREE.AmbientLight(0xffffff, 0.06);
   scene.add(ambient);
@@ -283,15 +288,15 @@
     // Sun controls shadow direction and contrast. Fill lights are non-shadowing
     // so dark faces can be lifted without flattening the diorama into CSS
     // brightness.
-    sun.intensity = 0.62 + renderLighting * 0.58;
-    hemi.intensity = 0.08 + renderAmbientFill * 0.20;
-    ambient.intensity = 0.025 + renderAmbientFill * 0.105;
-    frontFill.intensity = renderFrontFill * 0.28;
-    sideFillA.intensity = renderSideFill * 0.13;
-    sideFillB.intensity = renderSideFill * 0.13;
-    backFill.intensity = renderBackFill * 0.20;
-    modelStampImportAmbientFill.intensity = MODEL_STAMP_IMPORT_AMBIENT_BASE * renderAmbientFill;
-    modelStampImportDirFill.intensity = MODEL_STAMP_IMPORT_DIRECTIONAL_BASE * renderLighting;
+    sun.intensity = (0.62 + renderLighting * 0.58) * DIRECTIONAL_SUN_INTENSITY_MULTIPLIER * renderDirectionalSun;
+    hemi.intensity = (0.08 + renderAmbientFill * 0.20) * ENVIRONMENT_LIGHT_MULTIPLIER;
+    ambient.intensity = (0.025 + renderAmbientFill * 0.105) * ENVIRONMENT_LIGHT_MULTIPLIER;
+    frontFill.intensity = renderFrontFill * 0.28 * ENVIRONMENT_LIGHT_MULTIPLIER;
+    sideFillA.intensity = renderSideFill * 0.13 * ENVIRONMENT_LIGHT_MULTIPLIER;
+    sideFillB.intensity = renderSideFill * 0.13 * ENVIRONMENT_LIGHT_MULTIPLIER;
+    backFill.intensity = renderBackFill * 0.20 * ENVIRONMENT_LIGHT_MULTIPLIER;
+    modelStampImportAmbientFill.intensity = MODEL_STAMP_IMPORT_AMBIENT_BASE * renderAmbientFill * ENVIRONMENT_LIGHT_MULTIPLIER;
+    modelStampImportDirFill.intensity = MODEL_STAMP_IMPORT_DIRECTIONAL_BASE * renderLighting * ENVIRONMENT_LIGHT_MULTIPLIER;
   }
 
   function setShadowQuality(value) {

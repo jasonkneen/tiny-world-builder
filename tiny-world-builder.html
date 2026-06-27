@@ -115,6 +115,12 @@
     </button>
   </div>
 
+  <label class="sun-strength-control" aria-label="Directional sun strength">
+    <span>Sun</span>
+    <input id="directional-light-strength" type="range" min="0" max="1000" step="5" value="100" />
+    <output id="directional-light-strength-readout">100%</output>
+  </label>
+
   <button type="button" class="invite-top-btn" id="invite-top-btn" data-pos-type="primary" data-tooltip="Invite collaborators" aria-label="Invite collaborators">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
     <span>Invite</span>
@@ -1052,6 +1058,12 @@
       </div>
 
       <div class="help-line">Generate now previews a holographic diff first. Apply the preview only when it looks right.</div>
+      <div class="gen-progress" id="gen-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+        <div class="gen-progress-track">
+          <div class="gen-progress-fill" id="gen-progress-fill"></div>
+        </div>
+        <span class="gen-progress-label" id="gen-progress-label">Preparing generation</span>
+      </div>
       <div class="modal-foot gen-actions">
         <span id="gen-status"></span>
         <button class="btn gen-preview-action" id="gen-discard" type="button" hidden>Discard</button>

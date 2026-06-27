@@ -185,27 +185,25 @@
     const skipSurfaceDetails = !!(opts && opts.skipSurfaceDetails);
     const useVoxelTerrainForTile = renderVoxelTerrain && !(opts && opts.simpleTerrain);
 
-    // Dirt / riser block (sides + bottom of tile).
-    // For grass we *always* use a simple vertical brown dirt wall (BoxGeometry
-    // with no top face) + a larger grass top that overhangs it. This keeps the
-    // classic dirt edges visible on every grass cliff, bank, or drop-off while
-    // completely hiding the brown from above ("if it's grass it's grass").
+    // Dirt / riser block (sides + bottom of tile). Terrain tile geometry must
+    // stay inside its logical cell footprint: no x/z overhang into neighbours,
+    // and every terrain top/body uses the same TILE bounds.
     //
     // Hidden faces are stripped at geometry-build time: risers drop top/bottom
     // faces, caps/panels drop bottoms, and same-or-higher neighbours hide shared
     // side faces. FrontSide materials handle normal back-face culling on the
     // remaining visible faces.
     if (!skipTerrain) {
-      let riserSize = TILE * 1.04;
-      let topSize   = TILE * 0.98;
+      let riserSize = TILE;
+      let topSize   = TILE;
       let riserBevel = 0.04;
       let topBevel   = 0.06;
 
       if (terrain === 'grass' || terrain === 'path' || terrain === 'stone' || terrain === 'water') {
-        // Restore the physical tile look: the cap overhangs the body, so grass
-        // edges read as green first with dirt underneath.
-        riserSize  = TILE * 1.04;
-        topSize    = TILE * 1.04;
+        // Keep the physical tile look through materials/details, not by
+        // expanding the cap/body beyond the cell.
+        riserSize  = TILE;
+        topSize    = TILE;
         riserBevel = 0.02;
         topBevel   = 0.04;
       }
@@ -258,7 +256,7 @@
       // One whole logical tile panel: no artificial gaps inside a cell. The
       // voxel resolution belongs to objects/stamps; terrain/path cells must
       // still read as full panels aligned to the board grid.
-      const seamOverlap = 0.006;
+      const seamOverlap = 0;
       const topHeight = TOP_H + seamOverlap;
       if (useVoxelTerrainForTile) {
         addVoxelTerrainTop(g, terrain, x, z, visualRise - seamOverlap * 0.5, topSize, topHeight, pathN, terrainN, {

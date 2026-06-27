@@ -9,7 +9,10 @@ const WALLET_LOGIN_CHALLENGE_TTL_SECONDS = 10 * 60;
 function bearerToken(request) {
   const header = request.headers.get('authorization') || '';
   const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : '';
+  if (match) return match[1].trim();
+  const cookie = request.headers.get('cookie') || '';
+  const cookieMatch = cookie.match(/(?:^|;\s*)nf_jwt=([^;]+)/);
+  return cookieMatch ? decodeURIComponent(cookieMatch[1]) : '';
 }
 
 function envValue(name) {

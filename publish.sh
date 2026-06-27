@@ -17,6 +17,7 @@ Creates a clean dist/ folder for publishing Tiny World Builder.
 Outputs:
   dist/index.html                 Landing page entry point
   dist/tiny-world-builder.html    Original app filename
+  dist/random-island-preview.html Private Netlify-function route, not a public static copy
   dist/world.schema.json
   dist/README.md
   dist/LICENSE

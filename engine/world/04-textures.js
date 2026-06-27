@@ -140,12 +140,17 @@
     } else if (type === 'ripples') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, scale, scale);
-      ctx.fillStyle = '#e8e8e8';
-      ctx.fillRect(0, 3, scale, 1);
-      ctx.fillRect(0, 11, scale, 1);
-      ctx.fillStyle = '#cccccc';
-      ctx.fillRect(scale / 4, 4, scale / 2, 1);
-      ctx.fillRect(scale * 0.75, 12, scale / 4, 1);
+      // Neutral water albedo. The true motion/refraction/reflection comes from
+      // the enhanced water shader; do not bake fake wave stripes into the map.
+      for (let i = 0; i < scale * scale * 0.10; i++) {
+        const x = Math.floor(rand() * scale);
+        const y = Math.floor(rand() * scale);
+        const a = 0.025 + rand() * 0.040;
+        ctx.fillStyle = rand() > 0.5
+          ? 'rgba(255,255,255,' + a.toFixed(3) + ')'
+          : 'rgba(190,220,232,' + a.toFixed(3) + ')';
+        ctx.fillRect(x, y, 1, 1);
+      }
     } else if (type === 'leaves') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, scale, scale);
@@ -1092,9 +1097,9 @@
   }
 
   // Shared clock + procedural noise for the enhanced water surface shader
-  // (animated refraction / sun glints / foam). Advanced by tickWaterTextureFlow
+  // (planar reflection, refractive bend, sun glints, crest foam). Advanced by tickWaterTextureFlow
   // and shared across every water material so one update drives them all.
-  const WATER_SURFACE_SHADER_VARIANT = 'planar-reflect-v1';
+  const WATER_SURFACE_SHADER_VARIANT = 'planar-reflect-v3';
   const waterShaderTimeUniform = { value: 0 };
   const WATER_SHADER_NOISE_GLSL = `
     float twWaterHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -1128,7 +1133,7 @@
         `
         #include <common>
         uniform vec2 waterFlowOffset;
-        ${enhanced ? 'uniform mat4 twReflectionMatrix; varying vec3 vTwWaterWorld; varying vec3 vTwWaterView; varying vec3 vTwWaterNrm; varying vec4 vTwReflectCoord;' : ''}
+        ${enhanced ? 'uniform mat4 twReflectionMatrix; varying vec2 vTwWaterSurfaceUv; varying vec3 vTwWaterWorld; varying vec3 vTwWaterView; varying vec3 vTwWaterNrm; varying vec4 vTwReflectCoord;' : ''}
         `
       );
       shader.vertexShader = shader.vertexShader.replace(
@@ -1148,14 +1153,17 @@
         vec3 worldNormal = normalize((modelMatrix * localNormal).xyz);
         ${enhanced ? 'vTwWaterWorld = worldPos.xyz; vTwWaterView = cameraPosition - worldPos.xyz; vTwWaterNrm = worldNormal; vTwReflectCoord = twReflectionMatrix * worldPos;' : ''}
 
+        vec2 twWaterFlowUv;
+        if (abs(worldNormal.y) > 0.5) {
+          twWaterFlowUv = worldPos.xz * ${textureScale.toFixed(4)} + waterFlowOffset;
+        } else if (abs(worldNormal.x) > 0.5) {
+          twWaterFlowUv = worldPos.zy * ${textureScale.toFixed(4)} + waterFlowOffset.yx;
+        } else {
+          twWaterFlowUv = worldPos.xy * ${textureScale.toFixed(4)} + waterFlowOffset;
+        }
+        ${enhanced ? 'vTwWaterSurfaceUv = twWaterFlowUv;' : ''}
         #ifdef USE_MAP
-          if (abs(worldNormal.y) > 0.5) {
-            vMapUv = worldPos.xz * ${textureScale.toFixed(4)} + waterFlowOffset;
-          } else if (abs(worldNormal.x) > 0.5) {
-            vMapUv = worldPos.zy * ${textureScale.toFixed(4)} + waterFlowOffset.yx;
-          } else {
-            vMapUv = worldPos.xy * ${textureScale.toFixed(4)} + waterFlowOffset;
-          }
+          vMapUv = twWaterFlowUv;
         #endif
         `
       );
@@ -1173,6 +1181,7 @@
         uniform float uWaterTime;
         uniform sampler2D twReflectionMap;
         uniform float twReflectionStrength;
+        varying vec2 vTwWaterSurfaceUv;
         varying vec3 vTwWaterWorld;
         varying vec3 vTwWaterView;
         varying vec3 vTwWaterNrm;
@@ -1220,7 +1229,7 @@
             #endif
             float refrDepth = clamp(refrLum * 0.65 + h0 * 0.35, 0.0, 1.0);
             vec3 refrCol = mix(vec3(0.015, 0.25, 0.42), vec3(0.46, 0.96, 1.0), refrDepth);
-            float refrMask = clamp(0.18 + refrLean * 0.20, 0.0, 0.38) * twTop;
+            float refrMask = clamp(0.26 + refrLean * 0.30, 0.0, 0.58) * twTop;
             gl_FragColor.rgb = mix(gl_FragColor.rgb, refrCol, refrMask);
             vec2 reflUv = vTwReflectCoord.xy / max(vTwReflectCoord.w, 0.0001);
             vec2 reflBend = refrBend * 0.46 + rn.xz * 0.018;
@@ -1232,24 +1241,19 @@
             float reflectedLuma = dot(reflectedScene, vec3(0.299, 0.587, 0.114));
             vec3 reflectedWaterScene = mix(reflectedScene, reflectedScene * vec3(0.72, 0.90, 1.08) + vec3(0.01, 0.03, 0.05), 0.18);
             reflectedWaterScene += vec3(0.16, 0.42, 0.62) * smoothstep(0.08, 0.34, reflectedLuma) * 0.04;
-            float reflectMask = clamp(0.74 + fres * 0.28 + refrLean * 0.12, 0.0, 0.96) *
+            float reflectMask = clamp(0.88 + fres * 0.32 + refrLean * 0.18, 0.0, 1.0) *
               twReflectionStrength * twTop * reflInside;
             gl_FragColor.rgb = mix(gl_FragColor.rgb, reflectedWaterScene, reflectMask);
-            // bright thin caustic veins where the wave field crosses mid-height
-            float veins = pow(max(1.0 - abs(h0 - 0.5) * 2.0, 0.0), 4.0);
             float refrCaustic = pow(max(1.0 - abs(twWaterNoise(wp * 4.40 + refr.xz * 5.2 + vec2(t * 0.20, -t * 0.14)) - 0.52) * 2.25, 0.0), 4.0);
             float refrCausticFine = pow(max(1.0 - abs(twWaterNoise(wp * 9.20 - refr.xz * 8.0 + vec2(-t * 0.24, t * 0.19)) - 0.50) * 2.15, 0.0), 6.0);
-            float refrRibbon = pow(0.5 + 0.5 * sin((wp.x * 2.9 + wp.y * 1.7) + refrLean * 3.2 + t * 1.55), 8.0);
             float foam = smoothstep(0.62, 0.84, h0);
-            // Visible moving light/dark wave bands (troughs darker, crests brighter).
-            gl_FragColor.rgb *= mix(0.72, 1.18, h0) * twTop + (1.0 - twTop);
-            // Cyan refractive caustics + white sun sparkles + foam crests on top.
-            vec3 addCol = vec3(0.55, 0.90, 1.0) * veins * 0.10
-                        + vec3(0.42, 0.92, 1.0) * refrCaustic * 0.12
+            float broadSheen = smoothstep(0.46, 0.88, h0);
+            gl_FragColor.rgb *= mix(0.94, 1.08, broadSheen) * twTop + (1.0 - twTop);
+            vec3 addCol = vec3(0.42, 0.92, 1.0) * refrCaustic * 0.12
                         + vec3(0.80, 1.0, 1.0) * refrCausticFine * 0.08
-                        + vec3(0.72, 0.96, 1.0) * refrRibbon * 0.06
-                        + vec3(1.0, 1.0, 0.98) * glint * 1.15
-                        + vec3(0.95, 0.99, 1.0) * foam * 0.22;
+                        + vec3(1.0, 1.0, 0.98) * glint * 1.25
+                        + vec3(0.50, 0.88, 1.0) * refrLean * 0.08
+                        + vec3(0.95, 0.99, 1.0) * foam * 0.18;
             gl_FragColor.rgb += addCol * twTop;
           }
         }

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TinyWorld Island Reveal Preview</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles/random-island-preview.css">
+</head>
+<body>
+  <main class="rip-shell">
+    <section class="rip-toolbar" aria-label="Island reveal preview controls">
+      <div class="rip-brand">
+        <span class="rip-kicker">TinyWorld</span>
+        <h1>Island Reveal</h1>
+      </div>
+      <form class="rip-controls" id="rip-controls">
+        <label>
+          <span>Archetype</span>
+          <select id="rip-archetype">
+            <option value="random">Random</option>
+            <option value="pastoral">Pastoral</option>
+            <option value="forest">Forest</option>
+            <option value="quarry">Quarry</option>
+            <option value="river">River</option>
+            <option value="village">Village</option>
+            <option value="fortress">Fortress</option>
+            <option value="ruins">Ruins</option>
+            <option value="harbor">Harbor</option>
+          </select>
+        </label>
+        <label>
+          <span>Grid</span>
+          <select id="rip-grid-size">
+            <option value="8">8 x 8</option>
+            <option value="10">10 x 10</option>
+            <option value="12">12 x 12</option>
+            <option value="16">16 x 16</option>
+            <option value="20">20 x 20</option>
+          </select>
+        </label>
+        <label class="rip-seed-field">
+          <span>Seed</span>
+          <input id="rip-seed" type="text" autocomplete="off">
+        </label>
+        <button type="submit" class="rip-primary">Random</button>
+        <button type="button" id="rip-save-reveal">Save Island File</button>
+        <button type="button" id="rip-save-world">Save Game JSON</button>
+        <button type="button" id="rip-load-button">Load</button>
+        <input id="rip-load-file" type="file" accept=".json,application/json" hidden>
+      </form>
+      <div class="rip-status" id="rip-status" role="status">Starting real TinyWorld renderer...</div>
+    </section>
+
+    <section class="rip-frame-wrap" aria-label="Real TinyWorld island reveal">
+      <iframe
+        id="rip-frame"
+        title="TinyWorld rendered island reveal"
+        src="about:blank"
+        allow="fullscreen"
+      ></iframe>
+    </section>
+  </main>
+  <script src="scripts/random-island-preview.js"></script>
+</body>
+</html>

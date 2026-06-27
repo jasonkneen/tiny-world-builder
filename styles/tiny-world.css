@@ -252,10 +252,59 @@
     margin-left: 1px;
     color: #8d887d;
   }
-  .invite-top-btn {
+  .sun-strength-control {
     position: fixed;
     top: 14px;
     left: calc(50% + 118px);
+    z-index: 17;
+    height: 42px;
+    width: 178px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.62);
+    color: var(--ink);
+    font: 750 11px/1 "Space Grotesk", system-ui, sans-serif;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.85) inset,
+      0 1px 2px rgba(20, 30, 50, 0.05),
+      0 10px 30px -14px rgba(40, 50, 80, 0.28);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+  }
+  .sun-strength-control span {
+    flex: 0 0 auto;
+  }
+  .sun-strength-control input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    accent-color: #f1b84b;
+  }
+  .sun-strength-control output {
+    flex: 0 0 34px;
+    text-align: right;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  body.ui-theme-dark .sun-strength-control {
+    background: rgba(24, 30, 44, 0.74);
+    border-color: rgba(220, 236, 255, 0.22);
+    color: #f4f7ff;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.14) inset,
+      0 10px 30px -14px rgba(0, 0, 0, 0.72);
+  }
+  body.ui-theme-dark .sun-strength-control output {
+    color: rgba(244, 247, 255, 0.72);
+  }
+  .invite-top-btn {
+    position: fixed;
+    top: 14px;
+    left: calc(50% + 306px);
     z-index: 17;
     height: 42px;
     display: inline-flex;
@@ -4552,8 +4601,9 @@
   body.welcome-launch-open .brand,
   body.welcome-launch-open .brand-banner,
   body.welcome-launch-open .world-pill,
-  body.welcome-launch-open #invite-top-btn,
-  body.welcome-launch-open .token-corner,
+    body.welcome-launch-open #invite-top-btn,
+    body.welcome-launch-open .sun-strength-control,
+    body.welcome-launch-open .token-corner,
   body.welcome-launch-open .appbar,
   body.welcome-launch-open .controls,
   body.welcome-launch-open .toolbar,
@@ -4770,6 +4820,7 @@
     white-space: nowrap;
   }
   .modal-foot #gen-status.error { color: #b84838; }
+  .modal-foot #gen-status.done { color: #2d7d4d; }
   .modal-foot #gen-status.busy::after {
     content: '…';
     animation: dots 1s steps(4, end) infinite;
@@ -4960,6 +5011,35 @@
     transition: opacity 0.5s ease;
   }
   body.showcase .controls #showcase-mode { opacity: 1; pointer-events: auto; }
+  body.random-island-preview-mode .brand,
+  body.random-island-preview-mode .controls,
+  body.random-island-preview-mode .world-pill,
+  body.random-island-preview-mode #invite-top-btn,
+  body.random-island-preview-mode .token-corner,
+  body.random-island-preview-mode .appbar,
+  body.random-island-preview-mode .tool-palette,
+  body.random-island-preview-mode .flyout,
+  body.random-island-preview-mode .toolbar,
+  body.random-island-preview-mode .audio-panel,
+  body.random-island-preview-mode .help,
+  body.random-island-preview-mode .unsaved-banner,
+  body.random-island-preview-mode .minimap-wrap,
+  body.random-island-preview-mode #layers-toggle,
+  body.random-island-preview-mode #layers-panel,
+  body.random-island-preview-mode #agent-input,
+  body.random-island-preview-mode #agent-panel,
+  body.random-island-preview-mode #agent-panel-handle,
+  body.random-island-preview-mode #crowd-panel,
+  body.random-island-preview-mode #crowd-panel-handle,
+  body.random-island-preview-mode #stamp-builder-panel,
+  body.random-island-preview-mode .showcase-exit {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  body.random-island-preview-mode #welcome-modal {
+    display: none !important;
+  }
   body.new-world-reveal-open .controls,
   body.new-world-reveal-open .toolbar,
   body.new-world-reveal-open .appbar,
@@ -7042,6 +7122,38 @@
     justify-content: flex-end;
     gap: 10px;
     margin-top: 6px;
+  }
+  .gen-progress {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .gen-progress[hidden] {
+    display: none;
+  }
+  .gen-progress-track {
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(41, 54, 72, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(41, 54, 72, 0.12);
+  }
+  .gen-progress-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #3a72c8, #47a56f);
+    transition: width 160ms ease;
+  }
+  .gen-progress-label {
+    min-width: 132px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
   }
   .btn.confirm-destructive {
     background: #b84838;
@@ -9882,6 +9994,14 @@
     .invite-top-btn svg {
       width: 14px;
       height: 14px;
+    }
+    .sun-strength-control {
+      left: auto;
+      right: 8px;
+      top: 104px;
+      width: 178px;
+      height: 36px;
+      padding: 0 10px;
     }
     body.tw-worlds-play .brand,
     body.tw-worlds-play .brand-banner,

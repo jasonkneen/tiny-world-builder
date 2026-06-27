@@ -1093,8 +1093,8 @@
     const normalized = FENCE_SIDES.has(side) ? side : 'n';
     const fenceStyle = typeof normalizeFenceStyle === 'function' ? normalizeFenceStyle(style) : 'wood';
     const alongX = normalized === 'n' || normalized === 's' || normalized === 'center-x';
-    const offsetX = normalized === 'w' ? -0.43 : normalized === 'e' ? 0.43 : 0;
-    const offsetZ = normalized === 'n' ? -0.43 : normalized === 's' ? 0.43 : 0;
+    const offsetX = normalized === 'w' ? -0.50 : normalized === 'e' ? 0.50 : 0;
+    const offsetZ = normalized === 'n' ? -0.50 : normalized === 's' ? 0.50 : 0;
 
     function endpointOffsets() {
       return alongX
@@ -1123,41 +1123,41 @@
         return mesh;
       }
       for (const [px, pz] of endpointOffsets()) {
-        gateBox(0.14, postH, 0.14, px, postH / 2, pz, postMat);
-        gateBox(0.18, 0.055, 0.18, px, postH + 0.03, pz, railMat);
+        gateBox(0.08, postH, 0.08, px, postH / 2, pz, postMat);
+        gateBox(0.11, 0.045, 0.11, px, postH + 0.025, pz, railMat);
       }
       if (alongX) {
-        const inward = normalized === 'n' ? 1 : -1;
+        const outward = normalized === 'n' ? -1 : 1;
         const leaves = [
-          { hingeX: -hingeInset, dir: 1, ry: -inward * leafAngle },
-          { hingeX: hingeInset, dir: -1, ry: inward * leafAngle },
+          { hingeX: -hingeInset, dir: 1, ry: -outward * leafAngle },
+          { hingeX: hingeInset, dir: -1, ry: outward * leafAngle },
         ];
         leaves.forEach(leaf => {
           const leafX = leaf.hingeX + leaf.dir * Math.cos(leaf.ry) * leafHalf;
           const leafZ = offsetZ + leaf.dir * -Math.sin(leaf.ry) * leafHalf;
-          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(leafLen, 0.05, 0.05, leafX, y, leafZ, railMat, { ry: leaf.ry });
+          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(leafLen, 0.035, 0.035, leafX, y, leafZ, railMat, { ry: leaf.ry });
           for (const dx of [-0.13, 0.13]) {
-            gateBox(0.05, gateH * 0.66, 0.05, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
+            gateBox(0.034, gateH * 0.66, 0.034, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
           }
         });
-        gateBox(0.22, 0.11, 0.045, 0, postH + 0.13, offsetZ, markerMat);
-        gateBox(0.075, 0.075, 0.075, 0.12, gateH * 0.55, offsetZ + inward * 0.03, latchMat);
+        gateBox(0.18, 0.09, 0.035, 0, postH + 0.13, offsetZ, markerMat);
+        gateBox(0.055, 0.055, 0.055, 0.12, gateH * 0.55, offsetZ + outward * 0.025, latchMat);
       } else {
-        const inward = normalized === 'w' ? 1 : -1;
+        const outward = normalized === 'w' ? -1 : 1;
         const leaves = [
-          { hingeZ: -hingeInset, dir: 1, ry: inward * leafAngle },
-          { hingeZ: hingeInset, dir: -1, ry: -inward * leafAngle },
+          { hingeZ: -hingeInset, dir: 1, ry: outward * leafAngle },
+          { hingeZ: hingeInset, dir: -1, ry: -outward * leafAngle },
         ];
         leaves.forEach(leaf => {
           const leafX = offsetX + leaf.dir * Math.sin(leaf.ry) * leafHalf;
           const leafZ = leaf.hingeZ + leaf.dir * Math.cos(leaf.ry) * leafHalf;
-          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(0.05, 0.05, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry });
+          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(0.035, 0.035, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry });
           for (const dz of [-0.13, 0.13]) {
-            gateBox(0.05, gateH * 0.66, 0.05, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
+            gateBox(0.034, gateH * 0.66, 0.034, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
           }
         });
-        gateBox(0.045, 0.11, 0.22, offsetX, postH + 0.13, 0, markerMat);
-        gateBox(0.075, 0.075, 0.075, offsetX + inward * 0.03, gateH * 0.55, 0.12, latchMat);
+        gateBox(0.035, 0.09, 0.18, offsetX, postH + 0.13, 0, markerMat);
+        gateBox(0.055, 0.055, 0.055, offsetX + outward * 0.025, gateH * 0.55, 0.12, latchMat);
       }
     } else if (fenceStyle === 'garden' && level < 4) {
       const fenceScale = level === 1 ? 1 : (level === 2 ? 1.18 : 1.32);
@@ -1166,25 +1166,25 @@
       const railMat = M.fenceGardenD || M.fence;
       const vineMat = M.fenceVine || M.cropStem || postMat;
       const fruitMat = M.fenceFruit || M.pumpkin || railMat;
-      const postGeo = getBoxGeometry(0.10, postH, 0.10);
+      const postGeo = getBoxGeometry(0.064, postH, 0.064);
       for (const [px, pz] of endpointOffsets()) {
         const post = new THREE.Mesh(postGeo, postMat);
         post.position.set(px, postH / 2, pz);
         g.add(post);
-        const cap = new THREE.Mesh(getBoxGeometry(0.14, 0.045, 0.14), railMat);
+        const cap = new THREE.Mesh(getBoxGeometry(0.09, 0.04, 0.09), railMat);
         cap.position.set(px, postH + 0.025, pz);
         g.add(cap);
       }
       for (const y of [0.12 * fenceScale, 0.28 * fenceScale, ...(level >= 3 ? [0.42 * fenceScale] : [])]) {
-        const rail = new THREE.Mesh(getBoxGeometry(alongX ? 1.08 : 0.05, 0.05, alongX ? 0.05 : 1.08), railMat);
+        const rail = new THREE.Mesh(getBoxGeometry(alongX ? 1.00 : 0.034, 0.034, alongX ? 0.034 : 1.00), railMat);
         rail.position.set(offsetX, y, offsetZ);
         g.add(rail);
       }
-      const vine = new THREE.Mesh(getBoxGeometry(alongX ? 0.82 : 0.035, 0.035, alongX ? 0.035 : 0.82), vineMat);
+      const vine = new THREE.Mesh(getBoxGeometry(alongX ? 0.82 : 0.026, 0.026, alongX ? 0.026 : 0.82), vineMat);
       vine.position.set(offsetX, postH * 0.82, offsetZ);
       g.add(vine);
       for (const a of [-0.30, 0.18]) {
-        const fruit = new THREE.Mesh(getBoxGeometry(0.055, 0.055, 0.055), fruitMat);
+        const fruit = new THREE.Mesh(getBoxGeometry(0.045, 0.045, 0.045), fruitMat);
         fruit.position.set(alongX ? a : offsetX, postH * 0.90, alongX ? offsetZ : a);
         fruit.castShadow = false;
         fruit.receiveShadow = false;
@@ -1194,21 +1194,21 @@
       const stone = level >= 5 ? M.fenceSteel : M.castleStone;
       const capMat = level >= 5 ? M.skyFrame : M.castleStoneD;
       const wallH = level >= 5 ? 0.58 : 0.46;
-      const wallT = level >= 5 ? 0.14 : 0.18;
+      const wallT = level >= 5 ? 0.10 : 0.13;
       const wall = new THREE.Mesh(
-        getBoxGeometryPrecise(alongX ? 1.08 : wallT, wallH, alongX ? wallT : 1.08),
+        getBoxGeometryPrecise(alongX ? 1.00 : wallT, wallH, alongX ? wallT : 1.00),
         stone
       );
       wall.position.set(offsetX, wallH / 2, offsetZ);
       g.add(wall);
       const cap = new THREE.Mesh(
-        getBoxGeometryPrecise(alongX ? 1.12 : wallT + 0.04, 0.055, alongX ? wallT + 0.04 : 1.12),
+        getBoxGeometryPrecise(alongX ? 1.04 : wallT + 0.035, 0.05, alongX ? wallT + 0.035 : 1.04),
         capMat
       );
       cap.position.set(offsetX, wallH + 0.027, offsetZ);
       g.add(cap);
     } else if (level === 3) {
-      const postGeo = getBoxGeometry(0.07, 0.52, 0.07);
+      const postGeo = getBoxGeometry(0.045, 0.52, 0.045);
       for (const [px, pz] of endpointOffsets()) {
         const post = new THREE.Mesh(postGeo, M.fenceSteel);
         post.position.set(px, 0.26, pz);
@@ -1216,7 +1216,7 @@
       }
       for (const y of [0.15, 0.29, 0.43]) {
         const wire = new THREE.Mesh(
-          getBoxGeometry(alongX ? 1.08 : 0.025, 0.025, alongX ? 0.025 : 1.08),
+          getBoxGeometry(alongX ? 1.00 : 0.018, 0.018, alongX ? 0.018 : 1.00),
           M.fenceWire
         );
         wire.position.set(offsetX, y, offsetZ);
@@ -1225,14 +1225,14 @@
     } else {
       const fenceScale = level === 2 ? 1.28 : 1;
       const postH = 0.32 * fenceScale;
-      const postGeo = getBoxGeometry(0.09, postH, 0.09);
+      const postGeo = getBoxGeometry(0.055, postH, 0.055);
       for (const [px, pz] of endpointOffsets()) {
         const post = new THREE.Mesh(postGeo, M.fence);
         post.position.set(px, 0.16 * fenceScale, pz);
         g.add(post);
       }
-      const railH = 0.06;
-      const railGeo = getBoxGeometry(alongX ? 1.08 : railH, railH, alongX ? railH : 1.08);
+      const railH = 0.038;
+      const railGeo = getBoxGeometry(alongX ? 1.00 : railH, railH, alongX ? railH : 1.00);
       for (const y of [0.08 * fenceScale, 0.24 * fenceScale]) {
         const rail = new THREE.Mesh(railGeo, M.fence);
         rail.position.set(offsetX, y, offsetZ);

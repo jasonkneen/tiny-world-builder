@@ -1257,6 +1257,36 @@
       }
       pruneWaterToBudget(cells, protectedWater);
     }
+    function ensureMinimumWaterTiles(cells, minWaterTiles = 5) {
+      let waterCount = terrainCells(cells, 'water').length;
+      if (waterCount >= minWaterTiles) return;
+      const waterIndexes = terrainCells(cells, 'water');
+      function nearestWaterDistance(index) {
+        if (!waterIndexes.length) return isEdgeIndex(index) ? 0 : size;
+        return waterIndexes.reduce((best, waterIndex) => Math.min(best, distanceBetweenIndexes(index, waterIndex)), size * 2);
+      }
+      const candidates = cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => {
+          if (!cell || cell.terrain === 'water') return false;
+          if (isProtectedEconomyCell(cell)) return false;
+          if (cell.footprint || cell.footprintParent) return false;
+          if (isBuildingObjectId(cell.object) || cell.object === 'bridge' || cell.object === 'water-bridge') return false;
+          return true;
+        })
+        .map(entry => ({
+          index: entry.index,
+          score: nearestWaterDistance(entry.index)
+            + (isEdgeIndex(entry.index) ? -0.65 : 0)
+            + (entry.cell.object ? 1.25 : 0)
+            + cellRand(entry.index, 'minimum-water') * 0.35,
+        }))
+        .sort((a, b) => a.score - b.score);
+      for (const { index } of candidates) {
+        if (waterCount >= minWaterTiles) break;
+        if (clearMotifCell(cells, index, 'water')) waterCount++;
+      }
+    }
     function applyTerrainMotifs(cells) {
       const waterChance = pct(biomeMix, 'water', 10) / 100;
       const mountainChance = (pct(elevMix, 'mountains', 15) + pct(elevMix, 'hills', 30) * 0.45) / 100;
@@ -1383,9 +1413,29 @@
       if (resourceId === 'food') return isCropObjectId(objectId) || isAnimalObjectId(objectId) || objectId === 'berries';
       if (resourceId === 'materials') return objectId === 'tree' || objectId === 'stone' || objectId === 'ore' || objectId === 'crystal' || objectId === 'logs';
       if (resourceId === 'commerce') return objectId === 'house' || objectId === 'manor' || objectId === 'lamp' || objectId === 'bridge' || objectId === 'water-bridge';
-      if (resourceId === 'defense') return isTowerObjectId(objectId) || objectId === 'spotlight' || objectId === 'castle';
+      if (resourceId === 'defense') return isTowerObjectId(objectId) || objectId === 'totem' || objectId === 'spotlight' || objectId === 'castle';
       if (resourceId === 'charm') return objectId === 'flower' || objectId === 'berries' || objectId === 'tree' || objectId === 'crystal' || objectId === 'ruins' || objectId === 'totem';
       return false;
+    }
+    const generationSuppressedObjectIds = new Set(['spotlight']);
+    function generationEconomyObjectIdForMapped(mapped) {
+      if (!mapped || !mapped.kind) return null;
+      if (mapped.kind === 'house') {
+        if (mapped.buildingType === 'manor') return 'manor';
+        if (mapped.buildingType === 'tower' || mapped.buildingType === 'turret') return 'watchtower';
+        return 'house';
+      }
+      if (mapped.kind === 'lamp-post') return 'lamp';
+      if (mapped.kind === 'rock' || mapped.kind === 'stone' || mapped.kind === 'pebble') return 'stone';
+      if (mapped.kind === 'bush' || mapped.kind === 'shrub') return 'berries';
+      if (mapped.kind === 'crystal') return 'crystal';
+      if (mapped.kind === 'bridge') return 'bridge';
+      return mapped.kind;
+    }
+    function mappedObjectContributesToGenerationEconomy(mapped) {
+      const id = generationEconomyObjectIdForMapped(mapped);
+      if (!id || generationSuppressedObjectIds.has(id)) return false;
+      return economyResourceIds.some(resourceId => objectContributesToResource(id, resourceId));
     }
     function economyResourceCount(cells, resourceId) {
       return cells.reduce((count, cell) => count + (objectContributesToResource(cell && cell.object, resourceId) ? 1 : 0), 0);
@@ -1801,18 +1851,161 @@
       const targetY = archetypeKey === 'pastoral' ? size * 0.58 : size * 0.62;
       return nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', targetX, targetY);
     }
-    function applyCropPlotMotif(cells) {
-      clearObjectsWhere(cells, objectId => isCropObjectId(objectId) || objectId === 'garden');
-      const anchor = cropPlotAnchor(cells);
-      if (anchor < 0) return false;
-      const cropIds = archetypeKey === 'pastoral'
+    function chebyshevDistanceBetweenIndexes(a, b) {
+      const pa = xyFor(a);
+      const pb = xyFor(b);
+      return Math.max(Math.abs(pa.x - pb.x), Math.abs(pa.y - pb.y));
+    }
+    function isMainHabitationObject(objectId) {
+      return objectId === 'house' || objectId === 'manor';
+    }
+    function hasMainHabitationTooClose(cells, index) {
+      for (let i = 0; i < cells.length; i++) {
+        if (!cells[i] || !isMainHabitationObject(cells[i].object)) continue;
+        if (chebyshevDistanceBetweenIndexes(index, i) <= 1) return true;
+      }
+      return false;
+    }
+    function clearGeneratedFoodAreaObjects(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (!cell || (!isCropObjectId(cell.object) && cell.object !== 'garden')) continue;
+        cell.object = null;
+        cell.footprint = null;
+        cell.footprintParent = null;
+        cell.fenceEdges = null;
+        cell.fenceGatePath = false;
+        cell.fenceGateSides = null;
+        if (cell.motif === 'economy-food' || cell.motif === 'crop-plot') cell.motif = null;
+      }
+    }
+    function cropObjectIdsForArchetype() {
+      return archetypeKey === 'pastoral'
         ? ['wheat', 'corn', 'crop', 'sunflower', 'pumpkin']
         : archetypeKey === 'river'
           ? ['crop', 'wheat', 'carrot', 'flower']
-          : ['crop', 'wheat', 'corn', 'pumpkin'];
-      const plot = featureIndexesNear(anchor, 1)
-        .filter(index => cells[index] && cells[index].terrain !== 'water')
-        .slice(0, Math.max(4, Math.min(6, Math.ceil(size * 0.55))));
+          : ['crop', 'wheat', 'corn', 'pumpkin', 'carrot'];
+    }
+    function squareFoodPlotCandidates(cells, anchor, targetCount, options = {}) {
+      if (anchor < 0) return [];
+      const center = xyFor(anchor);
+      const target = Math.max(1, Math.floor(targetCount || 1));
+      function candidateAllowed(index) {
+        if (index < 0) return false;
+        const cell = cells[index];
+        const foodObject = cell && (isCropObjectId(cell.object) || cell.object === 'garden');
+        if (!cell || cell.terrain === 'water' || (cell.object && !(options.allowFoodObjects && foodObject)) || (cell.fenceGatePath && !options.allowFoodObjects) || (isProtectedEconomyCell(cell) && !(options.allowFoodObjects && foodObject))) return false;
+        if (options.avoidMainHabitation && hasMainHabitationTooClose(cells, index)) return false;
+        return true;
+      }
+      function plotSort(order) {
+        return (a, b) => {
+          const orderA = order.has(a) ? order.get(a) : 10000;
+          const orderB = order.has(b) ? order.get(b) : 10000;
+          if (orderA !== orderB) return orderA - orderB;
+          const ca = xyFor(a);
+          const cb = xyFor(b);
+          const da = Math.max(Math.abs(ca.x - center.x), Math.abs(ca.y - center.y)) + distanceBetweenIndexes(a, anchor) * 0.08 + cellRand(a, 'food-square') * 0.05;
+          const db = Math.max(Math.abs(cb.x - center.x), Math.abs(cb.y - center.y)) + distanceBetweenIndexes(b, anchor) * 0.08 + cellRand(b, 'food-square') * 0.05;
+          return da - db;
+        };
+      }
+      if (options.noFallback) {
+        let best = [];
+        let bestOrder = new Map();
+        for (let side = Math.max(2, Math.ceil(Math.sqrt(target))); side <= Math.min(size, Math.max(2, Math.ceil(Math.sqrt(target)) + 3)); side++) {
+          const local = [];
+          const localOrder = new Map();
+          const startX = clampIntLocal(Math.round(center.x - (side - 1) / 2), 0, Math.max(0, size - side), 0);
+          const startY = clampIntLocal(Math.round(center.y - (side - 1) / 2), 0, Math.max(0, size - side), 0);
+          for (let y = startY; y < startY + side; y++) {
+            for (let x = startX; x < startX + side; x++) {
+              const index = indexFor(x, y);
+              if (!localOrder.has(index)) localOrder.set(index, localOrder.size);
+              if (candidateAllowed(index)) local.push(index);
+            }
+          }
+          if (local.length >= target) return local.sort(plotSort(localOrder));
+          if (local.length > best.length) {
+            best = local;
+            bestOrder = localOrder;
+          }
+        }
+        return best.sort(plotSort(bestOrder));
+      }
+      const seen = new Set();
+      const squareOrder = new Map();
+      const out = [];
+      function consider(index) {
+        if (index < 0 || seen.has(index)) return;
+        seen.add(index);
+        if (!candidateAllowed(index)) return;
+        out.push(index);
+      }
+      for (let side = Math.max(2, Math.ceil(Math.sqrt(target))); side <= Math.min(size, Math.max(2, Math.ceil(Math.sqrt(target)) + 3)); side++) {
+        const startX = clampIntLocal(Math.round(center.x - (side - 1) / 2), 0, Math.max(0, size - side), 0);
+        const startY = clampIntLocal(Math.round(center.y - (side - 1) / 2), 0, Math.max(0, size - side), 0);
+        for (let y = startY; y < startY + side; y++) {
+          for (let x = startX; x < startX + side; x++) {
+            const index = indexFor(x, y);
+            if (!squareOrder.has(index)) squareOrder.set(index, squareOrder.size);
+            consider(index);
+          }
+        }
+        if (out.length >= target) break;
+      }
+      if (out.length < target && !options.noFallback) {
+        for (const index of featureIndexesNear(anchor, Math.max(2, Math.floor(size * 0.28)))) consider(index);
+      }
+      return out.sort((a, b) => {
+        return plotSort(squareOrder)(a, b);
+      });
+    }
+    function bestSquareFoodPlotAnchor(cells, targetCount) {
+      const preferred = cropPlotAnchor(cells);
+      if (preferred < 0) return -1;
+      const target = Math.max(1, Math.floor(targetCount || 1));
+      const minimum = Math.min(target, 4);
+      const candidates = featureIndexesNear(preferred, Math.max(2, Math.floor(size * 0.34)))
+        .filter(index => cells[index] && cells[index].terrain !== 'water' && !hasMainHabitationTooClose(cells, index))
+        .sort((a, b) => distanceBetweenIndexes(a, preferred) - distanceBetweenIndexes(b, preferred) + cellRand(a, 'food-anchor-square') * 0.08);
+      for (const index of candidates) {
+        if (squareFoodPlotCandidates(cells, index, target, { avoidMainHabitation: true, allowFoodObjects: true, noFallback: true }).length >= minimum) return index;
+      }
+      return preferred;
+    }
+    function consolidateGeneratedCropPlot(cells) {
+      const existing = cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => cell && isCropObjectId(cell.object));
+      if (existing.length < 4) return 0;
+      const cropIds = cropObjectIdsForArchetype();
+      const target = existing.length;
+      const anchor = bestSquareFoodPlotAnchor(cells, target);
+      if (anchor < 0) return 0;
+      const plot = squareFoodPlotCandidates(cells, anchor, target, { avoidMainHabitation: true, allowFoodObjects: true, noFallback: true }).slice(0, target);
+      if (plot.length < Math.min(target, 4)) return 0;
+      clearGeneratedFoodAreaObjects(cells);
+      const placedPlot = [];
+      for (let i = 0; i < plot.length; i++) {
+        const index = plot[i];
+        if (!setFeatureTerrain(cells, index, 'dirt')) continue;
+        if (forcePlaceObject(cells, index, cropIds[i % cropIds.length], 'dirt')) {
+          cells[index].motif = 'crop-plot';
+          placedPlot.push(index);
+        }
+      }
+      connectFeatureToPath(cells, anchor);
+      applyGeneratedFenceEnclosure(cells, placedPlot, { level: 1, style: 'garden' });
+      return placedPlot.length;
+    }
+    function applyCropPlotMotif(cells) {
+      clearGeneratedFoodAreaObjects(cells);
+      const anchor = cropPlotAnchor(cells);
+      if (anchor < 0) return false;
+      const cropIds = cropObjectIdsForArchetype();
+      const targetPlot = Math.max(4, Math.min(6, Math.ceil(size * 0.55)));
+      const plot = squareFoodPlotCandidates(cells, anchor, targetPlot, { avoidMainHabitation: true }).slice(0, targetPlot);
       const placedPlot = [];
       for (let i = 0; i < plot.length; i++) {
         const index = plot[i];
@@ -2051,16 +2244,24 @@
       const anchor = cropPlotAnchor(cells);
       if (anchor < 0) return 0;
       const home = ensureEconomyHomeNear(cells, anchor);
-      const openHomeNeighbor = home >= 0 ? openNeighborForPath(cells, home) : -1;
-      const plotAnchor = openHomeNeighbor >= 0 ? openHomeNeighbor : anchor;
-      const cropIds = archetypeKey === 'pastoral'
-        ? ['wheat', 'corn', 'crop', 'sunflower', 'pumpkin']
-        : archetypeKey === 'river'
-          ? ['crop', 'wheat', 'carrot', 'flower']
-          : ['crop', 'wheat', 'corn', 'pumpkin', 'carrot'];
+      const plotAnchorCandidates = featureIndexesNear(anchor, Math.max(2, Math.floor(size * 0.24)))
+        .filter(index => cells[index] && cells[index].terrain !== 'water' && !cells[index].object && !isProtectedEconomyCell(cells[index]) && !hasMainHabitationTooClose(cells, index))
+        .sort((a, b) => {
+          const homeScoreA = home >= 0 ? Math.abs(distanceBetweenIndexes(a, home) - 2) * 0.25 : 0;
+          const homeScoreB = home >= 0 ? Math.abs(distanceBetweenIndexes(b, home) - 2) * 0.25 : 0;
+          const da = distanceBetweenIndexes(a, anchor) + homeScoreA + cellRand(a, 'food-plot-anchor') * 0.1;
+          const db = distanceBetweenIndexes(b, anchor) + homeScoreB + cellRand(b, 'food-plot-anchor') * 0.1;
+          return da - db;
+        });
+      const plotAnchor = plotAnchorCandidates[0] == null ? anchor : plotAnchorCandidates[0];
+      const cropIds = cropObjectIdsForArchetype();
       let placed = 0;
       const placedFood = [];
-      for (const index of economyPlacementCandidates(cells, plotAnchor, Math.max(2, Math.floor(size * 0.2)), { homeIndex: home, homeDistance: 3 })) {
+      const squareCandidates = squareFoodPlotCandidates(cells, plotAnchor, need, { avoidMainHabitation: true });
+      const fallbackCandidates = economyPlacementCandidates(cells, plotAnchor, Math.max(2, Math.floor(size * 0.26)), { homeIndex: home, homeDistance: 4 })
+        .filter(index => !hasMainHabitationTooClose(cells, index));
+      const candidates = squareCandidates.concat(fallbackCandidates.filter(index => squareCandidates.indexOf(index) === -1));
+      for (const index of candidates) {
         if (placed >= need) break;
         if (!setFeatureTerrain(cells, index, 'dirt')) continue;
         if (!forcePlaceObject(cells, index, cropIds[placed % cropIds.length], 'dirt')) continue;
@@ -2127,8 +2328,7 @@
       let placed = 0;
       for (const index of economyPlacementCandidates(cells, anchor, Math.max(2, Math.floor(size * 0.26)), { nearHome: false })) {
         if (placed >= need) break;
-        const terrain = cells[index].terrain === 'path' ? 'path' : 'stone';
-        if (!forcePlaceObject(cells, index, 'spotlight', terrain)) continue;
+        if (!forcePlaceObject(cells, index, 'totem', 'grass')) continue;
         markEconomyCell(cells, index, 'defense');
         placed++;
       }
@@ -2728,6 +2928,28 @@
       }
     }
 
+    function limitLampPlacements(cells) {
+      const lampIndexes = cells
+        .map((cell, index) => ({ cell, index }))
+        .filter(({ cell }) => cell && cell.object === 'lamp')
+        .sort((a, b) => {
+          const ar = cellRand(a.index, 'lamp-limit');
+          const br = cellRand(b.index, 'lamp-limit');
+          return ar === br ? a.index - b.index : ar - br;
+        });
+      const kept = [];
+      for (const { index } of lampIndexes) {
+        const adjacent = kept.some(keptIndex => neighbors(index).indexOf(keptIndex) !== -1);
+        if (!adjacent && kept.length < 2) {
+          kept.push(index);
+        } else if (cells[index]) {
+          cells[index].object = null;
+          cells[index].footprint = null;
+          cells[index].footprintParent = null;
+        }
+      }
+    }
+
     function makeCells() {
       const land = createLandMask();
       const cells = Array.from({ length: size * size }, (_, index) => {
@@ -2735,15 +2957,18 @@
         return { terrain: terrainForBiomeField(index), object: null };
       });
       applyTerrainMotifs(cells);
+      ensureMinimumWaterTiles(cells, 5);
       carvePaths(cells);
       applyEconomyViabilityPass(cells);
       applyArchetypeGrammar(cells);
       applyArchetypeResourcePolish(cells);
       validateEconomyFloors(cells);
+      consolidateGeneratedCropPlot(cells);
       ensureRoadBridgeCrossing(cells);
       applyPathsideHomeMotif(cells);
       placeBridgeCandidates(cells, archetypeKey === 'river' || archetypeKey === 'harbor' ? 1 : 0.35);
       placeObjects(cells);
+      limitLampPlacements(cells);
       repairGeneratedFenceGatePaths(cells);
       repairGeneratedFenceOpenings(cells);
       ensureGeneratedResourceComponentGates(cells);
@@ -2751,6 +2976,7 @@
       ensureRoadBridgeCrossing(cells);
       forceRoadBridgeCrossing(cells);
       scrubInvalidWaterBridges(cells);
+      ensureMinimumWaterTiles(cells, 5);
       orientGeneratedTowers(cells);
       return cells;
     }
@@ -2865,22 +3091,6 @@
       return { kind: null, floors: 1, buildingType: null, fenceSide: null, appearance: null };
     }
     function terrainFloorsFor(cell, index, mapped) {
-      const terrain = cell && cell.terrain;
-      const kind = mapped && mapped.kind;
-      const rockLike = kind === 'rock' || kind === 'crystal' || kind === 'totem' || kind === 'ruins';
-      if (kind && !rockLike) return 1;
-      if (terrain === 'water' || terrain === 'path' || terrain === 'dirt' || terrain === 'sand' || terrain === 'prairie') return 1;
-      const hills = pct(elevMix, 'hills', 30);
-      const mountains = pct(elevMix, 'mountains', 15);
-      if (terrain === 'cliff') {
-        const max = clampIntLocal(3 + mountains / 18, 3, 7, 4);
-        return floorsByRand(index, 2, max, 'cliff-height');
-      }
-      if (terrain === 'stone') {
-        if (cellRand(index, 'stone-height') < (mountains + hills * 0.5) / 130) return floorsByRand(index, 2, 5, 'stone-height-hi');
-        return 1;
-      }
-      if (!kind && terrain === 'grass' && cellRand(index, 'grass-hill') < hills / 380) return 2;
       return 1;
     }
     function floorsByRand(index, min, max, salt) {
@@ -2900,6 +3110,14 @@
         mapped.buildingType = null;
         mapped.fenceSide = null;
         mapped.appearance = null;
+      }
+      if (mapped.kind && !mappedObjectContributesToGenerationEconomy(mapped)) {
+        mapped.kind = null;
+        mapped.floors = 1;
+        mapped.buildingType = null;
+        mapped.fenceSide = null;
+        mapped.appearance = null;
+        mapped.rotationY = null;
       }
       const fenceExtras = terrain === 'water' ? [] : (mapped.extras || []).concat(labFenceExtrasForCell(cell));
       const entry = {

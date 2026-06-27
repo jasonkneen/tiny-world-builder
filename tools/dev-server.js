@@ -36,7 +36,7 @@ const WATCH_PATHS = [
 const WATCH_ROOT_FILES = [
   'index.html', 'tiny-world-builder.html', 'roadmap.html',
   'features.html', 'community.html', 'terms.html', 'privacy.html', 'code-of-conduct.html',
-  'worlds.html', 'docs.html', 'harvest.html',
+  'worlds.html', 'docs.html', 'harvest.html', 'random-island-preview.html',
 ];
 
 function watchDir(dir) {

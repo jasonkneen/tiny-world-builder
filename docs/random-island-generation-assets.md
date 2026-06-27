@@ -1,10 +1,10 @@
 # Random Island Generation Asset Manifest
 
-Manifest version: `2026-06-27.1`
+Manifest version: `2026-06-27.4`
 
 Source: `engine/world/26-ai-generation.js`
 
-Source digest: `sha256-b264f7982d0c6321`
+Source digest: `sha256-5bbd562822d1abe2`
 
 Canonical path: `docs/random-island-generation-assets.md`
 
@@ -25,6 +25,40 @@ island generator currently knows about. Shipped GLB/texture/runtime assets stay
 in `models/`, `textures/`, `assets/`, or `engine/world/assets/`; generated sample
 and stats output stays ignored under `random-island-runs/` and
 `stats-runs/random-island/`.
+
+## Generation Selection Pipeline
+
+Random island generation uses a narrower final selection than the full catalog
+below. The catalog records every lab token the generator can recognize, map, or
+keep compatible with older output, but final generated islands use this order:
+
+1. Choose an archetype from prompt/settings mix and seed.
+2. Select terrain from the archetype terrain weights, deterministic terrain
+   motifs, road/path carving, validation passes, and a final minimum of five
+   saved `water` terrain cells.
+3. Select object candidates from economy viability floors, archetype object
+   weights, motif ownership passes, water-bridge validation, and residual
+   scatter. Food crops prefer a compact square-ish plot and keep at least one
+   empty cell of separation from main houses/manors when space allows.
+4. Apply generation-only suppression before save output. Suppressed props stay
+   documented for compatibility, but new random islands should not emit them.
+5. Map surviving lab tokens to native TinyWorld cells and score economy from
+   the mapped, rendered output.
+6. Cap generated lamp output to at most two `lamp-post` cells, and never place
+   those lamps adjacent to each other.
+7. Render generated island terrain as a flat, constant-height surface
+   (`terrainFloors: 1`) so terrain identity comes from material, coastline,
+   roads, and object composition rather than height variation.
+8. Request the terrain mesh bake after generated islands finish applying so
+   static terrain surfaces can be merged by material while per-cell picking
+   remains coordinate-derived.
+
+Use the status column to tell whether a token is part of the final generated
+selection. `Active` means the token can be emitted by new random islands.
+`Generation-suppressed` means the token may still be catalogued, weighted, or
+mapped for older data, but should not survive final generation. `Dormant`,
+`hidden`, and `map-supported` tokens are compatibility or planned semantics, not
+ordinary generated choices.
 
 ## Terrain Tokens
 
@@ -48,6 +82,9 @@ Final TinyWorld terrain mapping:
 | cliff | stone |
 
 The generator does not currently emit `lava` or `snow`.
+
+Generated random-island cells currently emit `terrainFloors: 1` for every
+terrain token.
 
 ## Lab Object Catalog
 
@@ -77,8 +114,8 @@ The generator does not currently emit `lava` or `snow`.
 | berries | grass, prairie, dirt | Active food/charm token; maps to bush. |
 | cow | grass, prairie | Active food token. |
 | sheep | grass, prairie | Active food/charm token. |
-| lamp | path, grass | Active commerce/charm token; maps to lamp-post. |
-| spotlight | path, stone, cliff | Active defense token. |
+| lamp | path, grass | Active commerce/charm token; maps to lamp-post. Final output is capped at two non-adjacent lamps. |
+| spotlight | path, stone, cliff | Generation-suppressed non-functional prop; legacy/pre-filter defense candidate only. |
 | ruins | grass, stone, cliff, dirt | Active relic/charm token. |
 | crystal | stone, cliff, grass | Active materials/charm token. |
 | totem | grass, prairie, stone | Active relic/charm token. |
@@ -113,7 +150,7 @@ All generated placed objects request voxel styling with
 | cow | `kind: "cow"`, floors 1 |
 | sheep | `kind: "sheep"`, floors 1 |
 | lamp | `kind: "lamp-post"`, floors 1 |
-| spotlight | `kind: "spotlight"`, floors 1 |
+| spotlight | Legacy/manual mapping only: `kind: "spotlight"`, floors 1; suppressed from new generated islands |
 | ruins | `kind: "ruins"`, floors 1-3 |
 | totem | `kind: "totem"`, floors 1-3 |
 
@@ -154,10 +191,19 @@ Current enclosure conventions:
 Crop and animal components are fenced separately. If a crop and animal touch,
 the shared boundary gets a fence edge instead of becoming a gate.
 
+Generated food areas prefer compact square-ish crop plots over loose single
+cells. Crop placement also avoids the immediate one-cell ring around main
+habitation (`house` / `manor`) so the farm reads as its own clear area instead
+of being glued to the front door. Towers are excluded from this house buffer.
+
 ## Archetype Weights
 
-These weights are selection weights, not exact counts. Motif passes and
-validation rules can also place assets directly.
+These weights are pre-filter selection weights, not exact counts. Motif passes
+and validation rules can also place assets directly. Tokens marked
+generation-suppressed in the catalog are legacy candidates only and should not
+survive the final emitted selection. Any mapped object that contributes to no
+Food / Materials / Commerce / Defense / Charm bucket is also skipped before
+save output.
 
 ```js
 pastoral.terrain = { grass: 5, prairie: 5, dirt: 1, path: 1, stone: 0.5, sand: 0.7 }
@@ -167,6 +213,7 @@ forest.terrain = { grass: 6, prairie: 1, dirt: 2, stone: 0.8, cliff: 0.4, path: 
 forest.objects = { tree: 6, berries: 2, flower: 1.5, stone: 1, ore: 0.4, crystal: 0.4, house: 0.6, garden: 0.8 }
 
 quarry.terrain = { stone: 5, cliff: 3, dirt: 2, grass: 1.5, path: 1, sand: 0.3 }
+// spotlight is a legacy/pre-filter candidate and is generation-suppressed.
 quarry.objects = { stone: 4, ore: 3, crystal: 1.3, watchtower: 1, ruins: 0.8, spotlight: 0.8, tree: 0.5 }
 
 river.terrain = { grass: 3, prairie: 2, sand: 2, path: 1.2, dirt: 1, stone: 0.8 }
@@ -176,6 +223,7 @@ village.terrain = { grass: 3, path: 3, prairie: 1.2, dirt: 1.4, stone: 0.8, sand
 village.objects = { house: 4, manor: 1.6, lamp: 2, garden: 1.8, crop: 1.5, tree: 1.2, flower: 1.2, watchtower: 0.8 }
 
 fortress.terrain = { cliff: 3, stone: 3, path: 2, grass: 1.5, dirt: 1 }
+// spotlight is a legacy/pre-filter candidate and is generation-suppressed.
 fortress.objects = { watchtower: 4, castle: 2.5, spotlight: 2, stone: 1.5, lamp: 1, house: 0.8 }
 
 ruins.terrain = { grass: 2.5, stone: 2.5, dirt: 2, cliff: 1, path: 0.8, prairie: 0.5 }
@@ -209,7 +257,7 @@ Resource bucket membership:
 | food | crop, corn, wheat, pumpkin, carrot, sunflower, cow, sheep, berries |
 | materials | tree, stone, ore, crystal, logs |
 | commerce | house, manor, lamp, bridge, water-bridge |
-| defense | watchtower, spotlight, castle |
+| defense | watchtower, castle, totem; spotlight is legacy/pre-filter only |
 | charm | flower, berries, tree, crystal, ruins, totem |
 
 ## Economy System Alignment
@@ -254,6 +302,9 @@ Gaps to keep visible:
   native cells. It relies on live derivation from terrain/kind. That is fine for
   water, stone, crops, and animals, but custom or non-obvious resource assets
   should use explicit metadata.
+- Random island generation suppresses props with no generation economy effect
+  before save output; `spotlight` is explicitly suppressed even though older
+  preview scoring treated it as a Defense candidate.
 - World-card purchase pricing uses live `fish`, `ore`, `plants`, and `meat`
   readiness. It does not use reveal `potential`, rarity, Commerce, Defense, or
   Charm yet.
@@ -276,19 +327,19 @@ economic output from visual material names, colors, or model shape.
 | Road/path carving | path |
 | Economy food floor | house anchor plus crop, wheat, corn, pumpkin, carrot, sunflower, flower, fence edge extras |
 | Economy materials floor | tree, berries, stone, ore, crystal |
-| Economy commerce floor | lamp, house |
-| Economy defense floor | spotlight |
+| Economy commerce floor | lamp, house; final lamp output is capped at two non-adjacent lamps |
+| Economy defense floor | totem; spotlight is legacy/pre-filter only |
 | Economy charm floor | flower, berries, tree, crystal, totem |
 | Corner tower motif | watchtower |
 | Crop plot motif | crop, wheat, corn, sunflower, pumpkin, carrot, fence edge extras |
 | Animal pen motif | cow, sheep, fence edge extras |
-| Settlement block motif | house, manor, lamp |
+| Settlement block motif | house, manor, lamp, with final lamp cap |
 | Pathside home motif | house |
 | Grove motif | tree, berries, flower |
 | Quarry seam motif | stone, ore, crystal |
 | Relic site motif | totem, ruins, crystal |
 | Water bridge validation | water-bridge |
-| Residual scatter | tree, garden, stone, berries, flower, lamp, spotlight |
+| Residual scatter | tree, garden, stone, berries, flower, lamp, with final lamp cap; spotlight is legacy/pre-filter only |
 
 Notes:
 
@@ -298,3 +349,6 @@ Notes:
   version markers for planned or partially ported lab semantics.
 - If a new token is added to `objectDefs`, it should also get a status here:
   active, hidden, map-supported, or dormant.
+- Generated island terrain requests the home terrain bake after the chunked
+  apply pass. Edits can unbake the affected cells and rebuild live tiles, so the
+  merged mesh stays a render optimization rather than a save-format feature.

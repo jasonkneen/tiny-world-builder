@@ -930,7 +930,8 @@
   // edited, then re-bake after the world settles.
   //
   // Feature flag: ON iff localStorage 'tinyworld:renderTerrainBake' === '1'
-  // OR URL param ?meshbake=1. Default OFF for safe rollout.
+  // OR URL param ?meshbake=1. Procedural islands can request the same bake at
+  // runtime after generation without persisting the setting.
 
   const terrainBakeEnabled = (function () {
     try {
@@ -947,6 +948,7 @@
   // Runtime opt-in for non-home contexts (static lobby/demo world rooms) without
   // the global flag. Toggled by window.__tinyworldSetTerrainBakeForced.
   let terrainBakeForced = false;
+  let terrainBakeRequested = false;
   const _terrainBakeBox = new THREE.Box3();
 
   function terrainCellBakeEligible(x, z, entry) {
@@ -988,7 +990,7 @@
   }
 
   function bakeHomeTerrainNow() {
-    if (!terrainBakeEnabled && !terrainBakeForced) return;
+    if (!terrainBakeEnabled && !terrainBakeForced && !terrainBakeRequested) return;
     if (bakedTerrainCells.size > 0) return; // already baked
     if (typeof isLandscapeMeshActive === 'function' && isLandscapeMeshActive()) return;
     // Suppress during applyState bulk load (suppressSave flag from 29-persistence-api.js)
@@ -1060,6 +1062,7 @@
     const ms = Math.round(performance.now() - t0);
     console.log('[terrain-bake] baked', bakedTerrainCells.size, 'cells in', ms + 'ms');
     if (ms > 50) console.warn('[terrain-bake] bake took', ms + 'ms (>50ms threshold; consider chunked v2)');
+    terrainBakeRequested = false;
   }
 
   function unbakeAllTerrain() {
@@ -1098,7 +1101,7 @@
   }
 
   function scheduleTerrainBakeOnSettle() {
-    if (!terrainBakeEnabled && !terrainBakeForced) return;
+    if (!terrainBakeEnabled && !terrainBakeForced && !terrainBakeRequested) return;
     if (terrainBakeSettleTimer !== null) clearTimeout(terrainBakeSettleTimer);
     terrainBakeSettleTimer = setTimeout(function () {
       terrainBakeSettleTimer = null;
@@ -1112,5 +1115,9 @@
   window.__tinyworldSetTerrainBakeForced = function (on) {
     terrainBakeForced = !!on;
     if (terrainBakeForced) scheduleTerrainBakeOnSettle();
+  };
+  window.__tinyworldRequestTerrainBake = function () {
+    terrainBakeRequested = true;
+    scheduleTerrainBakeOnSettle();
   };
   window.__tinyworldUnbakeTerrain = function () { try { unbakeAllTerrain(); } catch (_) {} };

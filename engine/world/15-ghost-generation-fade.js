@@ -582,7 +582,7 @@
   // -------- cheap ghost instancing helpers --------
   function ensureCheapGhostGeoms() {
     if (cheapGhostGeomDirt) return;
-    const size = TILE * 1.04;
+    const size = TILE;
     cheapGhostGeomDirt = new THREE.BoxGeometry(size, DIRT_H, size);
     cheapGhostGeomDirt.translate(0, DIRT_H / 2, 0);
     cheapGhostGeomTop = new THREE.BoxGeometry(size, TOP_H, size);
@@ -747,7 +747,7 @@
     if (terrain === 'snow')  mat = M.snow;
 
     const height = DIRT_H + rise + TOP_H;
-    const slab = new THREE.Mesh(getBoxGeometry(TILE * 1.04, height, TILE * 1.04), mat);
+    const slab = new THREE.Mesh(getBoxGeometry(TILE, height, TILE), mat);
     slab.position.y = -DIRT_H + height * 0.5;
 
     slab.userData = {

@@ -164,6 +164,7 @@
     uiTheme: 'tinyworld:uiTheme',
     shadow: 'tinyworld:render:shadow',
     lighting: 'tinyworld:render:lighting',
+    directionalSun: 'tinyworld:render:directionalSun',
     ambientFill: 'tinyworld:render:ambientFill',
     frontFill: 'tinyworld:render:frontFill',
     sideFill: 'tinyworld:render:sideFill',
@@ -242,6 +243,7 @@
     uiTheme: 'auto',
     shadow: 'balanced',
     lighting: '0.78',
+    directionalSun: '1',
     ambientFill: '1.00',
     frontFill: '0.48',
     sideFill: '0.40',
@@ -388,6 +390,7 @@
   let renderContrast = storedNumber(RENDER_LS.contrast, parseFloat(RENDER_DEFAULTS.contrast), 0.85, 1.25);
   let renderShadowQuality = localStorage.getItem(RENDER_LS.shadow) || 'balanced';
   let renderLighting = storedNumber(RENDER_LS.lighting, parseFloat(RENDER_DEFAULTS.lighting), 0.5, 1.45);
+  let renderDirectionalSun = storedNumber(RENDER_LS.directionalSun, parseFloat(RENDER_DEFAULTS.directionalSun), 0, 10);
   let renderAmbientFill = storedNumber(RENDER_LS.ambientFill, parseFloat(RENDER_DEFAULTS.ambientFill), 0, 1);
   let renderFrontFill = storedNumber(RENDER_LS.frontFill, parseFloat(RENDER_DEFAULTS.frontFill), 0, 1);
   let renderSideFill = storedNumber(RENDER_LS.sideFill, parseFloat(RENDER_DEFAULTS.sideFill), 0, 1);

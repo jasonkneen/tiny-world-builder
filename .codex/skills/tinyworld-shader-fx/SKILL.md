@@ -51,8 +51,10 @@ the landscape ocean. A Settings toggle upgrades water everywhere:
 - Voxel water: injected in **`applyFlowingWaterUVs`** (`04-textures.js`) — the single
   `onBeforeCompile` chokepoint for every water material (base + flow clones). Stays
   Lambert; projects each water vertex into the shared planar reflection texture, then adds
-  ripple-normal bend, light caustics, Blinn-Phong glint, and foam, masked by `vTwWaterNrm.y`
-  so sides stay calm. Shared `waterShaderTimeUniform` advanced in `tickWaterTextureFlow`.
+  refractive bend, ripple-normal sheen, Blinn-Phong glint, and crest foam, masked by
+  `vTwWaterNrm.y` so sides stay calm. The refractive sampler must use the derived
+  world-flow UV (`vTwWaterSurfaceUv` / the same coordinates assigned to `vMapUv`), not
+  raw mesh `vUv`. Shared `waterShaderTimeUniform` advanced in `tickWaterTextureFlow`.
   **`customProgramCacheKey` is mandatory** here — without it three.js would reuse the wrong
   program when the toggle flips (onBeforeCompile output isn't in the default cache key).
   Include the shader-variant string in both the program key and flow-material cache key
@@ -66,6 +68,9 @@ the landscape ocean. A Settings toggle upgrades water everywhere:
 - On toggle: `refreshWaterShaderMaterials()` (clears `waterFlowMaterialCache`, resets the
   base materials) then `rebuildTerrainRender()`; the handler also sets the live landscape
   `uEnhance`. Waterfalls are untouched (separate shaders).
+- The water albedo texture named `ripples` is intentionally neutral/no-stripe.
+  Do not re-add baked horizontal/wavy line decals there; visible motion should
+  come from the reflective/refractive shader and shoreline/waterfall edge foam.
 
 ## TinyShaderFX library (engine/world/45-shader-fx.js)
 

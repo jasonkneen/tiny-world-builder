@@ -11,6 +11,7 @@ Core rules:
 
 - Keep the builder app single-file at runtime: inline CSS, inline JS, no bundler, no npm runtime packages.
 - Root `index.html` is a static landing page entry point; the builder remains available at `/tiny-world-builder` and `/tiny-world-builder.html`.
+- `random-island-preview.html` is a standalone local-dev control shell for random-island reveal/card iteration. It embeds `/tiny-world-builder?randomIslandPreview=1` so the visible island is the real Three.js game renderer, then talks to the app by `postMessage` to generate, load, and export reveal/game JSON. Production Netlify shares it through the private `netlify/functions/random-island-preview.mjs` route instead of copying the HTML as a public static file.
 - Do not touch `tiny-world-builder BACKUP.html` if present.
 - Preserve style: 2-space indent, semicolons, single-quoted strings, section comments like `// -------- tools --------`.
 - Mutate board state through `setCell(x, z, opts)`, not direct `world[x][z]` writes outside initialization.

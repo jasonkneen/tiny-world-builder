@@ -202,8 +202,9 @@
     const mats = terrainVoxelMaterials(terrain, x, z, terrainN);
     const cells = terrainVoxelCellCount(terrain);
     const cellSize = topSize / cells;
-    const panelOverlap = Math.min(0.014, Math.max(0.006, cellSize * 0.06));
-    const panelSize = cellSize + panelOverlap;
+    // Terrain panels must stay inside their logical cell footprint. Do not
+    // overlap neighbouring panels or adjacent tiles in x/z.
+    const panelSize = cellSize;
     const half = topSize * 0.5;
     const y = rise + topHeight * 0.5;
     const buckets = new Map();
@@ -442,8 +443,8 @@
     const cells = terrainVoxelCellCount(terrain);
     const cellSize = riserSize / cells;
     const verticalCells = Math.max(2, Math.min(8, Math.ceil(riserHeight / cellSize)));
-    const panelW = cellSize + Math.min(0.012, cellSize * 0.05);
-    const panelH = riserHeight / verticalCells + Math.min(0.008, (riserHeight / verticalCells) * 0.04);
+    const panelW = cellSize;
+    const panelH = riserHeight / verticalCells;
     const sideDepth = Math.min(0.028, Math.max(0.016, cellSize * 0.12));
     const half = riserSize * 0.5;
     const buckets = new Map();
@@ -474,8 +475,8 @@
       const alongX = dir === 'n' || dir === 's';
       for (let i = 0; i < cells; i++) {
         for (let j = 0; j < verticalCells; j++) {
-          const px = alongX ? -half + cellSize * (i + 0.5) : (dir === 'w' ? -half : half);
-          const pz = alongX ? (dir === 'n' ? -half : half) : -half + cellSize * (i + 0.5);
+          const px = alongX ? -half + cellSize * (i + 0.5) : (dir === 'w' ? -half + sideDepth * 0.5 : half - sideDepth * 0.5);
+          const pz = alongX ? (dir === 'n' ? -half + sideDepth * 0.5 : half - sideDepth * 0.5) : -half + cellSize * (i + 0.5);
           const py = -DIRT_H + panelH * 0.5 + (riserHeight / verticalCells) * j;
           queuePanel(geo, pickMat(i, j, dir), px, py, pz);
         }
@@ -846,9 +847,9 @@
         for (let i = 0; i < count; i++) {
           const r = cellRand(x * 13 + i + dir.gx, z * 17 - i + dir.gz, 1820);
           const along = (r - 0.5) * topSize * 0.72;
-          const inset = 0.018 + cellRand(x - i, z + i, 1830) * 0.030;
           const h = 0.10 + cellRand(x + i, z - i, 1840) * 0.16;
           const w = 0.018 + cellRand(x - i * 2, z + i * 3, 1850) * 0.020;
+          const inset = Math.max(w * 0.5, 0.018 + cellRand(x - i, z + i, 1830) * 0.030);
           let px = 0, pz = 0;
           if (dir.key === 'n') { px = along; pz = -topSize * 0.5 + inset; }
           if (dir.key === 's') { px = along; pz =  topSize * 0.5 - inset; }
@@ -871,9 +872,9 @@
       for (let i = 0; i < count; i++) {
         const r = cellRand(x * 17 + i + dir.gx, z * 19 - i + dir.gz, 1870);
         const along = (r - 0.5) * topSize * 0.76;
-        const inset = 0.035 + cellRand(x - i, z + i, 1880) * 0.075;
         const h = 0.055 + cellRand(x + i, z - i, 1890) * 0.090;
         const w = 0.025 + cellRand(x - i * 2, z + i * 3, 1900) * 0.026;
+        const inset = Math.max(w * 0.5, 0.035 + cellRand(x - i, z + i, 1880) * 0.075);
         let px = 0, pz = 0;
         if (dir.key === 'n') { px = along; pz = -topSize * 0.5 + inset; }
         if (dir.key === 's') { px = along; pz =  topSize * 0.5 - inset; }
@@ -960,6 +961,7 @@
     function placeCurtainSheet(dir, h) {
       const mesh = new THREE.Mesh(getWaterfallPlaneGeometry(), getWaterfallCurtainMaterial());
       mesh.userData.noShadow = true;
+      mesh.userData.twWaterReflective = true;
       mesh.userData.waterfall = { kind: 'shaderSheet' };
       mesh.renderOrder = 6;
       orientCurtainSheet(mesh, dir, topY - h * 0.5, h);
@@ -970,6 +972,7 @@
       const length = 0.36 + cellRand(x + salt, z - salt, 712) * 0.16;
       const mesh = new THREE.Mesh(getWaterfallPlaneGeometry(), getWaterfallSurfaceMaterial());
       mesh.userData.noShadow = true;
+      mesh.userData.twWaterReflective = true;
       mesh.userData.waterfall = { kind: 'shaderSheet' };
       mesh.renderOrder = 7;
       orientSurfaceSheet(mesh, dir, length);
@@ -1021,6 +1024,7 @@
       const mesh = new THREE.InstancedMesh(getWaterfallFoamGeometry(), M.waterfallFoamPuff, specs.length);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.userData.noShadow = true;
+      mesh.userData.twWaterReflective = true;
       mesh.userData.waterfall = { kind: 'foamBatch', specs };
       mesh.renderOrder = 8;
       for (let i = 0; i < specs.length; i++) setWaterfallFoamInstanceMatrix(mesh, specs[i], 0, i);
@@ -1034,6 +1038,7 @@
       const mesh = new THREE.InstancedMesh(getWaterfallCubeGeometry(), M.waterfallCube, specs.length);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.userData.noShadow = true;
+      mesh.userData.twWaterReflective = true;
       mesh.userData.waterfall = { kind: 'cubeBatch', specs };
       mesh.renderOrder = 6;
       for (let i = 0; i < specs.length; i++) setWaterfallCubeInstanceMatrix(mesh, specs[i], 0, i);

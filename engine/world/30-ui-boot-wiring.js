@@ -1,3 +1,16 @@
+  // -------- random island preview mode --------
+  function randomIslandPreviewModeEnabled() {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      return params.get('randomIslandPreview') === '1' || params.get('islandPreview') === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+  if (randomIslandPreviewModeEnabled()) {
+    document.body.classList.add('random-island-preview-mode');
+  }
+
   // -------- welcome dialog --------
   function initWelcomeDialog() {
   
@@ -320,6 +333,10 @@ syncTinyworldOwnerToolControls();
       chooseWelcomeMode('play');
     };
     const showWelcome = (opts = {}) => {
+      if (randomIslandPreviewModeEnabled()) {
+        closeWelcome();
+        return;
+      }
       if (!opts.skipRoomCleanup) {
         try {
           const worlds = window.__tinyworldWorlds;
@@ -382,6 +399,10 @@ syncTinyworldOwnerToolControls();
         ? window.__tinyworldTinyverseSlugParam()
         : null;
       chooseWelcomeMode(tinyverseSlug ? 'play' : 'build');
+      return;
+    }
+    if (randomIslandPreviewModeEnabled()) {
+      closeWelcome();
       return;
     }
     showWelcome({ skipRoomCleanup: true });
@@ -3210,6 +3231,8 @@ syncTinyworldOwnerToolControls();
       const intensityReadout = document.getElementById('weather-intensity-readout');
       const splashesRange = document.getElementById('weather-splashes');
       const splashesReadout = document.getElementById('weather-splashes-readout');
+      const directionalLightRange = document.getElementById('directional-light-strength');
+      const directionalLightReadout = document.getElementById('directional-light-strength-readout');
 
       function paintPills() {
         if (seasonPills) seasonPills.querySelectorAll('.pill').forEach(p => {
@@ -3228,6 +3251,8 @@ syncTinyworldOwnerToolControls();
         if (intensityReadout) intensityReadout.textContent = Math.round(weatherIntensity * 100) + '%';
         if (splashesRange) splashesRange.value = String(Math.round(weatherSplashIntensity * 100));
         if (splashesReadout) splashesReadout.textContent = Math.round(weatherSplashIntensity * 100) + '%';
+        if (directionalLightRange) directionalLightRange.value = String(Math.round(renderDirectionalSun * 100));
+        if (directionalLightReadout) directionalLightReadout.textContent = Math.round(renderDirectionalSun * 100) + '%';
       }
       repaintTimeWeatherPopup = paintReadout;
       syncTimeRangeEditability = function () {
@@ -3307,6 +3332,19 @@ syncTinyworldOwnerToolControls();
           if (typeof setWeatherSplashIntensity === 'function') setWeatherSplashIntensity(value / 100);
           paintReadout();
           try { localStorage.setItem(WEATHER_SPLASHES_LS, weatherSplashIntensity.toFixed(2)); } catch (_) {}
+        });
+      }
+      if (directionalLightRange) {
+        directionalLightRange.addEventListener('input', () => {
+          const value = Math.max(0, Math.min(1000, parseInt(directionalLightRange.value, 10) || 0));
+          renderDirectionalSun = value / 100;
+          try { localStorage.setItem(RENDER_LS.directionalSun, renderDirectionalSun.toFixed(2)); } catch (_) {}
+          if (typeof applyLightingSettings === 'function') applyLightingSettings();
+          lightBase = null;
+          applyLights();
+          paintReadout();
+          if (typeof requestShadowMapUpdate === 'function') requestShadowMapUpdate();
+          if (typeof renderSceneIfReady === 'function') renderSceneIfReady();
         });
       }
     }
@@ -4465,6 +4503,171 @@ syncTinyworldOwnerToolControls();
       close();
       setTimeout(() => openNewWorldReveal(profile), 180);
     }
+
+    const RANDOM_ISLAND_PREVIEW_PARENT_SOURCE = 'tinyworld-random-island-preview-control';
+    const RANDOM_ISLAND_PREVIEW_APP_SOURCE = 'tinyworld-random-island-preview';
+    let randomIslandPreviewCurrent = null;
+
+    function randomIslandPreviewPost(type, payload = {}) {
+      if (!randomIslandPreviewModeEnabled()) return;
+      const msg = Object.assign({
+        source: RANDOM_ISLAND_PREVIEW_APP_SOURCE,
+        type,
+      }, payload);
+      try {
+        if (window.parent && window.parent !== window) window.parent.postMessage(msg, window.location.origin);
+      } catch (_) {}
+    }
+
+    function randomIslandPreviewCleanArchetype(value) {
+      const key = String(value || '').trim().toLowerCase();
+      return ['pastoral', 'forest', 'quarry', 'river', 'village', 'fortress', 'ruins', 'harbor'].indexOf(key) !== -1
+        ? key
+        : randomIslandArchetypeForWorldMenu();
+    }
+
+    function randomIslandPreviewGridSize(value) {
+      return coerceGridSize(value, GRID);
+    }
+
+    function randomIslandPreviewStatePayload() {
+      const worldState = (typeof buildWorldStateObject === 'function')
+        ? buildWorldStateObject()
+        : (randomIslandPreviewCurrent && randomIslandPreviewCurrent.world);
+      return {
+        seed: randomIslandPreviewCurrent && randomIslandPreviewCurrent.seed || '',
+        archetype: randomIslandPreviewCurrent && randomIslandPreviewCurrent.archetype || '',
+        profile: randomIslandPreviewCurrent && randomIslandPreviewCurrent.profile || null,
+        world: worldState || null,
+      };
+    }
+
+    function randomIslandPreviewForceEnhancedWater() {
+      try {
+        if (typeof renderEnhancedWater !== 'undefined') renderEnhancedWater = true;
+        if (typeof RENDER_LS !== 'undefined' && RENDER_LS.enhancedWater) {
+          localStorage.setItem(RENDER_LS.enhancedWater, '1');
+        }
+        const enhancedWaterEl = document.getElementById('render-enhanced-water');
+        if (enhancedWaterEl) enhancedWaterEl.checked = true;
+        if (typeof refreshWaterShaderMaterials === 'function') refreshWaterShaderMaterials();
+        if (typeof landscapeEngineInstance !== 'undefined'
+            && landscapeEngineInstance && landscapeEngineInstance.waterMat
+            && landscapeEngineInstance.waterMat.uniforms
+            && landscapeEngineInstance.waterMat.uniforms.uEnhance) {
+          landscapeEngineInstance.waterMat.uniforms.uEnhance.value = 1.0;
+        }
+      } catch (_) {}
+    }
+
+    function randomIslandPreviewApplyWorld(data, profile, meta = {}) {
+      if (!data || typeof applyState !== 'function') {
+        randomIslandPreviewPost('error', { message: 'Random island preview could not load a world.' });
+        return false;
+      }
+      dismissWelcomeLaunchForNewWorld();
+      leaveWorldRoomForMenuLoad();
+      document.body.classList.add('random-island-preview-mode');
+      randomIslandPreviewForceEnhancedWater();
+      randomIslandPreviewCurrent = {
+        seed: meta.seed || profile && profile.seed || '',
+        archetype: meta.archetype || profile && profile.archetypeKey || '',
+        world: data,
+        profile,
+      };
+      let postedReady = false;
+      function finishRandomIslandPreviewReveal() {
+        if (postedReady) return;
+        postedReady = true;
+        try {
+          if (profile) openNewWorldReveal(profile);
+          randomIslandPreviewPost('ready', { state: randomIslandPreviewStatePayload() });
+        } catch (err) {
+          console.error('[random-island-preview] reveal failed:', err);
+          randomIslandPreviewPost('error', {
+            message: err && err.message ? err.message : 'Random island reveal failed.',
+            state: randomIslandPreviewStatePayload(),
+          });
+        }
+      }
+      const ok = applyState(data, {
+        onDone: () => setTimeout(finishRandomIslandPreviewReveal, 60),
+      });
+      if (!ok) {
+        randomIslandPreviewPost('error', { message: 'Random island preview rejected the world JSON.' });
+        return false;
+      }
+      return true;
+    }
+
+    function randomIslandPreviewGenerate(opts = {}) {
+      if (typeof generateProceduralWorld !== 'function') {
+        randomIslandPreviewPost('error', { message: 'Random island generator is unavailable.' });
+        return false;
+      }
+      const seed = String(opts.seed || randomIslandSeedForWorldMenu()).trim() || randomIslandSeedForWorldMenu();
+      const archetype = randomIslandPreviewCleanArchetype(opts.archetype);
+      const gridSize = randomIslandPreviewGridSize(opts.gridSize);
+      const mix = randomIslandMixForWorldMenu(archetype);
+      const data = generateProceduralWorld({
+        seed,
+        archetype,
+        biomes: mix.biomes,
+        elevation: mix.elevation,
+        gridSize,
+      });
+      const profile = typeof buildRandomIslandEconomyProfile === 'function'
+        ? buildRandomIslandEconomyProfile(data, { seed, archetype })
+        : { seed, archetypeKey: archetype, name: 'New world', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } };
+      return randomIslandPreviewApplyWorld(data, profile, { seed, archetype });
+    }
+
+    function randomIslandPreviewLoad(payload) {
+      const source = payload && payload.type === 'tinyworld.randomIslandReveal' ? payload.world : payload;
+      if (!source || source.v !== 4 || !Array.isArray(source.cells)) {
+        randomIslandPreviewPost('error', { message: 'File is not a TinyWorld island reveal file or v:4 world JSON.' });
+        return false;
+      }
+      const seed = String(payload && payload.seed || source.seed || 'loaded-island');
+      const archetype = String(payload && payload.archetype || payload && payload.profile && payload.profile.archetypeKey || '').trim().toLowerCase();
+      const profile = payload && payload.profile
+        ? payload.profile
+        : (typeof buildRandomIslandEconomyProfile === 'function'
+          ? buildRandomIslandEconomyProfile(source, { seed, archetype })
+          : { seed, archetypeKey: archetype, name: 'Loaded island', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } });
+      return randomIslandPreviewApplyWorld(source, profile, { seed, archetype: archetype || profile.archetypeKey || '' });
+    }
+
+    function randomIslandPreviewHandleMessage(event) {
+      if (!randomIslandPreviewModeEnabled()) return;
+      if (event.origin !== window.location.origin) return;
+      const msg = event.data || {};
+      if (!msg || msg.source !== RANDOM_ISLAND_PREVIEW_PARENT_SOURCE) return;
+      if (msg.command === 'generate') {
+        randomIslandPreviewGenerate(msg);
+      } else if (msg.command === 'load') {
+        randomIslandPreviewLoad(msg.payload);
+      } else if (msg.command === 'export') {
+        randomIslandPreviewPost('state', { state: randomIslandPreviewStatePayload() });
+      }
+    }
+
+    function bootRandomIslandPreviewFromQuery() {
+      if (!randomIslandPreviewModeEnabled()) return;
+      const params = new URLSearchParams(window.location.search || '');
+      const seed = params.get('randomIslandSeed') || params.get('seed') || randomIslandSeedForWorldMenu();
+      const archetype = params.get('randomIslandArchetype') || params.get('archetype') || randomIslandArchetypeForWorldMenu();
+      const gridSize = params.get('randomIslandGrid') || params.get('gridSize') || GRID;
+      window.addEventListener('message', randomIslandPreviewHandleMessage);
+      setTimeout(() => randomIslandPreviewGenerate({ seed, archetype, gridSize }), 380);
+    }
+
+    window.__tinyworldRandomIslandPreview = {
+      generate: randomIslandPreviewGenerate,
+      load: randomIslandPreviewLoad,
+      exportState: randomIslandPreviewStatePayload,
+    };
+    bootRandomIslandPreviewFromQuery();
 
     async function worldMenuAccessToken() {
       const Auth = window.TinyWorldAuth;

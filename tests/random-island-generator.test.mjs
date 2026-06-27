@@ -79,6 +79,39 @@ test('random island generator is deterministic and emits complete v4 cells', () 
   }
 });
 
+test('random island generator emits flat terrain and suppresses no-effect props', () => {
+  for (const archetype of Object.keys(ARCHETYPE_MIXES)) {
+    const island = makeIsland({
+      seed: 'wave2-cleanup-' + archetype,
+      archetype,
+      biomes: ARCHETYPE_MIXES[archetype].biomes,
+      elevation: ARCHETYPE_MIXES[archetype].elevation,
+    });
+    assert.ok(island.cells.every(cell => cell.terrainFloors === 1), archetype + ' should emit flat terrain');
+    assert.equal(island.cells.some(cell => cell.kind === 'spotlight'), false, archetype + ' should suppress spotlight props');
+  }
+});
+
+test('random island generator limits lamp posts to two non-adjacent cells', () => {
+  for (const archetype of Object.keys(ARCHETYPE_MIXES)) {
+    const island = makeIsland({
+      seed: 'wave2-lamps-' + archetype,
+      archetype,
+      biomes: ARCHETYPE_MIXES[archetype].biomes,
+      elevation: ARCHETYPE_MIXES[archetype].elevation,
+    });
+    const lamps = island.cells.filter(cell => cell.kind === 'lamp-post');
+    assert.ok(lamps.length <= 2, archetype + ' should emit at most two lamp posts');
+    for (const lamp of lamps) {
+      assert.equal(
+        adjacentCells(island.cells, lamp).some(neighbor => neighbor.kind === 'lamp-post'),
+        false,
+        archetype + ' lamp posts should not be adjacent'
+      );
+    }
+  }
+});
+
 test('explicit archetypes map lab props to native TinyWorld assets', () => {
   const island = makeIsland({
     seed: 'test-village',
@@ -158,7 +191,7 @@ const ARCHETYPE_MIXES = {
   fortress: {
     biomes: { grass: 20, forest: 8, water: 8, dirt: 20, settlement: 44 },
     elevation: { plains: 22, hills: 38, mountains: 40 },
-    signature: ['house', 'rock', 'spotlight'],
+    signature: ['house', 'rock', 'crystal'],
   },
   ruins: {
     biomes: { grass: 26, forest: 20, water: 10, dirt: 24, settlement: 20 },
@@ -188,6 +221,45 @@ function cellsWithin(cells, cell, distance) {
 
 function nearCell(cells, cell, predicate, distance = 1) {
   return cellsWithin(cells, cell, distance).some(predicate);
+}
+
+function chebyshevDistance(cell, other) {
+  return Math.max(Math.abs(cell.x - other.x), Math.abs(cell.z - other.z));
+}
+
+function connectedCellGroups(cells, groupCells) {
+  const groupKeys = new Set(groupCells.map(cell => cell.x + ',' + cell.z));
+  const byCoord = cellByCoord(cells);
+  const seen = new Set();
+  const groups = [];
+  for (const start of groupCells) {
+    const startKey = start.x + ',' + start.z;
+    if (seen.has(startKey)) continue;
+    const stack = [start];
+    const group = [];
+    while (stack.length) {
+      const cell = stack.pop();
+      const key = cell.x + ',' + cell.z;
+      if (seen.has(key) || !groupKeys.has(key)) continue;
+      seen.add(key);
+      group.push(cell);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const neighbor = byCoord.get((cell.x + dx) + ',' + (cell.z + dz));
+        if (neighbor) stack.push(neighbor);
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
+function boundingBoxForCells(cells) {
+  const xs = cells.map(cell => cell.x);
+  const zs = cells.map(cell => cell.z);
+  return {
+    width: Math.max(...xs) - Math.min(...xs) + 1,
+    height: Math.max(...zs) - Math.min(...zs) + 1,
+  };
 }
 
 function fenceSideFacesNeighbor(fence, neighbor) {
@@ -336,7 +408,7 @@ function resourceCells(island, resourceId) {
     if (resourceId === 'food') return isFoodCell(cell);
     if (resourceId === 'materials') return cell.kind === 'tree' || cell.kind === 'rock' || cell.kind === 'crystal';
     if (resourceId === 'commerce') return cell.kind === 'lamp-post' || cell.kind === 'bridge' || (cell.kind === 'house' && cell.buildingType !== 'tower');
-    if (resourceId === 'defense') return cell.kind === 'fence' || cell.kind === 'spotlight' || isTowerCell(cell);
+    if (resourceId === 'defense') return cell.kind === 'fence' || cell.kind === 'totem' || isTowerCell(cell);
     if (resourceId === 'charm') return ['flower', 'bush', 'tree', 'crystal', 'totem', 'ruins'].includes(cell.kind);
     return false;
   });
@@ -407,6 +479,10 @@ test('explicit archetypes produce grouped signature features', () => {
     const grouped = featureCells.filter(cell => adjacentCells(island.cells, cell).some(neighbor => (
       signature.has(neighbor.kind)
       || ((archetype === 'river' || archetype === 'harbor') && neighbor.terrain === 'water')
+    )) || island.cells.some(neighbor => (
+      neighbor !== cell
+      && chebyshevDistance(cell, neighbor) <= 1
+      && signature.has(neighbor.kind)
     )));
 
     assert.ok(featureCells.length >= 5, archetype + ' should emit enough signature features');
@@ -556,6 +632,40 @@ test('resource motif pass composes fenced crop plots and animal pens', () => {
   }
 });
 
+test('generated food plots prefer compact square-ish areas buffered from main houses', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 4; i++) {
+      const island = makeIsland({
+        seed: 'food-plot-clarity-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      const cropCells = island.cells.filter(cell => CROP_KINDS.has(cell.kind));
+      const mainHomes = island.cells.filter(cell => cell.kind === 'house' && cell.buildingType !== 'tower');
+
+      for (const crop of cropCells) {
+        assert.equal(
+          mainHomes.some(home => chebyshevDistance(crop, home) <= 1),
+          false,
+          archetype + ' crop at ' + crop.x + ',' + crop.z + ' should keep one block between it and the main house'
+        );
+      }
+
+      if (cropCells.length < 4) continue;
+      const largestPlot = connectedCellGroups(island.cells, cropCells)
+        .sort((a, b) => b.length - a.length)[0];
+      const bounds = boundingBoxForCells(largestPlot);
+      const minimumGroupedFood = archetype === 'harbor' ? 2 : 3;
+      assert.ok(largestPlot.length >= Math.min(minimumGroupedFood, cropCells.length), archetype + ' should keep a clear grouped food plot');
+      if (largestPlot.length >= 4) {
+        assert.ok(Math.abs(bounds.width - bounds.height) <= 3, archetype + ' food plot should be square-ish');
+        assert.ok(bounds.width * bounds.height <= largestPlot.length + 6, archetype + ' food plot should avoid scattered thin lines');
+      }
+    }
+  }
+});
+
 test('economy viability pass gives every archetype a resource floor', () => {
   const minimumCells = {
     food: 2,
@@ -599,7 +709,7 @@ test('low-food quarry islands still place capped food near habitation', () => {
       island.cells,
       cell,
       neighbor => neighbor.kind === 'house' && neighbor.buildingType !== 'tower',
-      3
+      4
     ));
 
     assert.ok(foodCells.length >= 2, 'quarry should still have a food floor');

@@ -52,7 +52,6 @@
   const TOOL_GROUPS = [
     { id: 'terrain', label: 'Terrain', toolIds: ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow', 'rock', 'mesh-terrain'], iconTool: 'grass' },
     { id: 'plants', label: 'Plants', toolIds: ['tree', 'tuft', 'flower', 'bush'], iconTool: 'tree' },
-    { id: 'build', label: 'Build', toolIds: ['house', 'new-island'], iconTool: 'house' },
     { id: 'infra', label: 'Infra', toolIds: ['fence', 'bridge', 'lamp-post', 'spotlight', 'mooring'], iconTool: 'fence' },
     { id: 'farm', label: 'Farm', toolIds: ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower'], iconTool: 'wheat' },
     { id: 'life', label: 'Life', toolIds: ['cow', 'sheep'], iconTool: 'cow' },

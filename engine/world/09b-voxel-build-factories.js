@@ -2217,8 +2217,8 @@
     const normalized = FENCE_SIDES.has(side) ? side : 'n';
     const fenceStyle = typeof normalizeFenceStyle === 'function' ? normalizeFenceStyle(style) : 'wood';
     const alongX = roadGate ? pathOrientation === 'x' : (normalized === 'n' || normalized === 's' || normalized === 'center-x');
-    const offsetX = normalized === 'w' ? -0.43 : normalized === 'e' ? 0.43 : 0;
-    const offsetZ = normalized === 'n' ? -0.43 : normalized === 's' ? 0.43 : 0;
+    const offsetX = normalized === 'w' ? -0.50 : normalized === 'e' ? 0.50 : 0;
+    const offsetZ = normalized === 'n' ? -0.50 : normalized === 's' ? 0.50 : 0;
     const mat = castle || lv >= 4 ? M.castleStone : (lv >= 3 ? M.fenceSteel : M.fence);
     const dark = castle || lv >= 4 ? M.castleStoneD : (lv >= 3 ? M.fenceWire : M.fence);
 
@@ -2240,41 +2240,41 @@
       const hingeInset = 0.43;
       const ends = alongX ? [[-0.50, offsetZ], [0.50, offsetZ]] : [[offsetX, -0.50], [offsetX, 0.50]];
       ends.forEach(([x, z]) => {
-        vbox(g, 0.14, postH, 0.14, x, postH / 2, z, postMat);
-        vbox(g, 0.18, 0.06, 0.18, x, postH + 0.03, z, railMat);
+        vbox(g, 0.08, postH, 0.08, x, postH / 2, z, postMat);
+        vbox(g, 0.11, 0.045, 0.11, x, postH + 0.025, z, railMat);
       });
       if (alongX) {
-        const inward = normalized === 'n' ? 1 : -1;
+        const outward = normalized === 'n' ? -1 : 1;
         const leaves = [
-          { hingeX: -hingeInset, dir: 1, ry: -inward * leafAngle },
-          { hingeX: hingeInset, dir: -1, ry: inward * leafAngle },
+          { hingeX: -hingeInset, dir: 1, ry: -outward * leafAngle },
+          { hingeX: hingeInset, dir: -1, ry: outward * leafAngle },
         ];
         leaves.forEach(leaf => {
           const leafX = leaf.hingeX + leaf.dir * Math.cos(leaf.ry) * leafHalf;
           const leafZ = offsetZ + leaf.dir * -Math.sin(leaf.ry) * leafHalf;
-          for (const y of [0.13, gateH * 0.82]) vbox(g, leafLen, 0.055, 0.055, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
+          for (const y of [0.13, gateH * 0.82]) vbox(g, leafLen, 0.035, 0.035, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
           for (const dx of [-0.13, 0.13]) {
-            vbox(g, 0.05, gateH * 0.66, 0.05, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
+            vbox(g, 0.034, gateH * 0.66, 0.034, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
           }
         });
-        vbox(g, 0.22, 0.11, 0.045, 0, postH + 0.13, offsetZ, markerMat, { noShadow: true });
-        vbox(g, 0.075, 0.075, 0.075, 0.12, gateH * 0.55, offsetZ + inward * 0.03, latchMat, { noShadow: true });
+        vbox(g, 0.18, 0.09, 0.035, 0, postH + 0.13, offsetZ, markerMat, { noShadow: true });
+        vbox(g, 0.055, 0.055, 0.055, 0.12, gateH * 0.55, offsetZ + outward * 0.025, latchMat, { noShadow: true });
       } else {
-        const inward = normalized === 'w' ? 1 : -1;
+        const outward = normalized === 'w' ? -1 : 1;
         const leaves = [
-          { hingeZ: -hingeInset, dir: 1, ry: inward * leafAngle },
-          { hingeZ: hingeInset, dir: -1, ry: -inward * leafAngle },
+          { hingeZ: -hingeInset, dir: 1, ry: outward * leafAngle },
+          { hingeZ: hingeInset, dir: -1, ry: -outward * leafAngle },
         ];
         leaves.forEach(leaf => {
           const leafX = offsetX + leaf.dir * Math.sin(leaf.ry) * leafHalf;
           const leafZ = leaf.hingeZ + leaf.dir * Math.cos(leaf.ry) * leafHalf;
-          for (const y of [0.13, gateH * 0.82]) vbox(g, 0.055, 0.055, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
+          for (const y of [0.13, gateH * 0.82]) vbox(g, 0.035, 0.035, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
           for (const dz of [-0.13, 0.13]) {
-            vbox(g, 0.05, gateH * 0.66, 0.05, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
+            vbox(g, 0.034, gateH * 0.66, 0.034, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
           }
         });
-        vbox(g, 0.045, 0.11, 0.22, offsetX, postH + 0.13, 0, markerMat, { noShadow: true });
-        vbox(g, 0.075, 0.075, 0.075, offsetX + inward * 0.03, gateH * 0.55, 0.12, latchMat, { noShadow: true });
+        vbox(g, 0.035, 0.09, 0.18, offsetX, postH + 0.13, 0, markerMat, { noShadow: true });
+        vbox(g, 0.055, 0.055, 0.055, offsetX + outward * 0.025, gateH * 0.55, 0.12, latchMat, { noShadow: true });
       }
     } else if (fenceStyle === 'garden' && !castle && !roadGate && lv < 4) {
       const postH = lv === 1 ? 0.42 : (lv === 2 ? 0.50 : 0.56);
@@ -2284,18 +2284,18 @@
       const fruitMat = M.fenceFruit || M.pumpkin || railMat;
       const ends = alongX ? [[-0.50, offsetZ], [0.50, offsetZ]] : [[offsetX, -0.50], [offsetX, 0.50]];
       ends.forEach(([x, z]) => {
-        vbox(g, 0.11, postH, 0.11, x, postH / 2, z, postMat);
-        vbox(g, 0.14, 0.045, 0.14, x, postH + 0.025, z, railMat);
+        vbox(g, 0.064, postH, 0.064, x, postH / 2, z, postMat);
+        vbox(g, 0.09, 0.04, 0.09, x, postH + 0.025, z, railMat);
       });
       for (const y of [0.14, 0.31, ...(lv >= 3 ? [0.46] : [])]) {
-        vbox(g, alongX ? 1.08 : 0.052, 0.052, alongX ? 0.052 : 1.08, offsetX, y, offsetZ, railMat);
+        vbox(g, alongX ? 1.00 : 0.034, 0.034, alongX ? 0.034 : 1.00, offsetX, y, offsetZ, railMat);
       }
       for (const a of [-0.25, 0, 0.25]) {
-        vbox(g, 0.045, postH * 0.70, 0.045, alongX ? a : offsetX, postH * 0.38, alongX ? offsetZ : a, postMat);
+        vbox(g, 0.028, postH * 0.70, 0.028, alongX ? a : offsetX, postH * 0.38, alongX ? offsetZ : a, postMat);
       }
-      vbox(g, alongX ? 0.82 : 0.038, 0.035, alongX ? 0.038 : 0.82, offsetX, postH * 0.84, offsetZ, vineMat);
+      vbox(g, alongX ? 0.82 : 0.026, 0.026, alongX ? 0.026 : 0.82, offsetX, postH * 0.84, offsetZ, vineMat);
       for (const a of [-0.32, 0.18]) {
-        vbox(g, 0.055, 0.055, 0.055, alongX ? a : offsetX, postH * 0.90, alongX ? offsetZ : a, fruitMat, { noShadow: true });
+        vbox(g, 0.045, 0.045, 0.045, alongX ? a : offsetX, postH * 0.90, alongX ? offsetZ : a, fruitMat, { noShadow: true });
       }
     } else if (castle || lv >= 4 || roadGate) {
       const h = roadGate ? 0.62 + Math.max(0, lv - 3) * 0.05 : (castle ? 0.56 : 0.46);
@@ -2303,18 +2303,18 @@
         for (const s of [-1, 1]) vbox(g, 0.14, h, 0.14, alongX ? s * 0.42 : 0, h / 2, alongX ? 0 : s * 0.42, mat);
         vbox(g, alongX ? 1.02 : 0.16, 0.12, alongX ? 0.16 : 1.02, 0, h + 0.06, 0, dark);
       } else {
-        vbox(g, alongX ? 1.08 : 0.18, h, alongX ? 0.18 : 1.08, offsetX, h / 2, offsetZ, mat);
-        vbox(g, alongX ? 1.12 : 0.22, 0.06, alongX ? 0.22 : 1.12, offsetX, h + 0.03, offsetZ, dark);
+        vbox(g, alongX ? 1.00 : 0.13, h, alongX ? 0.13 : 1.00, offsetX, h / 2, offsetZ, mat);
+        vbox(g, alongX ? 1.04 : 0.165, 0.05, alongX ? 0.165 : 1.04, offsetX, h + 0.025, offsetZ, dark);
         for (const a of [-0.35, 0, 0.35]) {
-          vbox(g, 0.11, 0.12, 0.11, alongX ? a : offsetX, h + 0.12, alongX ? offsetZ : a, mat);
+          vbox(g, 0.08, 0.10, 0.08, alongX ? a : offsetX, h + 0.10, alongX ? offsetZ : a, mat);
         }
       }
     } else {
       const postH = lv === 2 ? 0.40 : 0.32;
       const ends = alongX ? [[-0.50, offsetZ], [0.50, offsetZ]] : [[offsetX, -0.50], [offsetX, 0.50]];
-      ends.forEach(([x, z]) => vbox(g, 0.09, postH, 0.09, x, postH / 2, z, mat));
+      ends.forEach(([x, z]) => vbox(g, 0.055, postH, 0.055, x, postH / 2, z, mat));
       for (const y of [0.12, 0.26, ...(lv >= 3 ? [0.40] : [])]) {
-        vbox(g, alongX ? 1.08 : 0.045, 0.055, alongX ? 0.045 : 1.08, offsetX, y, offsetZ, dark);
+        vbox(g, alongX ? 1.00 : 0.032, 0.038, alongX ? 0.032 : 1.00, offsetX, y, offsetZ, dark);
       }
     }
     g.userData = { kind: 'fence', level: lv, side: normalized, fenceStyle };
@@ -2332,8 +2332,8 @@
     const normalized = FENCE_SIDES.has(side) ? side : 'n';
     const fenceStyle = typeof normalizeFenceStyle === 'function' ? normalizeFenceStyle(style) : 'wood';
     const alongX = normalized === 'n' || normalized === 's' || normalized === 'center-x';
-    const offsetX = normalized === 'w' ? -0.43 : normalized === 'e' ? 0.43 : 0;
-    const offsetZ = normalized === 'n' ? -0.43 : normalized === 's' ? 0.43 : 0;
+    const offsetX = normalized === 'w' ? -0.50 : normalized === 'e' ? 0.50 : 0;
+    const offsetZ = normalized === 'n' ? -0.50 : normalized === 's' ? 0.50 : 0;
     const spanLen = spanCells * TILE;
     const mat = lv >= 4 ? M.castleStone : (lv >= 3 ? M.fenceSteel : M.fence);
     const dark = lv >= 4 ? M.castleStoneD : (lv >= 3 ? M.fenceWire : M.fence);
@@ -2347,38 +2347,38 @@
       const fruitMat = M.fenceFruit || M.pumpkin || railMat;
       for (let i = 0; i <= spanCells; i++) {
         const p = alongPos(i);
-        vbox(g, 0.11, postH, 0.11, alongX ? p : offsetX, postH / 2, alongX ? offsetZ : p, postMat);
-        vbox(g, 0.14, 0.045, 0.14, alongX ? p : offsetX, postH + 0.025, alongX ? offsetZ : p, railMat);
+        vbox(g, 0.064, postH, 0.064, alongX ? p : offsetX, postH / 2, alongX ? offsetZ : p, postMat);
+        vbox(g, 0.09, 0.04, 0.09, alongX ? p : offsetX, postH + 0.025, alongX ? offsetZ : p, railMat);
       }
       for (const y of [0.14, 0.31, ...(lv >= 3 ? [0.46] : [])]) {
-        vbox(g, alongX ? spanLen + 0.08 : 0.052, 0.052, alongX ? 0.052 : spanLen + 0.08, offsetX, y, offsetZ, railMat);
+        vbox(g, alongX ? spanLen : 0.034, 0.034, alongX ? 0.034 : spanLen, offsetX, y, offsetZ, railMat);
       }
       for (let cell = 0; cell < spanCells; cell++) {
         const base = -spanLen / 2 + cell * TILE + TILE * 0.5;
         for (const delta of [-0.24, 0.05, 0.30]) {
           const p = base + delta;
-          vbox(g, 0.045, postH * 0.70, 0.045, alongX ? p : offsetX, postH * 0.38, alongX ? offsetZ : p, postMat);
+          vbox(g, 0.028, postH * 0.70, 0.028, alongX ? p : offsetX, postH * 0.38, alongX ? offsetZ : p, postMat);
         }
         const fruitP = base + (cell % 2 ? 0.18 : -0.26);
-        vbox(g, 0.055, 0.055, 0.055, alongX ? fruitP : offsetX, postH * 0.90, alongX ? offsetZ : fruitP, fruitMat, { noShadow: true });
+        vbox(g, 0.045, 0.045, 0.045, alongX ? fruitP : offsetX, postH * 0.90, alongX ? offsetZ : fruitP, fruitMat, { noShadow: true });
       }
-      vbox(g, alongX ? spanLen - 0.18 : 0.038, 0.035, alongX ? 0.038 : spanLen - 0.18, offsetX, postH * 0.84, offsetZ, vineMat);
+      vbox(g, alongX ? spanLen - 0.18 : 0.026, 0.026, alongX ? 0.026 : spanLen - 0.18, offsetX, postH * 0.84, offsetZ, vineMat);
     } else if (lv >= 4) {
       const h = 0.46;
-      vbox(g, alongX ? spanLen + 0.08 : 0.18, h, alongX ? 0.18 : spanLen + 0.08, offsetX, h / 2, offsetZ, mat);
-      vbox(g, alongX ? spanLen + 0.12 : 0.22, 0.06, alongX ? 0.22 : spanLen + 0.12, offsetX, h + 0.03, offsetZ, dark);
+      vbox(g, alongX ? spanLen : 0.13, h, alongX ? 0.13 : spanLen, offsetX, h / 2, offsetZ, mat);
+      vbox(g, alongX ? spanLen + 0.04 : 0.165, 0.05, alongX ? 0.165 : spanLen + 0.04, offsetX, h + 0.025, offsetZ, dark);
       for (let i = 0; i <= spanCells; i++) {
         const p = alongPos(i);
-        vbox(g, 0.11, 0.12, 0.11, alongX ? p : offsetX, h + 0.12, alongX ? offsetZ : p, mat);
+        vbox(g, 0.08, 0.10, 0.08, alongX ? p : offsetX, h + 0.10, alongX ? offsetZ : p, mat);
       }
     } else {
       const postH = lv === 2 ? 0.40 : 0.32;
       for (let i = 0; i <= spanCells; i++) {
         const p = alongPos(i);
-        vbox(g, 0.09, postH, 0.09, alongX ? p : offsetX, postH / 2, alongX ? offsetZ : p, mat);
+        vbox(g, 0.055, postH, 0.055, alongX ? p : offsetX, postH / 2, alongX ? offsetZ : p, mat);
       }
       for (const y of [0.12, 0.26, ...(lv >= 3 ? [0.40] : [])]) {
-        vbox(g, alongX ? spanLen + 0.08 : 0.045, 0.055, alongX ? 0.045 : spanLen + 0.08, offsetX, y, offsetZ, dark);
+        vbox(g, alongX ? spanLen : 0.032, 0.038, alongX ? 0.032 : spanLen, offsetX, y, offsetZ, dark);
       }
     }
     g.userData = { kind: 'fence', level: lv, side: normalized, fenceStyle, batchedSpan: true, spanCells };

@@ -138,6 +138,9 @@
     const planetDropEl = document.getElementById('gen-planet-drop');
     const planetDropValueEl = document.getElementById('gen-planet-drop-value');
     const genActionsEl = goBtn ? goBtn.closest('.gen-actions') : null;
+    const progressEl = document.getElementById('gen-progress');
+    const progressFillEl = document.getElementById('gen-progress-fill');
+    const progressLabelEl = document.getElementById('gen-progress-label');
 
     const _genPreviewState = { data: null, meta: null, group: null, mats: [], geoms: [] };
 
@@ -273,19 +276,29 @@
       return true;
     }
 
-    function _genPreviewCommit() {
+    async function _genPreviewCommit() {
       const data = _genPreviewState.data;
       const meta = _genPreviewState.meta || {};
       if (!data) return false;
       _genPreviewDispose();
       _genPreviewSetControls(false);
       if (typeof setCameraMode === 'function') setCameraMode('perspective');
-      const ok = applyState(data, {
-        sliced: true,
-        keepCamera: true,
-        renderOrigin: meta.renderOrigin || undefined,
+      setGenerationLocked(true);
+      setStatus('applying preview…', 'busy');
+      setGenerationProgress(18, 'Preparing apply');
+      await generationPaintYield();
+      const ok = await applyGeneratedStateWithProgress(data, {
+        start: 24,
+        end: 94,
+        label: 'Applying preview',
+        terrainBake: true,
+        apply: {
+          keepCamera: true,
+          renderOrigin: meta.renderOrigin || undefined,
+        },
       });
       if (!ok) {
+        setGenerationLocked(false);
         setStatus('renderer rejected the preview', 'error');
         return false;
       }
@@ -293,7 +306,10 @@
         initLandscapeMesh();
         rebuildTerrainRender();
       }
-      setStatus('applied · seed: ' + (meta.seed || 'random') + (meta.planetDrop ? ' · planet ' + meta.planetDrop + 'm below' : ''), '');
+      setGenerationProgress(100, 'Complete');
+      setGenerationLocked(false);
+      clearGenerationProgress();
+      setStatus('applied · seed: ' + (meta.seed || 'random') + (meta.planetDrop ? ' · planet ' + meta.planetDrop + 'm below' : ''), 'done');
       if (window.__tinyworldAgent) window.__tinyworldAgent.say('Applied the generated preview.');
       return true;
     }
@@ -495,6 +511,71 @@
     function setStatus(msg, kind) {
       statusEl.textContent = msg || '';
       statusEl.className = kind || '';
+    }
+
+    function setGenerationProgress(value, label) {
+      const pct = Math.max(0, Math.min(100, Number(value) || 0));
+      if (progressEl) {
+        progressEl.hidden = false;
+        progressEl.setAttribute('aria-valuenow', String(Math.round(pct)));
+      }
+      if (progressFillEl) progressFillEl.style.width = pct.toFixed(1) + '%';
+      if (progressLabelEl) progressLabelEl.textContent = label || (Math.round(pct) + '%');
+    }
+
+    function clearGenerationProgress(delay = 900) {
+      setTimeout(() => {
+        if (progressEl) progressEl.hidden = true;
+        if (progressFillEl) progressFillEl.style.width = '0%';
+        if (progressLabelEl) progressLabelEl.textContent = 'Preparing generation';
+        if (progressEl) progressEl.setAttribute('aria-valuenow', '0');
+      }, delay);
+    }
+
+    function generationPaintYield() {
+      return new Promise(resolve => {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+        else setTimeout(resolve, 0);
+      });
+    }
+
+    function setGenerationLocked(locked) {
+      if (typeof setGenerationViewLocked === 'function') setGenerationViewLocked(locked);
+      [goBtn, applyPreviewBtn, regeneratePreviewBtn, discardPreviewBtn].forEach(btn => {
+        if (btn) btn.disabled = !!locked;
+      });
+    }
+
+    function requestGeneratedTerrainBake() {
+      try {
+        if (typeof window.__tinyworldRequestTerrainBake === 'function') window.__tinyworldRequestTerrainBake();
+      } catch (_) {}
+    }
+
+    function applyGeneratedStateWithProgress(data, opts = {}) {
+      return new Promise(resolve => {
+        const start = Number.isFinite(opts.start) ? opts.start : 35;
+        const end = Number.isFinite(opts.end) ? opts.end : 94;
+        const label = opts.label || 'Building world';
+        const applyOpts = Object.assign({}, opts.apply || {}, {
+          sliced: true,
+          onProgress(info) {
+            const total = Math.max(1, (info && info.total) || 1);
+            const done = Math.max(0, Math.min(total, (info && info.done) || 0));
+            const phase = info && info.phase ? ' · ' + info.phase : '';
+            setGenerationProgress(start + (end - start) * (done / total), label + phase);
+          },
+          onDone() {
+            if (opts.terrainBake) requestGeneratedTerrainBake();
+            if (opts.apply && typeof opts.apply.onDone === 'function') {
+              try { opts.apply.onDone(); } catch (_) {}
+            }
+            resolve(true);
+          },
+        });
+        const ok = typeof applyState === 'function' && applyState(data, applyOpts);
+        if (!ok) resolve(false);
+      });
     }
 
     function applyGenerationAutofillSetting(disabled) {
@@ -803,19 +884,30 @@
       if (procedural) {
         const effectiveSeed = seed || randomSeed();
         if (!seed && seedEl) seedEl.value = effectiveSeed;
-        goBtn.disabled = true;
+        setGenerationLocked(true);
         setStatus('generating random island…', 'busy');
+        setGenerationProgress(6, 'Preparing seed');
         try {
           applyGenerationAutofillSetting(disableAutofill);
+          await generationPaintYield();
+          setGenerationProgress(18, 'Selecting terrain and resources');
           const data = useLandscape
             ? generateLandscapeWorld({ seed: effectiveSeed, biomes, elevation, gridSize })
             : generateProceduralWorld({ seed: effectiveSeed, biomes, elevation, gridSize });
           if (wantsPlanetLandscape) {
             data.planetLandscape = planetLandscapeStateFromSelection(effectiveSeed, planetBiome, planetStyleMode, planetDrop);
           }
+          setGenerationProgress(30, 'Validating world');
+          await generationPaintYield();
           const err = (typeof validateWorld === 'function') ? validateWorld(data) : null;
           if (err) throw new Error('random island schema: ' + err);
-          if (typeof applyState === 'function' && !applyState(data, { sliced: true })) {
+          const applied = await applyGeneratedStateWithProgress(data, {
+            start: 36,
+            end: 94,
+            label: 'Rendering island',
+            terrainBake: !useLandscape,
+          });
+          if (!applied) {
             throw new Error('renderer rejected the procedural scene');
           }
           // Build the landscape overlay after applyState created the engine.
@@ -831,12 +923,14 @@
             }
           }
           if (wantsPlanetLandscape && typeof setCameraMode === 'function') setCameraMode('perspective');
-          setStatus('done · seed: ' + effectiveSeed + (wantsPlanetLandscape ? ' · planet ' + planetDrop + 'm below' : ''), '');
+          setGenerationProgress(100, 'Complete');
+          clearGenerationProgress();
+          setStatus('done · seed: ' + effectiveSeed + (wantsPlanetLandscape ? ' · planet ' + planetDrop + 'm below' : ''), 'done');
         } catch (err) {
           console.error('random island generate failed:', err);
           setStatus(String(err.message || err).slice(0, 140), 'error');
         } finally {
-          goBtn.disabled = false;
+          setGenerationLocked(false);
         }
         return;
       }
@@ -893,12 +987,15 @@
         setStatus('using ' + model + ' for JSON generation', 'busy');
       }
       saveProviderState();
-      goBtn.disabled = true;
+      setGenerationLocked(true);
+      setGenerationProgress(8, 'Preparing request');
       if (statusEl.textContent.indexOf('using ') !== 0) {
         setStatus('generating', 'busy');
       }
       try {
         hidePlanOverlay();
+        await generationPaintYield();
+        setGenerationProgress(28, 'Requesting JSON');
         progress.say('Generating validated world JSON with ' + model + '…');
         const data = await generateWorld(provider, model, key, decoratedPrompt, gridSize);
         if (!data) { setStatus('', ''); return; } // superseded by a newer generation
@@ -908,6 +1005,7 @@
         }
         const receivedCells = data && Array.isArray(data.cells) ? data.cells.length : 0;
         progress.say('Received JSON with ' + receivedCells + ' cells. Building holographic diff preview…');
+        setGenerationProgress(76, 'Building preview');
         hidePlanOverlay();
         if (typeof setCameraMode === 'function') setCameraMode('perspective');
         const ok = _genPreviewStage(data, {
@@ -917,6 +1015,8 @@
           planetDrop: wantsPlanetLandscape ? planetDrop : 0,
         });
         if (!ok) throw new Error('preview rejected the scene');
+        setGenerationProgress(100, 'Preview ready');
+        clearGenerationProgress();
         modal.hidden = false;
         progress.done('Preview ready — inspect the holographic diff, then Apply, Regenerate, or Discard.');
       } catch (err) {
@@ -926,8 +1026,7 @@
         progress.error(String(err.message || err).slice(0, 180));
         setStatus(String(err.message || err).slice(0, 140), 'error');
       } finally {
-        if (typeof setGenerationViewLocked === 'function') setGenerationViewLocked(false);
-        goBtn.disabled = false;
+        setGenerationLocked(false);
       }
     });
 

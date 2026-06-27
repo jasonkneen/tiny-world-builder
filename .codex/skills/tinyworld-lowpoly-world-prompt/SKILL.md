@@ -99,12 +99,21 @@ Offline random island generation:
   must update that manifest and its source digest in the same patch.
 - Keep emitted cells complete v4 object cells: `x`, `z`, `terrain`, `kind`,
   `floors`, `terrainFloors`, `buildingType`, and `fenceSide`.
+- Offline random islands currently emit a flat terrain surface:
+  `terrainFloors: 1` for every generated cell. Keep island identity in terrain
+  material, roads, water composition, object grouping, traits, and economy
+  profile rather than generated height variation.
 - Map lab-only tokens explicitly to real renderer support. Examples:
   watchtower/castle -> `kind:"house"` with `buildingType:"tower"`,
   manor -> `kind:"house"` with `buildingType:"manor"`, lamp -> `lamp-post`,
   berries -> `bush`, ore -> `crystal`, water-bridge -> `bridge` on water.
   Do not invent unsupported `kind` values just because the lab catalogue has
   a matching label.
+- Generated random islands suppress props that have no generation economy
+  effect before save output. `spotlight` is explicitly generation-suppressed
+  even though legacy mapping/scoring still understands it for compatibility.
+- Generated random islands may keep `lamp-post` as Commerce/Charm punctuation,
+  but final output is capped at two lamps and lamps must not be adjacent.
 - Generated placed objects should set `appearance.objectStyle = "voxel"` so
   the in-app test exercises the existing voxel asset factories instead of the
   standalone lab's flat preview tokens.
@@ -121,6 +130,10 @@ Offline random island generation:
   polish runs after the identity grammar, and final validation repairs any
   displaced floors. Residual scatter is for small accents only, not the primary
   source of meaningful resources.
+- Food areas should read as deliberate farm plots, not random sprinkles:
+  generated crops prefer a compact square-ish region and avoid the immediate
+  one-cell ring around main `house` / `manor` habitation when space allows.
+  Tower houses are landmarks and do not count as the main-house food buffer.
 - Towers are owned by the corner landmark pass, not by archetype scatter:
   generated `watchtower`/`castle` tokens should resolve to corner-adjacent
   `kind:"house", buildingType:"tower"` cells with the count profile

@@ -27,6 +27,18 @@
   status = 200
 
 [[redirects]]
+  from = "/random-island-preview"
+  to = "/.netlify/functions/random-island-preview"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/random-island-preview.html"
+  to = "/.netlify/functions/random-island-preview"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/roadmap"
   to = "/roadmap.html"
   status = 200

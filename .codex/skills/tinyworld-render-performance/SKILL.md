@@ -90,11 +90,19 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
   `findFenceRenderSpan()` / `makeVoxelFenceSpan()` while keeping per-cell
   `world` intent and tile picking unchanged. Refresh the full connected fence
   component after edits so old anchors/non-anchors do not linger.
+- Fence edge posts belong on the true tile edge/corner coordinates (`±0.50`),
+  not inset inside the cell. This lets perpendicular sides and neighboring
+  cells visually share one corner post while preserving the same adjacency
+  intent.
 - Waterfall froth/foam should drift slowly. Keep `WATERFALL_FROTH_SPEED`
   conservative (currently `0.30`) so the white puff layer reads as moving foam,
   not flashing particles.
 - The object/stamp voxel bevel is a persisted render setting (`tinyworld:render:voxelBevel`) applied inside `vbox()` through cached centered voxel box geometry. It is intentionally fine-grained (0.001 steps) so tiny voxels can keep only a slight softened edge. Keep it subtle and global; do not hand-bevel individual stamps unless they need a genuinely different silhouette.
-- Voxel terrain top panels need a small width/depth overlap. Exact edge-to-edge panels produce sub-pixel cracks in the pixelated render path, especially on dark soil. Do not add a full top underlay to hide seams: terrain tile fade materials are transparent/depthWrite-off, so broad underlays can sort over the voxel panels and make the surface read flat.
+- Terrain tile geometry must stay inside the logical cell footprint. Do not use
+  x/z overhangs on tile tops, risers, voxel top panels, riser panels, or cheap
+  ghost terrain; every terrain tile should share the same `TILE` bounds in x/z.
+  If cracks appear, solve them with material/shader treatment or camera/post
+  tuning, not by overlapping neighbouring terrain vertices or faces.
 - Terrain leak blockers belong under the dirt/riser body as bottom caps, not beneath the visible top surface. Mark those caps `userData.noShadow = true` and keep `castReceive()` respecting that flag so they block sky/background misses without adding shadow cost or flattening voxel tops.
 - Terrain/island side and riser meshes must not receive projected shadows. Tag side-only risers/kerbs/rims with `userData.noReceiveShadow = true` and keep `groundReceiveOnly()` respecting it; otherwise sun shadows from top content draw large diagonal bands on vertical side materials that appear to rotate while orbiting the camera.
 - Far zoom/VOD also disables terrain shadow receivers via `updateTerrainShadowReceiversForCamera()` so cap/top meshes that necessarily combine top + vertical side faces cannot show distant diagonal shadow bands. Preserve the near/far cutoff as a zoom-aware terrain-only shadow LOD; object shadows can read close-up, but distant terrain sides should stay clean.
@@ -127,6 +135,10 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
   Three may reuse a stock/local-UV program and side textures appear to rotate
   when the camera orbits.
 - Generated/imported world application supports sliced progressive rendering. In sliced mode, `applyState(..., { sliced: true })` sorts terrain and object/detail passes by distance from `opts.renderOrigin` or the current camera `target`, so visible/nearby cells appear before farther cells. Preserve that distance-ranked ordering when changing generation rendering. Demo/stress routes may pass `skipGhostBoards: true` to keep a large home board from also preloading preview boards; in that mode `applyState` should zero the in-memory preview distance, sync the ghost budget, and clear ghost boards without persisting render settings.
+- Generated random islands request a one-shot terrain bake through
+  `window.__tinyworldRequestTerrainBake()` after the sliced apply pass finishes.
+  This keeps merged terrain a render optimization: picking resolves baked cells
+  from hit coordinates, and terrain edits unbake back to live per-cell tiles.
 - Stamps panel card thumbnails share the toolbar thumbnail renderer/cache but should not synchronously build every 3D thumbnail during open/search/category renders. Keep fallback thumbs immediate, cancel stale card-thumb queues on panel re-render, and drain expensive card thumbs in small `requestAnimationFrame` batches.
 - Home grids above the windowing threshold are **intent-full / render-windowed**: `world[][]` may hold the full 512×512 board, but `cellMeshes` must only hold the camera-centred home render window. Keep large-grid bulk load/clear paths on intent writes plus `requestHomeRenderWindowSync()`, not `GRID²` mesh rebuilds. Keep `world[][]` sparse: virtual default grass comes from `getWorldCell()`/`ensureWorldCell()`, not from preallocating `HOME_GRID_MAX²` cells. Any direct `world[x][z]` read on an editing/API path must either guard the row or use `getWorldCell()` so untouched large-grid rows still behave as default terrain.
 - Duplicate editable islands follow the same sparse-intent rule: a new island gets one pickable default grass surface and only edited cells get materialized through `setCell()`. Do not restore per-island `GRID²` grass seeding; 50 islands must stay mostly proxies/sparse cells until edited.
@@ -185,6 +197,10 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
   lighting conservative now that there is no post pass; time-of-day
   hemisphere scaling should normalize against the day anchor (`0.90`), not
   the raw constructor value, or midday blows out.
+- The non-shadowing environment/fill stack is currently lifted by
+  `ENVIRONMENT_LIGHT_MULTIPLIER = 2.0` in `02-cameras-lighting.js`; this
+  brightens ambient/hemi/fill/model-stamp safety lights without increasing the
+  shadow-casting sun.
 - Imported GLB/model stamps also have named non-shadowing safety lights:
   `model-stamp-import-ambient-fill` and
   `model-stamp-import-directional-fill`. They are adapted from the
