@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-26T21:44:34.724Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-26T21-44-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-26T20:52:04.994Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Move Build Brush dock to top-center\" -> plans/production-line/drafts/2026-06-26T20-52-move-build-brush-dock-to-top-center.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-24T18:15:00Z",
       "kind": "shipped",
       "text": "SECURITY fix shipped to PROD (PR #87): the pre-existing privilege-escalation (editable profiles.email used for Tinyverse authorization) is closed — access now uses the verified user.email only. Codex review SHIP; regression test added; 194 tests pass. Launch blocker cleared."
-    },
-    {
-      "ts": "2026-06-24T17:30:00Z",
-      "kind": "review",
-      "text": "G1 referral rewards built (Opus) on EC1: earn Earned GOLD only after the referee completes a verified action (publishing). Codex caught a cap race + Sybil farming — fixed (atomic counter cap, verified-wallet gate). Live-DB verified. Also surfaced a PRE-EXISTING critical (editable profiles.email used for auth) -> SECURITY-NOTES.md. Staged (PR #86)."
     }
   ],
-  "lastTick": "2026-06-26T20:52:04.994Z"
+  "lastTick": "2026-06-26T21:44:34.724Z"
 }
