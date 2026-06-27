@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-27T02:04:42.923Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-27T02-04-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-27T01:27:48.404Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-27T01-27-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-24T21:00:00Z",
       "kind": "shipped",
       "text": "ECONOMY GATED PREVIEW LIVE: owner approved a gated preview. Merged all 9 economy slices into the economy-preview branch (clean, 229 tests pass), applied the 6 economy migrations to the live DB (additive/inert for prod), and Netlify deploy-preview-90 is up + verified (/templates + /rewards 200, public templates API works, /api/me/coins 401). Prod/main untouched. Try: https://deploy-preview-90--tiny-world-builder.netlify.app (PR #90)."
-    },
-    {
-      "ts": "2026-06-24T20:30:00Z",
-      "kind": "review",
-      "text": "T2b templates marketplace UI built (Sonnet agent): /templates page (browse + Remix-for-GOLD with success/402 states) + public /api/worlds/featured?templates=1 (safe fields, no email; existing /featured path preserved). XSS-verified. Folded into the preview."
     }
   ],
-  "lastTick": "2026-06-27T01:27:48.404Z"
+  "lastTick": "2026-06-27T02:04:42.923Z"
 }
