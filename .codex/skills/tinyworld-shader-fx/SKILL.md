@@ -25,7 +25,7 @@ Where the shaders live and how to extend them without breaking the guarded build
 
 ## Ocean water shader (engine/landscape/water.js)
 
-Stylized, cheap (~7 value-noise taps). Uniforms worth knowing:
+Stylized, cheap (~9 value-noise taps). Uniforms worth knowing:
 
 - `flowDir` (vec2) — scroll direction; two layers flow along it and its perpendicular.
 - `foamColor` / `foamAmount` — wave-crest + shoreline foam.
@@ -33,7 +33,10 @@ Stylized, cheap (~7 value-noise taps). Uniforms worth knowing:
 - `posterize` — cel banding levels (12 reproduces the original look; 0 disables).
 - `planetDistance*` — distance tint, kept in parity with the terrain materials.
 
-Keep the `runwayR` discard, the clip-box block, fog, and posterize tail intact.
+Enhanced ocean water samples the shared planar reflection target from `01-render-core.js`
+(`tw-water-planar-reflection`) via `reflectionMatrix`, then layers a localized refractive
+bend: `refract(-viewDir, norm, 0.7502)`. Keep the `runwayR` discard, the clip-box block,
+fog, and posterize tail intact.
 
 ## Enhanced water surfaces ("Enhanced water" toggle)
 
@@ -47,12 +50,19 @@ the landscape ocean. A Settings toggle upgrades water everywhere:
   exactly like the `planesEnabled` toggle. New key, no `RENDER_SETTINGS_VERSION` bump.
 - Voxel water: injected in **`applyFlowingWaterUVs`** (`04-textures.js`) — the single
   `onBeforeCompile` chokepoint for every water material (base + flow clones). Stays
-  Lambert; adds ripple-normal bands + fresnel + Blinn-Phong glint + foam, masked by
-  `vTwWaterNrm.y` so sides stay calm. Shared `waterShaderTimeUniform` advanced in
-  `tickWaterTextureFlow`. **`customProgramCacheKey` is mandatory** here — without it
-  three.js would reuse the wrong program when the toggle flips (onBeforeCompile output
-  isn't in the default cache key).
-- Landscape ocean: `uEnhance` uniform in `water.js` scales the new foam/sheen/subsurface.
+  Lambert; projects each water vertex into the shared planar reflection texture, then adds
+  ripple-normal bend, light caustics, Blinn-Phong glint, and foam, masked by `vTwWaterNrm.y`
+  so sides stay calm. Shared `waterShaderTimeUniform` advanced in `tickWaterTextureFlow`.
+  **`customProgramCacheKey` is mandatory** here — without it three.js would reuse the wrong
+  program when the toggle flips (onBeforeCompile output isn't in the default cache key).
+  Include the shader-variant string in both the program key and flow-material cache key
+  when the injected shader source changes.
+- Planar reflection capture: `twWaterReflectionCapture()` in `01-render-core.js` renders
+  the scene from a mirrored camera into `tw-water-planar-reflection`, hides reflective
+  water meshes during the pass, and clips below-water geometry so underside slabs do not
+  pollute the reflection. Water materials opt in with `material.userData.twWaterReflective`.
+- Landscape ocean: `uEnhance` uniform in `water.js` scales foam/sheen/subsurface and the
+  material samples the same planar reflection uniforms.
 - On toggle: `refreshWaterShaderMaterials()` (clears `waterFlowMaterialCache`, resets the
   base materials) then `rebuildTerrainRender()`; the handler also sets the live landscape
   `uEnhance`. Waterfalls are untouched (separate shaders).

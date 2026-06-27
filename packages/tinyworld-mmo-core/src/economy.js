@@ -3,6 +3,18 @@ export const GOLD_SYMBOL = 'GOLD';
 
 export const CURRENT_WORLD_RESOURCES = Object.freeze(['fish', 'meat', 'plants', 'ore']);
 export const SPEC_WORLD_RESOURCES = Object.freeze(['wood', 'ore', 'crystal', 'energy', 'fish', 'meat', 'plants']);
+export const WORLD_RESOURCE_ACTIONS = Object.freeze({
+  fish: 'fish',
+  meat: 'hunt',
+  plants: 'gather',
+  ore: 'mine',
+});
+export const WORLD_RESOURCE_DEFAULT_CHARGES = Object.freeze({
+  fish: 4,
+  meat: 1,
+  plants: 1,
+  ore: 1,
+});
 
 export const DEFAULT_GOLD_TIERS = Object.freeze([
   Object.freeze({ id: 'none', minTinyworld: 0n, allowance: 0 }),
@@ -255,6 +267,27 @@ export function applyIslandTax(event = {}, island = {}, policy = DEFAULT_ECONOMY
     miner: { wallet: minerWallet, resource, amount: minerAmount },
     islandOwner: { wallet: ownerWallet, resource, amount: taxAmount },
   };
+}
+
+export function resourceActionForType(resource) {
+  const key = String(resource || '').trim().toLowerCase();
+  return WORLD_RESOURCE_ACTIONS[key] || null;
+}
+
+export function normalizeWorldResourceSpec(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const resource = String(input.resource || input.type || '').trim().toLowerCase();
+  if (!CURRENT_WORLD_RESOURCES.includes(resource)) return null;
+  const action = resourceActionForType(resource);
+  if (!action) return null;
+  const rawCharges = input.charges == null ? WORLD_RESOURCE_DEFAULT_CHARGES[resource] : input.charges;
+  let charges = Math.round(Number(rawCharges));
+  if (!Number.isFinite(charges)) charges = WORLD_RESOURCE_DEFAULT_CHARGES[resource] || 1;
+  charges = Math.max(1, Math.min(99, charges));
+  const out = { resource, action, charges };
+  const label = String(input.label || '').trim();
+  if (label) out.label = label.slice(0, 48);
+  return out;
 }
 
 export function createResourceLedgerEvents(split, { referenceId, now = new Date() } = {}) {

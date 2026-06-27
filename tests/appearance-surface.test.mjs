@@ -56,6 +56,12 @@ test('finish enum guard; matte is default-dropped', () => {
   assert.equal(normalizeAppearance({ finish: 'bogus' }), null);
 });
 
+test('fence style keeps garden and gate variants only', () => {
+  assert.equal(normalizeAppearance({ fenceStyle: 'garden' }).fenceStyle, 'garden');
+  assert.equal(normalizeAppearance({ fenceStyle: 'gate' }).fenceStyle, 'gate');
+  assert.equal(normalizeAppearance({ fenceStyle: 'wire' }), null);
+});
+
 test('light normalizes type/color/intensity/range and clamps', () => {
   const a = normalizeAppearance({ light: { type: 'point', color: 'ffffff', intensity: 9, range: 99 } });
   assert.deepEqual(a.light, { type: 'point', color: '#ffffff', intensity: 4, range: 20 });

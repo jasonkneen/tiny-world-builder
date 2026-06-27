@@ -308,6 +308,8 @@
       let fo = 0; // float cursor
       const cap = positions.length;            // hard ceiling — typed-array OOB writes are silently dropped
       const bevAbs = Math.min(BEVEL * spacing, spacing * 0.45);
+      const topMerged = new Uint8Array(N * N);
+      let mergedTopRects = 0;
 
       // Per-voxel geometry scratch (scalars only, no per-voxel allocation — matches the
       // low-level writer contract). vg() fills these from the heightfield + neighbours.
@@ -340,17 +342,63 @@
         _z0b = z0 + (_eN ? bevAbs : 0); _z1b = z1 - (_eS ? bevAbs : 0);
       }
 
+      function hKey(idx) { return Math.round(cellH[idx] * 10000); }
+      function canMergeFlatTop(i, j, idx, t, key) {
+        if (topMerged[idx] || mats[idx] !== t || hKey(idx) !== key) return false;
+        if (voxelIsPreservedSunken(i, j)) return false;
+        const topY = surfaceY + cellH[idx];
+        const nE = (i + 1 < N) ? surfaceY + cellH[idx + 1] : baseY;
+        const nW = (i - 1 >= 0) ? surfaceY + cellH[idx - 1] : baseY;
+        const nS = (j + 1 < N) ? surfaceY + cellH[idx + N] : baseY;
+        const nN = (j - 1 >= 0) ? surfaceY + cellH[idx - N] : baseY;
+        // Keep exposed drops per-voxel so the bevel/chamfer language stays intact.
+        return !(topY > nE + 1e-6 || topY > nW + 1e-6 || topY > nS + 1e-6 || topY > nN + 1e-6);
+      }
+      function emitMergedFlatTops(t, c) {
+        for (let j = 0; j < N; j++) {
+          for (let i = 0; i < N; i++) {
+            const idx = j * N + i;
+            const key = hKey(idx);
+            if (!canMergeFlatTop(i, j, idx, t, key)) continue;
+            let w = 1;
+            while (i + w < N && canMergeFlatTop(i + w, j, idx + w, t, key)) w++;
+            let h = 1;
+            scanRows:
+            while (j + h < N) {
+              for (let xx = 0; xx < w; xx++) {
+                const nidx = (j + h) * N + i + xx;
+                if (!canMergeFlatTop(i + xx, j + h, nidx, t, key)) break scanRows;
+              }
+              h++;
+            }
+            if (fo + 18 > cap) return;
+            const x0 = i * spacing - half;
+            const x1 = (i + w) * spacing - half;
+            const z0 = j * spacing - half;
+            const z1 = (j + h) * spacing - half;
+            const topY = surfaceY + cellH[idx];
+            quad(fo, x0, topY, z0, x0, topY, z1, x1, topY, z1, x1, topY, z0, 0, 1, 0, c.r, c.g, c.b); fo += 18;
+            mergedTopRects++;
+            for (let yy = 0; yy < h; yy++) {
+              for (let xx = 0; xx < w; xx++) topMerged[(j + yy) * N + i + xx] = 1;
+            }
+          }
+        }
+      }
+
       // tops (+ bevel chamfers/corners on EXPOSED edges only)
       for (const t of present) {
         const vStart = fo / 3;
+        const c = matColor(t);
+        emitMergedFlatTops(t, c);
         for (let j = 0; j < N; j++) {
           const z0 = j * spacing - half, z1 = (j + 1) * spacing - half;
           for (let i = 0; i < N; i++) {
             const idx = j * N + i; if (mats[idx] !== t) continue;
+            if (topMerged[idx]) continue;
             if (voxelIsPreservedSunken(i, j)) continue; // hole over board water/stone
             const x0 = i * spacing - half, x1 = (i + 1) * spacing - half;
             vg(i, j, idx, x0, x1, z0, z1);
-            const c = matColor(t);
             if (fo + 18 > cap) break;
             quad(fo, _x0b, _topY, _z0b, _x0b, _topY, _z1b, _x1b, _topY, _z1b, _x1b, _topY, _z0b, 0, 1, 0, c.r, c.g, c.b); fo += 18;
             if (_bd > 1e-6) {
@@ -418,6 +466,7 @@
       for (const g of groups) geom.addGroup(g[0], g[1], g[2]);
       geom.setDrawRange(0, fo / 3);
       surfaceMesh.material = matList.length ? matList : [solidMat('empty', 0x6fae4f)];
+      surfaceMesh.userData.meshTerrainStats = { vertices: fo / 3, quads: Math.round(fo / 18), mergedTopRects };
       geom.attributes.position.needsUpdate = true;
       geom.attributes.normal.needsUpdate = true;
     }

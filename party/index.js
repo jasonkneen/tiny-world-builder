@@ -5,6 +5,7 @@ import {
   DEFAULT_ECONOMY_POLICY,
   clampTaxRate,
   applyIslandTax,
+  normalizeWorldResourceSpec,
 } from '../packages/tinyworld-mmo-core/src/index.js';
 
 const MESSAGE_LIMIT = 48 * 1024;
@@ -40,7 +41,7 @@ const MAX_FLOORS = 8;
 // raw customParts, so they replicate without being listed here.
 const CELL_FIELDS = new Set([
   'terrain', 'kind', 'floors', 'terrainFloors', 'buildingType', 'fenceSide',
-  'extras', 'rotationY', 'offsetX', 'offsetY', 'offsetZ', 'appearance', 'waterFlow',
+  'extras', 'rotationY', 'offsetX', 'offsetY', 'offsetZ', 'appearance', 'economy', 'waterFlow',
 ]);
 
 function clampFloors(value) {
@@ -311,6 +312,7 @@ function cleanCell(cell) {
   if (copy.floors != null) copy.floors = clampFloors(copy.floors);
   if (copy.terrainFloors != null) copy.terrainFloors = clampFloors(copy.terrainFloors);
   if (!Array.isArray(copy.extras)) copy.extras = [];
+  copy.economy = normalizeWorldResourceSpec(copy.economy);
   return copy;
 }
 
@@ -519,6 +521,7 @@ function cellTerrain(cell) { return Array.isArray(cell) ? cell[2] : (cell && cel
 function cellKind(cell) { return Array.isArray(cell) ? cell[3] : (cell && cell.kind); }
 function cellX(cell) { return Array.isArray(cell) ? cell[0] : (cell && cell.x); }
 function cellZ(cell) { return Array.isArray(cell) ? cell[1] : (cell && cell.z); }
+function cellEconomy(cell) { return Array.isArray(cell) ? null : normalizeWorldResourceSpec(cell && cell.economy); }
 
 // Resource action a cell currently affords, from its top tile (server-authoritative).
 function nodeActionForCell(terrain, kind) {
@@ -566,17 +569,23 @@ function deriveWorldState(data, rng = Math.random) {
   const animalCells = [];
   let stoneCount = 0;
   let spawnCell = null;
+  const explicitResources = new Map();
+  for (const [key, c] of byXZ) {
+    const spec = cellEconomy(c);
+    if (spec) explicitResources.set(key, spec);
+  }
 
   // Connected water bodies via 4-neighbor flood fill; one shared fish node each.
   const waterSeen = new Set();
   for (const [key, c] of byXZ) {
-    if (cellTerrain(c) !== 'water' || waterSeen.has(key)) continue;
+    if (explicitResources.has(key) || cellTerrain(c) !== 'water' || waterSeen.has(key)) continue;
     const stack = [key];
     const members = [];
     while (stack.length) {
       const k = stack.pop();
       if (waterSeen.has(k)) continue;
       const cc = byXZ.get(k);
+      if (explicitResources.has(k)) continue;
       if (!cc || cellTerrain(cc) !== 'water') continue;
       waterSeen.add(k);
       members.push(k);
@@ -587,7 +596,7 @@ function deriveWorldState(data, rng = Math.random) {
       }
     }
     const id = 'wb:' + members[0];
-    nodes[id] = { type: 'fish', charges: FISH_MAX_PER_BODY, maxCharges: FISH_MAX_PER_BODY, regenAt: 0, lockedBy: null };
+    nodes[id] = { type: 'fish', cell: members[0], charges: FISH_MAX_PER_BODY, maxCharges: FISH_MAX_PER_BODY, regenAt: 0, lockedBy: null };
     for (const k of members) cellIndex[k] = id;
   }
 
@@ -599,10 +608,32 @@ function deriveWorldState(data, rng = Math.random) {
       const z = Math.round(cellZ(c));
       if (Number.isFinite(x) && Number.isFinite(z)) spawnCell = { x, z };
     }
-    if (ANIMAL_KINDS.has(kind)) {
+    const explicit = explicitResources.get(key);
+    if (!explicit && ANIMAL_KINDS.has(kind)) {
       const x = Math.round(cellX(c));
       const z = Math.round(cellZ(c));
       if (Number.isFinite(x) && Number.isFinite(z)) animalCells.push({ x, z, kind });
+    }
+    if (explicit) {
+      const x = Math.round(cellX(c));
+      const z = Math.round(cellZ(c));
+      if (explicit.resource === 'meat') {
+        if (Number.isFinite(x) && Number.isFinite(z)) animalCells.push({ x, z, kind: kind || 'economy-meat' });
+        continue;
+      }
+      const charges = Math.max(1, Math.min(99, Math.round(Number(explicit.charges) || 1)));
+      const id = 'res:' + explicit.resource + ':' + key;
+      if (explicit.resource === 'fish') {
+        nodes[id] = { type: 'fish', cell: key, charges, maxCharges: charges, regenAt: 0, lockedBy: null };
+      } else if (explicit.resource === 'ore') {
+        stoneCount++;
+        const tier = Math.max(1, Math.min(3, charges));
+        nodes[id] = { type: 'ore', cell: key, tier, charges, maxCharges: charges, respawnAt: 0, lockedBy: null };
+      } else if (explicit.resource === 'plants') {
+        nodes[id] = { type: 'plant', cell: key, ripe: true, charges, maxCharges: charges, ripenAt: 0, lockedBy: null };
+      }
+      if (nodes[id]) cellIndex[key] = id;
+      continue;
     }
     if (terrain === 'stone') {
       stoneCount++;

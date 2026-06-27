@@ -1102,7 +1102,64 @@
         : [[offsetX, -0.50], [offsetX, 0.50]];
     }
 
-    if (fenceStyle === 'garden' && level < 4) {
+    if (fenceStyle === 'gate' && level < 4) {
+      const fenceScale = level === 1 ? 1 : (level === 2 ? 1.10 : 1.20);
+      const postH = 0.56 * fenceScale;
+      const gateH = postH * 0.70;
+      const postMat = M.fenceGarden || M.fence;
+      const railMat = M.fenceGardenD || M.fence;
+      const panelMat = M.fence || postMat;
+      const latchMat = M.knob || M.fenceWire || railMat;
+      const markerMat = M.flagRed || latchMat;
+      const leafLen = 0.42;
+      const leafHalf = leafLen / 2;
+      const leafAngle = 0.62;
+      const hingeInset = 0.43;
+      function gateBox(w, h, d, x, y, z, mat, rot = {}) {
+        const mesh = new THREE.Mesh(getBoxGeometry(w, h, d), mat);
+        mesh.position.set(x, y, z);
+        if (rot.ry) mesh.rotation.y = rot.ry;
+        g.add(mesh);
+        return mesh;
+      }
+      for (const [px, pz] of endpointOffsets()) {
+        gateBox(0.14, postH, 0.14, px, postH / 2, pz, postMat);
+        gateBox(0.18, 0.055, 0.18, px, postH + 0.03, pz, railMat);
+      }
+      if (alongX) {
+        const inward = normalized === 'n' ? 1 : -1;
+        const leaves = [
+          { hingeX: -hingeInset, dir: 1, ry: -inward * leafAngle },
+          { hingeX: hingeInset, dir: -1, ry: inward * leafAngle },
+        ];
+        leaves.forEach(leaf => {
+          const leafX = leaf.hingeX + leaf.dir * Math.cos(leaf.ry) * leafHalf;
+          const leafZ = offsetZ + leaf.dir * -Math.sin(leaf.ry) * leafHalf;
+          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(leafLen, 0.05, 0.05, leafX, y, leafZ, railMat, { ry: leaf.ry });
+          for (const dx of [-0.13, 0.13]) {
+            gateBox(0.05, gateH * 0.66, 0.05, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
+          }
+        });
+        gateBox(0.22, 0.11, 0.045, 0, postH + 0.13, offsetZ, markerMat);
+        gateBox(0.075, 0.075, 0.075, 0.12, gateH * 0.55, offsetZ + inward * 0.03, latchMat);
+      } else {
+        const inward = normalized === 'w' ? 1 : -1;
+        const leaves = [
+          { hingeZ: -hingeInset, dir: 1, ry: inward * leafAngle },
+          { hingeZ: hingeInset, dir: -1, ry: -inward * leafAngle },
+        ];
+        leaves.forEach(leaf => {
+          const leafX = offsetX + leaf.dir * Math.sin(leaf.ry) * leafHalf;
+          const leafZ = leaf.hingeZ + leaf.dir * Math.cos(leaf.ry) * leafHalf;
+          for (const y of [0.13 * fenceScale, gateH * 0.82]) gateBox(0.05, 0.05, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry });
+          for (const dz of [-0.13, 0.13]) {
+            gateBox(0.05, gateH * 0.66, 0.05, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
+          }
+        });
+        gateBox(0.045, 0.11, 0.22, offsetX, postH + 0.13, 0, markerMat);
+        gateBox(0.075, 0.075, 0.075, offsetX + inward * 0.03, gateH * 0.55, 0.12, latchMat);
+      }
+    } else if (fenceStyle === 'garden' && level < 4) {
       const fenceScale = level === 1 ? 1 : (level === 2 ? 1.18 : 1.32);
       const postH = 0.38 * fenceScale;
       const postMat = M.fenceGarden || M.fence;

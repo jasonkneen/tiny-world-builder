@@ -87,6 +87,28 @@ test('cleanCell normalizes terrain/kind enums and clamps floors', () => {
   assert.equal(cleanCell({ terrainFloors: 999 }).terrainFloors, 8);
   assert.equal(cleanCell({ floors: 0 }).floors, 1, 'floors floored to 1');
   assert.deepEqual(cleanCell({ terrain: 'grass' }).extras, [], 'extras defaults to []');
+  assert.deepEqual(cleanCell({ terrain: 'grass', economy: { resource: 'ore', charges: 200 } }).economy, {
+    resource: 'ore',
+    action: 'mine',
+    charges: 99,
+  });
+  assert.equal(cleanCell({ terrain: 'grass', economy: { resource: 'wood' } }).economy, null, 'future resources are not accepted by the live room yet');
+});
+
+test('cleanCell preserves multi-side fence extras on occupied cells', () => {
+  const c = cleanCell({
+    terrain: 'dirt',
+    kind: 'crop',
+    extras: [
+      { kind: 'fence', fenceSide: 'n', floors: 1 },
+      { kind: 'fence', fenceSide: 'e', floors: 1 },
+      { kind: 'fence', fenceSide: 's', floors: 1, appearance: { fenceStyle: 'garden' } },
+      { kind: 'fence', fenceSide: 'w', floors: 1, appearance: { fenceStyle: 'gate' } },
+    ],
+  });
+  assert.equal(c.kind, 'crop');
+  assert.deepEqual(c.extras.map(extra => extra.fenceSide), ['n', 'e', 's', 'w']);
+  assert.equal(c.extras[3].appearance.fenceStyle, 'gate');
 });
 
 test('clampFloors bounds to 1..8', () => {
@@ -501,6 +523,7 @@ test('deriveWorldState: connected water => one shared fish body, ore/plant nodes
   assert.equal(waterIds.size, 1, 'one connected water body');
   const fishNode = state.nodes[state.cellIndex['1,1']];
   assert.equal(fishNode.type, 'fish');
+  assert.equal(fishNode.cell, '1,1', 'water-body fish nodes expose a representative cell for the client harvest search');
   assert.equal(state.nodes[state.cellIndex['5,5']].type, 'ore');
   assert.equal(state.nodes[state.cellIndex['5,5']].charges, 3, 'rng 0.9 => tier 3');
   assert.equal(state.nodes[state.cellIndex['4,2']].type, 'plant');
@@ -516,6 +539,25 @@ test('deriveWorldState: connected water => one shared fish body, ore/plant nodes
   assert.ok(state.grassCells.indexOf('6,7') >= 0, 'flower is standable');
   assert.ok(state.grassCells.indexOf('7,6') >= 0, 'tuft is standable');
   assert.ok(state.grassCells.indexOf('0,0') >= 0, 'empty cells are standable grass');
+});
+
+test('deriveWorldState seeds explicit economy resource tags as authoritative nodes', () => {
+  const state = deriveWorldState({
+    v: 4, gridSize: 8,
+    cells: [
+      { x: 1, z: 1, terrain: 'water', economy: { resource: 'ore', charges: 2 } },
+      { x: 2, z: 1, terrain: 'water' },
+      { x: 3, z: 1, terrain: 'grass', kind: 'voxel-build', economy: { resource: 'plants', charges: 3 } },
+      { x: 4, z: 1, terrain: 'grass', kind: 'model-stamp', economy: { resource: 'meat' } },
+    ],
+  });
+  assert.equal(state.nodes[state.cellIndex['1,1']].type, 'ore', 'explicit resource overrides visual water terrain');
+  assert.equal(state.nodes[state.cellIndex['1,1']].charges, 2);
+  assert.equal(state.nodes[state.cellIndex['2,1']].type, 'fish', 'remaining water still creates a fish node');
+  assert.equal(state.nodes[state.cellIndex['2,1']].cell, '2,1');
+  assert.equal(state.nodes[state.cellIndex['3,1']].type, 'plant');
+  assert.equal(state.nodes[state.cellIndex['3,1']].charges, 3);
+  assert.ok(state.animalCells.some(c => c.x === 4 && c.z === 1), 'explicit meat seeds huntable animal spawn cells');
 });
 
 test('deriveWorldState and safeSpawn prefer the center stargate spawn cell', () => {

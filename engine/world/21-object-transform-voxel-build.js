@@ -247,8 +247,8 @@
       renderPixelDepthEdge = 0;
       renderPixelNormalEdge = 0;
       renderShaderAntialias = 0;
-      renderTiltBlur = 10.5;
-      renderTiltFocus = 21;
+      renderTiltBlur = parseFloat(RENDER_DEFAULTS.tiltBlur);
+      renderTiltFocus = parseFloat(RENDER_DEFAULTS.tiltFocus);
       applyTiltShiftSettings();
     }
     function resetWorldSettings() {

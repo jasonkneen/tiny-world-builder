@@ -26,6 +26,14 @@ const ALLOWED_KINDS = new Set([null, 'house', 'tree', 'fence', 'rock', 'bridge',
 const REQUIRED_CELL_KEYS = ['x', 'z', 'terrain', 'kind', 'floors', 'terrainFloors', 'buildingType', 'fenceSide'];
 const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
 const ANIMAL_KINDS = new Set(['cow', 'sheep']);
+const FENCE_EDGE_SIDES = new Set(['n', 'e', 's', 'w']);
+const SIDE_DELTAS = {
+  n: [0, -1],
+  e: [1, 0],
+  s: [0, 1],
+  w: [-1, 0],
+};
+const OPPOSITE_SIDE = { n: 's', e: 'w', s: 'n', w: 'e' };
 
 function makeIsland(overrides = {}) {
   return generateRandomIslandWorld({
@@ -60,6 +68,13 @@ test('random island generator is deterministic and emits complete v4 cells', () 
     assert.ok(Number.isInteger(cell.terrainFloors) && cell.terrainFloors >= 1 && cell.terrainFloors <= 8);
     if (cell.kind !== 'house') assert.equal(cell.buildingType, null);
     if (cell.kind !== 'fence') assert.equal(cell.fenceSide, null);
+    if (cell.extras) {
+      assert.ok(Array.isArray(cell.extras), 'extras should be an array');
+      for (const extra of cell.extras) {
+        assert.equal(extra.kind, 'fence', 'random island extras should be fence edges');
+        assert.ok(FENCE_EDGE_SIDES.has(extra.fenceSide), 'extra fence side should be an edge');
+      }
+    }
     if (cell.appearance) assert.equal(cell.appearance.objectStyle, 'voxel');
   }
 });
@@ -73,7 +88,7 @@ test('explicit archetypes map lab props to native TinyWorld assets', () => {
   const kinds = new Set(island.cells.map(cell => cell.kind).filter(Boolean));
 
   assert.ok(kinds.has('house'), 'village should place houses');
-  assert.ok(kinds.has('lamp-post') || kinds.has('fence') || kinds.has('flower'), 'village should include mapped props');
+  assert.ok(kinds.has('lamp-post') || kinds.has('flower'), 'village should include mapped props');
   assert.ok(island.cells.some(cell => cell.appearance && cell.appearance.objectStyle === 'voxel'), 'mapped props should request voxel assets');
   for (const kind of kinds) assert.ok(ALLOWED_KINDS.has(kind), 'unexpected kind ' + kind);
 });
@@ -118,7 +133,7 @@ const ARCHETYPE_MIXES = {
   pastoral: {
     biomes: { grass: 55, forest: 10, water: 8, dirt: 22, settlement: 5 },
     elevation: { plains: 70, hills: 24, mountains: 6 },
-    signature: ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'cow', 'sheep', 'fence'],
+    signature: ['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'cow', 'sheep'],
   },
   forest: {
     biomes: { grass: 35, forest: 44, water: 8, dirt: 10, settlement: 3 },
@@ -143,7 +158,7 @@ const ARCHETYPE_MIXES = {
   fortress: {
     biomes: { grass: 20, forest: 8, water: 8, dirt: 20, settlement: 44 },
     elevation: { plains: 22, hills: 38, mountains: 40 },
-    signature: ['house', 'fence', 'spotlight'],
+    signature: ['house', 'rock', 'spotlight'],
   },
   ruins: {
     biomes: { grass: 26, forest: 20, water: 10, dirt: 24, settlement: 20 },
@@ -153,7 +168,7 @@ const ARCHETYPE_MIXES = {
   harbor: {
     biomes: { grass: 24, forest: 8, water: 38, dirt: 10, settlement: 20 },
     elevation: { plains: 62, hills: 28, mountains: 10 },
-    signature: ['bridge', 'house', 'lamp-post', 'fence'],
+    signature: ['bridge', 'house', 'lamp-post', 'flower'],
   },
 };
 
@@ -173,6 +188,86 @@ function cellsWithin(cells, cell, distance) {
 
 function nearCell(cells, cell, predicate, distance = 1) {
   return cellsWithin(cells, cell, distance).some(predicate);
+}
+
+function fenceSideFacesNeighbor(fence, neighbor) {
+  if (!fence || !neighbor) return false;
+  if (neighbor.x < fence.x) return fence.fenceSide === 'w';
+  if (neighbor.x > fence.x) return fence.fenceSide === 'e';
+  if (neighbor.z < fence.z) return fence.fenceSide === 'n';
+  if (neighbor.z > fence.z) return fence.fenceSide === 's';
+  return false;
+}
+
+function cellByCoord(cells) {
+  return new Map(cells.map(entry => [entry.x + ',' + entry.z, entry]));
+}
+
+function neighborForSide(byCoord, cell, side) {
+  const delta = SIDE_DELTAS[side];
+  return byCoord.get((cell.x + delta[0]) + ',' + (cell.z + delta[1])) || null;
+}
+
+function fenceEdgeEntries(cell) {
+  const entries = [];
+  if (!cell) return entries;
+  function styleFor(appearance) {
+    const style = appearance && appearance.fenceStyle;
+    return style === 'garden' || style === 'gate' ? style : 'wood';
+  }
+  if (cell.kind === 'fence' && FENCE_EDGE_SIDES.has(cell.fenceSide)) entries.push({ side: cell.fenceSide, source: 'primary', fenceStyle: styleFor(cell.appearance) });
+  if (Array.isArray(cell.extras)) {
+    for (const extra of cell.extras) {
+      if (extra && extra.kind === 'fence' && FENCE_EDGE_SIDES.has(extra.fenceSide)) {
+        entries.push({ side: extra.fenceSide, source: 'extra', fenceStyle: styleFor(extra.appearance) });
+      }
+    }
+  }
+  return entries;
+}
+
+function hasFenceEdge(cell, side) {
+  return fenceEdgeEntries(cell).some(entry => entry.side === side);
+}
+
+function boundaryFenceStats(island, regionCells, sameRegion) {
+  const byCoord = cellByCoord(island.cells);
+  const stats = { boundary: 0, fenced: 0, pathGates: 0 };
+  for (const cell of regionCells) {
+    for (const side of FENCE_EDGE_SIDES) {
+      const neighbor = neighborForSide(byCoord, cell, side);
+      if (neighbor && sameRegion(neighbor)) continue;
+      stats.boundary++;
+      const edgeEntries = fenceEdgeEntries(cell).filter(entry => entry.side === side);
+      if (edgeEntries.length) stats.fenced++;
+      if (neighbor && neighbor.terrain === 'path' && edgeEntries.some(entry => entry.fenceStyle === 'gate')) stats.pathGates++;
+    }
+  }
+  return stats;
+}
+
+function assertSeparatedResourceEdges(island) {
+  const byCoord = cellByCoord(island.cells);
+  for (const crop of island.cells.filter(cell => CROP_KINDS.has(cell.kind))) {
+    for (const side of FENCE_EDGE_SIDES) {
+      const neighbor = neighborForSide(byCoord, crop, side);
+      if (!neighbor || !ANIMAL_KINDS.has(neighbor.kind)) continue;
+      assert.ok(
+        hasFenceEdge(crop, side) || hasFenceEdge(neighbor, OPPOSITE_SIDE[side]),
+        'crop at ' + crop.x + ',' + crop.z + ' should be fenced off from animal at ' + neighbor.x + ',' + neighbor.z
+      );
+    }
+  }
+}
+
+function isFenceEnclosureNeighbor(cell) {
+  return !!cell && (
+    CROP_KINDS.has(cell.kind)
+    || ANIMAL_KINDS.has(cell.kind)
+    || cell.kind === 'house'
+    || cell.kind === 'flower'
+    || cell.kind === 'bush'
+  );
 }
 
 function waterComponents(island) {
@@ -230,6 +325,39 @@ function isLargeGeneratedBuilding(cell) {
 
 function isTowerCell(cell) {
   return cell && cell.kind === 'house' && cell.buildingType === 'tower';
+}
+
+function isFoodCell(cell) {
+  return !!cell && (CROP_KINDS.has(cell.kind) || ANIMAL_KINDS.has(cell.kind) || cell.kind === 'bush');
+}
+
+function resourceCells(island, resourceId) {
+  return island.cells.filter(cell => {
+    if (resourceId === 'food') return isFoodCell(cell);
+    if (resourceId === 'materials') return cell.kind === 'tree' || cell.kind === 'rock' || cell.kind === 'crystal';
+    if (resourceId === 'commerce') return cell.kind === 'lamp-post' || cell.kind === 'bridge' || (cell.kind === 'house' && cell.buildingType !== 'tower');
+    if (resourceId === 'defense') return cell.kind === 'fence' || cell.kind === 'spotlight' || isTowerCell(cell);
+    if (resourceId === 'charm') return ['flower', 'bush', 'tree', 'crystal', 'totem', 'ruins'].includes(cell.kind);
+    return false;
+  });
+}
+
+function rotationYForCell(cell) {
+  const transform = cell && cell.transform;
+  if (Array.isArray(transform)) return Number(transform[0]) || 0;
+  if (transform && typeof transform === 'object') return Number(transform.rotationY) || 0;
+  return 0;
+}
+
+function towerDoorDotToCenter(island, tower) {
+  const rotationY = rotationYForCell(tower);
+  const forwardX = Math.sin(rotationY);
+  const forwardZ = Math.cos(rotationY);
+  const center = (island.gridSize - 1) / 2;
+  const inwardX = center - tower.x;
+  const inwardZ = center - tower.z;
+  const length = Math.hypot(inwardX, inwardZ) || 1;
+  return (forwardX * inwardX + forwardZ * inwardZ) / length;
 }
 
 function cornerDistance(island, cell) {
@@ -413,14 +541,139 @@ test('resource motif pass composes fenced crop plots and animal pens', () => {
     });
     const cropCells = island.cells.filter(cell => CROP_KINDS.has(cell.kind));
     const animalCells = island.cells.filter(cell => ANIMAL_KINDS.has(cell.kind));
-    const fencedCrops = cropCells.filter(cell => nearCell(island.cells, cell, neighbor => neighbor.kind === 'fence', 2));
-    const pennedAnimals = animalCells.filter(cell => nearCell(island.cells, cell, neighbor => neighbor.kind === 'fence', 2));
+    const cropStats = boundaryFenceStats(island, cropCells, cell => CROP_KINDS.has(cell.kind));
+    const animalStats = boundaryFenceStats(island, animalCells, cell => ANIMAL_KINDS.has(cell.kind));
 
     assert.ok(cropCells.length >= 4, 'pastoral should include a crop plot');
     assert.ok(animalCells.length >= 3, 'pastoral should include a herd');
-    assert.ok(fencedCrops.length / cropCells.length >= 0.65, 'most crops should read as a fenced plot');
-    assert.ok(pennedAnimals.length / animalCells.length >= 0.65, 'most animals should read as a fenced pen');
+    assert.ok(cropStats.boundary > 0, 'crop plots should have boundary edges');
+    assert.ok(animalStats.boundary > 0, 'animal pens should have boundary edges');
+    assert.ok(cropStats.fenced / cropStats.boundary >= 0.75, 'crop plot boundary edges should be fenced');
+    assert.ok(animalStats.fenced / animalStats.boundary >= 0.75, 'animal pen boundary edges should be fenced');
+    assert.ok(cropStats.pathGates >= 1, 'crop plot should have a path-side gate opening');
+    assert.ok(animalStats.pathGates >= 1, 'animal pen should have a path-side gate opening');
+    assertSeparatedResourceEdges(island);
   }
+});
+
+test('economy viability pass gives every archetype a resource floor', () => {
+  const minimumCells = {
+    food: 2,
+    materials: 1,
+    commerce: 1,
+    defense: 1,
+    charm: 2,
+  };
+
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 4; i++) {
+      const island = makeIsland({
+        seed: 'economy-floor-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      const profile = buildRandomIslandEconomyProfile(island, { seed: 'economy-floor-' + archetype + '-' + i, archetype });
+
+      for (const [resourceId, min] of Object.entries(minimumCells)) {
+        assert.ok(
+          resourceCells(island, resourceId).length >= min,
+          archetype + ' should have at least ' + min + ' ' + resourceId + ' cells'
+        );
+        assert.ok(profile.stats[resourceId] > 0, archetype + ' should score nonzero ' + resourceId);
+      }
+    }
+  }
+});
+
+test('low-food quarry islands still place capped food near habitation', () => {
+  for (let i = 0; i < 12; i++) {
+    const island = makeIsland({
+      seed: 'low-food-quarry-' + i,
+      archetype: 'quarry',
+      biomes: ARCHETYPE_MIXES.quarry.biomes,
+      elevation: ARCHETYPE_MIXES.quarry.elevation,
+    });
+    const foodCells = island.cells.filter(isFoodCell);
+    const foodNearHomes = foodCells.filter(cell => nearCell(
+      island.cells,
+      cell,
+      neighbor => neighbor.kind === 'house' && neighbor.buildingType !== 'tower',
+      3
+    ));
+
+    assert.ok(foodCells.length >= 2, 'quarry should still have a food floor');
+    assert.ok(foodCells.length <= 6, 'quarry should keep food inside its low-food cap');
+    assert.ok(foodNearHomes.length >= 2, 'quarry food should sit near a cottage/house');
+  }
+});
+
+test('generated resource fences live on enclosed cell edges', () => {
+  let checked = 0;
+  let fenced = 0;
+  for (let i = 0; i < 12; i++) {
+    const island = makeIsland({
+      seed: 'resource-fence-side-pastoral-' + i,
+      archetype: 'pastoral',
+      biomes: ARCHETYPE_MIXES.pastoral.biomes,
+      elevation: ARCHETYPE_MIXES.pastoral.elevation,
+    });
+    const resourceCells = island.cells.filter(cell => CROP_KINDS.has(cell.kind) || ANIMAL_KINDS.has(cell.kind));
+    const stats = boundaryFenceStats(island, resourceCells, cell => CROP_KINDS.has(cell.kind) || ANIMAL_KINDS.has(cell.kind));
+    assert.ok(
+      !island.cells.some(cell => cell.kind === 'fence'),
+      'generated islands should store fences as side extras rather than primary fence props'
+    );
+    checked += stats.boundary;
+    fenced += stats.fenced;
+    for (const cell of resourceCells) {
+      assert.ok(
+        cell.kind !== 'fence',
+        'resource enclosures should fence resource cell edges instead of replacing resources with fence props'
+      );
+    }
+  }
+
+  assert.ok(checked >= 24, 'seed sweep should include resource boundary edges');
+  assert.ok(fenced / checked >= 0.7, 'most resource boundary edges should have fence overlays');
+});
+
+test('generated islands do not leave fence-only cells in open fields', () => {
+  for (const [archetype, config] of Object.entries(ARCHETYPE_MIXES)) {
+    for (let i = 0; i < 8; i++) {
+      const island = makeIsland({
+        seed: 'no-stray-fence-' + archetype + '-' + i,
+        archetype,
+        biomes: config.biomes,
+        elevation: config.elevation,
+      });
+      const stray = island.cells.filter(cell => !cell.kind && fenceEdgeEntries(cell).length > 0);
+      assert.equal(stray.length, 0, archetype + ' should not emit fence-only empty cells');
+    }
+  }
+});
+
+test('farm enclosures do not automatically claim the defensive ring trait', () => {
+  const cells = [];
+  for (let x = 0; x < 6; x++) {
+    for (let z = 0; z < 6; z++) {
+      cells.push({ x, z, terrain: 'grass', kind: null, floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null });
+    }
+  }
+  const byCoord = new Map(cells.map(cell => [cell.x + ',' + cell.z, cell]));
+  function setKind(x, z, kind, fenceSide = null) {
+    const cell = byCoord.get(x + ',' + z);
+    cell.kind = kind;
+    cell.fenceSide = kind === 'fence' ? fenceSide : null;
+  }
+  [[2, 2], [2, 3], [3, 2], [3, 3]].forEach(([x, z], i) => setKind(x, z, i % 2 ? 'wheat' : 'crop'));
+  [[1, 2, 'e'], [1, 3, 'e'], [4, 2, 'w'], [4, 3, 'w'], [2, 1, 's'], [3, 1, 's'], [2, 4, 'n'], [3, 4, 'n']]
+    .forEach(([x, z, side]) => setKind(x, z, 'fence', side));
+
+  const profile = buildRandomIslandEconomyProfile({ v: 4, gridSize: 6, cells }, { seed: 'farm-enclosure', archetype: 'pastoral' });
+
+  assert.ok(profile.traits.includes('Meadow Economy'));
+  assert.ok(!profile.traits.includes('Defensive Ring'));
 });
 
 test('generated homes and estates are path-connected', () => {
@@ -458,6 +711,11 @@ test('generated towers are corner landmarks with the requested count profile', (
     const towers = island.cells.filter(isTowerCell);
     assert.ok(towers.length <= 4, archetype + ' should never emit more than four towers');
     for (const tower of towers) {
+      assert.ok(tower.transform && typeof tower.transform === 'object', archetype + ' tower should track its door-facing transform');
+      assert.ok(
+        towerDoorDotToCenter(island, tower) > 0,
+        archetype + ' tower at ' + tower.x + ',' + tower.z + ' should face inward'
+      );
       assert.ok(
         cornerDistance(island, tower) <= 3,
         archetype + ' tower at ' + tower.x + ',' + tower.z + ' should be a corner landmark'

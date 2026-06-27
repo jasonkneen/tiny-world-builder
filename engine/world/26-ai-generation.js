@@ -181,7 +181,7 @@
       'Houses cluster automatically when buildingType is null: adjacent houses merge into linear, L/T/+, or 2x2 forms. To force a single-cell variant set buildingType to cottage|manor|tower|skyscraper.',
       'Buildings must sit directly on flat grass or dirt. Do not put houses on path, water, lava, raised terrain, decks, bridges, platforms, posts, or stilts.',
       'Repeat-tapping the same object increases floors/intensity: houses grow upward; trees, rocks, bridges, fences, tufts, and crops become larger, denser, or more detailed.',
-      'A fence is a single side/leaf, not a full square. Set fenceSide to n|s|e|w for tile edges or center-x|center-z for centre-line walls.',
+      'A fence is an edge overlay, not a full square. Set the primary fenceSide to n|s|e|w for one fenced edge, or add fence entries to extras when a square needs 2-4 fenced sides. center-x|center-z remain available for centre-line walls.',
       'Fences placed on two perpendicular sides of a house can promote it to a castle turret and turn connected fence cells into stone wall — use this for castles.',
       'Think like a low-poly diorama designer, not a random tile filler: start from a readable scene concept, use strong silhouettes, and leave negative space.',
       'Use low-poly worldbuilding cues: readable silhouettes, a few landmark cells, modular clusters, paths that lead the eye, and color-blocked terrain.',
@@ -787,7 +787,7 @@
     const archetypes = {
       pastoral: {
         terrain: { grass: 5, prairie: 5, dirt: 1, path: 1, stone: 0.5, sand: 0.7 },
-        objects: { sheep: 4, cow: 3, wheat: 2, corn: 1.5, garden: 1.6, flower: 1.5, house: 1.2, tree: 1, fence: 1, berries: 1 },
+        objects: { sheep: 4, cow: 3, wheat: 2, corn: 1.5, garden: 1.6, flower: 1.5, house: 1.2, tree: 1, berries: 1 },
       },
       forest: {
         terrain: { grass: 6, prairie: 1, dirt: 2, stone: 0.8, cliff: 0.4, path: 0.4 },
@@ -803,11 +803,11 @@
       },
       village: {
         terrain: { grass: 3, path: 3, prairie: 1.2, dirt: 1.4, stone: 0.8, sand: 0.4 },
-        objects: { house: 4, manor: 1.6, lamp: 2, garden: 1.8, crop: 1.5, fence: 1.3, tree: 1.2, flower: 1.2, watchtower: 0.8 },
+        objects: { house: 4, manor: 1.6, lamp: 2, garden: 1.8, crop: 1.5, tree: 1.2, flower: 1.2, watchtower: 0.8 },
       },
       fortress: {
         terrain: { cliff: 3, stone: 3, path: 2, grass: 1.5, dirt: 1 },
-        objects: { watchtower: 4, castle: 2.5, fence: 4, spotlight: 2, stone: 1.5, lamp: 1, house: 0.8 },
+        objects: { watchtower: 4, castle: 2.5, spotlight: 2, stone: 1.5, lamp: 1, house: 0.8 },
       },
       ruins: {
         terrain: { grass: 2.5, stone: 2.5, dirt: 2, cliff: 1, path: 0.8, prairie: 0.5 },
@@ -815,7 +815,73 @@
       },
       harbor: {
         terrain: { sand: 3.5, grass: 2, path: 2, prairie: 1, stone: 0.8, dirt: 0.6 },
-        objects: { 'water-bridge': 3, bridge: 1.8, house: 2, lamp: 1.6, fence: 1.2, crop: 1, garden: 1, flower: 1, tree: 0.8 },
+        objects: { 'water-bridge': 3, bridge: 1.8, house: 2, lamp: 1.6, crop: 1, garden: 1, flower: 1, tree: 0.8 },
+      },
+    };
+    const economyResourceIds = ['food', 'materials', 'commerce', 'defense', 'charm'];
+    const economyResourceBands = {
+      default: {
+        food: { min: 2, max: 7 },
+        materials: { min: 2, max: 7 },
+        commerce: { min: 1, max: 5 },
+        defense: { min: 1, max: 5 },
+        charm: { min: 2, max: 7 },
+      },
+      pastoral: {
+        food: { min: 5, max: 10 },
+        materials: { min: 2, max: 5 },
+        commerce: { min: 1, max: 4 },
+        defense: { min: 1, max: 4 },
+        charm: { min: 3, max: 8 },
+      },
+      forest: {
+        food: { min: 2, max: 6 },
+        materials: { min: 4, max: 9 },
+        commerce: { min: 1, max: 4 },
+        defense: { min: 1, max: 4 },
+        charm: { min: 5, max: 10 },
+      },
+      quarry: {
+        food: { min: 2, max: 6 },
+        materials: { min: 6, max: 11 },
+        commerce: { min: 1, max: 4 },
+        defense: { min: 2, max: 6 },
+        charm: { min: 2, max: 6 },
+      },
+      river: {
+        food: { min: 4, max: 9 },
+        materials: { min: 2, max: 6 },
+        commerce: { min: 2, max: 6 },
+        defense: { min: 1, max: 4 },
+        charm: { min: 4, max: 9 },
+      },
+      village: {
+        food: { min: 3, max: 7 },
+        materials: { min: 2, max: 6 },
+        commerce: { min: 4, max: 9 },
+        defense: { min: 1, max: 5 },
+        charm: { min: 3, max: 7 },
+      },
+      fortress: {
+        food: { min: 2, max: 6 },
+        materials: { min: 3, max: 8 },
+        commerce: { min: 1, max: 5 },
+        defense: { min: 5, max: 10 },
+        charm: { min: 2, max: 6 },
+      },
+      ruins: {
+        food: { min: 2, max: 6 },
+        materials: { min: 3, max: 8 },
+        commerce: { min: 1, max: 4 },
+        defense: { min: 2, max: 6 },
+        charm: { min: 5, max: 10 },
+      },
+      harbor: {
+        food: { min: 3, max: 7 },
+        materials: { min: 2, max: 6 },
+        commerce: { min: 4, max: 9 },
+        defense: { min: 1, max: 5 },
+        charm: { min: 4, max: 9 },
       },
     };
 
@@ -952,10 +1018,15 @@
     }
     function clearMotifCell(cells, index, terrain) {
       if (!cells[index]) return;
+      if (isProtectedEconomyCell(cells[index])) return false;
       cells[index].terrain = terrain;
       cells[index].object = null;
       cells[index].footprint = null;
       cells[index].footprintParent = null;
+      cells[index].fenceEdges = null;
+      cells[index].fenceGatePath = false;
+      cells[index].fenceGateSides = null;
+      return true;
     }
     function paintTerrainPatch(cells, centerIndex, terrain, count, options = {}) {
       if (centerIndex < 0 || !cells[centerIndex]) return [];
@@ -968,7 +1039,7 @@
         if (seen.has(index) || !cells[index]) continue;
         seen.add(index);
         if (!options.includeWater && cells[index].terrain === 'water' && terrain !== 'water') continue;
-        clearMotifCell(cells, index, terrain);
+        if (!clearMotifCell(cells, index, terrain)) continue;
         painted.push(index);
         for (const next of neighbors(index, options.diagonal !== false)) {
           if (!seen.has(next) && rng() < (options.spread == null ? 0.68 : options.spread)) queue.push(next);
@@ -984,7 +1055,7 @@
       let direction = options.direction || null;
       for (let step = 0; step < count && index >= 0 && cells[index]; step++) {
         if (!options.includeWater && cells[index].terrain === 'water' && terrain !== 'water') break;
-        clearMotifCell(cells, index, terrain);
+        if (!clearMotifCell(cells, index, terrain)) break;
         painted.push(index);
         used.add(index);
         const { x, y } = xyFor(index);
@@ -1290,6 +1361,35 @@
     function isScatterAccentObjectId(objectId) {
       return ['tree', 'garden', 'stone', 'berries', 'flower', 'lamp', 'spotlight'].indexOf(objectId) !== -1;
     }
+    function isProtectedEconomyCell(cell) {
+      return !!(cell && /^economy-/.test(String(cell.motif || '')));
+    }
+    function markEconomyCell(cells, index, resourceId) {
+      if (cells[index]) cells[index].motif = 'economy-' + resourceId;
+    }
+    function economyBandFor(resourceId) {
+      const byArchetype = economyResourceBands[archetypeKey] || economyResourceBands.default;
+      return (byArchetype && byArchetype[resourceId]) || economyResourceBands.default[resourceId] || { min: 1, max: 4 };
+    }
+    function economyTargetFor(resourceId) {
+      const band = economyBandFor(resourceId);
+      const min = Math.max(0, Math.floor(band.min || 0));
+      const max = Math.max(min, Math.floor(band.max || min));
+      const targetRng = islandRngFromSeed(effectiveSeed + '|economy-target|' + archetypeKey + '|' + resourceId);
+      return min + Math.floor(targetRng() * (max - min + 1));
+    }
+    function objectContributesToResource(objectId, resourceId) {
+      if (!objectId || /-wing$/.test(objectId)) return false;
+      if (resourceId === 'food') return isCropObjectId(objectId) || isAnimalObjectId(objectId) || objectId === 'berries';
+      if (resourceId === 'materials') return objectId === 'tree' || objectId === 'stone' || objectId === 'ore' || objectId === 'crystal' || objectId === 'logs';
+      if (resourceId === 'commerce') return objectId === 'house' || objectId === 'manor' || objectId === 'lamp' || objectId === 'bridge' || objectId === 'water-bridge';
+      if (resourceId === 'defense') return isTowerObjectId(objectId) || objectId === 'spotlight' || objectId === 'castle';
+      if (resourceId === 'charm') return objectId === 'flower' || objectId === 'berries' || objectId === 'tree' || objectId === 'crystal' || objectId === 'ruins' || objectId === 'totem';
+      return false;
+    }
+    function economyResourceCount(cells, resourceId) {
+      return cells.reduce((count, cell) => count + (objectContributesToResource(cell && cell.object, resourceId) ? 1 : 0), 0);
+    }
     function placementHasIndex(placement, index) {
       return placement && placement.indexOf(index) !== -1;
     }
@@ -1310,7 +1410,7 @@
     }
     function canUseCellForPlacement(cells, index, objectId) {
       const cell = cells[index];
-      return cell && !cell.object && objectAllowed(objectId, cell.terrain);
+      return cell && !cell.fenceGatePath && !cell.object && objectAllowed(objectId, cell.terrain);
     }
     function placementIndexesFor(cells, index, objectId) {
       const object = objectById.get(objectId);
@@ -1404,9 +1504,202 @@
       let placed = 0;
       for (const index of ring) {
         if (placed >= limit) break;
-        if (forcePlaceObject(cells, index, 'fence', preferredTerrain || (cells[index].terrain === 'path' ? 'grass' : cells[index].terrain))) placed++;
+        if (forcePlaceObject(cells, index, 'spotlight', preferredTerrain || (cells[index].terrain === 'path' ? 'path' : 'stone'))) placed++;
       }
       return placed;
+    }
+    const generatedFenceSides = ['n', 'e', 's', 'w'];
+    function neighborIndexForFenceSide(index, side) {
+      const { x, y } = xyFor(index);
+      if (side === 'n') return inBounds(x, y - 1) ? indexFor(x, y - 1) : -1;
+      if (side === 's') return inBounds(x, y + 1) ? indexFor(x, y + 1) : -1;
+      if (side === 'e') return inBounds(x + 1, y) ? indexFor(x + 1, y) : -1;
+      if (side === 'w') return inBounds(x - 1, y) ? indexFor(x - 1, y) : -1;
+      return -1;
+    }
+    function addGeneratedFenceEdge(cells, index, side, level, style) {
+      if (!cells[index] || generatedFenceSides.indexOf(side) === -1) return false;
+      if (!cells[index].fenceEdges) cells[index].fenceEdges = [];
+      const fenceStyle = style === 'garden' || style === 'gate' ? style : 'wood';
+      const fenceLevel = Math.max(1, Math.min(8, level || 1));
+      const existing = cells[index].fenceEdges.find(edge => edge.side === side && edge.style === fenceStyle);
+      if (existing) {
+        existing.level = Math.max(existing.level || 1, fenceLevel);
+        return false;
+      }
+      cells[index].fenceEdges.push({ side, level: fenceLevel, style: fenceStyle });
+      return true;
+    }
+    function generatedGateLevelForCell(cell) {
+      return isAnimalObjectId(cell && cell.object) ? 2 : 1;
+    }
+    function addGeneratedFenceGate(cells, index, side, level) {
+      if (!cells[index]) return false;
+      removeGeneratedFenceEdgeSide(cells[index], side);
+      return addGeneratedFenceEdge(cells, index, side, level || generatedGateLevelForCell(cells[index]), 'gate');
+    }
+    function hasGeneratedFenceEdges(cell) {
+      return !!(cell && Array.isArray(cell.fenceEdges) && cell.fenceEdges.length);
+    }
+    function hasGeneratedFenceEdgeSide(cell, side) {
+      return !!(cell && Array.isArray(cell.fenceEdges) && cell.fenceEdges.some(edge => edge && edge.side === side));
+    }
+    function removeGeneratedFenceEdgeSide(cell, side) {
+      if (!cell || !Array.isArray(cell.fenceEdges)) return false;
+      const before = cell.fenceEdges.length;
+      cell.fenceEdges = cell.fenceEdges.filter(edge => !(edge && edge.side === side));
+      return cell.fenceEdges.length !== before;
+    }
+    function regionBoundaryFenceEdges(cells, indexes) {
+      const region = new Set(indexes.filter(index => cells[index] && cells[index].terrain !== 'water'));
+      const edges = [];
+      for (const index of region) {
+        for (const side of generatedFenceSides) {
+          const neighbor = neighborIndexForFenceSide(index, side);
+          if (neighbor < 0 || !region.has(neighbor)) edges.push({ index, side, neighbor });
+        }
+      }
+      return edges;
+    }
+    function chooseGeneratedGateEdge(cells, edges) {
+      const candidates = edges
+        .filter(edge => edge.neighbor >= 0 && cells[edge.neighbor] && cells[edge.neighbor].terrain !== 'water' && !cells[edge.neighbor].object && !isProtectedEconomyCell(cells[edge.neighbor]))
+        .map(edge => {
+          const neighbor = cells[edge.neighbor];
+          const pathScore = neighbor.terrain === 'path' ? -10 : 0;
+          return Object.assign({ score: pathScore + distanceBetweenIndexes(edge.index, edge.neighbor) + cellRand(edge.index, 'fence-gate-' + edge.side) * 0.4 }, edge);
+        })
+        .sort((a, b) => a.score - b.score);
+      return candidates.length ? candidates[0] : null;
+    }
+    function applyGeneratedFenceEnclosure(cells, indexes, opts = {}) {
+      const region = indexes.filter(index => cells[index] && cells[index].terrain !== 'water' && cells[index].object);
+      if (!region.length) return 0;
+      const edges = regionBoundaryFenceEdges(cells, region);
+      const gate = chooseGeneratedGateEdge(cells, edges);
+      if (gate && cells[gate.neighbor] && cells[gate.neighbor].terrain !== 'path') {
+        setFeatureTerrain(cells, gate.neighbor, 'path');
+      }
+      if (gate && cells[gate.neighbor]) {
+        cells[gate.neighbor].fenceGatePath = true;
+        if (!cells[gate.index].fenceGateSides) cells[gate.index].fenceGateSides = [];
+        if (cells[gate.index].fenceGateSides.indexOf(gate.side) === -1) cells[gate.index].fenceGateSides.push(gate.side);
+      }
+      let added = 0;
+      if (gate && addGeneratedFenceGate(cells, gate.index, gate.side, opts.level || 1)) added++;
+      for (const edge of edges) {
+        if (gate && edge.index === gate.index && edge.side === gate.side) continue;
+        if (addGeneratedFenceEdge(cells, edge.index, edge.side, opts.level || 1, opts.style || 'wood')) added++;
+      }
+      return added;
+    }
+    function repairGeneratedFenceGatePaths(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (!cell || !Array.isArray(cell.fenceGateSides)) continue;
+        for (const side of cell.fenceGateSides) {
+          const neighbor = neighborIndexForFenceSide(index, side);
+          if (neighbor < 0 || !cells[neighbor] || cells[neighbor].terrain === 'water') continue;
+          if (cells[neighbor].object && !isProtectedEconomyCell(cells[neighbor])) clearGeneratedObject(cells, neighbor);
+          if (!cells[neighbor].object && !isProtectedEconomyCell(cells[neighbor])) setFeatureTerrain(cells, neighbor, 'path');
+          cells[neighbor].fenceGatePath = true;
+          addGeneratedFenceGate(cells, index, side, generatedGateLevelForCell(cell));
+        }
+      }
+    }
+    function sameFenceResourceGroup(a, b) {
+      if (!a || !b) return false;
+      if (isCropObjectId(a.object) && isCropObjectId(b.object)) return true;
+      if (isAnimalObjectId(a.object) && isAnimalObjectId(b.object)) return true;
+      return false;
+    }
+    function repairGeneratedFenceOpenings(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        const cell = cells[index];
+        if (!cell || !hasGeneratedFenceEdges(cell)) continue;
+        if (!isCropObjectId(cell.object) && !isAnimalObjectId(cell.object)) continue;
+        for (const side of generatedFenceSides) {
+          if (hasGeneratedFenceEdgeSide(cell, side)) continue;
+          const neighbor = neighborIndexForFenceSide(index, side);
+          if (neighbor < 0 || !cells[neighbor] || cells[neighbor].terrain === 'water') continue;
+          if (sameFenceResourceGroup(cell, cells[neighbor])) continue;
+          if (isCropObjectId(cells[neighbor].object) || isAnimalObjectId(cells[neighbor].object)) {
+            addGeneratedFenceEdge(cells, index, side, isAnimalObjectId(cell.object) ? 2 : 1, isCropObjectId(cell.object) ? 'garden' : 'wood');
+            continue;
+          }
+          if (isProtectedEconomyCell(cells[neighbor])) {
+            addGeneratedFenceEdge(cells, index, side, isAnimalObjectId(cell.object) ? 2 : 1, isCropObjectId(cell.object) ? 'garden' : 'wood');
+            continue;
+          }
+          if (cells[neighbor].object && !isProtectedEconomyCell(cells[neighbor])) clearGeneratedObject(cells, neighbor);
+          if (!cells[neighbor].object && !isProtectedEconomyCell(cells[neighbor])) setFeatureTerrain(cells, neighbor, 'path');
+          cells[neighbor].fenceGatePath = true;
+          addGeneratedFenceGate(cells, index, side, generatedGateLevelForCell(cell));
+        }
+      }
+    }
+    function generatedResourceComponents(cells, predicate) {
+      const components = [];
+      const seen = new Set();
+      for (let index = 0; index < cells.length; index++) {
+        if (seen.has(index) || !predicate(cells[index]) || !hasGeneratedFenceEdges(cells[index])) continue;
+        const component = [];
+        const queue = [index];
+        seen.add(index);
+        while (queue.length) {
+          const current = queue.shift();
+          component.push(current);
+          for (const next of neighbors(current)) {
+            if (seen.has(next) || !predicate(cells[next]) || !hasGeneratedFenceEdges(cells[next])) continue;
+            seen.add(next);
+            queue.push(next);
+          }
+        }
+        components.push(component);
+      }
+      return components;
+    }
+    function componentFenceBoundaryEdges(cells, component, predicate) {
+      const edges = [];
+      for (const index of component) {
+        for (const side of generatedFenceSides) {
+          const neighbor = neighborIndexForFenceSide(index, side);
+          if (neighbor >= 0 && predicate(cells[neighbor])) continue;
+          edges.push({ index, side, neighbor });
+        }
+      }
+      return edges;
+    }
+    function ensureGateForGeneratedComponent(cells, component, predicate, opts) {
+      const edges = componentFenceBoundaryEdges(cells, component, predicate);
+      const existingPathGate = edges.find(edge => !hasGeneratedFenceEdgeSide(cells[edge.index], edge.side) && edge.neighbor >= 0 && cells[edge.neighbor] && cells[edge.neighbor].terrain === 'path');
+      if (existingPathGate) {
+        addGeneratedFenceGate(cells, existingPathGate.index, existingPathGate.side, opts && opts.level);
+        return;
+      }
+      const candidates = edges
+        .filter(edge => edge.neighbor >= 0 && cells[edge.neighbor] && cells[edge.neighbor].terrain !== 'water' && !isProtectedEconomyCell(cells[edge.neighbor]) && !isCropObjectId(cells[edge.neighbor].object) && !isAnimalObjectId(cells[edge.neighbor].object) && !predicate(cells[edge.neighbor]))
+        .map(edge => {
+          const neighbor = cells[edge.neighbor];
+          const pathScore = neighbor.terrain === 'path' ? -12 : 0;
+          const objectScore = neighbor.object ? 4 : 0;
+          return Object.assign({ score: pathScore + objectScore + cellRand(edge.index, 'component-gate-' + edge.side) * 0.3 }, edge);
+        })
+        .sort((a, b) => a.score - b.score);
+      const gate = candidates[0];
+      if (!gate) return;
+      if (cells[gate.neighbor].object) clearGeneratedObject(cells, gate.neighbor);
+      setFeatureTerrain(cells, gate.neighbor, 'path');
+      cells[gate.neighbor].fenceGatePath = true;
+      addGeneratedFenceGate(cells, gate.index, gate.side, opts && opts.level);
+    }
+    function ensureGeneratedResourceComponentGates(cells) {
+      for (const component of generatedResourceComponents(cells, cell => isCropObjectId(cell && cell.object))) {
+        ensureGateForGeneratedComponent(cells, component, cell => isCropObjectId(cell && cell.object), { level: 1, style: 'garden' });
+      }
+      for (const component of generatedResourceComponents(cells, cell => isAnimalObjectId(cell && cell.object))) {
+        ensureGateForGeneratedComponent(cells, component, cell => isAnimalObjectId(cell && cell.object), { level: 2, style: 'wood' });
+      }
     }
     function towerCountForSeed() {
       const roll = islandRngFromSeed(effectiveSeed + '|corner-tower-count')();
@@ -1452,11 +1745,32 @@
         .sort((a, b) => a.score - b.score)
         .map(entry => entry.index);
     }
+    function towerDoorSideTowardPoint(index, target) {
+      const point = xyFor(index);
+      const dx = target.x - point.x;
+      const dy = target.y - point.y;
+      if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'e' : 'w';
+      return dy >= 0 ? 's' : 'n';
+    }
+    function towerDoorTarget() {
+      const center = (size - 1) / 2;
+      return { x: center, y: center };
+    }
+    function towerDoorSideFor(cells, index) {
+      return towerDoorSideTowardPoint(index, towerDoorTarget());
+    }
+    function towerRotationYForDoorSide(side) {
+      if (side === 'n') return Math.PI;
+      if (side === 'e') return Math.PI / 2;
+      if (side === 'w') return -Math.PI / 2;
+      return 0;
+    }
     function placeTowerNearCorner(cells, corner) {
       for (const index of towerCandidatesForCorner(cells, corner)) {
         if (!spacingAllowsBuilding(cells, [index], 'watchtower')) continue;
         if (forcePlaceObject(cells, index, 'watchtower', cells[index].terrain === 'path' ? 'path' : 'stone')) {
           cells[index].motif = 'corner-tower';
+          cells[index].doorSide = towerDoorSideFor(cells, index);
           return true;
         }
       }
@@ -1470,6 +1784,12 @@
       for (const corner of corners) {
         if (placed >= count) break;
         if (placeTowerNearCorner(cells, corner)) placed++;
+      }
+    }
+    function orientGeneratedTowers(cells) {
+      for (let index = 0; index < cells.length; index++) {
+        if (!cells[index] || !isTowerObjectId(cells[index].object)) continue;
+        cells[index].doorSide = towerDoorSideFor(cells, index);
       }
     }
     function cropPlotAnchor(cells) {
@@ -1493,15 +1813,18 @@
       const plot = featureIndexesNear(anchor, 1)
         .filter(index => cells[index] && cells[index].terrain !== 'water')
         .slice(0, Math.max(4, Math.min(6, Math.ceil(size * 0.55))));
+      const placedPlot = [];
       for (let i = 0; i < plot.length; i++) {
         const index = plot[i];
-        setFeatureTerrain(cells, index, 'dirt');
-        forcePlaceObject(cells, index, cropIds[i % cropIds.length], 'dirt');
-        cells[index].motif = 'crop-plot';
+        if (!setFeatureTerrain(cells, index, 'dirt')) continue;
+        if (forcePlaceObject(cells, index, cropIds[i % cropIds.length], 'dirt')) {
+          cells[index].motif = 'crop-plot';
+          placedPlot.push(index);
+        }
       }
-      placeFenceRing(cells, anchor, 2, Math.max(4, Math.min(8, size)), 'grass');
       connectFeatureToPath(cells, anchor);
-      return plot.length > 0;
+      applyGeneratedFenceEnclosure(cells, placedPlot, { level: 1, style: 'garden' });
+      return placedPlot.length > 0;
     }
     function animalPenAnchor(cells) {
       return nearestFeatureIndex(
@@ -1518,15 +1841,31 @@
       const herd = featureIndexesNear(anchor, 1)
         .filter(index => cells[index] && cells[index].terrain !== 'water')
         .slice(0, Math.max(3, Math.min(5, Math.ceil(size * 0.42))));
+      const placedHerd = [];
+      const targetHerd = Math.max(3, Math.min(5, Math.ceil(size * 0.42)));
       for (let i = 0; i < herd.length; i++) {
         const index = herd[i];
-        setFeatureTerrain(cells, index, 'prairie');
-        forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie');
-        cells[index].motif = 'animal-pen';
+        if (!setFeatureTerrain(cells, index, 'prairie')) continue;
+        if (forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie')) {
+          cells[index].motif = 'animal-pen';
+          placedHerd.push(index);
+        }
       }
-      placeFenceRing(cells, anchor, 2, Math.max(5, Math.min(9, size + 1)), 'grass');
+      if (placedHerd.length < targetHerd) {
+        const extraHerd = featureIndexesNear(anchor, Math.max(2, Math.floor(size * 0.22)))
+          .filter(index => cells[index] && cells[index].terrain !== 'water' && !cells[index].object && !cells[index].fenceGatePath && !isProtectedEconomyCell(cells[index]));
+        for (const index of extraHerd) {
+          if (placedHerd.length >= targetHerd) break;
+          if (!setFeatureTerrain(cells, index, 'prairie')) continue;
+          if (forcePlaceObject(cells, index, placedHerd.length % 2 ? 'cow' : 'sheep', 'prairie')) {
+            cells[index].motif = 'animal-pen';
+            placedHerd.push(index);
+          }
+        }
+      }
       connectFeatureToPath(cells, anchor);
-      return herd.length > 0;
+      applyGeneratedFenceEnclosure(cells, placedHerd, { level: 2, style: 'wood' });
+      return placedHerd.length > 0;
     }
     function offsetIndex(index, dx, dy) {
       const point = xyFor(index);
@@ -1599,9 +1938,8 @@
         .slice(0, Math.max(5, Math.floor(size * 0.8)));
       for (let i = 0; i < grove.length; i++) {
         const index = grove[i];
-        setFeatureTerrain(cells, index, i % 4 === 0 ? 'dirt' : 'grass');
-        forcePlaceObject(cells, index, i % 4 === 0 ? 'berries' : i % 5 === 0 ? 'flower' : 'tree', cells[index].terrain);
-        cells[index].motif = 'grove';
+        if (!setFeatureTerrain(cells, index, i % 4 === 0 ? 'dirt' : 'grass')) continue;
+        if (forcePlaceObject(cells, index, i % 4 === 0 ? 'berries' : i % 5 === 0 ? 'flower' : 'tree', cells[index].terrain)) cells[index].motif = 'grove';
       }
       connectFeatureToPath(cells, anchor);
       return grove.length > 0;
@@ -1614,8 +1952,7 @@
       const seam = paintTerrainWalk(cells, anchor, rng() < 0.45 ? 'cliff' : 'stone', Math.max(5, Math.floor(size * 0.78)), { turnChance: 0.34 });
       for (let i = 0; i < seam.length; i++) {
         const index = seam[i];
-        forcePlaceObject(cells, index, i % 4 === 0 ? 'crystal' : i % 3 === 0 ? 'ore' : 'stone', cells[index].terrain);
-        cells[index].motif = 'quarry-seam';
+        if (forcePlaceObject(cells, index, i % 4 === 0 ? 'crystal' : i % 3 === 0 ? 'ore' : 'stone', cells[index].terrain)) cells[index].motif = 'quarry-seam';
       }
       connectFeatureToPath(cells, anchor);
       return seam.length > 0;
@@ -1628,9 +1965,8 @@
       const site = featureIndexesNear(anchor, 1).filter(index => cells[index] && cells[index].terrain !== 'water').slice(0, Math.max(5, Math.floor(size * 0.65)));
       for (let i = 0; i < site.length; i++) {
         const index = site[i];
-        setFeatureTerrain(cells, index, i % 3 === 0 ? 'stone' : 'dirt');
-        forcePlaceObject(cells, index, i % 3 === 0 ? 'totem' : i % 3 === 1 ? 'ruins' : 'crystal', cells[index].terrain);
-        cells[index].motif = 'relic-site';
+        if (!setFeatureTerrain(cells, index, i % 3 === 0 ? 'stone' : 'dirt')) continue;
+        if (forcePlaceObject(cells, index, i % 3 === 0 ? 'totem' : i % 3 === 1 ? 'ruins' : 'crystal', cells[index].terrain)) cells[index].motif = 'relic-site';
       }
       connectFeatureToPath(cells, anchor);
       return site.length > 0;
@@ -1641,9 +1977,206 @@
         if (!cell || (cell.object !== 'house' && cell.object !== 'manor')) continue;
         if (neighbors(index).some(next => cells[next] && cells[next].terrain === 'path')) continue;
         connectFeatureToPath(cells, index);
+        if (!neighbors(index).some(next => cells[next] && cells[next].terrain === 'path')) cell.terrain = 'path';
       }
     }
-    function applyResourceMotifPass(cells) {
+    function economyTargetPoint(resourceId) {
+      const center = (size - 1) / 2;
+      if (resourceId === 'food') {
+        if (archetypeKey === 'quarry' || archetypeKey === 'fortress') return { x: size * 0.28, y: size * 0.68 };
+        if (archetypeKey === 'river' || archetypeKey === 'harbor') return { x: size * 0.38, y: size * 0.58 };
+        return { x: size * 0.34, y: size * 0.62 };
+      }
+      if (resourceId === 'materials') {
+        if (archetypeKey === 'forest') return { x: size * 0.25, y: size * 0.28 };
+        return { x: size * 0.68, y: size * 0.35 };
+      }
+      if (resourceId === 'commerce') return { x: center, y: center };
+      if (resourceId === 'defense') return { x: size * 0.78, y: size * 0.24 };
+      if (resourceId === 'charm') return { x: size * 0.28, y: size * 0.32 };
+      return { x: center, y: center };
+    }
+    function economyAnchorFor(cells, resourceId) {
+      const target = economyTargetPoint(resourceId);
+      return nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water' && !isProtectedEconomyCell(cell), target.x, target.y);
+    }
+    function nearbyHabitationIndex(cells, fromIndex, distance) {
+      let best = -1;
+      let bestScore = Infinity;
+      for (const index of featureIndexesNear(fromIndex, distance)) {
+        const objectId = cells[index] && cells[index].object;
+        if (objectId !== 'house' && objectId !== 'manor') continue;
+        const score = distanceBetweenIndexes(fromIndex, index) + cellRand(index, 'economy-home-near') * 0.2;
+        if (score < bestScore) {
+          best = index;
+          bestScore = score;
+        }
+      }
+      return best;
+    }
+    function ensureEconomyHomeNear(cells, anchor) {
+      if (anchor < 0 || !cells[anchor]) return -1;
+      const existing = nearbyHabitationIndex(cells, anchor, 3);
+      if (existing >= 0) return existing;
+      const candidates = featureIndexesNear(anchor, Math.max(2, Math.floor(size * 0.18)))
+        .filter(index => cells[index] && cells[index].terrain !== 'water' && !cells[index].object && !isProtectedEconomyCell(cells[index]))
+        .sort((a, b) => distanceBetweenIndexes(anchor, a) - distanceBetweenIndexes(anchor, b) + cellRand(a, 'economy-home') * 0.2);
+      for (const index of candidates) {
+        if (forcePlaceObject(cells, index, 'house', cells[index].terrain === 'path' ? 'path' : 'grass')) {
+          markEconomyCell(cells, index, 'commerce');
+          connectFeatureToPath(cells, index);
+          return index;
+        }
+      }
+      return -1;
+    }
+    function economyPlacementCandidates(cells, anchor, radius, options = {}) {
+      const preferredHome = options.homeIndex == null ? -1 : options.homeIndex;
+      return featureIndexesNear(anchor, radius)
+        .filter(index => {
+          const cell = cells[index];
+          if (!cell || cell.terrain === 'water' || cell.object || isProtectedEconomyCell(cell)) return false;
+          if (preferredHome >= 0 && options.nearHome !== false && distanceBetweenIndexes(index, preferredHome) > (options.homeDistance || 3)) return false;
+          return true;
+        })
+        .sort((a, b) => {
+          const homeBiasA = preferredHome >= 0 ? distanceBetweenIndexes(a, preferredHome) : 0;
+          const homeBiasB = preferredHome >= 0 ? distanceBetweenIndexes(b, preferredHome) : 0;
+          return homeBiasA - homeBiasB + distanceBetweenIndexes(a, anchor) - distanceBetweenIndexes(b, anchor) + cellRand(a, 'economy-candidate') * 0.2;
+        });
+    }
+    function placeFoodEconomy(cells, target) {
+      let need = Math.max(0, target - economyResourceCount(cells, 'food'));
+      if (!need) return 0;
+      const anchor = cropPlotAnchor(cells);
+      if (anchor < 0) return 0;
+      const home = ensureEconomyHomeNear(cells, anchor);
+      const openHomeNeighbor = home >= 0 ? openNeighborForPath(cells, home) : -1;
+      const plotAnchor = openHomeNeighbor >= 0 ? openHomeNeighbor : anchor;
+      const cropIds = archetypeKey === 'pastoral'
+        ? ['wheat', 'corn', 'crop', 'sunflower', 'pumpkin']
+        : archetypeKey === 'river'
+          ? ['crop', 'wheat', 'carrot', 'flower']
+          : ['crop', 'wheat', 'corn', 'pumpkin', 'carrot'];
+      let placed = 0;
+      const placedFood = [];
+      for (const index of economyPlacementCandidates(cells, plotAnchor, Math.max(2, Math.floor(size * 0.2)), { homeIndex: home, homeDistance: 3 })) {
+        if (placed >= need) break;
+        if (!setFeatureTerrain(cells, index, 'dirt')) continue;
+        if (!forcePlaceObject(cells, index, cropIds[placed % cropIds.length], 'dirt')) continue;
+        markEconomyCell(cells, index, 'food');
+        placedFood.push(index);
+        placed++;
+      }
+      if (placed > 0) {
+        connectFeatureToPath(cells, home >= 0 ? home : plotAnchor);
+        applyGeneratedFenceEnclosure(cells, placedFood, { level: 1, style: 'garden' });
+      }
+      return placed;
+    }
+    function placeMaterialsEconomy(cells, target) {
+      let need = Math.max(0, target - economyResourceCount(cells, 'materials'));
+      if (!need) return 0;
+      const anchor = economyAnchorFor(cells, 'materials');
+      if (anchor < 0) return 0;
+      const rocky = archetypeKey === 'quarry' || archetypeKey === 'fortress' || archetypeKey === 'ruins';
+      const materialIds = rocky ? ['stone', 'ore', 'crystal', 'stone'] : ['tree', 'tree', 'berries', 'stone'];
+      let placed = 0;
+      for (const index of economyPlacementCandidates(cells, anchor, Math.max(2, Math.floor(size * 0.22)), { nearHome: false })) {
+        if (placed >= need) break;
+        const objectId = materialIds[placed % materialIds.length];
+        const terrain = rocky || objectId === 'stone' || objectId === 'ore' || objectId === 'crystal' ? 'stone' : 'grass';
+        if (!setFeatureTerrain(cells, index, terrain)) continue;
+        if (!forcePlaceObject(cells, index, objectId, terrain)) continue;
+        markEconomyCell(cells, index, 'materials');
+        placed++;
+      }
+      if (placed > 0) connectFeatureToPath(cells, anchor);
+      return placed;
+    }
+    function placeCommerceEconomy(cells, target) {
+      let need = Math.max(0, target - economyResourceCount(cells, 'commerce'));
+      if (!need) return 0;
+      const anchor = economyAnchorFor(cells, 'commerce');
+      if (anchor < 0) return 0;
+      let placed = 0;
+      const paths = featureIndexesNear(anchor, Math.max(2, Math.floor(size * 0.22)))
+        .filter(index => cells[index] && cells[index].terrain === 'path' && !cells[index].object && !isProtectedEconomyCell(cells[index]));
+      for (const index of paths) {
+        if (placed >= need) break;
+        if (!forcePlaceObject(cells, index, 'lamp', 'path')) continue;
+        markEconomyCell(cells, index, 'commerce');
+        placed++;
+      }
+      need = Math.max(0, target - economyResourceCount(cells, 'commerce'));
+      let placedHouses = 0;
+      for (const index of economyPlacementCandidates(cells, anchor, Math.max(2, Math.floor(size * 0.24)), { nearHome: false })) {
+        if (placedHouses >= need) break;
+        if (!forcePlaceObject(cells, index, 'house', cells[index].terrain === 'path' ? 'path' : 'grass')) continue;
+        markEconomyCell(cells, index, 'commerce');
+        connectFeatureToPath(cells, index);
+        placedHouses++;
+      }
+      return placed + placedHouses;
+    }
+    function placeDefenseEconomy(cells, target) {
+      let need = Math.max(0, target - economyResourceCount(cells, 'defense'));
+      if (!need) return 0;
+      const anchor = economyAnchorFor(cells, 'defense');
+      if (anchor < 0) return 0;
+      let placed = 0;
+      for (const index of economyPlacementCandidates(cells, anchor, Math.max(2, Math.floor(size * 0.26)), { nearHome: false })) {
+        if (placed >= need) break;
+        const terrain = cells[index].terrain === 'path' ? 'path' : 'stone';
+        if (!forcePlaceObject(cells, index, 'spotlight', terrain)) continue;
+        markEconomyCell(cells, index, 'defense');
+        placed++;
+      }
+      return placed;
+    }
+    function placeCharmEconomy(cells, target) {
+      let need = Math.max(0, target - economyResourceCount(cells, 'charm'));
+      if (!need) return 0;
+      const anchor = economyAnchorFor(cells, 'charm');
+      if (anchor < 0) return 0;
+      const charmIds = archetypeKey === 'quarry' || archetypeKey === 'fortress'
+        ? ['flower', 'crystal', 'flower', 'tree']
+        : archetypeKey === 'ruins'
+          ? ['flower', 'totem', 'berries', 'tree']
+          : ['flower', 'berries', 'tree', 'flower'];
+      let placed = 0;
+      for (const index of economyPlacementCandidates(cells, anchor, Math.max(2, Math.floor(size * 0.24)), { nearHome: false })) {
+        if (placed >= need) break;
+        const objectId = charmIds[placed % charmIds.length];
+        const terrain = objectId === 'crystal' || objectId === 'totem' ? 'stone' : 'grass';
+        if (!setFeatureTerrain(cells, index, terrain)) continue;
+        if (!forcePlaceObject(cells, index, objectId, terrain)) continue;
+        markEconomyCell(cells, index, 'charm');
+        placed++;
+      }
+      return placed;
+    }
+    function applyEconomyResourcePass(cells, resourceId, target) {
+      if (resourceId === 'food') return placeFoodEconomy(cells, target);
+      if (resourceId === 'materials') return placeMaterialsEconomy(cells, target);
+      if (resourceId === 'commerce') return placeCommerceEconomy(cells, target);
+      if (resourceId === 'defense') return placeDefenseEconomy(cells, target);
+      if (resourceId === 'charm') return placeCharmEconomy(cells, target);
+      return 0;
+    }
+    function applyEconomyViabilityPass(cells) {
+      for (const resourceId of economyResourceIds) {
+        applyEconomyResourcePass(cells, resourceId, economyTargetFor(resourceId));
+      }
+      connectBuildingsToPaths(cells);
+    }
+    function validateEconomyFloors(cells) {
+      for (const resourceId of economyResourceIds) {
+        applyEconomyResourcePass(cells, resourceId, economyBandFor(resourceId).min);
+      }
+      connectBuildingsToPaths(cells);
+    }
+    function applyArchetypeResourcePolish(cells) {
       applyCornerTowerMotif(cells);
       applySettlementBlockMotif(cells);
       if (['pastoral', 'river', 'village', 'harbor'].indexOf(archetypeKey) !== -1) applyCropPlotMotif(cells);
@@ -1719,9 +2252,14 @@
     }
     function clearGeneratedObject(cells, index) {
       if (!cells[index]) return;
+      if (isProtectedEconomyCell(cells[index])) return false;
       cells[index].object = null;
       cells[index].footprint = null;
       cells[index].footprintParent = null;
+      cells[index].fenceEdges = null;
+      cells[index].fenceGatePath = false;
+      cells[index].fenceGateSides = null;
+      return true;
     }
     function placeRoadBridgeAt(cells, index) {
       if (!waterRoadBridgeAxis(cells, index)) return false;
@@ -1753,7 +2291,7 @@
       if (!plan) return false;
       return plan.water.concat(plan.path).every(index => {
         const objectId = cells[index] && cells[index].object;
-        return cells[index] && (!objectId || (!isBuildingObjectId(objectId) && objectId !== 'bridge' && objectId !== 'water-bridge'));
+        return cells[index] && !isProtectedEconomyCell(cells[index]) && (!objectId || (!isBuildingObjectId(objectId) && objectId !== 'bridge' && objectId !== 'water-bridge'));
       });
     }
     function ensureRoadBridgeCrossing(cells) {
@@ -1782,6 +2320,48 @@
           for (const waterIndex of plan.water) clearMotifCell(cells, waterIndex, 'water');
           for (const pathIndex of plan.path) setFeatureTerrain(cells, pathIndex, 'path');
           return placeRoadBridgeAt(cells, index);
+        }
+      }
+      return false;
+    }
+    function forceClearBridgePlanCell(cells, index, terrain) {
+      if (!cells[index]) return false;
+      const objectId = cells[index].object;
+      if (objectId && (isBuildingObjectId(objectId) || objectId === 'bridge' || objectId === 'water-bridge')) return false;
+      cells[index].terrain = terrain;
+      cells[index].object = null;
+      cells[index].footprint = null;
+      cells[index].footprintParent = null;
+      cells[index].fenceEdges = null;
+      cells[index].fenceGatePath = false;
+      cells[index].fenceGateSides = null;
+      cells[index].motif = null;
+      return true;
+    }
+    function forceRoadBridgeCrossing(cells) {
+      if (archetypeKey !== 'river' && archetypeKey !== 'harbor') return false;
+      if (cells.some(cell => cell && cell.object === 'water-bridge')) return true;
+      const center = (size - 1) / 2;
+      const candidates = cells
+        .map((cell, index) => ({ cell, index, point: xyFor(index) }))
+        .filter(({ cell, point }) => cell && point.x > 0 && point.y > 0 && point.x < size - 1 && point.y < size - 1)
+        .sort((a, b) => {
+          const da = Math.abs(a.point.x - center) + Math.abs(a.point.y - center) + cellRand(a.index, 'force-bridge') * 0.25;
+          const db = Math.abs(b.point.x - center) + Math.abs(b.point.y - center) + cellRand(b.index, 'force-bridge') * 0.25;
+          return da - db;
+        });
+      for (const { index } of candidates) {
+        for (const axis of ['x', 'z']) {
+          const plan = bridgeChannelPlan(index, axis);
+          if (!plan) continue;
+          const all = plan.water.concat(plan.path);
+          if (all.some(cellIndex => {
+            const objectId = cells[cellIndex] && cells[cellIndex].object;
+            return !cells[cellIndex] || (objectId && (isBuildingObjectId(objectId) || objectId === 'bridge' || objectId === 'water-bridge'));
+          })) continue;
+          for (const waterIndex of plan.water) forceClearBridgePlanCell(cells, waterIndex, 'water');
+          for (const pathIndex of plan.path) forceClearBridgePlanCell(cells, pathIndex, 'path');
+          if (placeRoadBridgeAt(cells, index)) return true;
         }
       }
       return false;
@@ -1839,10 +2419,15 @@
     }
     function setFeatureTerrain(cells, index, terrain) {
       if (!cells[index]) return;
+      if (isProtectedEconomyCell(cells[index])) return false;
       cells[index].terrain = terrain;
       cells[index].object = null;
       cells[index].footprint = null;
       cells[index].footprintParent = null;
+      cells[index].fenceEdges = null;
+      cells[index].fenceGatePath = false;
+      cells[index].fenceGateSides = null;
+      return true;
     }
     function forcePlaceObject(cells, index, objectId, preferredTerrain) {
       const object = objectById.get(objectId);
@@ -1856,10 +2441,14 @@
       const footprint = object.footprint || { w: 1, h: 1 };
       function prepare(cellIndex) {
         if (!cells[cellIndex]) return false;
+        if (isProtectedEconomyCell(cells[cellIndex])) return false;
         cells[cellIndex].terrain = terrain;
         cells[cellIndex].object = null;
         cells[cellIndex].footprint = null;
         cells[cellIndex].footprintParent = null;
+        cells[cellIndex].fenceEdges = null;
+        cells[cellIndex].fenceGatePath = false;
+        cells[cellIndex].fenceGateSides = null;
         return true;
       }
       if (footprint.w === 2 && footprint.h === 1) {
@@ -1870,12 +2459,13 @@
         ];
         for (const pair of pairs) {
           if (pair.some(cellIndex => cellIndex < 0 || !cells[cellIndex])) continue;
+          if (pair.some(cellIndex => isProtectedEconomyCell(cells[cellIndex]))) continue;
           pair.forEach(prepare);
           if (placeObjectAt(cells, index, objectId)) return true;
         }
         return false;
       }
-      prepare(index);
+      if (!prepare(index)) return false;
       return placeObjectAt(cells, index, objectId);
     }
     function carveFeaturePath(cells, startIndex, endIndex) {
@@ -1931,12 +2521,16 @@
         const meadow = featureIndexesNear(anchor, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(7, size));
         for (const index of meadow) setFeatureTerrain(cells, index, rng() < 0.68 ? 'prairie' : 'dirt');
         const cropIds = ['wheat', 'corn', 'crop', 'sunflower'];
-        meadow.slice(0, Math.max(3, Math.floor(size * 0.45))).forEach((index, i) => forcePlaceObject(cells, index, cropIds[i % cropIds.length], cells[index].terrain));
-        meadow.slice(Math.max(3, Math.floor(size * 0.45)), Math.max(6, Math.floor(size * 0.8))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie'));
-        const ring = featureRingIndexes(anchor, Math.min(broadRadius + 1, Math.max(2, Math.floor(size * 0.33))));
-        ring.slice(0, Math.max(4, size)).forEach(index => {
-          if (cells[index] && cells[index].terrain !== 'water') forcePlaceObject(cells, index, 'fence', cells[index].terrain === 'path' ? 'grass' : cells[index].terrain);
+        const cropIndexes = [];
+        const animalIndexes = [];
+        meadow.slice(0, Math.max(3, Math.floor(size * 0.45))).forEach((index, i) => {
+          if (forcePlaceObject(cells, index, cropIds[i % cropIds.length], cells[index].terrain)) cropIndexes.push(index);
         });
+        meadow.slice(Math.max(3, Math.floor(size * 0.45)), Math.max(6, Math.floor(size * 0.8))).forEach((index, i) => {
+          if (forcePlaceObject(cells, index, i % 2 ? 'cow' : 'sheep', 'prairie')) animalIndexes.push(index);
+        });
+        applyGeneratedFenceEnclosure(cells, cropIndexes, { level: 1, style: 'garden' });
+        applyGeneratedFenceEnclosure(cells, animalIndexes, { level: 2, style: 'wood' });
         const house = nearestFeatureIndex(cells, (cell, index) => cell && cell.terrain !== 'water' && meadow.indexOf(index) === -1, 1, centerTarget);
         if (house >= 0) {
           forcePlaceObject(cells, house, 'house', 'grass');
@@ -2026,7 +2620,7 @@
         keep.forEach(index => setFeatureTerrain(cells, index, rng() < 0.6 ? 'cliff' : 'stone'));
         keep.slice(0, 3).forEach((index, i) => forcePlaceObject(cells, index, i === 0 ? 'spotlight' : 'stone', cells[index].terrain));
         const wall = featureRingIndexes(anchor, Math.min(broadRadius, 3)).filter(index => cells[index] && cells[index].terrain !== 'water');
-        wall.slice(0, Math.max(8, size)).forEach((index, i) => forcePlaceObject(cells, index, i % 5 === 0 ? 'spotlight' : 'fence', i % 5 === 0 ? 'stone' : 'grass'));
+        wall.slice(0, Math.max(8, size)).forEach((index, i) => forcePlaceObject(cells, index, i % 5 === 0 ? 'spotlight' : 'stone', 'stone'));
         const gate = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, size - 1);
         carveFeaturePath(cells, gate, anchor);
         const light = wall.find(index => cells[index] && !cells[index].object);
@@ -2050,7 +2644,7 @@
         const shore = featureIndexesNear(pair.land, broadRadius).filter(index => cells[index].terrain !== 'water').slice(0, Math.max(7, size));
         shore.forEach((index, i) => setFeatureTerrain(cells, index, i < 3 ? 'path' : 'sand'));
         shore.slice(0, Math.max(3, Math.floor(size * 0.5))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'lamp' : 'house', i % 2 ? 'path' : 'sand'));
-        shore.slice(Math.max(3, Math.floor(size * 0.5)), Math.max(6, Math.floor(size * 0.9))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'fence' : 'garden', cells[index].terrain));
+        shore.slice(Math.max(3, Math.floor(size * 0.5)), Math.max(6, Math.floor(size * 0.9))).forEach((index, i) => forcePlaceObject(cells, index, i % 2 ? 'lamp' : 'garden', i % 2 ? 'path' : cells[index].terrain));
         const inland = nearestFeatureIndex(cells, cell => cell && cell.terrain !== 'water', centerTarget, centerTarget);
         carveFeaturePath(cells, pair.land, inland);
         if (banks) {
@@ -2088,6 +2682,7 @@
       for (let index = 0; index < cells.length; index++) {
         const cell = cells[index];
         if (cell.object || cell.terrain === 'water') continue;
+        if (cell.fenceGatePath) continue;
         if (placedCount >= scatterLimit) continue;
         const densityBoost = cell.terrain === 'path' ? 0.18 : 0;
         if (rng() > (featureDensity * 0.34 + densityBoost * 0.55)) continue;
@@ -2124,10 +2719,12 @@
       if (archetypeKey === 'pastoral') {
         const meadowCells = cells
           .map((cell, index) => ({ cell, index }))
-          .filter(({ cell, index }) => cell.terrain === 'prairie' && !cell.object && neighbors(index).some(next => cells[next] && cells[next].object === 'fence'));
+          .filter(({ cell, index }) => cell.terrain === 'prairie' && !cell.object && neighbors(index).some(next => hasGeneratedFenceEdges(cells[next])));
+        const placedHerd = [];
         for (const { index } of meadowCells.slice(0, Math.max(3, Math.ceil(size * 0.38)))) {
-          if (rng() < 0.82) placeObjectAt(cells, index, rng() < 0.55 ? 'sheep' : 'cow');
+          if (rng() < 0.82 && placeObjectAt(cells, index, rng() < 0.55 ? 'sheep' : 'cow')) placedHerd.push(index);
         }
+        applyGeneratedFenceEnclosure(cells, placedHerd, { level: 2, style: 'wood' });
       }
     }
 
@@ -2139,14 +2736,22 @@
       });
       applyTerrainMotifs(cells);
       carvePaths(cells);
+      applyEconomyViabilityPass(cells);
       applyArchetypeGrammar(cells);
-      applyResourceMotifPass(cells);
+      applyArchetypeResourcePolish(cells);
+      validateEconomyFloors(cells);
       ensureRoadBridgeCrossing(cells);
       applyPathsideHomeMotif(cells);
       placeBridgeCandidates(cells, archetypeKey === 'river' || archetypeKey === 'harbor' ? 1 : 0.35);
       placeObjects(cells);
+      repairGeneratedFenceGatePaths(cells);
+      repairGeneratedFenceOpenings(cells);
+      ensureGeneratedResourceComponentGates(cells);
       connectBuildingsToPaths(cells);
+      ensureRoadBridgeCrossing(cells);
+      forceRoadBridgeCrossing(cells);
       scrubInvalidWaterBridges(cells);
+      orientGeneratedTowers(cells);
       return cells;
     }
 
@@ -2158,12 +2763,66 @@
     }
     function fenceSideFor(cells, index) {
       const { x, y } = xyFor(index);
+      function sideToward(nextIndex) {
+        const point = xyFor(nextIndex);
+        if (point.x < x) return 'w';
+        if (point.x > x) return 'e';
+        if (point.y < y) return 'n';
+        if (point.y > y) return 's';
+        return null;
+      }
+      function enclosureObject(objectId) {
+        return isCropObjectId(objectId)
+          || isAnimalObjectId(objectId)
+          || isBuildingObjectId(objectId)
+          || objectId === 'garden'
+          || objectId === 'flower'
+          || objectId === 'berries';
+      }
+      function bestSideFor(predicate, salt) {
+        const options = neighbors(index)
+          .filter(i => cells[i] && predicate(cells[i], i))
+          .map(i => ({ index: i, side: sideToward(i), score: cellRand(i, salt) }));
+        options.sort((a, b) => a.score - b.score);
+        return options.length ? options[0].side : null;
+      }
+      const enclosureSide = bestSideFor(cell => enclosureObject(cell.object), 'fence-enclosure-side');
+      if (enclosureSide) return enclosureSide;
+      const waterSide = bestSideFor(cell => cell.terrain === 'water', 'fence-water-side');
+      if (waterSide && (archetypeKey === 'harbor' || archetypeKey === 'river')) return waterSide;
+      const pathSide = bestSideFor(cell => cell.terrain === 'path', 'fence-path-side');
+      if (pathSide && cellRand(index, 'fence-path-edge') < 0.72) return pathSide;
       const same = neighbors(index).filter(i => cells[i] && cells[i].object === 'fence');
       const eastWest = same.some(i => xyFor(i).y === y);
       const northSouth = same.some(i => xyFor(i).x === x);
       if (eastWest && !northSouth) return 'center-x';
       if (northSouth && !eastWest) return 'center-z';
       return cellRand(index, 'fence-side') < 0.5 ? 'center-x' : 'center-z';
+    }
+    function fenceEdgeSideFor(cells, index) {
+      const side = fenceSideFor(cells, index);
+      if (generatedFenceSides.indexOf(side) !== -1) return side;
+      const { x, y } = xyFor(index);
+      const center = (size - 1) / 2;
+      const dx = center - x;
+      const dy = center - y;
+      if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? 'e' : 'w';
+      if (Math.abs(dy) > 0) return dy >= 0 ? 's' : 'n';
+      return cellRand(index, 'fence-edge-side') < 0.5 ? 'n' : 'e';
+    }
+    function labFenceExtrasForCell(cell) {
+      if (!cell || !Array.isArray(cell.fenceEdges)) return [];
+      return cell.fenceEdges
+        .filter(edge => edge && generatedFenceSides.indexOf(edge.side) !== -1)
+        .map(edge => {
+          const extra = {
+            kind: 'fence',
+            fenceSide: edge.side,
+            floors: Math.max(1, Math.min(8, edge.level || 1)),
+          };
+          if (edge.style === 'garden' || edge.style === 'gate') extra.appearance = { fenceStyle: edge.style };
+          return extra;
+        });
     }
     function mapLabObject(cells, index) {
       const objectId = cells[index] && cells[index].object;
@@ -2172,15 +2831,28 @@
       }
       const objectStyle = { objectStyle: 'voxel' };
       const floors = (min, max, salt) => min + Math.floor(cellRand(index, salt) * (max - min + 1));
-      if (objectId === 'watchtower') return { kind: 'house', floors: floors(2, 3, 'watchtower'), buildingType: 'tower', fenceSide: null, appearance: objectStyle };
+      if (objectId === 'watchtower') return { kind: 'house', floors: floors(2, 3, 'watchtower'), buildingType: 'tower', fenceSide: null, appearance: objectStyle, rotationY: towerRotationYForDoorSide(cells[index].doorSide || towerDoorSideFor(cells, index)) };
       if (objectId === 'house') return { kind: 'house', floors: floors(1, 2, 'house'), buildingType: null, fenceSide: null, appearance: objectStyle };
       if (objectId === 'manor') return { kind: 'house', floors: floors(2, 3, 'manor'), buildingType: 'manor', fenceSide: null, appearance: objectStyle };
-      if (objectId === 'castle') return { kind: 'house', floors: floors(4, 5, 'castle'), buildingType: 'tower', fenceSide: null, appearance: objectStyle };
+      if (objectId === 'castle') return { kind: 'house', floors: floors(4, 5, 'castle'), buildingType: 'tower', fenceSide: null, appearance: objectStyle, rotationY: towerRotationYForDoorSide(cells[index].doorSide || towerDoorSideFor(cells, index)) };
       if (objectId === 'tree') return { kind: 'tree', floors: floors(1, 3, 'tree'), buildingType: null, fenceSide: null, appearance: objectStyle };
       if (objectId === 'garden' || objectId === 'flower') return { kind: 'flower', floors: floors(1, 3, 'flower'), buildingType: null, fenceSide: null, appearance: objectStyle };
       if (objectId === 'stone') return { kind: 'rock', floors: floors(1, 3, 'stone'), buildingType: null, fenceSide: null, appearance: objectStyle };
       if (objectId === 'ore' || objectId === 'crystal') return { kind: 'crystal', floors: floors(2, 4, 'crystal'), buildingType: null, fenceSide: null, appearance: objectStyle };
-      if (objectId === 'fence') return { kind: 'fence', floors: floors(1, archetypeKey === 'fortress' ? 4 : 2, 'fence'), buildingType: null, fenceSide: fenceSideFor(cells, index), appearance: objectStyle };
+      if (objectId === 'fence') {
+        return {
+          kind: null,
+          floors: 1,
+          buildingType: null,
+          fenceSide: null,
+          appearance: null,
+          extras: [{
+            kind: 'fence',
+            fenceSide: fenceEdgeSideFor(cells, index),
+            floors: floors(1, archetypeKey === 'fortress' ? 4 : 2, 'fence'),
+          }],
+        };
+      }
       if (objectId === 'bridge' || objectId === 'water-bridge') return { kind: 'bridge', floors: 1, buildingType: null, fenceSide: null, appearance: objectStyle };
       if (objectId === 'crop' || objectId === 'corn' || objectId === 'wheat' || objectId === 'pumpkin' || objectId === 'carrot' || objectId === 'sunflower') {
         return { kind: objectId, floors: floors(1, 3, objectId), buildingType: null, fenceSide: null, appearance: objectStyle };
@@ -2229,6 +2901,7 @@
         mapped.fenceSide = null;
         mapped.appearance = null;
       }
+      const fenceExtras = terrain === 'water' ? [] : (mapped.extras || []).concat(labFenceExtrasForCell(cell));
       const entry = {
         x,
         z: y,
@@ -2240,6 +2913,8 @@
         fenceSide: mapped.kind === 'fence' ? (mapped.fenceSide || 'center-x') : null,
       };
       if (mapped.appearance) entry.appearance = mapped.appearance;
+      if (fenceExtras.length) entry.extras = fenceExtras;
+      if (Number.isFinite(mapped.rotationY)) entry.transform = { rotationY: mapped.rotationY };
       out.cells.push(entry);
     }
     return out;
@@ -2342,8 +3017,12 @@
       if (terrain === 'snow') return { charm: 0.2 };
       return { charm: 0.3 };
     }
+    function cellHasFenceExtra(cell) {
+      return !!(cell && Array.isArray(cell.extras) && cell.extras.some(extra => extra && extra.kind === 'fence'));
+    }
     function economyObjectId(cell) {
-      if (!cell || !cell.kind) return null;
+      if (!cell) return null;
+      if (!cell.kind) return cellHasFenceExtra(cell) ? 'fence' : null;
       if (cell.kind === 'house') {
         if (cell.buildingType === 'manor') return 'manor';
         if (cell.buildingType === 'tower' || cell.buildingType === 'turret') return 'watchtower';
@@ -2402,6 +3081,14 @@
     }
     function edgeCell(cell) {
       return cell.x === 0 || cell.z === 0 || cell.x === gridSize - 1 || cell.z === gridSize - 1;
+    }
+    function fenceHasDefensiveContext(cell) {
+      if (!cell || economyObjectId(cell) !== 'fence') return false;
+      if (edgeCell(cell) || cell.terrain === 'stone' || (cell.terrainFloors || 1) >= 3) return true;
+      return neighborsOf(cell).some(neighbor => {
+        const id = economyObjectId(neighbor);
+        return id === 'watchtower' || id === 'spotlight';
+      });
     }
     function pushUnique(list, value) {
       if (list.indexOf(value) === -1) list.push(value);
@@ -2465,7 +3152,7 @@
         stats.commerce += bonus;
         addSynergy(id === 'manor' ? 'Manor Road' : 'Connected House', bonus, cell, { commerce: bonus });
       }
-      if ((id === 'watchtower' || id === 'fence' || id === 'spotlight') && (edgeCell(cell) || cell.terrain === 'stone' || (cell.terrainFloors || 1) >= 3)) {
+      if ((id === 'watchtower' || id === 'spotlight' || fenceHasDefensiveContext(cell)) && (edgeCell(cell) || cell.terrain === 'stone' || (cell.terrainFloors || 1) >= 3 || id === 'fence')) {
         stats.defense += 1.2;
         addSynergy('Guarded Edge', 1.0, cell, { defense: 1.2 });
       }
@@ -2509,7 +3196,8 @@
     if ((counts.stone || 0) + (counts.crystal || 0) >= 5) traits.push('Rich Quarry');
     if ((counts.house || 0) >= 3) traits.push('House Cluster');
     if ((counts.manor || 0) >= 1) traits.push('Manor Estate');
-    if ((counts.watchtower || 0) + (counts.fence || 0) + (counts.spotlight || 0) >= 4) traits.push('Defensive Ring');
+    const defensiveFenceCount = cells.filter(cell => fenceHasDefensiveContext(cell)).length;
+    if ((counts.watchtower || 0) + defensiveFenceCount + (counts.spotlight || 0) >= 4) traits.push('Defensive Ring');
     if ((counts.bridge || 0) >= 1 && (terrains.water || 0) >= 8) traits.push('Bridge Crossing');
     if ((counts.ruins || 0) + (counts.totem || 0) + (counts.crystal || 0) >= 3) traits.push('Ancient Mystery');
     if ((counts.flower || 0) + (counts.sunflower || 0) >= 3) traits.push('Bloom Gardens');
@@ -2531,15 +3219,15 @@
     const potential = Math.max(1, Math.round(weighted + cappedSynergyBonus * 1.05 + traitBonus));
     const rarityScore = weighted + cappedSynergyBonus * 1.05 + traitBonus;
     const rarityThresholds = {
-      pastoral: { uncommon: 88.8, rare: 96.8, epic: 103.3, legendary: 109.7 },
-      forest: { uncommon: 74.7, rare: 81.2, epic: 87.2, legendary: 96.6 },
-      quarry: { uncommon: 99.4, rare: 106.1, epic: 111.5, legendary: 117.8 },
-      river: { uncommon: 96.5, rare: 101.8, epic: 106.0, legendary: 110.6 },
-      village: { uncommon: 99.3, rare: 106.3, epic: 110.8, legendary: 114.3 },
-      fortress: { uncommon: 91.8, rare: 98.6, epic: 104.1, legendary: 109.7 },
-      ruins: { uncommon: 76.2, rare: 82.9, epic: 88.7, legendary: 94.6 },
-      harbor: { uncommon: 84.1, rare: 93.5, epic: 99.1, legendary: 102.9 },
-      global: { uncommon: 90.0, rare: 99.0, epic: 106.0, legendary: 112.0 },
+      pastoral: { uncommon: 111.5, rare: 116.8, epic: 121.4, legendary: 126.6 },
+      forest: { uncommon: 80.0, rare: 86.9, epic: 93.6, legendary: 101.6 },
+      quarry: { uncommon: 129.7, rare: 136.1, epic: 141.0, legendary: 145.6 },
+      river: { uncommon: 102.1, rare: 111.4, epic: 118.4, legendary: 124.2 },
+      village: { uncommon: 106.6, rare: 112.7, epic: 118.1, legendary: 123.7 },
+      fortress: { uncommon: 124.4, rare: 130.3, epic: 135.3, legendary: 140.6 },
+      ruins: { uncommon: 110.9, rare: 118.9, epic: 125.5, legendary: 131.2 },
+      harbor: { uncommon: 100.2, rare: 108.6, epic: 114.8, legendary: 120.6 },
+      global: { uncommon: 109.3, rare: 120.6, epic: 130.2, legendary: 138.8 },
     };
     const rarityBand = rarityThresholds[archetypeKey] || rarityThresholds.global;
     const rarity = rarityScore >= rarityBand.legendary ? 'Legendary'

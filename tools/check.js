@@ -572,8 +572,8 @@ const renderDefaults = {
   'tinyworld:render:backFill': '0.22',
   'tinyworld:render:saturation': '1.09',
   'tinyworld:render:contrast': '1.16',
-  'tinyworld:render:tiltBlur': '10.5',
-  'tinyworld:render:tiltFocus': '21',
+  'tinyworld:render:tiltBlur': '2.1',
+  'tinyworld:render:tiltFocus': '65',
   'tinyworld:render:planesEnabled': '0',
   'tinyworld:render:materialWear': '1.00',
 };
@@ -591,7 +591,7 @@ try {
 if (!shippedCamera || !shippedCamera.target || shippedCamera.target.x !== 0 || shippedCamera.target.z !== 0 || !/const DEFAULT_TARGET = new THREE\.Vector3\(0, 0, 0\)/.test(html) || !/clampTargetToHomeBoard\(\);\s*updateCamera\(\);/.test(html)) {
   fail('camera defaults must start centered and clamp stale off-board targets before first render');
 }
-if (!/const RENDER_SETTINGS_VERSION = '26'/.test(html) || !/resolution:\s*'0\.75'/.test(html) || !/dynamicResolution:\s*'1'/.test(html) || !/targetFps:\s*'55'/.test(html) || !/brightness:\s*'1\.08'/.test(html) || !/tiltBlur:\s*'10\.5'/.test(html) || !/materialWear:\s*'1'/.test(html)) {
+if (!/const RENDER_SETTINGS_VERSION = '26'/.test(html) || !/resolution:\s*'0\.75'/.test(html) || !/dynamicResolution:\s*'1'/.test(html) || !/targetFps:\s*'55'/.test(html) || !/brightness:\s*'1\.08'/.test(html) || !/tiltBlur:\s*'2\.1'/.test(html) || !/tiltFocus:\s*'65'/.test(html) || !/materialWear:\s*'1'/.test(html)) {
   fail('hard-coded render defaults must match the shipped v26 defaults');
 }
 if (!/<div id="welcome-modal" class="modal launch-modal" hidden aria-hidden="true">[\s\S]*<img class="welcome-logo" src="assets\/twlogo\.png" alt="Tiny World Builder"[\s\S]*id="welcome-tinyverse"[^>]*>Tinyverse<\/button>[\s\S]*id="welcome-battleworlds"[^>]*>Battleworlds<\/button>[\s\S]*id="welcome-build"[^>]*>Build<\/button>[\s\S]*id="welcome-play"[^>]*>Play<\/button>[\s\S]*class="welcome-credit"[\s\S]*Created by Jason Kneen[\s\S]*https:\/\/x\.com\/jasonkneen[\s\S]*@jasonkneen[\s\S]*https:\/\/x\.com\/tinyworldsapp[\s\S]*@tinyworldsapp/.test(htmlRaw)) {

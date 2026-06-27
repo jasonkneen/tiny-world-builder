@@ -441,6 +441,66 @@
         "$ref": "#/$defs/extra"
       }
     },
+    "cellEconomy": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "Optional explicit economy resource tag for custom/model assets. The authoritative room/server normalizes this tag; clients must not use it to mint balances directly.",
+      "anyOf": [
+        {
+          "required": [
+            "resource"
+          ]
+        },
+        {
+          "required": [
+            "type"
+          ]
+        }
+      ],
+      "properties": {
+        "resource": {
+          "type": "string",
+          "enum": [
+            "fish",
+            "meat",
+            "plants",
+            "ore"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "fish",
+            "meat",
+            "plants",
+            "ore"
+          ],
+          "description": "Alias accepted by import tooling; resource is preferred."
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "fish",
+            "hunt",
+            "gather",
+            "mine"
+          ],
+          "description": "Derived from resource by the server/client normalizer; included only for readability."
+        },
+        "charges": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 48
+        }
+      }
+    },
     "appearance": {
       "type": [
         "object",
@@ -518,7 +578,8 @@
         "fenceStyle": {
           "type": "string",
           "enum": [
-            "garden"
+            "garden",
+            "gate"
           ]
         }
       }
@@ -621,6 +682,9 @@
         },
         "appearance": {
           "$ref": "#/$defs/appearance"
+        },
+        "economy": {
+          "$ref": "#/$defs/cellEconomy"
         },
         "customName": {
           "type": "string",

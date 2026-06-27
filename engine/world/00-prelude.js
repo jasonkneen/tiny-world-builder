@@ -164,3 +164,24 @@
       input.click();
     });
   }
+
+  const TW_RESOURCE_ACTIONS = Object.freeze({ fish: 'fish', meat: 'hunt', plants: 'gather', ore: 'mine' });
+  const TW_RESOURCE_DEFAULT_CHARGES = Object.freeze({ fish: 4, meat: 1, plants: 1, ore: 1 });
+  function normalizeCellEconomy(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const resource = String(value.resource || value.type || '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(TW_RESOURCE_ACTIONS, resource)) return null;
+    const rawCharges = value.charges == null ? TW_RESOURCE_DEFAULT_CHARGES[resource] : value.charges;
+    let charges = Math.round(Number(rawCharges));
+    if (!Number.isFinite(charges)) charges = TW_RESOURCE_DEFAULT_CHARGES[resource] || 1;
+    charges = Math.max(1, Math.min(99, charges));
+    const out = { resource, action: TW_RESOURCE_ACTIONS[resource], charges };
+    const label = String(value.label || '').trim();
+    if (label) out.label = label.slice(0, 48);
+    return out;
+  }
+  function sameCellEconomy(a, b) {
+    const aa = normalizeCellEconomy(a);
+    const bb = normalizeCellEconomy(b);
+    return JSON.stringify(aa || null) === JSON.stringify(bb || null);
+  }

@@ -663,6 +663,66 @@
           "$ref": "#/$defs/extra"
         }
       },
+      "cellEconomy": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": false,
+        "description": "Optional explicit economy resource tag for custom/model assets. The authoritative room/server normalizes this tag; clients must not use it to mint balances directly.",
+        "anyOf": [
+          {
+            "required": [
+              "resource"
+            ]
+          },
+          {
+            "required": [
+              "type"
+            ]
+          }
+        ],
+        "properties": {
+          "resource": {
+            "type": "string",
+            "enum": [
+              "fish",
+              "meat",
+              "plants",
+              "ore"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "fish",
+              "meat",
+              "plants",
+              "ore"
+            ],
+            "description": "Alias accepted by import tooling; resource is preferred."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "fish",
+              "hunt",
+              "gather",
+              "mine"
+            ],
+            "description": "Derived from resource by the server/client normalizer; included only for readability."
+          },
+          "charges": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 48
+          }
+        }
+      },
       "appearance": {
         "type": [
           "object",
@@ -740,7 +800,8 @@
           "fenceStyle": {
             "type": "string",
             "enum": [
-              "garden"
+              "garden",
+              "gate"
             ]
           }
         }
@@ -844,6 +905,9 @@
           "appearance": {
             "$ref": "#/$defs/appearance"
           },
+          "economy": {
+            "$ref": "#/$defs/cellEconomy"
+          },
           "customName": {
             "type": "string",
             "description": "Optional short name for a bespoke custom object authored via customParts."
@@ -870,24 +934,109 @@
       "customPart": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "material", "size", "pos"],
+        "required": [
+          "kind",
+          "material",
+          "size",
+          "pos"
+        ],
         "description": "One low-poly primitive of a custom object. Coordinates are voxel units centered on the tile (x left-right, y up, z front-back). Use sphere/ellipsoid for rounded envelopes, domes, canopies, and tanks. Sphere/ellipsoid parts may use phiStart/phiLength/thetaStart/thetaLength for curved slices, such as balloon fabric panels. Use cable for ropes, tethers, rigging, and mooring-style connections; cable parts must include from/to endpoints and should still include size/pos for compatibility.",
         "properties": {
-          "kind": { "type": "string", "enum": ["box", "cylinder", "cone", "sphere", "ellipsoid", "cable"] },
-          "material": { "type": "string", "description": "Color/material name. Prefer exact TinyWorld names such as wood, woodDark, woodLight, leather, rope, ropeLight, cable, stone, stoneDark, metal, steel, silver, brass, brassDark, copper, bronze, glass, glassBlue, glassGreen, fabric, canvas, fabricRed, fabricOrange, fabricYellow, fabricBlue, fabricPurple, fabricGreen, roof, roofEdge, white, cream, red, orange, yellow, blue, teal, purple, green, black, charcoal. Do not default to stone unless the part is stone." },
-          "size": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-          "pos": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-          "scale": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-          "from": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-          "to": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-          "radius": { "type": "number", "minimum": 0.006, "maximum": 0.3 },
-          "sag": { "type": "number", "minimum": -8, "maximum": 8 },
-          "segments": { "type": "integer", "minimum": 4, "maximum": 64 },
-          "verticalSegments": { "type": "integer", "minimum": 3, "maximum": 24 },
-          "phiStart": { "type": "number", "minimum": 0, "maximum": 6.28319 },
-          "phiLength": { "type": "number", "minimum": 0.05, "maximum": 6.28319 },
-          "thetaStart": { "type": "number", "minimum": 0, "maximum": 3.14159 },
-          "thetaLength": { "type": "number", "minimum": 0.05, "maximum": 3.14159 }
+          "kind": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cylinder",
+              "cone",
+              "sphere",
+              "ellipsoid",
+              "cable"
+            ]
+          },
+          "material": {
+            "type": "string",
+            "description": "Color/material name. Prefer exact TinyWorld names such as wood, woodDark, woodLight, leather, rope, ropeLight, cable, stone, stoneDark, metal, steel, silver, brass, brassDark, copper, bronze, glass, glassBlue, glassGreen, fabric, canvas, fabricRed, fabricOrange, fabricYellow, fabricBlue, fabricPurple, fabricGreen, roof, roofEdge, white, cream, red, orange, yellow, blue, teal, purple, green, black, charcoal. Do not default to stone unless the part is stone."
+          },
+          "size": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "pos": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "scale": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "from": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "to": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 0.006,
+            "maximum": 0.3
+          },
+          "sag": {
+            "type": "number",
+            "minimum": -8,
+            "maximum": 8
+          },
+          "segments": {
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 64
+          },
+          "verticalSegments": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 24
+          },
+          "phiStart": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6.28319
+          },
+          "phiLength": {
+            "type": "number",
+            "minimum": 0.05,
+            "maximum": 6.28319
+          },
+          "thetaStart": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3.14159
+          },
+          "thetaLength": {
+            "type": "number",
+            "minimum": 0.05,
+            "maximum": 3.14159
+          }
         }
       },
       "cellTuple": {

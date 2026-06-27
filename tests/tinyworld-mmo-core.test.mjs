@@ -9,6 +9,7 @@ import {
   createMovementIntent,
   createResourceLedgerEvents,
   getTierAllowance,
+  normalizeWorldResourceSpec,
   reduceGoldLedger,
   spendGold,
 } from '../packages/tinyworld-mmo-core/src/index.js';
@@ -71,6 +72,22 @@ test('island tax follows guide cap and creates resource ledger credits', () => {
   );
   assert.equal(ownerHarvest.islandOwner.amount, 0);
   assert.equal(ownerHarvest.miner.amount, 100);
+});
+
+test('explicit world resource specs normalize to current authoritative resources', () => {
+  assert.deepEqual(normalizeWorldResourceSpec({ resource: 'ORE', charges: 150, label: 'Ancient drill node' }), {
+    resource: 'ore',
+    action: 'mine',
+    charges: 99,
+    label: 'Ancient drill node',
+  });
+  assert.deepEqual(normalizeWorldResourceSpec({ type: 'plants', charges: 2.6 }), {
+    resource: 'plants',
+    action: 'gather',
+    charges: 3,
+  });
+  assert.equal(normalizeWorldResourceSpec({ resource: 'wood' }), null, 'future spec resources are not live bank resources yet');
+  assert.equal(normalizeWorldResourceSpec(null), null);
 });
 
 test('interest snapshots send full, lite, keep, and remove records', () => {

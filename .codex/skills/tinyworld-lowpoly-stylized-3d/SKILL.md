@@ -125,6 +125,10 @@ Use this together with:
   safety fill lights so converted GLBs are not dependent on the shadow-casting
   sun alone.
 - Model stamp factories should apply `opts.appearance` themselves so world rendering, ghost previews, and selection previews share texture/color overrides; avoid applying the same model-stamp appearance again at the board render wrapper.
+- If a custom/model asset should be harvestable in Tinyverse, add explicit
+  object-cell `economy` metadata (`fish`, `ore`, `plants`, or `meat`) instead of
+  relying on material names, colors, or visual shape. Keep the visual asset
+  authoring separate from the authoritative economy tag.
 - Wear-and-tear should stay stylized: global grime/desaturation plus small batched chips/scuffs/moss beats realistic noise-heavy shader work.
 - Floating-board depth can reuse existing roof language by inverting a stepped roof form under the board: dark gray shingle-textured slabs, board-footprint width/depth, vertically compressed, and attached below the dirt body. Utility underside dressing should stay toy-like and readable: chunky pipe cylinders, cable trays, clamps, junction boxes, and short dangling cable drops in the existing steel/dark underside palette.
 - Voxel lift/propeller engines use an explicit part palette inside

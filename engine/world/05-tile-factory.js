@@ -1237,7 +1237,25 @@
     const oy = c.offsetY || 0;
     const hasTransform = ry || ox || oz || oy;
     const appearance = normalizeAppearance(c.appearance);
+    const economy = normalizeCellEconomy(c.economy);
     const wf = normalizeWaterFlow(c.waterFlow);
+    if (economy) {
+      const out = {
+        x,
+        z,
+        terrain: c.terrain || 'grass',
+        kind: c.kind || null,
+        floors: f,
+        buildingType: bt,
+        terrainFloors: tf,
+        fenceSide: fs,
+        economy,
+      };
+      if (extras) out.extras = extras;
+      if (hasTransform) out.transform = [ry, ox, oz, oy];
+      if (appearance) out.appearance = appearance;
+      return out;
+    }
     if (c.terrain !== 'grass' || c.kind || f !== 1 || tf !== 1 || bt || fs || extras || hasTransform || appearance || wf !== 'auto') {
       const out = [x, z, c.terrain, c.kind, f, bt, tf, fs];
       // Always push extras (or null) before the transform / appearance so

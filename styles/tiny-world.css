@@ -6633,23 +6633,83 @@
     pointer-events: none;
   }
   .new-world-reveal[hidden] { display: none; }
-  .new-world-reveal-card {
+  .new-world-reveal-stack {
     position: relative;
     width: min(420px, calc(100vw - 32px));
     max-height: min(720px, calc(100vh - 32px));
     overflow: auto;
     pointer-events: auto;
-    color: #243047;
-    background: rgba(255, 255, 255, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.72);
+    display: grid;
+    gap: 10px;
+    animation: new-world-reveal-in 0.26s ease-out;
+  }
+  .new-world-reveal-card,
+  .new-world-reveal-guide {
+    position: relative;
+    color: #5f4516;
+    background: linear-gradient(180deg, rgba(255, 252, 239, 0.98), rgba(245, 224, 166, 0.96));
+    border: 3px solid rgba(159, 122, 44, 0.62);
     border-radius: var(--radius-lg);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.9) inset,
-      0 24px 70px -24px rgba(25, 35, 60, 0.42);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+      inset 0 0 0 2px rgba(255, 255, 255, 0.9),
+      0 5px 0 rgba(110, 81, 27, 0.34),
+      0 22px 44px -22px rgba(42, 39, 34, 0.62);
+    backdrop-filter: blur(18px) saturate(165%);
+    -webkit-backdrop-filter: blur(18px) saturate(165%);
     padding: 18px;
-    animation: new-world-reveal-in 0.26s ease-out;
+  }
+  .new-world-reveal-card {
+    --rarity-line: rgba(83, 97, 118, 0.22);
+    --rarity-glow: rgba(83, 97, 118, 0.10);
+    overflow: hidden;
+  }
+  .new-world-reveal-guide {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.68);
+  }
+  .new-world-reveal-card[data-rarity="uncommon"] {
+    --rarity-line: #4aa777;
+    --rarity-glow: rgba(74, 167, 119, 0.18);
+    border-color: rgba(74, 167, 119, 0.32);
+  }
+  .new-world-reveal-card[data-rarity="rare"] {
+    --rarity-line: #2876d7;
+    --rarity-glow: rgba(40, 118, 215, 0.20);
+    border-color: rgba(40, 118, 215, 0.34);
+  }
+  .new-world-reveal-card[data-rarity="epic"] {
+    --rarity-line: #8756d8;
+    --rarity-glow: rgba(135, 86, 216, 0.22);
+    border-color: rgba(135, 86, 216, 0.36);
+  }
+  .new-world-reveal-card[data-rarity="legendary"] {
+    --rarity-line: #d69528;
+    --rarity-glow: rgba(214, 149, 40, 0.24);
+    border-color: rgba(214, 149, 40, 0.40);
+  }
+  .new-world-reveal-card::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border-radius: 14px;
+    pointer-events: none;
+    opacity: 0;
+    background:
+      linear-gradient(90deg, var(--rarity-line), transparent 70%) top left / 42% 1px no-repeat,
+      linear-gradient(180deg, var(--rarity-line), transparent 70%) top left / 1px 42% no-repeat,
+      linear-gradient(270deg, var(--rarity-line), transparent 70%) top right / 42% 1px no-repeat,
+      linear-gradient(180deg, var(--rarity-line), transparent 70%) top right / 1px 42% no-repeat,
+      linear-gradient(90deg, var(--rarity-line), transparent 70%) bottom left / 42% 1px no-repeat,
+      linear-gradient(0deg, var(--rarity-line), transparent 70%) bottom left / 1px 42% no-repeat,
+      linear-gradient(270deg, var(--rarity-line), transparent 70%) bottom right / 42% 1px no-repeat,
+      linear-gradient(0deg, var(--rarity-line), transparent 70%) bottom right / 1px 42% no-repeat;
+    box-shadow: 0 0 36px var(--rarity-glow) inset;
+  }
+  .new-world-reveal-card[data-rarity="uncommon"]::before,
+  .new-world-reveal-card[data-rarity="rare"]::before,
+  .new-world-reveal-card[data-rarity="epic"]::before,
+  .new-world-reveal-card[data-rarity="legendary"]::before {
+    opacity: 1;
   }
   @keyframes new-world-reveal-in {
     from { opacity: 0; transform: translateY(12px) scale(0.985); }
@@ -6661,21 +6721,24 @@
     right: 10px;
     width: 28px;
     height: 28px;
-    border: 1px solid rgba(93, 106, 130, 0.18);
+    border: 2px solid #9f7a2c;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.68);
-    color: #536176;
+    background: linear-gradient(180deg, #fffdf5, #f4e4b6);
+    color: #7a5718;
     cursor: pointer;
     font: 18px/1 ui-sans-serif, system-ui, sans-serif;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92), 0 2px 0 #6e511b;
   }
-  .new-world-reveal-close:hover { color: #243047; background: rgba(255, 255, 255, 0.9); }
+  .new-world-reveal-close:hover { color: #3b2b12; background: linear-gradient(180deg, #fff3c1, #e8b94d); }
   .new-world-reveal-kicker {
     margin-right: 34px;
-    color: #536176;
+    color: #6e511b;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
   }
   .new-world-reveal-name {
     margin: 5px 34px 8px 0;
@@ -6683,7 +6746,8 @@
     font-size: clamp(26px, 4vw, 36px);
     line-height: 0.96;
     letter-spacing: 0;
-    color: #182238;
+    color: #3b2b12;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
   }
   .new-world-reveal-meta {
     display: flex;
@@ -6695,18 +6759,24 @@
   .new-world-reveal-traits span {
     display: inline-flex;
     align-items: center;
-    border: 1px solid rgba(72, 89, 120, 0.16);
+    border: 2px solid rgba(159, 122, 44, 0.4);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.66);
-    color: #40506a;
+    background: rgba(255, 250, 232, 0.9);
+    color: #7a5718;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
     padding: 6px 8px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  }
+  .new-world-reveal-meta-rarity {
+    color: #243047 !important;
+    border-color: color-mix(in srgb, var(--rarity-line) 45%, rgba(72, 89, 120, 0.16)) !important;
+    background: color-mix(in srgb, var(--rarity-glow) 70%, rgba(255, 255, 255, 0.70)) !important;
   }
   .new-world-reveal-step-count {
-    margin-top: 4px;
-    color: #6a7690;
+    margin-top: 0;
+    color: #9f7a2c;
     font: 700 10px/1 ui-monospace, 'SF Mono', Menlo, monospace;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -6715,12 +6785,12 @@
     margin: 6px 0 3px;
     font-size: 17px;
     line-height: 1.15;
-    color: #1d2940;
+    color: #3b2b12;
   }
   .new-world-reveal-step-body {
-    min-height: 42px;
-    margin: 0 0 14px;
-    color: #536176;
+    min-height: 34px;
+    margin: 0;
+    color: #6e511b;
     font-size: 13px;
     line-height: 1.45;
   }
@@ -6735,10 +6805,10 @@
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    color: #536176;
+    color: #6e511b;
   }
   .new-world-reveal-stat.active {
-    color: #1d2940;
+    color: #3b2b12;
     font-weight: 800;
   }
   .new-world-reveal-stat > span:first-child {
@@ -6749,7 +6819,8 @@
   .new-world-reveal-bar {
     height: 8px;
     border-radius: 999px;
-    background: rgba(91, 108, 130, 0.14);
+    background: rgba(159, 122, 44, 0.2);
+    box-shadow: inset 0 1px 2px rgba(110, 81, 27, 0.22);
     overflow: hidden;
   }
   .new-world-reveal-bar span {
@@ -6774,54 +6845,74 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-top: 16px;
+    margin-top: 12px;
   }
   .new-world-reveal-actions button {
     min-height: 34px;
-    border-radius: 8px;
-    padding: 0 12px;
-    font: 700 12px/1 ui-sans-serif, system-ui, sans-serif;
+    border-radius: 9px;
+    padding: 0 14px;
+    font: 800 12px/1 'Space Grotesk', system-ui, sans-serif;
     cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.12s ease;
   }
   .new-world-reveal-secondary {
-    border: 1px solid rgba(83, 97, 118, 0.18);
-    color: #536176;
-    background: rgba(255, 255, 255, 0.56);
+    border: 2px solid #9f7a2c;
+    color: #7a5718;
+    background: linear-gradient(180deg, #fffdf5, #f4e4b6);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92), 0 3px 0 #6e511b, 0 8px 16px -10px rgba(42, 39, 34, 0.55);
   }
   .new-world-reveal-primary {
-    border: 1px solid rgba(35, 94, 184, 0.32);
-    color: #fff;
-    background: #276ad8;
-    box-shadow: 0 8px 22px -12px rgba(39, 106, 216, 0.7);
+    border: 2px solid #9f7a2c;
+    color: #3b2b12;
+    background: linear-gradient(180deg, #fff3c1, #e8b94d);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95), 0 3px 0 #6e511b, 0 8px 16px -10px rgba(42, 39, 34, 0.5);
   }
-  .new-world-reveal-secondary:hover { color: #243047; background: rgba(255, 255, 255, 0.86); }
-  .new-world-reveal-primary:hover { background: #1f5fc5; }
-  body.ui-theme-dark .new-world-reveal-card {
-    color: #ecf3ff;
-    background: rgba(22, 28, 42, 0.82);
-    border-color: rgba(255, 255, 255, 0.14);
+  .new-world-reveal-secondary:hover { color: #3b2b12; background: linear-gradient(180deg, #fffbe9, #f0d99a); }
+  .new-world-reveal-primary:hover { background: linear-gradient(180deg, #fff7cf, #edc35c); }
+  .new-world-reveal-actions button:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9), 0 1px 0 #6e511b;
+  }
+  /* Dock theme stays warm in both light and dark, matching .brush-mode-dock */
+  body.ui-theme-dark .new-world-reveal-card,
+  body.ui-theme-dark .new-world-reveal-guide {
+    color: #5f4516;
+    background: linear-gradient(180deg, rgba(255, 252, 239, 0.98), rgba(245, 224, 166, 0.96));
+    border-color: rgba(159, 122, 44, 0.62);
     box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.12) inset,
-      0 24px 70px -24px rgba(0, 0, 0, 0.62);
+      inset 0 0 0 2px rgba(255, 255, 255, 0.9),
+      0 5px 0 rgba(110, 81, 27, 0.34),
+      0 22px 44px -22px rgba(0, 0, 0, 0.7);
+  }
+  body.ui-theme-dark .new-world-reveal-guide {
+    background: rgba(22, 28, 42, 0.72);
   }
   body.ui-theme-dark .new-world-reveal-name,
   body.ui-theme-dark .new-world-reveal-step-title,
   body.ui-theme-dark .new-world-reveal-stat.active {
-    color: #f7fbff;
+    color: #3b2b12;
   }
   body.ui-theme-dark .new-world-reveal-kicker,
-  body.ui-theme-dark .new-world-reveal-step-count,
-  body.ui-theme-dark .new-world-reveal-step-body,
+  body.ui-theme-dark .new-world-reveal-step-body {
+    color: #6e511b;
+  }
+  body.ui-theme-dark .new-world-reveal-step-count {
+    color: #9f7a2c;
+  }
   body.ui-theme-dark .new-world-reveal-stat {
-    color: #b9c5d9;
+    color: #6e511b;
   }
   body.ui-theme-dark .new-world-reveal-meta span,
-  body.ui-theme-dark .new-world-reveal-traits span,
+  body.ui-theme-dark .new-world-reveal-traits span {
+    color: #7a5718;
+    background: rgba(255, 250, 232, 0.9);
+    border-color: rgba(159, 122, 44, 0.4);
+  }
   body.ui-theme-dark .new-world-reveal-close,
   body.ui-theme-dark .new-world-reveal-secondary {
-    color: #d9e5f8;
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.13);
+    color: #7a5718;
+    background: linear-gradient(180deg, #fffdf5, #f4e4b6);
+    border-color: #9f7a2c;
   }
 
   /* --- Command palette (⌘K) --- */

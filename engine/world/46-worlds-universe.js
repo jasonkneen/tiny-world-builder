@@ -19,6 +19,7 @@
     const ACTIVE_TINYVERSE_LS = 'tinyworld:worlds.activeTinyverse.v1';
     const WORLD_CLAIM_START_LABEL = 'CLAIMS STARTS 23-JUN-26';
     const WORLD_CLAIM_DEMO_SLUGS = new Set(['tidewater-bay', 'green-pastures']);
+    const WORLD_TAX_MAX_PERCENT = 20;
   
     function api(path, method, body) {
       if (typeof window.__tinyworldCloudApiCall === 'function') return window.__tinyworldCloudApiCall(path, method, body);
@@ -671,14 +672,14 @@
   const cd = w.taxCooldown || null;
   const onCooldown = cd && !cd.canChange;
       const nameI = el('input', { value: w.name || '', maxlength: '48' });
-      const taxI = el('input', { type: 'number', min: '1', max: '100', value: String(w.taxPercent || 10) });
+      const taxI = el('input', { type: 'number', min: '1', max: String(WORLD_TAX_MAX_PERCENT), value: String(w.taxPercent || 5) });
       const draft = w.status === 'draft';
       const body = [el('label', { text: T('worlds.name') }), nameI, el('label', { text: T('worlds.taxPercent') }), taxI];
       if (!draft) { nameI.disabled = true; taxI.disabled = true; body.push(el('p', { style: 'font-size:12px;opacity:.6;margin-top:8px', text: 'Name and tax are locked while published.' })); }
       const buttons = [];
       if (draft) {
         buttons.push({ label: T('worlds.save'), cls: 'alt', onClick: async () => {
-          const res = await api('/api/worlds?id=' + w.id, 'PUT', { name: nameI.value.trim(), taxPercent: Number(taxI.value) });
+          const res = await api('/api/worlds?id=' + w.id, 'PUT', { name: nameI.value.trim(), taxPercent: Math.min(WORLD_TAX_MAX_PERCENT, Number(taxI.value)) });
           if (!res || res.error) { toast(res && res.error ? res.error : T('worlds.error')); return; }
           if (res.world && res.world.taxCooldown && !res.world.taxCooldown.canChange) {
             taxI.disabled = true;
@@ -688,7 +689,7 @@
           toast(T('worlds.saved')); loadWorlds();
         } });
         buttons.push({ label: T('worlds.publish'), cls: 'go', onClick: async (done) => {
-          await api('/api/worlds?id=' + w.id, 'PUT', { name: nameI.value.trim(), taxPercent: Number(taxI.value) });
+          await api('/api/worlds?id=' + w.id, 'PUT', { name: nameI.value.trim(), taxPercent: Math.min(WORLD_TAX_MAX_PERCENT, Number(taxI.value)) });
           const res = await api('/api/worlds?id=' + w.id, 'POST', { action: 'publish' });
           if (!res || res.error) { toast(res && res.error ? res.error : T('worlds.error')); return; }
           toast(T('worlds.published')); done(); loadWorlds();

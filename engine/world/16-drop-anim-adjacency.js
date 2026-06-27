@@ -631,9 +631,56 @@
   }
 
   const FENCE_SIDES = new Set(['n', 's', 'e', 'w', 'center-x', 'center-z']);
+  const FENCE_EDGE_SIDES = new Set(['n', 's', 'e', 'w']);
 
   function normalizeFenceSide(side) {
     return FENCE_SIDES.has(side) ? side : 'n';
+  }
+
+  function normalizeFenceEdgeSide(side) {
+    const normalized = normalizeFenceSide(side);
+    return FENCE_EDGE_SIDES.has(normalized) ? normalized : null;
+  }
+
+  function cellFenceEdgeEntries(cell) {
+    const entries = [];
+    if (!cell) return entries;
+    if (cell.kind === 'fence') {
+      const side = normalizeFenceEdgeSide(cell.fenceSide);
+      if (side) {
+        entries.push({
+          source: 'primary',
+          side,
+          floors: cell.floors || 1,
+          appearance: cell.appearance || null,
+        });
+      }
+    }
+    if (Array.isArray(cell.extras)) {
+      cell.extras.forEach((extra, index) => {
+        if (!extra || extra.kind !== 'fence') return;
+        const side = normalizeFenceEdgeSide(extra.fenceSide || extra.s);
+        if (!side) return;
+        entries.push({
+          source: 'extra',
+          index,
+          side,
+          floors: extra.floors || extra.f || 1,
+          appearance: extra.appearance || extra.a || null,
+        });
+      });
+    }
+    return entries;
+  }
+
+  function cellFenceEdgeSides(cell) {
+    return cellFenceEdgeEntries(cell).map(entry => entry.side);
+  }
+
+  function cellHasFenceEdge(cell, side) {
+    const normalized = normalizeFenceEdgeSide(side);
+    if (!normalized) return false;
+    return cellFenceEdgeEntries(cell).some(entry => entry.side === normalized);
   }
 
   function fenceAxisForSide(side) {
@@ -641,7 +688,7 @@
     return (normalized === 'n' || normalized === 's' || normalized === 'center-x') ? 'x' : 'z';
   }
 
-  const FENCE_STYLES = new Set(['wood', 'garden']);
+  const FENCE_STYLES = new Set(['wood', 'garden', 'gate']);
 
   function normalizeFenceStyle(style) {
     return FENCE_STYLES.has(style) ? style : 'wood';

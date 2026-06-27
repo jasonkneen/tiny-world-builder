@@ -43,6 +43,28 @@ Implementation guardrails:
 - If adding a new visual variation, route it through the factory for the existing `kind`.
 - Rock and hill variants need visible contact skirts/talus at tile level so stacked or connected geometry reads grounded.
 - Connected fence/wall rails should overlap tile boundaries slightly; never leave visible gaps in a run.
+- Treat fences as square-edge overlays. New authored/generated fences live in
+  `cell.extras` as `{ kind: 'fence', fenceSide: 'n|e|s|w' }`, so a square can
+  have 0-4 fenced sides while keeping its terrain/object identity. Legacy
+  primary `kind: 'fence'` cells may still render, but do not make them the new
+  authoring path.
+- Generated/random-island resource enclosures should fence the owning resource
+  cells' boundary edges: crop plots use garden-style level-1 fence extras,
+  animal pens use taller wood level-2 fence extras, and a gate is a visibly
+  open two-leaf `appearance.fenceStyle: 'gate'` edge with taller posts and a
+  red marker, facing a path. The gate hinge line belongs on the fenced cell
+  border; only the open leaves swing inward. Crop and animal components stay
+  separate; shared crop/animal boundaries should be fenced, not treated as
+  gates. Do not let
+  ordinary farm enclosures automatically score as a `Defensive Ring`; that trait
+  belongs to edge, stone/high-ground, watchtower, or spotlight security context.
+  Do not emit empty/random fence-only cells as field scatter or generic defense;
+  fence extras should belong to the enclosed crop/animal cell unless the user is
+  manually authoring a fence.
+- Generated corner towers use the existing cell transform path for door
+  direction. The stone/voxel tower door is local `+z`; random-island towers
+  should set `transform.rotationY` so that face points inward toward the island
+  center/core rather than adding a separate saved door-side field.
 - Do not let `addEnhancementBits` double-scale a kind that now handles its own levels internally.
 - Do not use object `floors` to raise ground. Old saves may overload `floors`; migrate object cells to `terrainFloors: 1`.
 

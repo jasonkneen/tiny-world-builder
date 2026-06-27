@@ -583,6 +583,60 @@
     return true;
   }
 
+  function removeCellFenceSide(x, z, side) {
+    if (!world[x] || !world[x][z]) return false;
+    const normalized = typeof normalizeFenceEdgeSide === 'function' ? normalizeFenceEdgeSide(side) : normalizeFenceSide(side);
+    if (!normalized) return false;
+    const cell = world[x][z];
+    const extras = Array.isArray(cell.extras) ? cell.extras.slice() : [];
+    const extraIdx = extras.findIndex(extra => extra && extra.kind === 'fence' && normalizeFenceSide(extra.fenceSide || extra.s) === normalized);
+    if (extraIdx >= 0) {
+      pushWorldHistorySnapshot();
+      extras.splice(extraIdx, 1);
+      cell.extras = extras;
+      renderCellExtras(x, z);
+      refreshVehiclesForWorldObstacleChange(x, z);
+      saveState();
+      notifyWorldChanged(x, z);
+      return true;
+    }
+    if (cell.kind !== 'fence' || normalizeFenceSide(cell.fenceSide) !== normalized) return false;
+
+    const promotedIdx = extras.findIndex(extra => extra && extra.kind === 'fence');
+    if (promotedIdx >= 0) {
+      const promoted = extras[promotedIdx];
+      const remaining = extras.slice(0, promotedIdx).concat(extras.slice(promotedIdx + 1));
+      setCell(x, z, {
+        terrain: cell.terrain,
+        terrainFloors: terrainLevelForCell(cell),
+        kind: 'fence',
+        floors: promoted.floors || promoted.f || 1,
+        fenceSide: promoted.fenceSide || promoted.s || 'n',
+        extras: remaining,
+        rotationY: 0,
+        offsetX: 0,
+        offsetY: 0,
+        offsetZ: 0,
+        appearance: normalizeAppearance(promoted.appearance || promoted.a),
+      });
+      return true;
+    }
+
+    setCell(x, z, {
+      terrain: cell.terrain,
+      terrainFloors: terrainLevelForCell(cell),
+      kind: null,
+      floors: 1,
+      extras,
+      rotationY: 0,
+      offsetX: 0,
+      offsetY: 0,
+      offsetZ: 0,
+      appearance: null,
+    });
+    return true;
+  }
+
   const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
 
   function notifyWorldChanged(x, z) {
@@ -601,7 +655,7 @@
   }
 
   function setCellImpl(x, z, opts) {
-    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow, dest, label } = opts;
+    const { terrain, terrainFloors, kind = null, floors, buildingType, fenceSide, tileDelay = 0, objectDelay = 0, animate = true, impactDust = true, forceTile = false, rotationY, offsetX, offsetY, offsetZ, appearance, waterFlow, economy, dest, label } = opts;
     const historyStart = repaintProfileBegin();
     pushWorldHistorySnapshot();
     repaintProfileEnd('state.history', historyStart);
@@ -659,12 +713,16 @@
       ? normalizeAppearance(appearance)
       : (kindIsNew ? null : normalizeAppearance(prev.appearance));
     const appearanceChanged = !sameAppearance(prev.appearance, newAppearance);
+    const newEconomy = Object.prototype.hasOwnProperty.call(opts || {}, 'economy')
+      ? normalizeCellEconomy(economy)
+      : (kindIsNew ? null : normalizeCellEconomy(prev.economy));
+    const economyChanged = !sameCellEconomy(prev.economy, newEconomy);
     const newWaterFlow = nextTerrain === 'water'
       ? normalizeWaterFlow(waterFlow !== undefined ? waterFlow : prev.waterFlow)
       : 'auto';
     const waterFlowChanged = normalizeWaterFlow(prev.waterFlow) !== newWaterFlow;
     const userEdited = !!(prev.userEdited || (opts && opts.userEdited));
-    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, waterFlow: newWaterFlow };
+    world[x][z] = { terrain: nextTerrain, terrainFloors: newTerrainFloors, kind: nextKind, floors: newFloors, buildingType: newBType, fenceSide: newFenceSide, extras: carriedExtras, rotationY: newRotationY, offsetX: newOffsetX, offsetY: newOffsetY, offsetZ: newOffsetZ, appearance: newAppearance, economy: newEconomy, waterFlow: newWaterFlow };
     if (nextKind === 'stargate') {
       if (dest != null) world[x][z].dest = dest;
       if (label != null) world[x][z].label = label;
@@ -727,7 +785,7 @@
         && typeof scheduleHomeBorderEdgeRefresh === 'function') {
       scheduleHomeBorderEdgeRefresh();
     }
-    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !transformChanged && !waterFlowChanged) {
+    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !economyChanged && !transformChanged && !waterFlowChanged) {
       if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
         const saveStart = repaintProfileBegin();
         saveState();

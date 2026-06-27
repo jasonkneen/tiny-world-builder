@@ -3994,6 +3994,15 @@ syncTinyworldOwnerToolControls();
       return worldMenuRevealText(key, rarity || 'Common');
     }
 
+    function randomIslandRarityKey(rarity) {
+      const key = String(rarity || 'Common').toLowerCase();
+      return ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(key) !== -1 ? key : 'common';
+    }
+
+    function randomIslandDisplayRarity(rarity) {
+      return randomIslandRarityKey(rarity) === 'common' ? '' : randomIslandRarityLabel(rarity);
+    }
+
     function randomIslandStatLabel(statId, fallback) {
       return worldMenuRevealText('newworld.stat.' + statId, fallback || statId);
     }
@@ -4003,11 +4012,16 @@ syncTinyworldOwnerToolControls();
       if (newWorldRevealHighlight.parent) newWorldRevealHighlight.parent.remove(newWorldRevealHighlight);
       const geos = new Set();
       const mats = new Set();
+      const maps = new Set();
       newWorldRevealHighlight.traverse(node => {
         if (node.geometry) geos.add(node.geometry);
-        if (node.material) mats.add(node.material);
+        if (node.material) {
+          mats.add(node.material);
+          if (node.material.map) maps.add(node.material.map);
+        }
       });
       geos.forEach(geo => { try { geo.dispose(); } catch (_) {} });
+      maps.forEach(map => { try { map.dispose(); } catch (_) {} });
       mats.forEach(mat => { try { mat.dispose(); } catch (_) {} });
       newWorldRevealHighlight = null;
     }
@@ -4024,13 +4038,7 @@ syncTinyworldOwnerToolControls();
       return 0.34;
     }
 
-    function paintNewWorldRevealHighlight(step) {
-      clearNewWorldRevealHighlight();
-      if (!step || !Array.isArray(step.cells) || !step.cells.length) return;
-      if (typeof THREE === 'undefined' || typeof worldGroup === 'undefined') return;
-      const group = new THREE.Group();
-      group.name = 'new-world-reveal-highlight';
-      group.userData.noPointerPick = true;
+    function newWorldRevealStatColor(stat) {
       const colorByStat = {
         food: 0x2faa6e,
         materials: 0x7b8794,
@@ -4038,31 +4046,125 @@ syncTinyworldOwnerToolControls();
         defense: 0x55657e,
         charm: 0x2473e6,
       };
-      const mat = new THREE.MeshBasicMaterial({
-        color: colorByStat[step.stat] || 0x2f7df6,
+      return colorByStat[stat] || 0x2f7df6;
+    }
+
+    function newWorldRevealMarkerLabelTexture(text, color) {
+      if (typeof document === 'undefined' || typeof THREE === 'undefined') return null;
+      const canvas = document.createElement('canvas');
+      canvas.width = 192;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      const c = new THREE.Color(color);
+      const fill = '#' + c.getHexString();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.strokeStyle = fill;
+      ctx.lineWidth = 4;
+      const r = 20;
+      ctx.beginPath();
+      ctx.moveTo(26 + r, 10);
+      ctx.lineTo(166 - r, 10);
+      ctx.quadraticCurveTo(166, 10, 166, 10 + r);
+      ctx.lineTo(166, 54 - r);
+      ctx.quadraticCurveTo(166, 54, 166 - r, 54);
+      ctx.lineTo(26 + r, 54);
+      ctx.quadraticCurveTo(26, 54, 26, 54 - r);
+      ctx.lineTo(26, 10 + r);
+      ctx.quadraticCurveTo(26, 10, 26 + r, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#203047';
+      ctx.font = '700 22px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 96, 32);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      texture.generateMipmaps = false;
+      texture.minFilter = THREE.LinearFilter;
+      return texture;
+    }
+
+    function newWorldRevealStatMarkerText(stat) {
+      return ({
+        food: 'Food',
+        materials: 'Mat',
+        commerce: 'Trade',
+        defense: 'Def',
+        charm: 'Charm',
+      })[stat] || 'Trait';
+    }
+
+    function paintNewWorldRevealHighlight(step) {
+      clearNewWorldRevealHighlight();
+      if (!step || step.id === 'overview' || step.id === 'summary') return;
+      if (!step || !Array.isArray(step.cells) || !step.cells.length) return;
+      if (typeof THREE === 'undefined' || typeof worldGroup === 'undefined') return;
+      const group = new THREE.Group();
+      group.name = 'new-world-reveal-highlight';
+      group.userData.noPointerPick = true;
+      const markerColor = newWorldRevealStatColor(step.stat);
+      const dotMat = new THREE.MeshBasicMaterial({
+        color: markerColor,
         transparent: true,
-        opacity: 0.82,
+        opacity: 0.9,
         depthWrite: false,
-        side: THREE.DoubleSide,
       });
-      const geo = new THREE.RingGeometry(0.42, 0.52, 32);
+      const stemMat = new THREE.MeshBasicMaterial({
+        color: markerColor,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      });
+      const dotGeo = new THREE.SphereGeometry(0.095, 16, 10);
+      const stemGeo = new THREE.CylinderGeometry(0.014, 0.014, 0.24, 8);
       const used = new Set();
-      step.cells.slice(0, 14).forEach(cell => {
+      const offsets = [
+        [0.27, -0.26],
+        [-0.27, -0.26],
+        [0.27, 0.26],
+        [-0.27, 0.26],
+      ];
+      step.cells.slice(0, 10).forEach((cell, markerIndex) => {
         if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) return;
         const key = cell.x + ',' + cell.z;
         if (used.has(key)) return;
         used.add(key);
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.rotation.x = -Math.PI / 2;
         const pos = typeof tilePos === 'function'
           ? tilePos(cell.x, cell.z)
           : new THREE.Vector3(cell.x - GRID / 2 + 0.5, 0, cell.z - GRID / 2 + 0.5);
-        mesh.position.set(pos.x, newWorldRevealCellY(cell), pos.z);
-        group.add(mesh);
+        const [ox, oz] = offsets[markerIndex % offsets.length];
+        const y = newWorldRevealCellY(cell);
+        const stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.position.set(pos.x + ox, y + 0.15, pos.z + oz);
+        const dot = new THREE.Mesh(dotGeo, dotMat);
+        dot.position.set(pos.x + ox, y + 0.28, pos.z + oz);
+        group.add(stem);
+        group.add(dot);
+        if (markerIndex < 5) {
+          const texture = newWorldRevealMarkerLabelTexture(newWorldRevealStatMarkerText(step.stat), markerColor);
+          if (texture) {
+            const labelMat = new THREE.SpriteMaterial({
+              map: texture,
+              transparent: true,
+              depthWrite: false,
+              depthTest: false,
+            });
+            const sprite = new THREE.Sprite(labelMat);
+            sprite.position.set(pos.x + ox, y + 0.56, pos.z + oz);
+            sprite.scale.set(0.72, 0.24, 1);
+            group.add(sprite);
+          }
+        }
       });
       if (!group.children.length) {
-        geo.dispose();
-        mat.dispose();
+        dotGeo.dispose();
+        stemGeo.dispose();
+        dotMat.dispose();
+        stemMat.dispose();
         return;
       }
       worldGroup.add(group);
@@ -4143,21 +4245,25 @@ syncTinyworldOwnerToolControls();
       overlay.setAttribute('role', 'dialog');
       overlay.setAttribute('aria-modal', 'false');
       overlay.innerHTML =
-        '<section class="new-world-reveal-card">' +
-          '<button type="button" class="new-world-reveal-close"></button>' +
-          '<div class="new-world-reveal-kicker"></div>' +
-          '<h2 class="new-world-reveal-name"></h2>' +
-          '<div class="new-world-reveal-meta"></div>' +
-          '<div class="new-world-reveal-step-count"></div>' +
-          '<h3 class="new-world-reveal-step-title"></h3>' +
-          '<p class="new-world-reveal-step-body"></p>' +
-          '<div class="new-world-reveal-stats"></div>' +
-          '<div class="new-world-reveal-traits"></div>' +
-          '<div class="new-world-reveal-actions">' +
-            '<button type="button" class="new-world-reveal-secondary"></button>' +
-            '<button type="button" class="new-world-reveal-primary"></button>' +
-          '</div>' +
-        '</section>';
+        '<div class="new-world-reveal-stack">' +
+          '<section class="new-world-reveal-card">' +
+            '<button type="button" class="new-world-reveal-close"></button>' +
+            '<div class="new-world-reveal-kicker"></div>' +
+            '<h2 class="new-world-reveal-name"></h2>' +
+            '<div class="new-world-reveal-meta"></div>' +
+            '<div class="new-world-reveal-stats"></div>' +
+            '<div class="new-world-reveal-traits"></div>' +
+          '</section>' +
+          '<section class="new-world-reveal-guide">' +
+            '<div class="new-world-reveal-step-count"></div>' +
+            '<h3 class="new-world-reveal-step-title"></h3>' +
+            '<p class="new-world-reveal-step-body"></p>' +
+            '<div class="new-world-reveal-actions">' +
+              '<button type="button" class="new-world-reveal-secondary"></button>' +
+              '<button type="button" class="new-world-reveal-primary"></button>' +
+            '</div>' +
+          '</section>' +
+        '</div>';
       document.body.appendChild(overlay);
       overlay.querySelector('.new-world-reveal-close').addEventListener('click', closeNewWorldReveal);
       overlay.querySelector('.new-world-reveal-secondary').addEventListener('click', closeNewWorldReveal);
@@ -4193,15 +4299,19 @@ syncTinyworldOwnerToolControls();
       const index = Math.max(0, Math.min(steps.length - 1, newWorldRevealState.step));
       const step = steps[index];
       const stat = (profile.topStats || []).find(s => s.id === step.stat) || (profile.topStats && profile.topStats[0]) || { id: 'charm', label: 'Charm', value: 0 };
+      const rarityKey = randomIslandRarityKey(profile.economy.rarity);
+      const rarityText = randomIslandDisplayRarity(profile.economy.rarity);
       const params = {
         name: profile.name,
         archetype: profile.archetype,
-        rarity: randomIslandRarityLabel(profile.economy.rarity),
+        rarity: rarityText,
         gold: profile.economy.potential,
         stat: randomIslandStatLabel(stat.id, stat.label),
         value: Number(stat.value || 0).toFixed(1),
         traits: (profile.traits || []).slice(0, 3).join(', '),
       };
+      const card = overlay.querySelector('.new-world-reveal-card');
+      card.dataset.rarity = rarityKey;
       overlay.querySelector('.new-world-reveal-close').setAttribute('aria-label', worldMenuRevealText('newworld.close', 'Close'));
       overlay.querySelector('.new-world-reveal-close').textContent = '×';
       overlay.querySelector('.new-world-reveal-kicker').textContent = worldMenuRevealText('newworld.kicker', 'New world discovered');
@@ -4209,12 +4319,13 @@ syncTinyworldOwnerToolControls();
       const meta = overlay.querySelector('.new-world-reveal-meta');
       meta.innerHTML = '';
       [
-        randomIslandRarityLabel(profile.economy.rarity),
-        profile.archetype,
-        worldMenuRevealText('newworld.goldDay', '{gold} gold/day', params),
-      ].forEach(text => {
+        rarityText ? { text: rarityText, className: 'rarity' } : null,
+        { text: profile.archetype, className: 'archetype' },
+        { text: worldMenuRevealText('newworld.goldDay', '{gold} gold/day', params), className: 'gold' },
+      ].filter(Boolean).forEach(item => {
         const pill = document.createElement('span');
-        pill.textContent = text;
+        pill.className = 'new-world-reveal-meta-' + item.className;
+        pill.textContent = item.text;
         meta.appendChild(pill);
       });
       overlay.querySelector('.new-world-reveal-step-count').textContent = worldMenuRevealText('newworld.stepCount', 'Step {n}/{total}', {
@@ -4222,7 +4333,7 @@ syncTinyworldOwnerToolControls();
         total: steps.length,
       });
       overlay.querySelector('.new-world-reveal-step-title').textContent = worldMenuRevealText('newworld.step.' + step.id + '.title', step.title, params);
-      overlay.querySelector('.new-world-reveal-step-body').textContent = worldMenuRevealText('newworld.step.' + step.id + '.body', step.body, params);
+      overlay.querySelector('.new-world-reveal-step-body').textContent = worldMenuRevealText('newworld.step.' + step.id + '.body', step.body, params).replace(/\s+/g, ' ').trim();
 
       const statsEl = overlay.querySelector('.new-world-reveal-stats');
       statsEl.innerHTML = '';

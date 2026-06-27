@@ -1,8 +1,8 @@
 /**
  * LandscapeEngine — water surface mixin.
  *
- * Builds the animated reflective water plane (ripples, fresnel, sun
- * glint, fog, optional XZ clip box) and registers the mesh into the
+ * Builds the animated refractive/reflective water plane (ripples, fresnel,
+ * sun glint, fog, optional XZ clip box) and registers the mesh into the
  * scene. Attaches `_initWater` to LandscapeEngine.prototype.
  *
  * Depends on: LandscapeEngine being defined globally and window.THREE.
@@ -19,6 +19,7 @@
   Object.assign(global.LandscapeEngine.prototype, {
     // --- Water Implementation ---
     _initWater() {
+      const reflectionUniforms = global.twWaterReflectionUniforms ? global.twWaterReflectionUniforms() : null;
       this.waterMat = new THREE.ShaderMaterial({
         uniforms: {
           time:      { value: 0 },
@@ -42,6 +43,9 @@
           foamAmount:   { value: 0.55 },
           specPower:    { value: 90.0 },
           posterize:    { value: 12.0 },
+          reflectionMap:      reflectionUniforms ? reflectionUniforms.map : { value: null },
+          reflectionMatrix:   reflectionUniforms ? reflectionUniforms.matrix : { value: new THREE.Matrix4() },
+          reflectionStrength: reflectionUniforms ? reflectionUniforms.strength : { value: 0.0 },
           // Gated by the "Enhanced water" Settings toggle (renderEnhancedWater).
           uEnhance:     { value: (typeof renderEnhancedWater === 'undefined' || renderEnhancedWater) ? 1.0 : 0.0 },
           clipEnabled:  { value: 0.0 },
@@ -86,6 +90,9 @@
           uniform float foamAmount;
           uniform float specPower;
           uniform float posterize;
+          uniform sampler2D reflectionMap;
+          uniform mat4 reflectionMatrix;
+          uniform float reflectionStrength;
           uniform float uEnhance;
           uniform float clipEnabled;
           uniform vec3 clipMin;
@@ -163,6 +170,28 @@
             float back = max(dot(-norm, L), 0.0);
             col += shallow * back * 0.05 * uEnhance;
 
+            // --- Refractive bend: air-to-water vector drives caustic tint ---
+            vec3 refr = refract(-viewDir, norm, 0.7502);
+            vec2 refrUv = baseUv * 1.65 + refr.xz * (0.48 + (1.0 - norm.y) * 1.15) + fl * (time * 0.040);
+            float refrN = noise(refrUv * 3.2) * 0.7 +
+              noise(refrUv * 8.5 + vec2(time * 0.07, -time * 0.05)) * 0.3;
+            float refrStrength = clamp(0.24 + length(refr.xz) * 0.32 + (1.0 - fresnel) * 0.24, 0.0, 0.58) * uEnhance;
+            vec3 refrCol = mix(deep, shallow, 0.34 + refrN * 0.66);
+            col = mix(col, refrCol, refrStrength);
+            float refrCaustic = pow(max(1.0 - abs(refrN - 0.5) * 2.0, 0.0), 4.0);
+            float refrRibbon = pow(0.5 + 0.5 * sin(vWorldPos.x * 0.055 + vWorldPos.z * 0.036 + time * 0.85), 8.0);
+            col += shallow * refrCaustic * 0.26 * uEnhance * (1.0 - fresnel * 0.45);
+            col += vec3(0.62, 0.95, 1.0) * refrRibbon * 0.10 * uEnhance;
+
+            vec4 reflCoord = reflectionMatrix * vec4(vWorldPos, 1.0);
+            vec2 reflUv = reflCoord.xy / max(reflCoord.w, 0.0001);
+            float reflInside = step(0.001, reflUv.x) * step(0.001, reflUv.y) *
+              step(reflUv.x, 0.999) * step(reflUv.y, 0.999);
+            vec3 sceneReflection = texture2D(reflectionMap, clamp(reflUv + norm.xz * 0.028, vec2(0.001), vec2(0.999))).rgb;
+            float sceneReflectMix = clamp(0.46 + fresnel * 0.38 + length(norm.xz) * 0.18, 0.0, 0.84) *
+              reflectionStrength * uEnhance * reflInside;
+            col = mix(col, sceneReflection, sceneReflectMix);
+
             float reflectionMix = clamp((0.14 + fresnel * 0.44 * fresnelBoost) * reflectivity, 0.0, 0.94);
             col = mix(col, reflectedSky, reflectionMix);
             col += reflectedSky * sheen * uEnhance;
@@ -197,10 +226,12 @@
         depthWrite: false,
         side: THREE.DoubleSide,
       });
+      this.waterMat.userData.twWaterReflective = true;
 
       this.waterGeo = new THREE.PlaneGeometry(this.WATER_EXTENT, this.WATER_EXTENT, 1, 1);
       this.waterGeo.rotateX(-Math.PI / 2);
       this.waterMesh = new THREE.Mesh(this.waterGeo, this.waterMat);
+      this.waterMesh.userData.twWaterReflective = true;
       this.waterMesh.position.y = this.WATER_LEVEL;
       this.waterMesh.renderOrder = 3;
       this.scene.add(this.waterMesh);

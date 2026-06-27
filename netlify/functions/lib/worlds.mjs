@@ -6,6 +6,11 @@
 // straightforward to unit test. Gameplay constants (hearts, cooldowns, node
 // charges, regrowth) live in party/index.js, the authoritative simulation.
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  DEFAULT_ECONOMY_POLICY,
+  clampTaxRate,
+  normalizeWorldResourceSpec,
+} from '../../../packages/tinyworld-mmo-core/src/index.js';
 import { solanaEnv, solanaRpc, isSolanaPublicKey } from './solana.mjs';
 
 export const WORLD_RESOURCES = ['fish', 'meat', 'plants', 'ore'];
@@ -27,6 +32,7 @@ function worldCellX(cell) { return Array.isArray(cell) ? cell[0] : (cell && cell
 function worldCellZ(cell) { return Array.isArray(cell) ? cell[1] : (cell && cell.z); }
 function worldCellKind(cell) { return Array.isArray(cell) ? cell[3] : (cell && cell.kind); }
 function worldCellTerrain(cell) { return Array.isArray(cell) ? cell[2] : (cell && cell.terrain); }
+function worldCellEconomy(cell) { return Array.isArray(cell) ? null : normalizeWorldResourceSpec(cell && cell.economy); }
 // Supported home-board sizes (mirrors the client HOME_GRID_OPTIONS / HOME_GRID_MAX).
 // The client renderer is capped at 20x20 with this discrete set, so the server must
 // not serve or persist a size outside it — older seeds shipped 18x18 / 22x22, which
@@ -211,15 +217,23 @@ export function deriveResourceStats(data, gridSizeHint) {
   }
 
   const out = { fish: 0, ore: 0, plants: 0, meat: 0, ready: 0, mineable: 0, spawnable: 0 };
+  const explicitResources = new Map();
+  for (const [key, c] of byXZ) {
+    const spec = worldCellEconomy(c);
+    if (!spec) continue;
+    explicitResources.set(key, spec);
+    out[spec.resource]++;
+  }
   const waterSeen = new Set();
   for (const [key, c] of byXZ) {
-    if (worldCellTerrain(c) !== 'water' || waterSeen.has(key)) continue;
+    if (explicitResources.has(key) || worldCellTerrain(c) !== 'water' || waterSeen.has(key)) continue;
     const stack = [key];
     let members = 0;
     while (stack.length) {
       const k = stack.pop();
       if (waterSeen.has(k)) continue;
       const cc = byXZ.get(k);
+      if (explicitResources.has(k)) continue;
       if (!cc || worldCellTerrain(cc) !== 'water') continue;
       waterSeen.add(k);
       members++;
@@ -234,6 +248,9 @@ export function deriveResourceStats(data, gridSizeHint) {
   }
 
   for (const c of byXZ.values()) {
+    const x = Math.round(Number(worldCellX(c)));
+    const z = Math.round(Number(worldCellZ(c)));
+    if (explicitResources.has(x + ',' + z)) continue;
     const terrain = worldCellTerrain(c) || 'grass';
     const kind = worldCellKind(c);
     if (terrain === 'stone') out.ore++;

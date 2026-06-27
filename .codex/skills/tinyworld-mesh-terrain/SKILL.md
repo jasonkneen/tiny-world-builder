@@ -22,13 +22,16 @@ terrain instead of baking into per-tile `setCell`.
 - `N = GRID * effVpt` voxels per side; `effVpt` is clamped so `N <= MAX_N` (96).
 - Render (`rebuildGeometry`): each voxel writes a flat **top quad** at its height
   plus **vertical step-walls** only on edges where a neighbour (or the board
-  boundary) is lower. Boundary walls drop to a base skirt below the lowest block.
-  Geometry is non-indexed and writes from **scalars** via `quad()`/`wv()` (no
-  per-quad array allocation). Sculpt/paint edits don't rebuild inline — they call
-  `scheduleRebuild()`, which coalesces to **one rebuild per animation frame**
-  (rAF); `flushRebuild()` forces the final frame on pointer-up and
-  `cancelScheduledRebuild()` runs on teardown. This keeps a fast drag from
-  forcing multiple full-board rewrites per frame (engine perf budget).
+  boundary) is lower. The real-material path greedily merges flat same-material
+  top rectangles that have no exposed drop edge, then leaves exposed bevels and
+  walls per-voxel so the chunky silhouette stays intact. Boundary walls drop to
+  a base skirt below the lowest block. Geometry is non-indexed and writes from
+  **scalars** via `quad()`/`wv()` (no per-quad array allocation). Sculpt/paint
+  edits don't rebuild inline — they call `scheduleRebuild()`, which coalesces to
+  **one rebuild per animation frame** (rAF); `flushRebuild()` forces the final
+  frame on pointer-up and `cancelScheduledRebuild()` runs on teardown. This keeps
+  a fast drag from forcing multiple full-board rewrites per frame (engine perf
+  budget).
 - Preserved sunken board cells (`water`/`stone`) are mesh holes so the underlying
   board terrain shows through. Treat those holes as open/low neighbours when
   computing adjacent wall panels; otherwise deleting adjacent blocks leaves
@@ -138,6 +141,10 @@ terrain instead of baking into per-tile `setCell`.
 - The block terrain is still a separately persisted overlay. Object/avatar
   grounding can sample it, but the world save/version schema does not yet store a
   mesh-terrain payload for published islands.
+- Mesh Terrain is visual/grounding data only for the economy. If a sculpted
+  formation should become harvestable, project it to ordinary cells or object
+  cells with explicit `economy` metadata; do not infer resource payouts from
+  shader/material pixels.
 - Home-tile hiding can race world (re)renders; it re-hides on
   `tinyworld:world-changed` and via short boot timers.
 

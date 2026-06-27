@@ -63,6 +63,22 @@ test('deriveResourceStats mirrors world room resource node seeding', () => {
   assert.ok(stats.spawnable > 0);
 });
 
+test('deriveResourceStats honors explicit economy tags on custom assets', () => {
+  const data = { v: 4, gridSize: 4, cells: [
+    { x: 0, z: 0, terrain: 'water', economy: { resource: 'ore', charges: 2 } },
+    { x: 1, z: 0, terrain: 'water' },
+    { x: 2, z: 0, terrain: 'grass', kind: 'model-stamp', economy: { resource: 'plants' } },
+    { x: 3, z: 0, terrain: 'grass', kind: 'voxel-build', economy: { type: 'meat' } },
+  ] };
+  const stats = deriveResourceStats(data, 4);
+  assert.equal(stats.fish, 1, 'explicit non-fish water cell is not double-counted as a water body');
+  assert.equal(stats.ore, 1);
+  assert.equal(stats.plants, 1);
+  assert.equal(stats.meat, 2, 'explicit meat participates in the same visible meat floor as wildlife');
+  assert.equal(stats.mineable, 1);
+  assert.equal(stats.ready, 5);
+});
+
 test('worldDto includes owner email and resource stats for cards', () => {
   const dto = worldDto({
     id: 42,

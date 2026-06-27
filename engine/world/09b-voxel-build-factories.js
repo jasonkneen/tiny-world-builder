@@ -2226,7 +2226,57 @@
       g.userData = { kind: 'fence', level: lv, side: normalized };
       return g;
     }
-    if (fenceStyle === 'garden' && !castle && !roadGate && lv < 4) {
+    if (fenceStyle === 'gate' && !castle && !roadGate && lv < 4) {
+      const postH = lv === 1 ? 0.58 : 0.66;
+      const gateH = postH * 0.70;
+      const postMat = M.fenceGarden || M.fence;
+      const railMat = M.fenceGardenD || M.fence;
+      const panelMat = M.fence || postMat;
+      const latchMat = M.knob || M.fenceWire || railMat;
+      const markerMat = M.flagRed || latchMat;
+      const leafLen = 0.42;
+      const leafHalf = leafLen / 2;
+      const leafAngle = 0.62;
+      const hingeInset = 0.43;
+      const ends = alongX ? [[-0.50, offsetZ], [0.50, offsetZ]] : [[offsetX, -0.50], [offsetX, 0.50]];
+      ends.forEach(([x, z]) => {
+        vbox(g, 0.14, postH, 0.14, x, postH / 2, z, postMat);
+        vbox(g, 0.18, 0.06, 0.18, x, postH + 0.03, z, railMat);
+      });
+      if (alongX) {
+        const inward = normalized === 'n' ? 1 : -1;
+        const leaves = [
+          { hingeX: -hingeInset, dir: 1, ry: -inward * leafAngle },
+          { hingeX: hingeInset, dir: -1, ry: inward * leafAngle },
+        ];
+        leaves.forEach(leaf => {
+          const leafX = leaf.hingeX + leaf.dir * Math.cos(leaf.ry) * leafHalf;
+          const leafZ = offsetZ + leaf.dir * -Math.sin(leaf.ry) * leafHalf;
+          for (const y of [0.13, gateH * 0.82]) vbox(g, leafLen, 0.055, 0.055, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
+          for (const dx of [-0.13, 0.13]) {
+            vbox(g, 0.05, gateH * 0.66, 0.05, leafX + dx * Math.cos(leaf.ry), gateH * 0.43, leafZ - dx * Math.sin(leaf.ry), panelMat, { ry: leaf.ry });
+          }
+        });
+        vbox(g, 0.22, 0.11, 0.045, 0, postH + 0.13, offsetZ, markerMat, { noShadow: true });
+        vbox(g, 0.075, 0.075, 0.075, 0.12, gateH * 0.55, offsetZ + inward * 0.03, latchMat, { noShadow: true });
+      } else {
+        const inward = normalized === 'w' ? 1 : -1;
+        const leaves = [
+          { hingeZ: -hingeInset, dir: 1, ry: inward * leafAngle },
+          { hingeZ: hingeInset, dir: -1, ry: -inward * leafAngle },
+        ];
+        leaves.forEach(leaf => {
+          const leafX = offsetX + leaf.dir * Math.sin(leaf.ry) * leafHalf;
+          const leafZ = leaf.hingeZ + leaf.dir * Math.cos(leaf.ry) * leafHalf;
+          for (const y of [0.13, gateH * 0.82]) vbox(g, 0.055, 0.055, leafLen, leafX, y, leafZ, railMat, { ry: leaf.ry, noBevel: true });
+          for (const dz of [-0.13, 0.13]) {
+            vbox(g, 0.05, gateH * 0.66, 0.05, leafX + dz * Math.sin(leaf.ry), gateH * 0.43, leafZ + dz * Math.cos(leaf.ry), panelMat, { ry: leaf.ry });
+          }
+        });
+        vbox(g, 0.045, 0.11, 0.22, offsetX, postH + 0.13, 0, markerMat, { noShadow: true });
+        vbox(g, 0.075, 0.075, 0.075, offsetX + inward * 0.03, gateH * 0.55, 0.12, latchMat, { noShadow: true });
+      }
+    } else if (fenceStyle === 'garden' && !castle && !roadGate && lv < 4) {
       const postH = lv === 1 ? 0.42 : (lv === 2 ? 0.50 : 0.56);
       const postMat = M.fenceGarden || M.fence;
       const railMat = M.fenceGardenD || M.fence;

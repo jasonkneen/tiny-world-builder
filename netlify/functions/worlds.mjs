@@ -240,7 +240,7 @@ export default async function worldsFunction(request) {
         return errorResponse("Tax changes are on cooldown (" + h + "h remaining)", 429, origin);
       }
       const tax = cleanTaxPercent(body && body.taxPercent, lastChange);
-      if (tax == null) return errorResponse('Tax must be 1-100', 400, origin);
+      if (tax == null) return errorResponse('Tax must be 1-20', 400, origin);
       // Name + tax are editable only while the world is a draft; locked on publish.
       const rows = await sql`
         UPDATE worlds

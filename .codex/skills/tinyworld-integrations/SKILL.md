@@ -138,6 +138,13 @@ backend:
 - Tinyverse room join/refresh payloads use compact cells. Terrain-only cells may
   be `[x,z,terrain]`; object/resource cells are `[x,z,terrain,kind]`. Keep the
   renderer validator and `applyState()` tolerant of both tuple lengths.
+- Explicit resource-bearing custom assets use object-form cells with
+  `economy: { resource, charges?, label? }`. Live resources are currently
+  `fish`, `ore`, `plants`, and `meat`; normalize through
+  `packages/tinyworld-mmo-core/normalizeWorldResourceSpec(...)` in PartyKit and
+  Netlify code instead of inferring resources from visual materials or copying
+  constants. Compact tuple cells remain the default for ordinary terrain/kind
+  saves.
 - Tinyverse multiplayer rooms are runtime/play/moderation surfaces only. Do not
   add live island building controls, `adminSave`, build-role seats, or
   `world.refresh` board replacement inside PartyKit rooms. Island editing and

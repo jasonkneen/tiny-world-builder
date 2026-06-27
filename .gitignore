@@ -30,6 +30,11 @@ dist/
 cluso/
 /.worktrees
 /.polly
+
+# Private local-only docs for strategy, vision, and rough notes.
+docs/private/
+docs/*.private.md
+
 plans/autonomous-agentic-team.md
 plans/drafts/agent-spec-format.md
 plans/drafts/future-migrations.draft.sql

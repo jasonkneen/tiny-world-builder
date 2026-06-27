@@ -266,8 +266,8 @@
     distanceMist: '0.36',
     backdrop: '0.78',
     backdropVignette: '0.24',
-    tiltBlur: '10.5',
-    tiltFocus: '21',
+    tiltBlur: '2.1',
+    tiltFocus: '65',
     ghostOpacity: '0',
     floorOpacity: '0',
     objectOpacity: '0',
@@ -495,8 +495,8 @@
   let renderPixelDepthEdge = storedNumber(RENDER_LS.pixelDepthEdge, 0, 0, 1);
   let renderPixelNormalEdge = storedNumber(RENDER_LS.pixelNormalEdge, 0, 0, 1);
   let renderShaderAntialias = storedNumber(RENDER_LS.shaderAntialias, 0, 0, 1);
-  let renderTiltBlur = storedNumber(RENDER_LS.tiltBlur, 1.0, 0, 18);
-  let renderTiltFocus = storedNumber(RENDER_LS.tiltFocus, 65, 15, 80);
+  let renderTiltBlur = storedNumber(RENDER_LS.tiltBlur, parseFloat(RENDER_DEFAULTS.tiltBlur), 0, 18);
+  let renderTiltFocus = storedNumber(RENDER_LS.tiltFocus, parseFloat(RENDER_DEFAULTS.tiltFocus), 15, 80);
   let renderGhostOpacity = 0;
   let renderFloorOpacity = 0;
   let renderObjectOpacity = 0;
@@ -1250,6 +1250,180 @@
     pixelState.wantNormals = wantNormals;
   }
 
+  // -------- planar water reflection --------
+  // True reflective water needs an actual scene render from a mirrored camera.
+  // This target is sampled by the water materials patched in 04-textures.js.
+  const twWaterReflectionState = {
+    target: null,
+    targetSize: 0,
+    perspectiveCam: null,
+    orthoCam: null,
+    textureMatrix: new THREE.Matrix4(),
+    uniforms: {
+      map: { value: null },
+      matrix: { value: new THREE.Matrix4() },
+      strength: { value: 0 },
+      resolution: { value: new THREE.Vector2(1, 1) },
+    },
+    rendering: false,
+  };
+  const twWaterReflectionBiasMatrix = new THREE.Matrix4().set(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 0.5, 0.5,
+    0.0, 0.0, 0.0, 1.0
+  );
+  const twWaterReflectionPlaneY = 0;
+  const twWaterReflectionClipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -twWaterReflectionPlaneY);
+  const twWaterReflectionEye = new THREE.Vector3();
+  const twWaterReflectionLook = new THREE.Vector3();
+  const twWaterReflectionUp = new THREE.Vector3();
+  const twWaterReflectionDir = new THREE.Vector3();
+  const twWaterReflectionBufferSize = new THREE.Vector2();
+
+  function twWaterReflectionUniforms() {
+    return twWaterReflectionState.uniforms;
+  }
+
+  function twWaterReflectionMirrorVec3(src, dst) {
+    dst.copy(src);
+    dst.y = twWaterReflectionPlaneY * 2 - dst.y;
+    return dst;
+  }
+
+  function twWaterReflectionEnsureTarget() {
+    const size = renderer.getDrawingBufferSize(twWaterReflectionBufferSize);
+    const targetSize = Math.max(256, Math.min(1024, Math.floor(Math.min(size.x, size.y))));
+    if (!twWaterReflectionState.target) {
+      twWaterReflectionState.target = new THREE.WebGLRenderTarget(targetSize, targetSize, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        depthBuffer: true,
+        stencilBuffer: false,
+      });
+      twWaterReflectionState.target.texture.name = 'tw-water-planar-reflection';
+      twWaterReflectionState.target.texture.generateMipmaps = false;
+      twWaterReflectionState.uniforms.map.value = twWaterReflectionState.target.texture;
+      twWaterReflectionState.targetSize = targetSize;
+    } else if (twWaterReflectionState.targetSize !== targetSize) {
+      twWaterReflectionState.target.setSize(targetSize, targetSize);
+      twWaterReflectionState.targetSize = targetSize;
+    }
+    twWaterReflectionState.uniforms.resolution.value.set(targetSize, targetSize);
+    return twWaterReflectionState.target;
+  }
+
+  function twWaterReflectionCameraFor(activeCamera) {
+    if (activeCamera && activeCamera.isOrthographicCamera) {
+      if (!twWaterReflectionState.orthoCam) {
+        twWaterReflectionState.orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+      }
+      const cam = twWaterReflectionState.orthoCam;
+      cam.left = activeCamera.left;
+      cam.right = activeCamera.right;
+      cam.top = activeCamera.top;
+      cam.bottom = activeCamera.bottom;
+      cam.near = activeCamera.near;
+      cam.far = activeCamera.far;
+      cam.zoom = activeCamera.zoom;
+      cam.projectionMatrix.copy(activeCamera.projectionMatrix);
+      return cam;
+    }
+    if (!twWaterReflectionState.perspectiveCam) {
+      twWaterReflectionState.perspectiveCam = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
+    }
+    const cam = twWaterReflectionState.perspectiveCam;
+    cam.fov = activeCamera.fov;
+    cam.aspect = activeCamera.aspect;
+    cam.near = activeCamera.near;
+    cam.far = activeCamera.far;
+    cam.zoom = activeCamera.zoom;
+    cam.projectionMatrix.copy(activeCamera.projectionMatrix);
+    return cam;
+  }
+
+  function twWaterReflectionSyncCamera(activeCamera) {
+    const mirrorCam = twWaterReflectionCameraFor(activeCamera);
+    activeCamera.getWorldDirection(twWaterReflectionDir);
+    twWaterReflectionLook.copy(activeCamera.position).add(twWaterReflectionDir);
+    twWaterReflectionMirrorVec3(activeCamera.position, twWaterReflectionEye);
+    twWaterReflectionMirrorVec3(twWaterReflectionLook, twWaterReflectionLook);
+    twWaterReflectionUp.copy(activeCamera.up);
+    twWaterReflectionUp.y *= -1;
+    mirrorCam.position.copy(twWaterReflectionEye);
+    mirrorCam.up.copy(twWaterReflectionUp);
+    mirrorCam.lookAt(twWaterReflectionLook);
+    mirrorCam.updateMatrixWorld(true);
+    mirrorCam.matrixWorldInverse.copy(mirrorCam.matrixWorld).invert();
+    twWaterReflectionState.textureMatrix.copy(twWaterReflectionBiasMatrix)
+      .multiply(mirrorCam.projectionMatrix)
+      .multiply(mirrorCam.matrixWorldInverse);
+    twWaterReflectionState.uniforms.matrix.value.copy(twWaterReflectionState.textureMatrix);
+    return mirrorCam;
+  }
+
+  function twWaterReflectionIsWaterObject(obj) {
+    if (!obj) return false;
+    if (obj.userData && obj.userData.twWaterReflective) return true;
+    const mat = obj.material;
+    if (Array.isArray(mat)) return mat.some(m => m && m.userData && m.userData.twWaterReflective);
+    return !!(mat && mat.userData && mat.userData.twWaterReflective);
+  }
+
+  function twWaterReflectionHideWater() {
+    const hidden = [];
+    scene.traverse(obj => {
+      if (!obj || !obj.visible || !twWaterReflectionIsWaterObject(obj)) return;
+      hidden.push(obj);
+      obj.visible = false;
+    });
+    return hidden;
+  }
+
+  function twWaterReflectionRestore(hidden) {
+    for (const obj of hidden) {
+      if (obj) obj.visible = true;
+    }
+  }
+
+  function twWaterReflectionCapture() {
+    const xrPresenting = renderer.xr && renderer.xr.isPresenting;
+    if (!renderEnhancedWater || xrPresenting || !camera || twWaterReflectionState.rendering) {
+      twWaterReflectionState.uniforms.strength.value = 0;
+      return;
+    }
+    const targetRT = twWaterReflectionEnsureTarget();
+    const mirrorCam = twWaterReflectionSyncCamera(camera);
+    const previousTarget = renderer.getRenderTarget();
+    const previousShadowNeedsUpdate = renderer.shadowMap && renderer.shadowMap.needsUpdate;
+    const previousClippingPlanes = renderer.clippingPlanes;
+    const previousSkyPos = skyBubble ? skyBubble.position.clone() : null;
+    const hiddenWater = twWaterReflectionHideWater();
+    twWaterReflectionState.rendering = true;
+    if (skyBubble) skyBubble.position.copy(mirrorCam.position);
+    if (renderer.shadowMap) renderer.shadowMap.needsUpdate = false;
+    renderer.clippingPlanes = [twWaterReflectionClipPlane];
+    renderer.setRenderTarget(targetRT);
+    renderer.clear();
+    const reflectionStart = repaintProfileBegin();
+    renderer.render(scene, mirrorCam);
+    repaintProfileEnd('render.reflect', reflectionStart);
+    renderer.setRenderTarget(previousTarget);
+    renderer.clippingPlanes = previousClippingPlanes;
+    if (renderer.shadowMap) renderer.shadowMap.needsUpdate = previousShadowNeedsUpdate;
+    if (skyBubble && previousSkyPos) skyBubble.position.copy(previousSkyPos);
+    twWaterReflectionRestore(hiddenWater);
+    twWaterReflectionState.rendering = false;
+    twWaterReflectionState.uniforms.strength.value = 1;
+  }
+
+  window.__tinyworldWaterReflection = {
+    uniforms: twWaterReflectionUniforms,
+    capture: twWaterReflectionCapture,
+    state: twWaterReflectionState,
+  };
+
   // -------- render culling --------
   // Three.js frustum-culls meshes, but it does not know our scene-level
   // occlusion rules: island top content is invisible from underneath, and
@@ -1565,6 +1739,7 @@
       renderer.shadowMap.needsUpdate = true;
     }
     updateSceneVisibilityForCamera();
+    twWaterReflectionCapture();
     const xrPresenting = renderer.xr && renderer.xr.isPresenting;
     const usePixelation = renderPixelSize > 1 && !xrPresenting;
     const useShaderAA = renderShaderAntialias > 0.001 && !xrPresenting;

@@ -35,6 +35,10 @@ Checks:
   admin grid. It must use real `/api/worlds` preview data, keep legacy
   multi-gate data collapsed to the single center world-selection stargate, and
   keep search/filter/arrow/dot navigation reachable on desktop and mobile.
+- New-world reveal QA: the collectible island card and the step-through guide
+  should read as separate surfaces; Common rarity should be silent; Uncommon+
+  uses a restrained rarity border treatment; resource highlights should render
+  as small labeled stat pins, not large unexplained rings over whole tiles.
 - Multiplayer avatar name tags should stay a fixed on-screen size while zooming
   in perspective or orthographic camera modes.
 - Orbit still works with normal left-drag.

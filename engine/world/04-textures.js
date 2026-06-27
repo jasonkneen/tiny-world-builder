@@ -1092,8 +1092,9 @@
   }
 
   // Shared clock + procedural noise for the enhanced water surface shader
-  // (animated reflections / sun glints / foam). Advanced by tickWaterTextureFlow
+  // (animated refraction / sun glints / foam). Advanced by tickWaterTextureFlow
   // and shared across every water material so one update drives them all.
+  const WATER_SURFACE_SHADER_VARIANT = 'planar-reflect-v1';
   const waterShaderTimeUniform = { value: 0 };
   const WATER_SHADER_NOISE_GLSL = `
     float twWaterHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -1110,21 +1111,24 @@
     material.map = texture;
     material.userData = material.userData || {};
     material.userData.worldTextureScale = textureScale;
+    material.userData.twWaterReflective = true;
     material.needsUpdate = true;
     // The enhanced surface shimmer is injected via onBeforeCompile, whose output
     // is NOT part of the default program cache key — so give each enhanced/plain
     // state its own key. That lets the Settings toggle recompile water cleanly.
     material.customProgramCacheKey = () =>
-      'tw-water-' + textureScale.toFixed(4) + '-' + (renderEnhancedWater ? 'fx' : 'plain');
+      'tw-water-' + WATER_SURFACE_SHADER_VARIANT + '-' + textureScale.toFixed(4) + '-' +
+        (renderEnhancedWater ? 'fx' : 'plain');
     material.onBeforeCompile = (shader) => {
       const enhanced = (typeof renderEnhancedWater === 'undefined') ? true : renderEnhancedWater;
+      const reflectionUniforms = (typeof twWaterReflectionUniforms === 'function') ? twWaterReflectionUniforms() : null;
       shader.uniforms.waterFlowOffset = { value: flowState.offset };
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
         `
         #include <common>
         uniform vec2 waterFlowOffset;
-        ${enhanced ? 'varying vec3 vTwWaterWorld; varying vec3 vTwWaterView; varying vec3 vTwWaterNrm;' : ''}
+        ${enhanced ? 'uniform mat4 twReflectionMatrix; varying vec3 vTwWaterWorld; varying vec3 vTwWaterView; varying vec3 vTwWaterNrm; varying vec4 vTwReflectCoord;' : ''}
         `
       );
       shader.vertexShader = shader.vertexShader.replace(
@@ -1142,7 +1146,7 @@
           localNormal = instanceMatrix * localNormal;
         #endif
         vec3 worldNormal = normalize((modelMatrix * localNormal).xyz);
-        ${enhanced ? 'vTwWaterWorld = worldPos.xyz; vTwWaterView = cameraPosition - worldPos.xyz; vTwWaterNrm = worldNormal;' : ''}
+        ${enhanced ? 'vTwWaterWorld = worldPos.xyz; vTwWaterView = cameraPosition - worldPos.xyz; vTwWaterNrm = worldNormal; vTwReflectCoord = twReflectionMatrix * worldPos;' : ''}
 
         #ifdef USE_MAP
           if (abs(worldNormal.y) > 0.5) {
@@ -1156,17 +1160,23 @@
         `
       );
       if (!enhanced) return;
-      // --- enhanced water surface: animated ripple normal -> fresnel sky tint,
-      //     Blinn-Phong sun glint and foam, masked to upward-facing faces ---
+      // --- enhanced water surface: animated ripple normal -> refractive lensing,
+      //     planar reflection, Blinn-Phong sun glint and foam, masked to upward-facing faces ---
       shader.uniforms.uWaterTime = waterShaderTimeUniform;
+      shader.uniforms.twReflectionMap = reflectionUniforms ? reflectionUniforms.map : { value: null };
+      shader.uniforms.twReflectionMatrix = reflectionUniforms ? reflectionUniforms.matrix : { value: new THREE.Matrix4() };
+      shader.uniforms.twReflectionStrength = reflectionUniforms ? reflectionUniforms.strength : { value: 0 };
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <common>',
         `
         #include <common>
         uniform float uWaterTime;
+        uniform sampler2D twReflectionMap;
+        uniform float twReflectionStrength;
         varying vec3 vTwWaterWorld;
         varying vec3 vTwWaterView;
         varying vec3 vTwWaterNrm;
+        varying vec4 vTwReflectCoord;
         ${WATER_SHADER_NOISE_GLSL}
         `
       );
@@ -1194,15 +1204,52 @@
             vec3 sdir = normalize(vec3(0.40, 0.72, 0.55));
             vec3 hvec = normalize(sdir + vdir);
             float glint = pow(max(dot(rn, hvec), 0.0), 60.0);
+            vec3 refr = refract(-vdir, rn, 0.7502);
+            float refrLean = clamp(length(refr.xz) * 1.35 + (1.0 - rn.y) * 3.4, 0.0, 1.0);
+            vec2 refrBend = refr.xz * (0.070 + refrLean * 0.120);
+            vec2 refrUv = vUv + refrBend + vec2(t * 0.020, -t * 0.015);
+            #ifdef USE_MAP
+              vec3 refrTex = vec3(
+                texture2D(map, refrUv + refrBend * 0.80 + vec2(0.006, -0.003)).r,
+                texture2D(map, refrUv + refrBend * 0.18).g,
+                texture2D(map, refrUv - refrBend * 0.55 + vec2(-0.004, 0.004)).b
+              );
+              float refrLum = dot(refrTex, vec3(0.299, 0.587, 0.114));
+            #else
+              float refrLum = twWaterNoise(wp * 2.20 + refr.xz * 2.7 + vec2(t * 0.07, -t * 0.05));
+            #endif
+            float refrDepth = clamp(refrLum * 0.65 + h0 * 0.35, 0.0, 1.0);
+            vec3 refrCol = mix(vec3(0.015, 0.25, 0.42), vec3(0.46, 0.96, 1.0), refrDepth);
+            float refrMask = clamp(0.18 + refrLean * 0.20, 0.0, 0.38) * twTop;
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, refrCol, refrMask);
+            vec2 reflUv = vTwReflectCoord.xy / max(vTwReflectCoord.w, 0.0001);
+            vec2 reflBend = refrBend * 0.46 + rn.xz * 0.018;
+            vec2 reflSampleUv = clamp(reflUv + reflBend, vec2(0.001), vec2(0.999));
+            float reflInside = step(0.001, reflUv.x) * step(0.001, reflUv.y) *
+              step(reflUv.x, 0.999) * step(reflUv.y, 0.999);
+            vec3 reflectedScene = texture2D(twReflectionMap, reflSampleUv).rgb;
+            float fres = pow(1.0 - max(dot(rn, vdir), 0.0), 2.0);
+            float reflectedLuma = dot(reflectedScene, vec3(0.299, 0.587, 0.114));
+            vec3 reflectedWaterScene = mix(reflectedScene, reflectedScene * vec3(0.72, 0.90, 1.08) + vec3(0.01, 0.03, 0.05), 0.18);
+            reflectedWaterScene += vec3(0.16, 0.42, 0.62) * smoothstep(0.08, 0.34, reflectedLuma) * 0.04;
+            float reflectMask = clamp(0.74 + fres * 0.28 + refrLean * 0.12, 0.0, 0.96) *
+              twReflectionStrength * twTop * reflInside;
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, reflectedWaterScene, reflectMask);
             // bright thin caustic veins where the wave field crosses mid-height
             float veins = pow(max(1.0 - abs(h0 - 0.5) * 2.0, 0.0), 4.0);
+            float refrCaustic = pow(max(1.0 - abs(twWaterNoise(wp * 4.40 + refr.xz * 5.2 + vec2(t * 0.20, -t * 0.14)) - 0.52) * 2.25, 0.0), 4.0);
+            float refrCausticFine = pow(max(1.0 - abs(twWaterNoise(wp * 9.20 - refr.xz * 8.0 + vec2(-t * 0.24, t * 0.19)) - 0.50) * 2.15, 0.0), 6.0);
+            float refrRibbon = pow(0.5 + 0.5 * sin((wp.x * 2.9 + wp.y * 1.7) + refrLean * 3.2 + t * 1.55), 8.0);
             float foam = smoothstep(0.62, 0.84, h0);
             // Visible moving light/dark wave bands (troughs darker, crests brighter).
-            gl_FragColor.rgb *= mix(0.82, 1.08, h0) * twTop + (1.0 - twTop);
-            // Cyan caustic veins + white sun sparkles + foam crests on top.
-            vec3 addCol = vec3(0.55, 0.86, 1.0) * veins * 0.22
-                        + vec3(1.0, 1.0, 0.98) * glint * 0.85
-                        + vec3(0.95, 0.99, 1.0) * foam * 0.32;
+            gl_FragColor.rgb *= mix(0.72, 1.18, h0) * twTop + (1.0 - twTop);
+            // Cyan refractive caustics + white sun sparkles + foam crests on top.
+            vec3 addCol = vec3(0.55, 0.90, 1.0) * veins * 0.10
+                        + vec3(0.42, 0.92, 1.0) * refrCaustic * 0.12
+                        + vec3(0.80, 1.0, 1.0) * refrCausticFine * 0.08
+                        + vec3(0.72, 0.96, 1.0) * refrRibbon * 0.06
+                        + vec3(1.0, 1.0, 0.98) * glint * 1.15
+                        + vec3(0.95, 0.99, 1.0) * foam * 0.22;
             gl_FragColor.rgb += addCol * twTop;
           }
         }
@@ -1291,7 +1338,9 @@
     const scale = base.userData && base.userData.worldTextureScale ? base.userData.worldTextureScale : 1;
     const map = base.map || texRipples;
     const color = base.color ? base.color.getHexString() : 'none';
-    const key = (base.uuid || base.id) + ':' + (map && (map.uuid || map.id)) + ':' + scale + ':' + color + ':' + Math.sign(dx || 0) + ',' + Math.sign(dz || 0);
+    const key = WATER_SURFACE_SHADER_VARIANT + ':' + (base.uuid || base.id) + ':' +
+      (map && (map.uuid || map.id)) + ':' + scale + ':' + color + ':' +
+      Math.sign(dx || 0) + ',' + Math.sign(dz || 0);
     if (!waterFlowMaterialCache.has(key)) {
       const mat = base.clone();
       applyFlowingWaterUVs(mat, map, scale, waterTextureFlowState(dx, dz));
@@ -2070,7 +2119,7 @@
         const baseScale = terrainMaterialBaseScales.get(name) || (mat.userData && mat.userData.worldTextureScale) || 1;
         const nextMap = texture !== 'default' ? materialTextureForKey(texture) : mat.map;
         if (nextMap && (texture !== 'default' || Math.abs(scale - 1) > 0.001)) {
-          applyWorldUVs(mat, nextMap, baseScale * scale);
+          applyTerrainWorldUVs(name, mat, nextMap, baseScale * scale);
         }
       }
     }
@@ -2287,7 +2336,7 @@
       ? rawObjectStyle
       : null;
     const rawFenceStyle = String(value.fenceStyle || value.fence || '').toLowerCase();
-    const fenceStyle = rawFenceStyle === 'garden' ? 'garden' : null;
+    const fenceStyle = rawFenceStyle === 'garden' || rawFenceStyle === 'gate' ? rawFenceStyle : null;
     const clampNum = (raw, lo, hi) => {
       const n = Number(raw);
       return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null;

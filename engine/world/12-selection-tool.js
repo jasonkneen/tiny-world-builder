@@ -575,6 +575,7 @@
       offsetY: (src && src.offsetY) || 0,
       offsetZ: (src && src.offsetZ) || 0,
       appearance: normalizeAppearance(src && src.appearance),
+      economy: normalizeCellEconomy(src && src.economy),
       waterFlow: normalizeWaterFlow(src && src.waterFlow),
     };
     if (cell.kind === 'stargate') {

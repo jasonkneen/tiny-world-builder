@@ -92,6 +92,11 @@ Offline random island generation:
 - The random island generator ports the `tiny-markov/island-lab` flow into
   TinyWorld schema cells: connected island mask, archetype terrain/object
   weights, water/bridge/path passes, then a deliberate token-to-native mapping.
+- The current random-island terrain/object catalog, archetype weights, resource
+  buckets, output mapping, motif ownership, and live-economy alignment notes are
+  versioned in the canonical repository
+  `docs/random-island-generation-assets.md`. Any change to those source blocks
+  must update that manifest and its source digest in the same patch.
 - Keep emitted cells complete v4 object cells: `x`, `z`, `terrain`, `kind`,
   `floors`, `terrainFloors`, `buildingType`, and `fenceSide`.
 - Map lab-only tokens explicitly to real renderer support. Examples:
@@ -109,15 +114,19 @@ Offline random island generation:
   crossing plus irrigated bank, village = plaza/roads/house block, fortress =
   keep/wall/gate, ruins = relic cluster, harbor = shore/dock/inland path. Do
   not regress this to pure weighted random placement.
-- Resource placement has a dedicated semantic pass after archetype grammar and
-  before residual scatter. Crops should read as fenced plots, animals as fenced
-  pens, homes/manors as path-connected places, trees/berries as groves,
-  stone/crystal as seams, and ruins/totems as relic sites. Residual scatter is
-  for small accents only, not the primary source of meaningful resources.
+- Resource placement now starts with a pre-archetype economy viability pass:
+  every generated island visits Food / Materials / Commerce / Defense / Charm
+  with archetype-weighted min/max bands, so even low-food quarry/fortress-style
+  islands still get a small food floor near habitation. Archetype resource
+  polish runs after the identity grammar, and final validation repairs any
+  displaced floors. Residual scatter is for small accents only, not the primary
+  source of meaningful resources.
 - Towers are owned by the corner landmark pass, not by archetype scatter:
   generated `watchtower`/`castle` tokens should resolve to corner-adjacent
   `kind:"house", buildingType:"tower"` cells with the count profile
-  0/1/2/3/4 = 6.25%/50%/25%/12.5%/6.25%.
+  0/1/2/3/4 = 6.25%/50%/25%/12.5%/6.25%. Tower doors are on local `+z`, so
+  generated towers must emit a `transform.rotationY` that faces the door inward
+  toward the island center/core.
 - Terrain is also composed through motifs before paths and object placement:
   broad land terrain comes from deterministic smooth noise fields, then water
   gets one protected composition motif (edge inlet, lake, or river) plus a small

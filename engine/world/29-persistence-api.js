@@ -369,12 +369,12 @@
       // Accept either tuple form [x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide]
       // (storage / export) or object form {x,z,terrain,kind,floors,buildingType,terrainFloors,fenceSide}
       // (canonical schema, AI generation output).
-      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dest, label;
+      let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, economy, waterFlow, dest, label;
       if (Array.isArray(entry)) {
         if (entry.length < 3) continue;
         [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow] = entry;
       } else if (entry && typeof entry === 'object') {
-        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow, dest, label } = entry);
+        ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, economy, waterFlow, dest, label } = entry);
       } else {
         continue;
       }
@@ -435,6 +435,7 @@
         extras: normalizedExtras,
         rotationY, offsetX, offsetY, offsetZ,
         appearance: normalizeAppearance(appearance),
+        economy: normalizeCellEconomy(economy),
         waterFlow: normalizeWaterFlow(waterFlow),
         dest: (normalizedKind === 'stargate' && dest != null) ? dest : undefined,
         label: (normalizedKind === 'stargate' && label != null) ? label : undefined,
@@ -465,6 +466,7 @@
           offsetY: o.offsetY,
           offsetZ: o.offsetZ,
           appearance: o.appearance,
+          economy: o.economy,
           dest: o.dest,
           label: o.label,
           userEdited: true,
@@ -595,6 +597,7 @@
         offsetX: o ? o.offsetX : 0,
         offsetZ: o ? o.offsetZ : 0,
         appearance: o ? o.appearance : null,
+        economy: o ? o.economy : null,
         animate: item.phase !== 'full' || !!(o && (o.kind || (o.extras && o.extras.length))),
         forceTile: item.phase !== 'detail' && item.phase !== 'full',
       });
@@ -652,6 +655,7 @@
           offsetX: o.offsetX,
           offsetZ: o.offsetZ,
           appearance: o.appearance,
+          economy: o.economy,
           userEdited: true,
           animate: false,
           forceTile: true,
@@ -717,11 +721,11 @@
   }
 
   function cellPatchFromEntry(entry) {
-    let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow;
+    let x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, economy, waterFlow;
     if (Array.isArray(entry)) {
       [x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow] = entry;
     } else if (entry && typeof entry === 'object') {
-      ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, waterFlow } = entry);
+      ({ x, z, terrain, kind, floors, buildingType, terrainFloors, fenceSide, extras, transform, appearance, economy, waterFlow } = entry);
     }
     if (!Number.isInteger(x) || !Number.isInteger(z)) return null;
     if (x < 0 || x >= GRID || z < 0 || z >= GRID) return null;
@@ -750,6 +754,7 @@
       })) : [],
       rotationY, offsetX, offsetY, offsetZ,
       appearance: normalizeAppearance(appearance),
+      economy: normalizeCellEconomy(economy),
       waterFlow: normalizeWaterFlow(waterFlow),
     };
   }
@@ -781,6 +786,7 @@
           offsetX: c.offsetX,
           offsetZ: c.offsetZ,
           appearance: c.appearance,
+          economy: c.economy,
           waterFlow: c.waterFlow,
           animate: true,
           impactDust: false,

@@ -9,7 +9,13 @@ Keep the renderer single-pass and predictable.
 
 Current renderer contract:
 
-- Default render path is single-pass: `renderer.render(scene, camera)` straight to the canvas. The only sanctioned post-process is the optional pixelation pass (low-res render target + depth/normal-edge fullscreen quad) gated behind the `Pixel size` / `Pixel depth edge` / `Pixel normal edge` render settings. When `renderPixelSize <= 1` or XR is presenting, that pass MUST bypass and fall back to direct rendering — do not introduce other always-on post passes (EffectComposer, screen shaders, additional render targets) without explicit approval.
+- Default render path is direct except for two explicit render-target systems:
+  the optional pixelation pass (low-res render target + depth/normal-edge fullscreen quad)
+  and the enhanced-water planar reflection pass. The reflection pass renders the scene once
+  from a mirrored camera into `tw-water-planar-reflection`, hides reflective water during
+  capture, clips below-water geometry, and is disabled in XR / when enhanced water is off.
+  Do not introduce any other always-on post passes (EffectComposer, screen shaders,
+  additional render targets) without explicit approval.
 - Cap DPR; do not return to uncapped `devicePixelRatio`. Dynamic resolution (`renderDynamicResolution`) is an adaptive multiplier below the user's Resolution slider ceiling: it adjusts effective pixel ratio slowly toward Target FPS and never persists its transient scale.
 - Warn on software WebGL renderers (SwiftShader/llvmpipe/softpipe/WARP/etc.) with the dismissible hardware-acceleration banner; many FPS complaints come from browser hardware acceleration being disabled.
 - Main WebGL context uses `antialias: true`; the old smoothing/post pass has been removed.
@@ -25,6 +31,10 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Simple blank-grass terrain is receive-only for shadows. Do not put empty grass slabs into the shadow-map pass; they receive object shadows but should not double the blank-island draw call count.
 - Preview/ghost board rendering is forced off by default: Preview distance/window/opacities persist as zero and the Settings controls are removed. Do not let hidden Preview settings create ghost boards or fade traversal on a blank island.
 - When voxel terrain is enabled, keep the top surface voxelized but render exposed riser/body sides as solid shader-textured walls. Avoid thousands of side panels: they create cracks/transparent-looking corners and waste draw/instance budget. Keep same-or-higher neighbour side culling intact so shared internal sides are not rendered.
+- Mesh Terrain's real-material path may greedily merge flat same-material top
+  rectangles, but keep exposed bevel/chamfer edges and sculpted drops visibly
+  chunky. Future side-wall greedy strips should merge only contiguous faces with
+  identical material, top height, and bottom height.
 - Pixelation shader AA should work in pixel mode, but only through edge/depth/normal detection. Do not use a broad fullscreen blur; it smears terrain texture and UI-like decals. Shader AA must not force the normal prepass by itself; only `Pixel normal edge` should allocate/render the normal target.
 - Pixel post shaders must preserve the renderer output color space. In Three r185 `ShaderMaterial` injects color-space helpers, so include/apply `colorspace_fragment` at the final `gl_FragColor` step; do not use the old `encodings_fragment`/`encodings_pars_fragment` chunks.
 - Backdrop/game-screen vignette should remain a cheap CSS overlay variable, not another WebGL post pass. Keep it separate from scene brightness/lighting so it can frame the background without retuning materials.
@@ -141,8 +151,9 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Stats overlay (`?stats=1` or backtick key) reads `renderer.info` and reports FPS, draws, tris, geoms, mats, programs, textures, ghost-board count + queue depth. It also shows the repaint profiler when visible: render submit buckets, frame tick buckets, `setCell` refresh/plan/save time, tile/object/extras rebuild time, queue drains, and dispose traversal. Use `?repaint=1` or `window.__tinyworldRepaintProfile.setEnabled(true)` for a focused repaint breakdown, and `window.__tinyworldRepaintProfile.snapshot()` to inspect the current top buckets.
 - Camera culling runs immediately before `renderer.render()` in `updateSceneVisibilityForCamera()`. Keep this scene-level pass in addition to mesh `frustumCulled`: it hides off-frustum home/ghost/editable-island roots before the camera and shadow passes. For now, under-island top-content hiding is a hard cutoff: top-side objects/extras stay fully opaque until the camera is far enough below the island that the top side should not render at all. Do not reintroduce partial transparent fade/wipe without visual QA for grazing-angle transparency and side-shell sorting. The stats overlay `culled` row is the quick sanity check that draw/tris totals are responding to what is actually visible.
 - Current default color grade is intentionally stylized: resolution 75%,
-  brightness 80%, saturation 109%, contrast 120%, lighting 50%, ambient fill
-  100%, front/side/back fill 10%, tilt blur 10.5px, and tilt focus 21%.
+  brightness 108%, saturation 109%, contrast 116%, lighting 62%, ambient fill
+  100%, front fill 34%, side fill 26%, back fill 22%, tilt blur 2.1px, and
+  tilt focus 65%.
 - Render settings are user-adjustable and persisted in `localStorage` under `tinyworld:render:*`.
 - Tilt-shift blur stays active while the camera is moving, panning, zooming,
   home-tweening, or first-person walking/look-moving. Keep `markCameraMoving()`
