@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-28T15:44:24.648Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add onboarding tour and card reveal experience\" -> plans/production-line/drafts/2026-06-28T15-44-add-onboarding-tour-and-card-reveal-experience.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-28T14:53:16.955Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-28T14-53-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-26T16:56:55.973Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add line/rectangle brush preview modes\" -> plans/production-line/drafts/2026-06-26T16-56-add-line-rectangle-brush-preview-modes.md. No economy paths touched."
-    },
-    {
-      "ts": "2026-06-26T16:01:57.832Z",
-      "kind": "tick",
-      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add staged preview flow for generated worlds\" -> plans/production-line/drafts/2026-06-26T16-01-add-staged-preview-flow-for-generated-worlds.md. No economy paths touched."
     }
   ],
-  "lastTick": "2026-06-28T14:53:16.955Z"
+  "lastTick": "2026-06-28T15:44:24.648Z"
 }
