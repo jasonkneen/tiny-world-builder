@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-28T17:42:06.960Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-28T17-42-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-28T16:41:48.835Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-28T16-41-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-26T18:55:12.241Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-26T18-55-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
-    },
-    {
-      "ts": "2026-06-26T17:54:39.137Z",
-      "kind": "tick",
-      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Add fill/scatter brush modes with preview UI\" -> plans/production-line/drafts/2026-06-26T17-54-add-fill-scatter-brush-modes-with-preview-ui.md. No economy paths touched."
     }
   ],
-  "lastTick": "2026-06-28T16:41:48.835Z"
+  "lastTick": "2026-06-28T17:42:06.960Z"
 }
