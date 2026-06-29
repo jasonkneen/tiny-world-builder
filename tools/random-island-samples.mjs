@@ -217,6 +217,7 @@ const outDirInput = String(readArg('--out-dir', DEFAULT_OUT_DIR));
 const outDir = path.isAbsolute(outDirInput) ? outDirInput : path.join(ROOT, outDirInput);
 const generatedAt = new Date();
 const generatorPath = path.join(ROOT, 'engine/world/26-ai-generation.js');
+const economyProfilePath = path.join(ROOT, 'engine/world/26b-random-island-economy-profile.js');
 const preamble = `
   const GRID = 8;
   function coerceGridSize(value, fallback) {
@@ -227,8 +228,10 @@ const preamble = `
 `;
 const {
   generateRandomIslandWorld,
+} = buildEngineFns(generatorPath, ['generateRandomIslandWorld'], preamble);
+const {
   buildRandomIslandEconomyProfile,
-} = buildEngineFns(generatorPath, ['generateRandomIslandWorld', 'buildRandomIslandEconomyProfile'], preamble);
+} = buildEngineFns(economyProfilePath, ['buildRandomIslandEconomyProfile'], preamble);
 
 const samples = [];
 for (let i = 0; i < count; i++) {

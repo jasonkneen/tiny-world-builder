@@ -5,6 +5,7 @@ import path from 'node:path';
 import { buildEngineFns } from './helpers/extract-fn.mjs';
 
 const generatorPath = path.resolve('engine/world/26-ai-generation.js');
+const economyProfilePath = path.resolve('engine/world/26b-random-island-economy-profile.js');
 const preamble = `
   const GRID = 8;
   function coerceGridSize(value, fallback) {
@@ -16,8 +17,10 @@ const preamble = `
 
 const {
   generateRandomIslandWorld,
+} = buildEngineFns(generatorPath, ['generateRandomIslandWorld'], preamble);
+const {
   buildRandomIslandEconomyProfile,
-} = buildEngineFns(generatorPath, ['generateRandomIslandWorld', 'buildRandomIslandEconomyProfile'], preamble);
+} = buildEngineFns(economyProfilePath, ['buildRandomIslandEconomyProfile'], preamble);
 
 const DEFAULT_BIOMES = { grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 };
 const DEFAULT_ELEVATION = { plains: 55, hills: 30, mountains: 15 };

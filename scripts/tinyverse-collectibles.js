@@ -276,10 +276,18 @@
 
   function profileToCardStats(profile) {
     const top = (profile && profile.topStats) ? profile.topStats.slice(0, 3) : [];
+    const statMap = profile && profile.stats ? profile.stats : {};
+    const maxStat = Math.max(
+      ...Object.values(statMap).map(v => Number(v) || 0),
+      ...(top.map(stat => Number(stat && stat.value) || 0)),
+      1,
+    );
     const out = {};
     top.forEach(stat => {
       if (!stat || !stat.label) return;
-      out[stat.label] = Math.max(1, Math.min(10, Math.round(stat.value || 0)));
+      const raw = Number(stat.value || statMap[stat.id] || 0);
+      const scaled = Math.max(1, Math.min(10, Math.round((raw / maxStat) * 10)));
+      out[stat.label] = scaled;
     });
     if (!Object.keys(out).length) return { Charm: 5, Food: 4, Defense: 3 };
     return out;

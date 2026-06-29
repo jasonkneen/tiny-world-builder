@@ -345,6 +345,19 @@ function cleanRole(value) {
   return ASSIGNABLE_ROLES.has(value) ? value : 'viewer';
 }
 
+// Shared-build links pass collab=1 on the PartyKit socket URL so guests never
+// become host when they beat the owner to the room.
+function connCollabRoom(conn) {
+  const uri = String((conn && conn.uri) || '');
+  if (!uri) return false;
+  try {
+    const q = new URL(uri, 'http://partykit.local').searchParams;
+    return q.get('collab') === '1' || q.get('collab') === 'true';
+  } catch (_) {
+    return /[?&]collab=(?:1|true)(?:&|$)/.test(uri);
+  }
+}
+
 // Editor scope bounds. Returns null when not a usable rectangle (so an editor
 // granted no/invalid bounds is treated as having no scope -> all edits drop).
 function cleanIsland(value) {
@@ -733,6 +746,10 @@ export default class TinyWorldParty {
     // Explicit host-close state. A closed shared build must not promote a
     // replacement host on socket teardown or admit later connections.
     this.closed = false;
+    // Owner-locked shared builds: only the share owner (control.claim) may host;
+    // guests wait in the lobby until the owner is present and the room closes
+    // when the owner host disconnects (no promotion to invitees).
+    this.ownerLocked = false;
 
     // ---- Worlds MMO room state (only for 'world-' rooms) ----
     this.isWorldRoom = String((room && room.id) || '').startsWith(WORLD_ROOM_PREFIX);
@@ -778,6 +795,66 @@ export default class TinyWorldParty {
     return Array.from(this.buildZones.values());
   }
 
+  welcomeWaitingForOwner(conn) {
+    this.ownerLocked = true;
+    this.lobby.set(conn.id, { id: conn.id, name: '', presence: null });
+    conn.send(JSON.stringify({
+      type: 'welcome',
+      room: this.room.id,
+      id: conn.id,
+      role: 'viewer',
+      admitted: false,
+      waitingForOwner: true,
+      peers: [],
+      zones: this.zoneList(),
+    }));
+  }
+
+  admitConnAsViewer(conn) {
+    const viewerSeat = { role: 'viewer', island: null, zoneIds: [] };
+    this.admitted.set(conn.id, viewerSeat);
+    this.seats.set(conn.id, viewerSeat);
+    conn.send(JSON.stringify({
+      type: 'welcome',
+      room: this.room.id,
+      id: conn.id,
+      role: 'viewer',
+      island: null,
+      zoneIds: [],
+      admitted: true,
+      peers: Array.from(this.presence.values()),
+      zones: this.zoneList(),
+    }));
+    if (this.hostId && this.hostId !== conn.id) {
+      this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
+    }
+  }
+
+  admitLobbyWaitersAsViewers() {
+    for (const id of Array.from(this.lobby.keys())) {
+      const conn = this.room.getConnection(id);
+      if (!conn) {
+        this.lobby.delete(id);
+        continue;
+      }
+      const viewerSeat = { role: 'viewer', island: null, zoneIds: [] };
+      this.admitted.set(id, viewerSeat);
+      this.seats.set(id, viewerSeat);
+      this.lobby.delete(id);
+      this.sendTo(id, {
+        type: 'admitted',
+        role: 'viewer',
+        island: null,
+        zoneIds: [],
+        zones: this.zoneList(),
+        peers: Array.from(this.presence.values()),
+      });
+      if (this.hostId && this.hostId !== id) {
+        this.sendTo(this.hostId, { type: 'snapshot.request', forId: id });
+      }
+    }
+  }
+
   closeBuildRoom(reason = 'Host closed the room') {
     if (this.isWorldRoom || this.closed) return false;
     this.closed = true;
@@ -821,7 +898,12 @@ export default class TinyWorldParty {
       return;
     }
     if (!this.hostId) {
-      // First in the room is host: full rights, no lobby gate.
+      // Shared-build guests must wait for the owner; casual party rooms still
+      // promote the first connection to host.
+      if (connCollabRoom(conn) || this.ownerLocked) {
+        this.welcomeWaitingForOwner(conn);
+        return;
+      }
       this.hostId = conn.id;
       this.admitted.set(conn.id, { role: 'host', island: null, zoneIds: [] });
       conn.send(JSON.stringify({
@@ -856,24 +938,8 @@ export default class TinyWorldParty {
       if (this.hostId && this.hostId !== conn.id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
       return;
     }
-    // Public collab rooms default to viewable: everyone after the host joins as
-    // an admitted viewer/observer. The host can promote them later, but edit
-    // rights still go through role + zone/island checks below.
-    const viewerSeat = { role: 'viewer', island: null, zoneIds: [] };
-    this.admitted.set(conn.id, viewerSeat);
-    this.seats.set(conn.id, viewerSeat);
-    conn.send(JSON.stringify({
-      type: 'welcome',
-      room: this.room.id,
-      id: conn.id,
-      role: 'viewer',
-      island: null,
-      zoneIds: [],
-      admitted: true,
-      peers: Array.from(this.presence.values()),
-      zones: this.zoneList(),
-    }));
-    if (this.hostId && this.hostId !== conn.id) this.sendTo(this.hostId, { type: 'snapshot.request', forId: conn.id });
+    // After the owner host is present, new guests join as admitted viewers.
+    this.admitConnAsViewer(conn);
   }
 
   async onMessage(message, sender) {
@@ -905,11 +971,14 @@ export default class TinyWorldParty {
       const secret = this.env.WORLDS_JOIN_SECRET || this.env.WORLDS_SERVICE_TOKEN || '';
       const payload = await verifyJoinTokenWeb(data.token, secret);
       if (!payload || payload.typ !== 'tinyworld-collab-control' || payload.roomId !== this.room.id) return;
+      this.ownerLocked = true;
       const previousHostId = this.hostId;
+      const wasLobby = this.lobby.has(sender.id);
       if (previousHostId && previousHostId !== sender.id) {
         this.sendTo(previousHostId, { type: 'snapshot.request', forId: sender.id });
       }
       this.hostId = sender.id;
+      this.lobby.delete(sender.id);
       this.admitted.set(sender.id, { role: 'host', island: null, zoneIds: [] });
       this.seats.set(sender.id, { role: 'host', island: null, zoneIds: [] });
       this.sendTo(sender.id, {
@@ -919,7 +988,11 @@ export default class TinyWorldParty {
         zoneIds: [],
         zones: this.zoneList(),
         admitted: true,
+        pending: this.pendingList(),
       });
+      if (wasLobby) {
+        this.sendTo(sender.id, { type: 'lobby.list', pending: this.pendingList() });
+      }
       if (previousHostId && previousHostId !== sender.id) {
         const oldSeat = { role: 'viewer', island: null, zoneIds: [] };
         this.admitted.set(previousHostId, oldSeat);
@@ -933,6 +1006,7 @@ export default class TinyWorldParty {
           admitted: true,
         });
       }
+      this.admitLobbyWaitersAsViewers();
       return;
     }
 
@@ -1234,6 +1308,10 @@ export default class TinyWorldParty {
     if (wasLobby && this.hostId) this.sendTo(this.hostId, { type: 'lobby.leave', id: conn.id });
 
     if (wasHost) {
+      if (this.ownerLocked) {
+        this.closeBuildRoom('Host left the build');
+        return;
+      }
       this.hostId = null;
       // Prefer the oldest still-admitted connection (Map insertion order = age).
       let next = null;
@@ -1895,7 +1973,7 @@ export {
   cleanText, cleanNumber, cleanVec3, cleanCursor, cleanSelection,
   cleanPresence, cleanAvatar, cleanCell, cleanCellSet, cleanRole, cleanIsland,
   cleanBuildZone, cleanBuildZones, cleanZoneIds, inBuildZones, inEditorScope,
-  clampFloors, inIsland, takeToken, safeJson, RATE_LIMITS, MAX_CELL_COORD, MAX_FLOORS,
+  clampFloors, inIsland, takeToken, safeJson, connCollabRoom, RATE_LIMITS, MAX_CELL_COORD, MAX_FLOORS,
   // Worlds MMO pure helpers (authoritative game rules).
   cleanHarvestAction, actionDurationMs, isAdjacentStep, withinReach, taxSplit,
   heartsNow, oreRespawnMs, plantRipenMs, nodeActionForCell, deriveWorldState,

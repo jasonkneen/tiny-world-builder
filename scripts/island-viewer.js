@@ -233,11 +233,13 @@
   }
 
   function currentProfileFor(world, meta) {
-    if (meta && meta.profile) return meta.profile;
     const G = window.TinyWorldIslandGenerator;
-    return G && typeof G.profile === 'function'
-      ? G.profile(world, { seed: state.current && state.current.seed, archetype: state.current && state.current.archetype })
-      : null;
+    const seed = String((meta && meta.seed) || (state.current && state.current.seed) || '').trim();
+    const archetype = String((meta && meta.archetype) || (state.current && state.current.archetype) || '').trim().toLowerCase();
+    if (G && typeof G.profile === 'function') {
+      return G.profile(world, { seed, archetype });
+    }
+    return (meta && meta.profile) || null;
   }
 
   function applyGraphics() {

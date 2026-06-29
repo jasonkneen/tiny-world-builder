@@ -1500,7 +1500,8 @@
      so the world-management trigger + menu are removed for them. Host / null
      role / single-player are unaffected (body.mp-guest is never set there). */
   body.mp-guest #world-pill,
-  body.mp-guest #world-menu { display: none !important; }
+  body.mp-guest #world-menu,
+  body.mp-no-invite #invite-top-btn { display: none !important; }
 
   /* Viewer / player have NO edit rights: hide ALL editing chrome so there are no
      controls to reach for. Camera gestures (orbit/zoom/pan) still work, and a

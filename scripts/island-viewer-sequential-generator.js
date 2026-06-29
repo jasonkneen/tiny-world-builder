@@ -1183,6 +1183,10 @@
   }
 
   function buildRandomIslandEconomyProfile(data, options = {}) {
+    const canonical = window.__buildRandomIslandEconomyProfile;
+    if (typeof canonical === 'function' && canonical !== buildRandomIslandEconomyProfile) {
+      return canonical(data, options);
+    }
     const cells = Array.isArray(data && data.cells) ? data.cells : [];
     const seed = String(options.seed || (data && data.seed) || 'tiny-1');
     const archetypeKey = normalizeArchetype(options.archetype || options.archetypeKey || (data && data.archetypeKey), seed);

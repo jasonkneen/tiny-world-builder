@@ -44,6 +44,7 @@ the user is signed in **and** `/api/admin-users?action=tinyverse-access` returns
 Canon Tinyverse entry. Loads:
 
 - `scripts/island-viewer-sequential-generator.js` — one-shot island pull per card
+- `engine/world/26b-random-island-economy-profile.js` — canonical Food/Materials/Commerce/Defense/Charm stats (pack card + island reveal share this module via `window.__buildRandomIslandEconomyProfile`)
 - `scripts/world-preview.js` — isometric preview painted on island card faces
 - `scripts/tinyverse-collectibles.js` — preview GOLD, pack purchase, immutable snapshots
 
@@ -86,7 +87,7 @@ Boot: `bootCollectibleHandoffFromQuery()` in `30-ui-boot-wiring.js` reads
 calls `enter()` after `applyState` is ready.
 
 - Forces play mode; locks build/play toggle (`body.tinyverse-collectible`)
-- Opens `openNewWorldReveal(profile)` yellow card walkthrough
+- Recomputes economy profile from the applied world (`recomputeRandomIslandProfile` in `30-ui-boot-wiring.js`) before `openNewWorldReveal(profile)` so card stats match the rendered island
 - Blocks autosave onto the freeform build slot while active
 - One-way fork: `importToBuildCopy(name)` → new editable draft in My Worlds; never
   write back to the collectible canonical snapshot

@@ -30,9 +30,10 @@ function makeRoom(env = {}) {
     // The server narrows to broadcastToAdmitted (per-connection send); room
     // broadcast is unused, but stub it so nothing throws if that changes.
     broadcast: () => {},
-    addConn(id) {
+    addConn(id, opts = {}) {
       const c = {
         id,
+        uri: opts.collab ? ('ws://local/party/room-test?collab=1&_pk=' + encodeURIComponent(id)) : '',
         received: [],
         closed: false,
         send(raw) { c.received.push(JSON.parse(raw)); },
@@ -47,7 +48,11 @@ function makeRoom(env = {}) {
 function setup() {
   const room = makeRoom();
   const party = new TinyWorldParty(room);
-  const connect = (id) => { const c = room.addConn(id); party.onConnect(c); return c; };
+  const connect = (id, opts = {}) => {
+    const c = room.addConn(id, opts);
+    party.onConnect(c);
+    return c;
+  };
   // onMessage(rawString, sender); sender only needs .id.
   const send = (sender, obj) => party.onMessage(JSON.stringify(obj), sender);
   return { room, party, connect, send };
@@ -388,7 +393,7 @@ test('signed collab control token lets the share owner reclaim host control', as
   assert.equal(last(host).role, 'viewer');
 });
 
-test('host leaving promotes the next admitted member to host', () => {
+test('host leaving promotes the next admitted member to host in casual party rooms', () => {
   const { party, connect, send, room } = setup();
   const host = connect('h');
   const ed = connect('e');
@@ -397,6 +402,38 @@ test('host leaving promotes the next admitted member to host', () => {
   assert.equal(party.hostId, 'e', 'next admitted promoted to host');
   assert.equal(party.admitted.get('e').role, 'host');
   assert.ok(typesTo(room.getConnection('e')).includes('role'));
+});
+
+test('shared-build guest without owner waits in lobby instead of joining', () => {
+  const { party, connect } = setup();
+  const guest = connect('g', { collab: true });
+  const w = last(guest);
+  assert.equal(w.admitted, false);
+  assert.equal(w.waitingForOwner, true);
+  assert.equal(party.hostId, null);
+  assert.equal(party.lobby.has('g'), true);
+  assert.equal(party.admitted.has('g'), false);
+});
+
+test('owner-locked host leaving closes the shared build for everyone', async () => {
+  const room = makeRoom({ WORLDS_JOIN_SECRET: 'test-secret' });
+  const party = new TinyWorldParty(room);
+  const connect = (id, opts = {}) => {
+    const c = room.addConn(id, opts);
+    party.onConnect(c);
+    return c;
+  };
+  const guest = connect('g', { collab: true });
+  const owner = connect('owner', { collab: true });
+  const token = signJoinToken({ typ: 'tinyworld-collab-control', roomId: 'room-test' }, 'test-secret');
+  await party.onMessage(JSON.stringify({ type: 'control.claim', token }), owner);
+  assert.equal(party.hostId, 'owner');
+  assert.equal(party.admitted.has('g'), true, 'waiting guest auto-admitted when owner arrives');
+  party.onClose(room.getConnection('owner'));
+  assert.equal(party.closed, true);
+  assert.equal(party.hostId, null);
+  assert.ok(typesTo(guest).includes('room.closed'));
+  assert.equal(guest.closed, true);
 });
 
 test('combat.hit routes only to the targeted peer, stamped with shooter id', () => {

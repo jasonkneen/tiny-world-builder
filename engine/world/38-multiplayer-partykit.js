@@ -236,7 +236,10 @@
     function multiplayerSocketUrl() {
       // _pk sets the PartyKit conn id; the stable per-page token lets the server
       // recognize this client across WS reconnects (seats re-admit, no re-lobby).
-      return multiplayerHost() + '/party/' + encodeURIComponent(roomId) + '?_pk=' + encodeURIComponent(connToken);
+      const qs = new URLSearchParams();
+      qs.set('_pk', connToken);
+      if (shareId) qs.set('collab', '1');
+      return multiplayerHost() + '/party/' + encodeURIComponent(roomId) + '?' + qs.toString();
     }
 
     function localName() {
@@ -1169,8 +1172,12 @@
     }
 
     // -------- lobby-wait overlay (shown to an un-admitted self) --------
-    function showLobbyOverlay(show) {
+    let lobbyWaitingForOwner = false;
+
+    function showLobbyOverlay(show, opts) {
       if (show) {
+        const waitingForOwner = !!(opts && opts.waitingForOwner);
+        lobbyWaitingForOwner = waitingForOwner;
         if (!lobbyOverlayEl) {
           lobbyOverlayEl = document.createElement('div');
           lobbyOverlayEl.className = 'mp-lobby-overlay';
@@ -1178,17 +1185,31 @@
           card.className = 'mp-lobby-card';
           const title = document.createElement('div');
           title.className = 'mp-lobby-title';
-          title.textContent = 'Waiting for the host to let you in...';
           const sub = document.createElement('div');
           sub.className = 'mp-lobby-sub';
-          sub.textContent = 'You will join the shared build as soon as the host admits you.';
           card.appendChild(title);
           card.appendChild(sub);
           lobbyOverlayEl.appendChild(card);
           document.body.appendChild(lobbyOverlayEl);
         }
+        const card = lobbyOverlayEl.querySelector('.mp-lobby-card');
+        if (card) {
+          const title = card.querySelector('.mp-lobby-title');
+          const sub = card.querySelector('.mp-lobby-sub');
+          if (title) {
+            title.textContent = waitingForOwner
+              ? 'Waiting for the host...'
+              : 'Waiting for the host to let you in...';
+          }
+          if (sub) {
+            sub.textContent = waitingForOwner
+              ? 'This shared build opens when the owner joins. You cannot enter or invite others until they are here.'
+              : 'You will join the shared build as soon as the host admits you.';
+          }
+        }
         lobbyOverlayEl.classList.add('visible');
       } else if (lobbyOverlayEl) {
+        lobbyWaitingForOwner = false;
         lobbyOverlayEl.classList.remove('visible');
       }
     }
@@ -1710,15 +1731,20 @@
     // stays declarative and reversible if the host is promoted/demoted.
     // ------------------------------------------------------------
     function updateGuestMenuVisibility() {
+      const canInvite = collabCanControl || isHost;
       const isGuest = admitted && !isHost && (myRole === 'viewer' || myRole === 'player' || myRole === 'editor');
+      const hideInvite = shareId ? !canInvite : !!isGuest;
       // viewer/player have no edit rights at all: mp-noedit hides every editing
       // control (tools, panels, appbar, agent prompt). editor keeps them (scoped).
       const noEdit = admitted && !isHost && (myRole === 'viewer' || myRole === 'player');
       try {
         document.body.classList.toggle('mp-guest', !!isGuest);
         document.body.classList.toggle('mp-noedit', !!noEdit);
+        document.body.classList.toggle('mp-no-invite', !!hideInvite);
+        const inviteBtn = document.getElementById('invite-top-btn');
+        if (inviteBtn) inviteBtn.hidden = !!hideInvite;
         // If a guest had the world menu open, close it so it cannot linger.
-        if (isGuest) {
+        if (isGuest || hideInvite) {
           const menu = document.getElementById('world-menu');
           const btn = document.getElementById('world-menu-btn');
           if (menu && !menu.hidden) menu.hidden = true;
@@ -2406,7 +2432,7 @@
         if (typeof data.role === 'string') { myRole = data.role; isHost = data.role === 'host'; }
         myIsland = data.island && typeof data.island === 'object' ? data.island : (myRole === 'editor' ? myIsland : null);
         myZoneIds = myRole === 'editor' ? cleanZoneIdsForClient(data.zoneIds) : [];
-        showLobbyOverlay(!admitted);
+        showLobbyOverlay(!admitted, { waitingForOwner: data.waitingForOwner === true });
         (Array.isArray(data.peers) ? data.peers : []).forEach(updatePeerPresence);
         // Lobby clients still publish presence so the host learns their name.
         publishPresence(true);

@@ -4551,6 +4551,21 @@ syncTinyworldOwnerToolControls();
       animateNewWorldRevealCamera(index, step);
     }
 
+    function recomputeRandomIslandProfile(meta = {}, fallbackProfile = null) {
+      const seed = String(meta.seed || (fallbackProfile && fallbackProfile.seed) || '').trim();
+      const archetype = String(meta.archetype || meta.archetypeKey || (fallbackProfile && fallbackProfile.archetypeKey) || '').trim().toLowerCase();
+      const buildProfile = (typeof buildRandomIslandEconomyProfile === 'function')
+        ? buildRandomIslandEconomyProfile
+        : (typeof window.__buildRandomIslandEconomyProfile === 'function' ? window.__buildRandomIslandEconomyProfile : null);
+      const world = (typeof buildWorldStateObject === 'function') ? buildWorldStateObject() : null;
+      if (!buildProfile || !world || !Array.isArray(world.cells) || !world.cells.length) {
+        return fallbackProfile;
+      }
+      const profile = buildProfile(world, { seed, archetype, archetypeKey: archetype });
+      if (fallbackProfile && fallbackProfile.name && profile) profile.name = fallbackProfile.name;
+      return profile || fallbackProfile;
+    }
+
     function openNewWorldReveal(profile) {
       const topStat = profile.topStats && profile.topStats[0] ? profile.topStats[0] : { id: 'charm' };
       function highlightCells(id) {
@@ -4707,20 +4722,25 @@ syncTinyworldOwnerToolControls();
         elevation: mix.elevation,
         gridSize: GRID,
       });
-      const profile = typeof buildRandomIslandEconomyProfile === 'function'
+      const draftProfile = typeof buildRandomIslandEconomyProfile === 'function'
         ? buildRandomIslandEconomyProfile(data, { seed, archetype })
         : { name: 'New world', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } };
       dismissWelcomeLaunchForNewWorld();
       leaveWorldRoomForMenuLoad();
-      if (!applyState(data)) {
+      const ok = applyState(data, {
+        onDone: () => {
+          const profile = recomputeRandomIslandProfile({ seed, archetype }, draftProfile) || draftProfile;
+          setTimeout(() => openNewWorldReveal(profile), 180);
+        },
+      });
+      if (!ok) {
         twToast(worldMenuRevealText('newworld.generatorFailed', 'Random island generation failed.'), 'err');
         return;
       }
-      saveAsNew(profile.name);
+      saveAsNew(draftProfile.name);
       paintLabel();
       paintList();
       close();
-      setTimeout(() => openNewWorldReveal(profile), 180);
     }
 
     window.__tinyworldCollectible = {
@@ -4729,11 +4749,21 @@ syncTinyworldOwnerToolControls();
       profile: null,
       enter(opts = {}) {
         const world = opts.world;
-        const profile = opts.profile || null;
-        if (!world || typeof applyState !== 'function' || !applyState(world)) return false;
+        const draftProfile = opts.profile || null;
+        if (!world || typeof applyState !== 'function') return false;
+        const seed = String(opts.seed || (draftProfile && draftProfile.seed) || '').trim();
+        const archetype = String(opts.archetype || opts.archetypeKey || (draftProfile && draftProfile.archetypeKey) || '').trim().toLowerCase();
+        const ok = applyState(world, {
+          onDone: () => {
+            const profile = recomputeRandomIslandProfile({ seed, archetype }, draftProfile) || draftProfile;
+            this.profile = profile;
+            if (profile) setTimeout(() => openNewWorldReveal(profile), 180);
+          },
+        });
+        if (!ok) return false;
         this.active = true;
         this.id = opts.id || opts.collectibleId || null;
-        this.profile = profile;
+        this.profile = draftProfile;
         dismissWelcomeLaunchForNewWorld();
         leaveWorldRoomForMenuLoad();
         if (window.__tinyworldMode && typeof window.__tinyworldMode.setPlay === 'function') {
@@ -4741,7 +4771,6 @@ syncTinyworldOwnerToolControls();
           window.__tinyworldMode.setPlay();
         }
         if (typeof window.__tinyworldSyncCollectibleChrome === 'function') window.__tinyworldSyncCollectibleChrome();
-        if (profile) setTimeout(() => openNewWorldReveal(profile), 180);
         return true;
       },
       exit() {
@@ -4792,7 +4821,13 @@ syncTinyworldOwnerToolControls();
           if (attempts > 0) setTimeout(() => tryEnter(attempts - 1), 200);
           return;
         }
-        const ok = window.__tinyworldCollectible.enter({ id, world, profile });
+        const ok = window.__tinyworldCollectible.enter({
+          id,
+          world,
+          profile,
+          seed: (pending && pending.seed) || (rec && rec.seed) || (profile && profile.seed) || '',
+          archetype: (pending && pending.archetype) || (rec && rec.archetypeKey) || (profile && profile.archetypeKey) || '',
+        });
         if (!ok && attempts > 0) {
           setTimeout(() => tryEnter(attempts - 1), 200);
           return;
@@ -4838,10 +4873,15 @@ syncTinyworldOwnerToolControls();
       const worldState = (typeof buildWorldStateObject === 'function')
         ? buildWorldStateObject()
         : (randomIslandPreviewCurrent && randomIslandPreviewCurrent.world);
+      const seed = randomIslandPreviewCurrent && randomIslandPreviewCurrent.seed || '';
+      const archetype = randomIslandPreviewCurrent && randomIslandPreviewCurrent.archetype || '';
+      const draftProfile = randomIslandPreviewCurrent && randomIslandPreviewCurrent.profile || null;
+      const profile = recomputeRandomIslandProfile({ seed, archetype }, draftProfile) || draftProfile;
+      if (randomIslandPreviewCurrent && profile) randomIslandPreviewCurrent.profile = profile;
       return {
-        seed: randomIslandPreviewCurrent && randomIslandPreviewCurrent.seed || '',
-        archetype: randomIslandPreviewCurrent && randomIslandPreviewCurrent.archetype || '',
-        profile: randomIslandPreviewCurrent && randomIslandPreviewCurrent.profile || null,
+        seed,
+        archetype,
+        profile,
         world: worldState || null,
       };
     }
@@ -4884,7 +4924,14 @@ syncTinyworldOwnerToolControls();
         if (postedReady) return;
         postedReady = true;
         try {
-          if (profile) openNewWorldReveal(profile);
+          const revealProfile = recomputeRandomIslandProfile(
+            { seed: meta.seed || profile && profile.seed, archetype: meta.archetype || profile && profile.archetypeKey },
+            profile,
+          ) || profile;
+          if (revealProfile) {
+            randomIslandPreviewCurrent.profile = revealProfile;
+            openNewWorldReveal(revealProfile);
+          }
           randomIslandPreviewPost('ready', { state: randomIslandPreviewStatePayload() });
         } catch (err) {
           console.error('[random-island-preview] reveal failed:', err);
@@ -5070,6 +5117,11 @@ syncTinyworldOwnerToolControls();
     }
 
     function openInviteDialog() {
+      if (window.__tinyworldMultiplayer && typeof window.__tinyworldMultiplayer.canControl === 'function'
+        && !window.__tinyworldMultiplayer.canControl()) {
+        twToast('Only the build owner can invite collaborators.', 'warn');
+        return;
+      }
       if (!twCloudLoggedIn()) {
         if (window.__tinyworldAuthEnabled && typeof window.__openLoginModal === 'function') {
           window.__openLoginModal('Sign in to invite collaborators');
@@ -5463,10 +5515,13 @@ syncTinyworldOwnerToolControls();
         items.push({ group: 'World', label: 'Export world as JSON', run: topBtnAction('export') });
         items.push({ group: 'World', label: 'Import world from JSON', run: topBtnAction('import') });
       }
-      items.push({ group: 'World', label: 'Start collaborate room', hint: 'shared PartyKit room link', run: () => {
-        const btn = document.querySelector('#world-menu [data-action="collaborate"]');
-        if (btn) btn.click();
-      } });
+      if (!window.__tinyworldMultiplayer || typeof window.__tinyworldMultiplayer.canControl !== 'function'
+        || window.__tinyworldMultiplayer.canControl()) {
+        items.push({ group: 'World', label: 'Start collaborate room', hint: 'shared PartyKit room link', run: () => {
+          const btn = document.querySelector('#world-menu [data-action="collaborate"]');
+          if (btn) btn.click();
+        } });
+      }
       if (ffEnabled('generatePrompt')) {
         items.push({ group: 'World', label: 'Generate from prompt…', hint: 'AI generation panel', kbd: '⌘G', run: () => {
           if (typeof openGenerateModal === 'function') openGenerateModal();
