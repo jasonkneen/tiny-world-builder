@@ -17,6 +17,13 @@ particular, material wear (`tinyworld:render:materialWear`) needs the
 `applyPersistedMaterialSettingsOnBoot()` pass so saved wear is visible on first
 render without toggling the slider.
 
+Builder directional sun defaults to `10.0` (1000%) under
+`tinyworld:render:directionalSun`. Keep the one-time migration narrow: upgrade
+missing/old untouched `1.0` builder values to `10.0`, but preserve clearly
+user-edited non-default values. Island Viewer has its own
+`tinyworld:island-viewer:*` graphics keys and migrates its old `1.1` default
+separately.
+
 Cloud saves are separate from defaults/localStorage:
 
 - The account modal posts full TinyWorld JSON to Netlify Functions

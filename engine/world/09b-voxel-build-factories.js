@@ -2164,7 +2164,43 @@
     if (opts && opts.editable) g.userData.noVoxelBatch = true;
   }
 
+  function makeVoxelOreRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false, opts = {}, ore = null) {
+    const mats = ore || (typeof tinyworldOreMaterialsFor === 'function' ? tinyworldOreMaterialsFor(opts && opts.appearance) : null);
+    const g = makeVoxelRock(neighbors, level, seedX, seedZ, inWater, Object.assign({}, opts, { appearance: null }));
+    const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
+    const bevel = Math.max(0.015, Math.min(0.035, renderVoxelBevel || 0.018));
+    const sink = inWater ? 0.06 : 0;
+    function oreBox(w, h, d, x, y, z, mat, salt, scale = 1) {
+      const mesh = new THREE.Mesh(getVoxelBoxGeometry(w * scale, h * scale, d * scale, bevel), mat);
+      mesh.position.set(x, y - sink, z);
+      mesh.rotation.set(
+        (cellRand(seedX, seedZ, 930 + salt) - 0.5) * 0.08,
+        cellRand(seedX, seedZ, 950 + salt) * Math.PI * 0.5,
+        (cellRand(seedX, seedZ, 970 + salt) - 0.5) * 0.08
+      );
+      g.add(mesh);
+      return mesh;
+    }
+    const grow = 1 + extra * 0.030;
+    oreBox(0.14, 0.050 + extra * 0.004, 0.12, -0.16, 0.25 + extra * 0.010, 0.02, mats.body, 1, grow);
+    oreBox(0.11, 0.044 + extra * 0.004, 0.10, 0.18, 0.22 + extra * 0.010, -0.12, mats.dark, 2, grow);
+    oreBox(0.10, 0.040 + extra * 0.004, 0.11, 0.04, 0.35 + extra * 0.012, 0.18, mats.body, 3, grow);
+    oreBox(0.08, 0.036 + extra * 0.003, 0.08, -0.27, 0.13 + extra * 0.008, -0.19, mats.dark, 4, grow);
+    if (neighbors && (neighbors.n || neighbors.s || neighbors.e || neighbors.w)) {
+      if (neighbors.n) oreBox(0.10, 0.034, 0.08, 0, 0.095, -0.38, mats.dark, 11);
+      if (neighbors.s) oreBox(0.10, 0.034, 0.08, 0, 0.095, 0.38, mats.dark, 12);
+      if (neighbors.e) oreBox(0.08, 0.034, 0.10, 0.38, 0.095, 0, mats.dark, 13);
+      if (neighbors.w) oreBox(0.08, 0.034, 0.10, -0.38, 0.095, 0, mats.dark, 14);
+    }
+    g.userData = Object.assign(g.userData || {}, { kind: 'rock', oreMetal: mats.id });
+    castReceive(g);
+    optimizeVoxelObjectGroup(g, { reason: 'voxel-ore-rock' });
+    return g;
+  }
+
   function makeVoxelRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false, opts = {}) {
+    const ore = typeof tinyworldOreMaterialsFor === 'function' ? tinyworldOreMaterialsFor(opts && opts.appearance) : null;
+    if (ore) return makeVoxelOreRock(neighbors, level, seedX, seedZ, inWater, opts, ore);
     const g = new THREE.Group();
     const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
     const count = 4 + Math.min(extra, 5);

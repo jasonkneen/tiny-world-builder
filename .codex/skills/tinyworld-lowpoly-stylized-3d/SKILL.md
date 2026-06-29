@@ -129,6 +129,11 @@ Use this together with:
   object-cell `economy` metadata (`fish`, `ore`, `plants`, or `meat`) instead of
   relying on material names, colors, or visual shape. Keep the visual asset
   authoring separate from the authoritative economy tag.
+- Native generated ore is a rock prop variant, not a new kind: keep
+  `kind: "rock"` and use `appearance.oreMetal` (`copper`, `iron`, `silver`,
+  `gold`). The built-in rock factories should render ore as natural stone
+  boulders with small embedded beveled metallic cubes, roughly a third of the
+  stone chunks' scale; do not turn the entire rock prop into metal.
 - Wear-and-tear should stay stylized: global grime/desaturation plus small batched chips/scuffs/moss beats realistic noise-heavy shader work.
 - Floating-board depth can reuse existing roof language by inverting a stepped roof form under the board: dark gray shingle-textured slabs, board-footprint width/depth, vertically compressed, and attached below the dirt body. Utility underside dressing should stay toy-like and readable: chunky pipe cylinders, cable trays, clamps, junction boxes, and short dangling cable drops in the existing steel/dark underside palette.
 - Voxel lift/propeller engines use an explicit part palette inside

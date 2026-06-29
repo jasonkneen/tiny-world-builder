@@ -6803,12 +6803,12 @@
   .new-world-reveal-stack {
     position: relative;
     z-index: 1;
-    width: min(420px, calc(100vw - 32px));
-    max-height: min(720px, calc(100vh - 32px));
-    overflow: auto;
+    width: min(560px, calc(100vw - 32px));
+    max-height: none;
+    overflow: visible;
     pointer-events: auto;
     display: grid;
-    gap: 10px;
+    gap: 8px;
     filter: drop-shadow(0 22px 38px rgba(28, 22, 14, 0.22));
     animation: new-world-reveal-in 0.26s ease-out;
   }
@@ -6832,14 +6832,14 @@
       0 30px 52px -22px rgba(42, 39, 34, 0.28);
     backdrop-filter: blur(18px) saturate(165%);
     -webkit-backdrop-filter: blur(18px) saturate(165%);
-    padding: 18px;
+    padding: 16px;
   }
   .new-world-reveal-card {
     --rarity-line: rgba(83, 97, 118, 0.22);
     --rarity-glow: rgba(83, 97, 118, 0.10);
   }
   .new-world-reveal-guide {
-    padding: 14px 16px;
+    padding: 10px 14px;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 248, 232, 0.76));
     border-color: rgba(159, 122, 44, 0.28);
     box-shadow:
@@ -6926,9 +6926,9 @@
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
   }
   .new-world-reveal-name {
-    margin: 6px 34px 10px 0;
+    margin: 4px 34px 8px 0;
     font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-    font-size: clamp(28px, 4.4vw, 40px);
+    font-size: clamp(26px, 3.8vw, 36px);
     font-weight: 650;
     font-variation-settings: 'SOFT' 42, 'WONK' 0.85, 'opsz' 72;
     line-height: 0.94;
@@ -6943,10 +6943,9 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
-  .new-world-reveal-meta span,
-  .new-world-reveal-traits span {
+  .new-world-reveal-meta span {
     display: inline-flex;
     align-items: center;
     border: 2px solid rgba(159, 122, 44, 0.4);
@@ -6963,20 +6962,81 @@
       0 2px 0 rgba(110, 81, 27, 0.16),
       0 5px 10px -4px rgba(42, 39, 34, 0.28);
   }
-  .new-world-reveal-meta-rarity {
+  .new-world-reveal-meta-yield {
     color: #243047 !important;
     border-color: color-mix(in srgb, var(--rarity-line) 45%, rgba(72, 89, 120, 0.16)) !important;
     background: color-mix(in srgb, var(--rarity-glow) 70%, rgba(255, 255, 255, 0.70)) !important;
   }
-  .new-world-reveal-step-count {
-    margin-top: 0;
-    color: #9f7a2c;
-    font: 700 10px/1 ui-monospace, 'SF Mono', Menlo, monospace;
+  .new-world-reveal-scoreline {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin: 8px 0 10px;
+  }
+  .new-world-reveal-scoreline[hidden] { display: none; }
+  .new-world-reveal-scoreline span {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    border: 1.5px solid rgba(159, 122, 44, 0.28);
+    border-radius: 10px;
+    background: rgba(255, 252, 240, 0.62);
+    padding: 7px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  }
+  .new-world-reveal-scoreline b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #8a641d;
+    font-size: 10px;
+    line-height: 1;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
+  }
+  .new-world-reveal-scoreline strong {
+    color: #2f220c;
+    font: 800 17px/1 'Space Grotesk', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  .new-world-reveal-resources {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    align-items: start;
+  }
+  .new-world-reveal-resource-group {
+    display: grid;
+    gap: 3px;
+  }
+  .new-world-reveal-resource-group h3 {
+    margin: 0;
+    color: #3b2b12;
+    font: 800 11px/1 'Space Grotesk', system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .new-world-reveal-resource-rows {
+    display: grid;
+    gap: 1px;
+  }
+  .new-world-reveal-resource-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 30px;
+    align-items: center;
+    min-height: 20px;
+    gap: 8px;
+    border-bottom: 1px solid rgba(159, 122, 44, 0.16);
+    color: #6e511b;
+    font-size: 12px;
+  }
+  .new-world-reveal-resource-row strong {
+    color: #2f220c;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .new-world-reveal-step-title {
-    margin: 6px 0 3px;
+    margin: 2px 0 2px;
     font-family: 'Fraunces', Georgia, serif;
     font-size: 18px;
     font-weight: 600;
@@ -6987,71 +7047,17 @@
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
   }
   .new-world-reveal-step-body {
-    min-height: 34px;
+    min-height: 0;
     margin: 0;
     color: #6e511b;
-    font-size: 13px;
-    line-height: 1.45;
-  }
-  .new-world-reveal-stats {
-    display: grid;
-    gap: 7px;
-    margin: 12px 0;
-  }
-  .new-world-reveal-stat {
-    display: grid;
-    grid-template-columns: minmax(78px, 0.72fr) minmax(96px, 1fr) 42px;
-    align-items: center;
-    gap: 8px;
     font-size: 12px;
-    color: #6e511b;
-  }
-  .new-world-reveal-stat.active {
-    color: #3b2b12;
-    font-weight: 800;
-  }
-  .new-world-reveal-stat > span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .new-world-reveal-bar {
-    height: 10px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, rgba(159, 122, 44, 0.16), rgba(110, 81, 27, 0.24));
-    border: 1px solid rgba(159, 122, 44, 0.22);
-    box-shadow:
-      inset 0 2px 4px rgba(110, 81, 27, 0.28),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.42),
-      0 1px 0 rgba(255, 255, 255, 0.55);
-    overflow: hidden;
-  }
-  .new-world-reveal-bar span {
-    display: block;
-    height: 100%;
-    width: var(--value);
-    border-radius: inherit;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--bar) 82%, white), var(--bar));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.48),
-      0 1px 2px rgba(42, 39, 34, 0.18);
-    transition: width 0.28s ease;
-  }
-  .new-world-reveal-stat strong {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-  }
-  .new-world-reveal-traits {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 14px;
+    line-height: 1.45;
   }
   .new-world-reveal-actions {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 8px;
   }
   .new-world-reveal-actions button {
     min-height: 34px;
@@ -7079,6 +7085,9 @@
     transform: translateY(2px);
     box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.9), 0 1px 0 #6e511b;
   }
+  @media (max-width: 520px) {
+    .new-world-reveal-resources { grid-template-columns: 1fr; }
+  }
   /* Dock theme stays warm in both light and dark, matching .brush-mode-dock */
   body.ui-theme-dark .new-world-reveal-card,
   body.ui-theme-dark .new-world-reveal-guide {
@@ -7101,22 +7110,14 @@
       0 10px 24px -14px rgba(0, 0, 0, 0.42);
   }
   body.ui-theme-dark .new-world-reveal-name,
-  body.ui-theme-dark .new-world-reveal-step-title,
-  body.ui-theme-dark .new-world-reveal-stat.active {
+  body.ui-theme-dark .new-world-reveal-step-title {
     color: #3b2b12;
   }
   body.ui-theme-dark .new-world-reveal-kicker,
   body.ui-theme-dark .new-world-reveal-step-body {
     color: #6e511b;
   }
-  body.ui-theme-dark .new-world-reveal-step-count {
-    color: #9f7a2c;
-  }
-  body.ui-theme-dark .new-world-reveal-stat {
-    color: #6e511b;
-  }
-  body.ui-theme-dark .new-world-reveal-meta span,
-  body.ui-theme-dark .new-world-reveal-traits span {
+  body.ui-theme-dark .new-world-reveal-meta span {
     color: #7a5718;
     background: rgba(255, 250, 232, 0.9);
     border-color: rgba(159, 122, 44, 0.4);

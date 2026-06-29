@@ -4257,279 +4257,117 @@ syncTinyworldOwnerToolControls();
     }
 
     let newWorldRevealState = null;
-    let newWorldRevealHighlight = null;
-    let newWorldRevealCameraToken = 0;
+
+    function randomIslandRarityId(rarity) {
+      if (rarity && typeof rarity === 'object' && rarity.id) return String(rarity.id).toLowerCase();
+      return String(rarity || 'common').toLowerCase();
+    }
 
     function randomIslandRarityLabel(rarity) {
+      if (rarity && typeof rarity === 'object' && rarity.label) return String(rarity.label);
       const key = 'newworld.rarity.' + String(rarity || '').toLowerCase();
       return worldMenuRevealText(key, rarity || 'Common');
     }
 
     function randomIslandRarityKey(rarity) {
-      const key = String(rarity || 'Common').toLowerCase();
+      const key = randomIslandRarityId(rarity);
       return ['common', 'uncommon', 'rare', 'epic', 'legendary'].indexOf(key) !== -1 ? key : 'common';
     }
 
-    function randomIslandDisplayRarity(rarity) {
-      return randomIslandRarityKey(rarity) === 'common' ? '' : randomIslandRarityLabel(rarity);
+    function randomIslandRawYield(profile) {
+      return profile && profile.rawYield ? profile.rawYield : null;
     }
 
-    function randomIslandStatLabel(statId, fallback) {
-      return worldMenuRevealText('newworld.stat.' + statId, fallback || statId);
+    function randomIslandRawYieldLabel(profile) {
+      const rawYield = randomIslandRawYield(profile);
+      if (!rawYield || !rawYield.scores || !rawYield.rarity) return 'Raw Yield unavailable';
+      return randomIslandRarityLabel(rawYield.rarity) + ' - Raw Yield ' + Math.max(0, Math.round(Number(rawYield.scores.rawYield) || 0));
     }
 
-    function clearNewWorldRevealHighlight() {
-      if (!newWorldRevealHighlight) return;
-      if (newWorldRevealHighlight.parent) newWorldRevealHighlight.parent.remove(newWorldRevealHighlight);
-      const geos = new Set();
-      const mats = new Set();
-      const maps = new Set();
-      newWorldRevealHighlight.traverse(node => {
-        if (node.geometry) geos.add(node.geometry);
-        if (node.material) {
-          mats.add(node.material);
-          if (node.material.map) maps.add(node.material.map);
-        }
-      });
-      geos.forEach(geo => { try { geo.dispose(); } catch (_) {} });
-      maps.forEach(map => { try { map.dispose(); } catch (_) {} });
-      mats.forEach(mat => { try { mat.dispose(); } catch (_) {} });
-      newWorldRevealHighlight = null;
+    const randomIslandRawYieldGroups = [
+      { id: 'crops', title: 'Crops', rows: [['pumpkin', 'Pumpkin'], ['carrot', 'Carrot'], ['sunflower', 'Sunflower'], ['corn', 'Corn'], ['wheat', 'Wheat']] },
+      { id: 'rockOre', title: 'Rock/Ore', rows: [['stone', 'Stone'], ['copper', 'Copper'], ['silver', 'Silver'], ['goldOre', 'Gold Ore'], ['iron', 'Iron']] },
+      { id: 'animals', title: 'Animals', rows: [['sheep', 'Sheep'], ['cow', 'Cow']] },
+      { id: 'nature', title: 'Nature', rows: [['trees', 'Trees'], ['berries', 'Berries'], ['water', 'Water'], ['fish', 'Fish']] },
+      { id: 'buildings', title: 'Buildings', rows: [['houses', 'Houses'], ['towers', 'Towers'], ['manor', 'Manor']] },
+    ];
+
+    function randomIslandPositiveResourceRows(group, values) {
+      return group.rows.map(([id, label]) => {
+        const value = Math.max(0, Math.round(Number(values[id]) || 0));
+        return { id, label, value };
+      }).filter(row => row.value > 0);
     }
 
-    function newWorldRevealCellY(cell) {
-      try {
-        const entry = cellMeshes[cell.x + ',' + cell.z];
-        const root = entry && (entry.object || entry.tile);
-        if (root && typeof THREE !== 'undefined') {
-          const box = new THREE.Box3().setFromObject(root);
-          if (Number.isFinite(box.max.y)) return box.max.y + 0.045;
-        }
-      } catch (_) {}
-      return 0.34;
-    }
-
-    function newWorldRevealStatColor(stat) {
-      const colorByStat = {
-        food: 0x2faa6e,
-        materials: 0x7b8794,
-        commerce: 0xd79225,
-        defense: 0x55657e,
-        charm: 0x2473e6,
-      };
-      return colorByStat[stat] || 0x2f7df6;
-    }
-
-    function newWorldRevealMarkerLabelTexture(text, color) {
-      if (typeof document === 'undefined' || typeof THREE === 'undefined') return null;
-      const fontPx = 32;
-      const padX = 30;
-      const padY = 18;
-      const font = '800 ' + fontPx + 'px ui-sans-serif, system-ui, -apple-system, sans-serif';
-      const measureCanvas = document.createElement('canvas');
-      const measureCtx = measureCanvas.getContext('2d');
-      if (!measureCtx) return null;
-      measureCtx.font = font;
-      const textWidth = Math.ceil(measureCtx.measureText(text).width);
-      const canvas = document.createElement('canvas');
-      canvas.width = textWidth + padX * 2;
-      canvas.height = fontPx + padY * 2;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-      const c = new THREE.Color(color);
-      const fill = '#' + c.getHexString();
-      const w = canvas.width;
-      const h = canvas.height;
-      const r = Math.min(22, Math.floor(h / 2) - 2);
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
-      ctx.strokeStyle = fill;
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(w - r, 0);
-      ctx.arcTo(w, 0, w, r, r);
-      ctx.lineTo(w, h - r);
-      ctx.arcTo(w, h, w - r, h, r);
-      ctx.lineTo(r, h);
-      ctx.arcTo(0, h, 0, h - r, r);
-      ctx.lineTo(0, r);
-      ctx.arcTo(0, 0, r, 0, r);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.font = font;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#142033';
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 1;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-      ctx.lineWidth = 3;
-      ctx.strokeText(text, w / 2, h / 2 + 1);
-      ctx.fillText(text, w / 2, h / 2 + 1);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      texture.generateMipmaps = false;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      return texture;
-    }
-
-    function newWorldRevealStatMarkerText(stat) {
-      const fallbacks = {
-        food: 'Food',
-        materials: 'Materials',
-        commerce: 'Commerce',
-        defense: 'Defense',
-        charm: 'Charm',
-      };
-      return randomIslandStatLabel(stat, fallbacks[stat] || 'Trait');
-    }
-
-    function paintNewWorldRevealHighlight(step) {
-      clearNewWorldRevealHighlight();
-      if (!step || step.id === 'overview' || step.id === 'summary') return;
-      if (!step || !Array.isArray(step.cells) || !step.cells.length) return;
-      if (typeof THREE === 'undefined' || typeof worldGroup === 'undefined') return;
-      const group = new THREE.Group();
-      group.name = 'new-world-reveal-highlight';
-      group.userData.noPointerPick = true;
-      const markerColor = newWorldRevealStatColor(step.stat);
-      const dotMat = new THREE.MeshBasicMaterial({
-        color: markerColor,
-        transparent: true,
-        opacity: 0.9,
-        depthWrite: false,
-      });
-      const stemMat = new THREE.MeshBasicMaterial({
-        color: markerColor,
-        transparent: true,
-        opacity: 0.42,
-        depthWrite: false,
-      });
-      const dotGeo = new THREE.SphereGeometry(0.095, 16, 10);
-      const stemGeo = new THREE.CylinderGeometry(0.014, 0.014, 0.24, 8);
-      const used = new Set();
-      const offsets = [
-        [0.27, -0.26],
-        [-0.27, -0.26],
-        [0.27, 0.26],
-        [-0.27, 0.26],
-      ];
-      step.cells.slice(0, 10).forEach((cell, markerIndex) => {
-        if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) return;
-        const key = cell.x + ',' + cell.z;
-        if (used.has(key)) return;
-        used.add(key);
-        const pos = typeof tilePos === 'function'
-          ? tilePos(cell.x, cell.z)
-          : new THREE.Vector3(cell.x - GRID / 2 + 0.5, 0, cell.z - GRID / 2 + 0.5);
-        const [ox, oz] = offsets[markerIndex % offsets.length];
-        const y = newWorldRevealCellY(cell);
-        const stem = new THREE.Mesh(stemGeo, stemMat);
-        stem.position.set(pos.x + ox, y + 0.15, pos.z + oz);
-        const dot = new THREE.Mesh(dotGeo, dotMat);
-        dot.position.set(pos.x + ox, y + 0.28, pos.z + oz);
-        group.add(stem);
-        group.add(dot);
-      });
-      const labelText = newWorldRevealStatMarkerText(step.stat);
-      const labelTexture = newWorldRevealMarkerLabelTexture(labelText, markerColor);
-      if (labelTexture) {
-        const labelAspect = labelTexture.image
-          ? labelTexture.image.width / Math.max(1, labelTexture.image.height)
-          : 3.2;
-        const labelHeight = 0.46;
-        const avg = averageNewWorldRevealCells(step.cells);
-        const avgY = step.cells.reduce((sum, cell) => sum + newWorldRevealCellY(cell), 0) / Math.max(1, step.cells.length);
-        const labelMat = new THREE.SpriteMaterial({
-          map: labelTexture,
-          transparent: true,
-          depthWrite: false,
-          depthTest: false,
+    function appendRandomIslandResourceRows(root, rawYield) {
+      if (!root) return;
+      root.innerHTML = '';
+      const resources = rawYield && rawYield.resources || {};
+      randomIslandRawYieldGroups.forEach(group => {
+        const values = resources[group.id] || {};
+        const visibleRows = randomIslandPositiveResourceRows(group, values);
+        if (!visibleRows.length) return;
+        const section = document.createElement('section');
+        section.className = 'new-world-reveal-resource-group';
+        const heading = document.createElement('h3');
+        heading.textContent = group.title;
+        section.appendChild(heading);
+        const rows = document.createElement('div');
+        rows.className = 'new-world-reveal-resource-rows';
+        visibleRows.forEach(({ label, value }) => {
+          const row = document.createElement('div');
+          row.className = 'new-world-reveal-resource-row';
+          const name = document.createElement('span');
+          name.textContent = label;
+          const amount = document.createElement('strong');
+          amount.textContent = String(value);
+          row.appendChild(name);
+          row.appendChild(amount);
+          rows.appendChild(row);
         });
-        const sprite = new THREE.Sprite(labelMat);
-        sprite.position.set(avg.x, avgY + 0.68, avg.z);
-        sprite.scale.set(labelHeight * labelAspect, labelHeight, 1);
-        sprite.renderOrder = 999;
-        group.add(sprite);
-      }
-      if (!group.children.length) {
-        dotGeo.dispose();
-        stemGeo.dispose();
-        dotMat.dispose();
-        stemMat.dispose();
-        return;
-      }
-      worldGroup.add(group);
-      newWorldRevealHighlight = group;
+        section.appendChild(rows);
+        root.appendChild(section);
+      });
     }
 
-    function averageNewWorldRevealCells(cells) {
-      const valid = (cells || []).filter(cell => cell && Number.isInteger(cell.x) && Number.isInteger(cell.z));
-      if (!valid.length) return { x: 0, z: 0 };
-      const sum = valid.reduce((acc, cell) => {
-        const pos = typeof tilePos === 'function'
-          ? tilePos(cell.x, cell.z)
-          : { x: cell.x - GRID / 2 + 0.5, z: cell.z - GRID / 2 + 0.5 };
-        acc.x += pos.x;
-        acc.z += pos.z;
-        return acc;
-      }, { x: 0, z: 0 });
-      return { x: sum.x / valid.length, z: sum.z / valid.length };
-    }
-
-    function animateNewWorldRevealCamera(stepIndex, step) {
-      if (!step || typeof updateCamera !== 'function') return;
-      const focus = averageNewWorldRevealCells(step.cells);
-      const token = ++newWorldRevealCameraToken;
-      const start = {
-        tx: (typeof target !== 'undefined' && target) ? target.x : 0,
-        ty: (typeof target !== 'undefined' && target) ? target.y : 0,
-        tz: (typeof target !== 'undefined' && target) ? target.z : 0,
-        az: (typeof azimuth === 'number') ? azimuth : -0.78,
-        po: (typeof polar === 'number') ? polar : 0.9,
-        vs: (typeof viewSize === 'number') ? viewSize : 8,
+    function fallbackRandomIslandRawYieldProfile(data, opts = {}) {
+      const seed = String(opts.seed || data && data.seed || 'tiny-1');
+      const name = String(opts.name || data && data.name || 'New world');
+      const buildRawYield = (typeof buildIslandRawYieldEconomy === 'function')
+        ? buildIslandRawYieldEconomy
+        : (typeof window.__buildIslandRawYieldEconomy === 'function' ? window.__buildIslandRawYieldEconomy : null);
+      const rawYield = buildRawYield ? buildRawYield(data, { seed, name }) : null;
+      const finalRawYield = rawYield || {
+        aspect: 'raw_yield',
+        label: 'Raw Yield',
+        scoreV: 1,
+        seed,
+        name,
+        resources: {
+          crops: { wheat: 0, corn: 0, carrot: 0, pumpkin: 0, sunflower: 0 },
+          rockOre: { stone: 0, copper: 0, iron: 0, silver: 0, goldOre: 0 },
+          animals: { sheep: 0, cow: 0 },
+          nature: { trees: 0, berries: 0, water: 0, fish: 0 },
+          buildings: { houses: 0, towers: 0, manor: 0 },
+        },
+        scores: { crops: 0, rockOre: 0, animals: 0, nature: 0, rawYield: 0, buildings: 0, totalRank: 0 },
+        rarity: { id: 'common', label: 'Common', range: { min: 0, max: 169 } },
+        leader: { id: 'crops', label: 'Crop-led' },
       };
-      const end = {
-        tx: focus.x,
-        ty: 0,
-        tz: focus.z,
-        az: -0.82 + stepIndex * 0.18,
-        po: 0.78,
-        vs: Math.max(5.4, Math.min(8.6, GRID * (stepIndex === 0 ? 0.92 : 0.72))),
+      return {
+        seed,
+        name,
+        rawYield: finalRawYield,
+        economy: {
+          aspect: 'raw_yield',
+          rarityScope: 'raw_yield',
+          rarity: finalRawYield.rarity.label,
+          rawYieldScore: finalRawYield.scores.rawYield,
+          buildingScore: finalRawYield.scores.buildings,
+          totalRankScore: finalRawYield.scores.totalRank,
+          leader: finalRawYield.leader,
+        },
       };
-      if (typeof setCameraMode === 'function' && typeof cameraMode !== 'undefined' && cameraMode === 'ortho') {
-        try { setCameraMode('perspective'); } catch (_) {}
-      }
-      const startMs = performance.now();
-      function shortAngleDelta(a, b) {
-        let d = b - a;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        return d;
-      }
-      function tick(now) {
-        if (token !== newWorldRevealCameraToken) return;
-        const t = Math.min(1, (now - startMs) / 720);
-        const u = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        if (typeof target !== 'undefined' && target) {
-          target.set(
-            start.tx + (end.tx - start.tx) * u,
-            start.ty + (end.ty - start.ty) * u,
-            start.tz + (end.tz - start.tz) * u
-          );
-        }
-        if (typeof azimuth !== 'undefined') azimuth = start.az + shortAngleDelta(start.az, end.az) * u;
-        if (typeof polar !== 'undefined') polar = start.po + (end.po - start.po) * u;
-        if (typeof viewSize !== 'undefined') viewSize = start.vs + (end.vs - start.vs) * u;
-        updateCamera();
-        if (t < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
     }
 
     function ensureNewWorldRevealOverlay() {
@@ -4548,11 +4386,10 @@ syncTinyworldOwnerToolControls();
             '<div class="new-world-reveal-kicker"></div>' +
             '<h2 class="new-world-reveal-name"></h2>' +
             '<div class="new-world-reveal-meta"></div>' +
-            '<div class="new-world-reveal-stats"></div>' +
-            '<div class="new-world-reveal-traits"></div>' +
+            '<div class="new-world-reveal-scoreline"></div>' +
+            '<div class="new-world-reveal-resources"></div>' +
           '</section>' +
           '<section class="new-world-reveal-guide">' +
-            '<div class="new-world-reveal-step-count"></div>' +
             '<h3 class="new-world-reveal-step-title"></h3>' +
             '<p class="new-world-reveal-step-body"></p>' +
             '<div class="new-world-reveal-actions">' +
@@ -4564,15 +4401,7 @@ syncTinyworldOwnerToolControls();
       document.body.appendChild(overlay);
       overlay.querySelector('.new-world-reveal-close').addEventListener('click', closeNewWorldReveal);
       overlay.querySelector('.new-world-reveal-secondary').addEventListener('click', closeNewWorldReveal);
-      overlay.querySelector('.new-world-reveal-primary').addEventListener('click', () => {
-        if (!newWorldRevealState) return;
-        if (newWorldRevealState.step >= newWorldRevealState.steps.length - 1) {
-          closeNewWorldReveal();
-          return;
-        }
-        newWorldRevealState.step++;
-        renderNewWorldReveal();
-      });
+      overlay.querySelector('.new-world-reveal-primary').addEventListener('click', closeNewWorldReveal);
       overlay.addEventListener('click', e => {
         if (e.target === overlay) closeNewWorldReveal();
       });
@@ -4584,7 +4413,6 @@ syncTinyworldOwnerToolControls();
       if (overlay) overlay.hidden = true;
       document.body.classList.remove('new-world-reveal-open');
       newWorldRevealState = null;
-      clearNewWorldRevealHighlight();
     }
 
     function renderNewWorldReveal() {
@@ -4592,88 +4420,52 @@ syncTinyworldOwnerToolControls();
       dismissWelcomeLaunchForNewWorld();
       const overlay = ensureNewWorldRevealOverlay();
       const profile = newWorldRevealState.profile;
-      const steps = newWorldRevealState.steps;
-      const index = Math.max(0, Math.min(steps.length - 1, newWorldRevealState.step));
-      const step = steps[index];
-      const stat = (profile.topStats || []).find(s => s.id === step.stat) || (profile.topStats && profile.topStats[0]) || { id: 'charm', label: 'Charm', value: 0 };
-      const rarityKey = randomIslandRarityKey(profile.economy.rarity);
-      const rarityText = randomIslandDisplayRarity(profile.economy.rarity);
-      const params = {
-        name: profile.name,
-        archetype: profile.archetype,
-        rarity: rarityText,
-        gold: profile.economy.potential,
-        stat: randomIslandStatLabel(stat.id, stat.label),
-        value: Number(stat.value || 0).toFixed(1),
-        traits: (profile.traits || []).slice(0, 3).join(', '),
-      };
+      const rawYield = randomIslandRawYield(profile);
+      if (!rawYield) return;
+      const rawYieldLabel = randomIslandRawYieldLabel(profile);
+      const rarityKey = randomIslandRarityKey(rawYield.rarity);
+      const scores = rawYield.scores || {};
       const card = overlay.querySelector('.new-world-reveal-card');
       card.dataset.rarity = rarityKey;
       overlay.querySelector('.new-world-reveal-close').setAttribute('aria-label', worldMenuRevealText('newworld.close', 'Close'));
       overlay.querySelector('.new-world-reveal-close').textContent = '×';
-      overlay.querySelector('.new-world-reveal-kicker').textContent = worldMenuRevealText('newworld.kicker', 'New world discovered');
-      overlay.querySelector('.new-world-reveal-name').textContent = profile.name;
+      overlay.querySelector('.new-world-reveal-kicker').textContent = 'Island resources';
+      overlay.querySelector('.new-world-reveal-name').textContent = rawYield.name || profile.name || 'Island';
       const meta = overlay.querySelector('.new-world-reveal-meta');
       meta.innerHTML = '';
       [
-        rarityText ? { text: rarityText, className: 'rarity' } : null,
-        { text: profile.archetype, className: 'archetype' },
-        { text: worldMenuRevealText('newworld.goldDay', '{gold} gold/day', params), className: 'gold' },
+        { text: rawYieldLabel, className: 'yield' },
       ].filter(Boolean).forEach(item => {
         const pill = document.createElement('span');
         pill.className = 'new-world-reveal-meta-' + item.className;
         pill.textContent = item.text;
         meta.appendChild(pill);
       });
-      overlay.querySelector('.new-world-reveal-step-count').textContent = worldMenuRevealText('newworld.stepCount', 'Step {n}/{total}', {
-        n: index + 1,
-        total: steps.length,
+      const scoreline = overlay.querySelector('.new-world-reveal-scoreline');
+      scoreline.innerHTML = '';
+      [
+        ['Raw Yield', scores.rawYield],
+        ['Buildings', scores.buildings],
+        ['Total Rank', scores.totalRank],
+      ].map(([label, value]) => [label, Math.max(0, Math.round(Number(value) || 0))])
+        .filter(([, value]) => value > 0)
+        .forEach(([label, value]) => {
+        const item = document.createElement('span');
+        item.innerHTML = '<b>' + label + '</b><strong>' + value + '</strong>';
+        scoreline.appendChild(item);
       });
-      overlay.querySelector('.new-world-reveal-step-title').textContent = worldMenuRevealText('newworld.step.' + step.id + '.title', step.title, params);
-      overlay.querySelector('.new-world-reveal-step-body').textContent = worldMenuRevealText('newworld.step.' + step.id + '.body', step.body, params).replace(/\s+/g, ' ').trim();
-
-      const statsEl = overlay.querySelector('.new-world-reveal-stats');
-      statsEl.innerHTML = '';
-      const max = Math.max(...(profile.statDefs || []).map(def => profile.stats[def.id] || 0), 1);
-      (profile.statDefs || []).forEach(def => {
-        const row = document.createElement('div');
-        row.className = 'new-world-reveal-stat' + (def.id === step.stat ? ' active' : '');
-        const label = document.createElement('span');
-        label.textContent = randomIslandStatLabel(def.id, def.label);
-        const bar = document.createElement('span');
-        bar.className = 'new-world-reveal-bar';
-        bar.style.setProperty('--bar', def.color);
-        bar.style.setProperty('--value', Math.round(((profile.stats[def.id] || 0) / max) * 100) + '%');
-        const fill = document.createElement('span');
-        bar.appendChild(fill);
-        const value = document.createElement('strong');
-        value.textContent = Number(profile.stats[def.id] || 0).toFixed(1);
-        row.appendChild(label);
-        row.appendChild(bar);
-        row.appendChild(value);
-        statsEl.appendChild(row);
-      });
-
-      const traitsEl = overlay.querySelector('.new-world-reveal-traits');
-      traitsEl.innerHTML = '';
-      (profile.traits || []).forEach(trait => {
-        const chip = document.createElement('span');
-        chip.textContent = trait;
-        traitsEl.appendChild(chip);
-      });
-      overlay.querySelector('.new-world-reveal-secondary').textContent = worldMenuRevealText('newworld.skip', 'Skip');
-      overlay.querySelector('.new-world-reveal-primary').textContent = index >= steps.length - 1
-        ? worldMenuRevealText('newworld.done', 'Enter world')
-        : worldMenuRevealText('newworld.next', 'Next');
+      scoreline.hidden = !scoreline.children.length;
+      appendRandomIslandResourceRows(overlay.querySelector('.new-world-reveal-resources'), rawYield);
+      overlay.querySelector('.new-world-reveal-step-title').textContent = 'Visible island contents';
+      overlay.querySelector('.new-world-reveal-step-body').textContent = 'Raw Yield is derived from visible cells only. Buildings are shown separately for ranking.';
+      overlay.querySelector('.new-world-reveal-secondary').textContent = 'Close';
+      overlay.querySelector('.new-world-reveal-primary').textContent = worldMenuRevealText('newworld.done', 'Enter world');
       overlay.hidden = false;
       document.body.classList.add('new-world-reveal-open');
-      paintNewWorldRevealHighlight(step);
-      animateNewWorldRevealCamera(index, step);
     }
 
     function recomputeRandomIslandProfile(meta = {}, fallbackProfile = null) {
       const seed = String(meta.seed || (fallbackProfile && fallbackProfile.seed) || '').trim();
-      const archetype = String(meta.archetype || meta.archetypeKey || (fallbackProfile && fallbackProfile.archetypeKey) || '').trim().toLowerCase();
       const buildProfile = (typeof buildRandomIslandEconomyProfile === 'function')
         ? buildRandomIslandEconomyProfile
         : (typeof window.__buildRandomIslandEconomyProfile === 'function' ? window.__buildRandomIslandEconomyProfile : null);
@@ -4681,69 +4473,13 @@ syncTinyworldOwnerToolControls();
       if (!buildProfile || !world || !Array.isArray(world.cells) || !world.cells.length) {
         return fallbackProfile;
       }
-      const profile = buildProfile(world, { seed, archetype, archetypeKey: archetype });
+      const profile = buildProfile(world, { seed, name: fallbackProfile && fallbackProfile.name });
       if (fallbackProfile && fallbackProfile.name && profile) profile.name = fallbackProfile.name;
       return profile || fallbackProfile;
     }
 
     function openNewWorldReveal(profile) {
-      const topStat = profile.topStats && profile.topStats[0] ? profile.topStats[0] : { id: 'charm' };
-      function highlightCells(id) {
-        const h = profile.highlights && profile.highlights.find(item => item.id === id);
-        return h ? h.cells : [];
-      }
-      const steps = [
-        {
-          id: 'overview',
-          stat: topStat.id,
-          title: 'Island revealed',
-          body: '{name} is a {rarity} {archetype} island earning {gold} gold/day.',
-          cells: highlightCells('overview'),
-        },
-        {
-          id: 'commerce',
-          stat: 'commerce',
-          title: 'Trade routes',
-          body: 'Paths, homes, bridges, and lamps drive {value} {stat}.',
-          cells: highlightCells('commerce'),
-        },
-        {
-          id: 'food',
-          stat: 'food',
-          title: 'Food engine',
-          body: 'Crops, animals, berries, and water produce {value} {stat}.',
-          cells: highlightCells('food'),
-        },
-        {
-          id: 'materials',
-          stat: 'materials',
-          title: 'Materials',
-          body: 'Stone, trees, and crystal veins produce {value} {stat}.',
-          cells: highlightCells('materials'),
-        },
-        {
-          id: 'defense',
-          stat: 'defense',
-          title: 'Defense',
-          body: 'Towers, fences, elevation, and lights produce {value} {stat}.',
-          cells: highlightCells('defense'),
-        },
-        {
-          id: 'charm',
-          stat: 'charm',
-          title: 'Charm',
-          body: 'Water, flowers, trees, and relics produce {value} {stat}.',
-          cells: highlightCells('charm'),
-        },
-        {
-          id: 'summary',
-          stat: topStat.id,
-          title: 'Ready for Tinyverse',
-          body: 'Top traits: {traits}. This world is saved and ready to explore.',
-          cells: highlightCells('summary'),
-        },
-      ];
-      newWorldRevealState = { profile, steps, step: 0 };
+      newWorldRevealState = { profile };
       renderNewWorldReveal();
     }
 
@@ -4843,13 +4579,13 @@ syncTinyworldOwnerToolControls();
         gridSize: GRID,
       });
       const draftProfile = typeof buildRandomIslandEconomyProfile === 'function'
-        ? buildRandomIslandEconomyProfile(data, { seed, archetype })
-        : { name: 'New world', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } };
+        ? buildRandomIslandEconomyProfile(data, { seed })
+        : fallbackRandomIslandRawYieldProfile(data, { seed });
       dismissWelcomeLaunchForNewWorld();
       leaveWorldRoomForMenuLoad();
       const ok = applyState(data, {
         onDone: () => {
-          const profile = recomputeRandomIslandProfile({ seed, archetype }, draftProfile) || draftProfile;
+          const profile = recomputeRandomIslandProfile({ seed }, draftProfile) || draftProfile;
           setTimeout(() => openNewWorldReveal(profile), 180);
         },
       });
@@ -4872,10 +4608,9 @@ syncTinyworldOwnerToolControls();
         const draftProfile = opts.profile || null;
         if (!world || typeof applyState !== 'function') return false;
         const seed = String(opts.seed || (draftProfile && draftProfile.seed) || '').trim();
-        const archetype = String(opts.archetype || opts.archetypeKey || (draftProfile && draftProfile.archetypeKey) || '').trim().toLowerCase();
         const ok = applyState(world, {
           onDone: () => {
-            const profile = recomputeRandomIslandProfile({ seed, archetype }, draftProfile) || draftProfile;
+            const profile = recomputeRandomIslandProfile({ seed }, draftProfile) || draftProfile;
             this.profile = profile;
             if (profile) setTimeout(() => openNewWorldReveal(profile), 180);
           },
@@ -4948,7 +4683,6 @@ syncTinyworldOwnerToolControls();
           world,
           profile,
           seed: (pending && pending.seed) || (rec && rec.seed) || (profile && profile.seed) || '',
-          archetype: (pending && pending.archetype) || (rec && rec.archetypeKey) || (profile && profile.archetypeKey) || '',
         });
         if (!ok && attempts > 0) {
           setTimeout(() => tryEnter(attempts - 1), 200);
@@ -5038,7 +4772,7 @@ syncTinyworldOwnerToolControls();
       randomIslandPreviewForceEnhancedWater();
       randomIslandPreviewCurrent = {
         seed: meta.seed || profile && profile.seed || '',
-        archetype: meta.archetype || profile && profile.archetypeKey || '',
+        archetype: meta.archetype || '',
         world: data,
         profile,
       };
@@ -5048,7 +4782,7 @@ syncTinyworldOwnerToolControls();
         postedReady = true;
         try {
           const revealProfile = recomputeRandomIslandProfile(
-            { seed: meta.seed || profile && profile.seed, archetype: meta.archetype || profile && profile.archetypeKey },
+            { seed: meta.seed || profile && profile.seed },
             profile,
           ) || profile;
           if (revealProfile) {
@@ -5091,8 +4825,8 @@ syncTinyworldOwnerToolControls();
         gridSize,
       });
       const profile = typeof buildRandomIslandEconomyProfile === 'function'
-        ? buildRandomIslandEconomyProfile(data, { seed, archetype })
-        : { seed, archetypeKey: archetype, name: 'New world', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } };
+        ? buildRandomIslandEconomyProfile(data, { seed })
+        : fallbackRandomIslandRawYieldProfile(data, { seed });
       return randomIslandPreviewApplyWorld(data, profile, { seed, archetype });
     }
 
@@ -5103,13 +4837,12 @@ syncTinyworldOwnerToolControls();
         return false;
       }
       const seed = String(payload && payload.seed || source.seed || 'loaded-island');
-      const archetype = String(payload && payload.archetype || payload && payload.profile && payload.profile.archetypeKey || '').trim().toLowerCase();
       const profile = payload && payload.profile
         ? payload.profile
         : (typeof buildRandomIslandEconomyProfile === 'function'
-          ? buildRandomIslandEconomyProfile(source, { seed, archetype })
-          : { seed, archetypeKey: archetype, name: 'Loaded island', archetype, stats: {}, statDefs: [], traits: [], topStats: [], highlights: [], economy: { potential: 1, rarity: 'Common' } });
-      return randomIslandPreviewApplyWorld(source, profile, { seed, archetype: archetype || profile.archetypeKey || '' });
+          ? buildRandomIslandEconomyProfile(source, { seed })
+          : fallbackRandomIslandRawYieldProfile(source, { seed, name: 'Loaded island' }));
+      return randomIslandPreviewApplyWorld(source, profile, { seed });
     }
 
     function randomIslandPreviewHandleMessage(event) {

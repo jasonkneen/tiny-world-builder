@@ -280,6 +280,14 @@
     rockDk:    new THREE.MeshLambertMaterial({ color: 0x707066, side: THREE.FrontSide }),
     rockHi:    new THREE.MeshLambertMaterial({ color: 0xc3c0b2, side: THREE.FrontSide }),
     rockMoss:  new THREE.MeshLambertMaterial({ color: 0x6f8a3a, side: THREE.FrontSide }),
+    oreCopper: new THREE.MeshStandardMaterial({ color: 0xc9763f, roughness: 0.42, metalness: 0.58, side: THREE.FrontSide }),
+    oreCopperD:new THREE.MeshStandardMaterial({ color: 0x7d3f24, roughness: 0.50, metalness: 0.48, side: THREE.FrontSide }),
+    oreIron:   new THREE.MeshStandardMaterial({ color: 0x87919a, roughness: 0.48, metalness: 0.42, side: THREE.FrontSide }),
+    oreIronD:  new THREE.MeshStandardMaterial({ color: 0x49525a, roughness: 0.56, metalness: 0.34, side: THREE.FrontSide }),
+    oreSilver: new THREE.MeshStandardMaterial({ color: 0xd8dde4, roughness: 0.34, metalness: 0.62, side: THREE.FrontSide }),
+    oreSilverD:new THREE.MeshStandardMaterial({ color: 0x8e9aa6, roughness: 0.42, metalness: 0.48, side: THREE.FrontSide }),
+    oreGold:   new THREE.MeshStandardMaterial({ color: 0xf2bf4b, roughness: 0.34, metalness: 0.58, side: THREE.FrontSide }),
+    oreGoldD:  new THREE.MeshStandardMaterial({ color: 0x9b6821, roughness: 0.46, metalness: 0.42, side: THREE.FrontSide }),
 
     // New terrains (stone / lava / sand / snow).
     stone:     new THREE.MeshLambertMaterial({ color: 0x8f8a82, side: THREE.FrontSide }),
@@ -549,6 +557,24 @@
   // tint/darkness/brightness/reflect are shader-only, so they update live.
   const WINDOW = { glassRatio: 0.86, tint: 0xc4d6ea, darkness: 0.12, brightness: 1.0, reflect: 0.5 };
   if (typeof window !== 'undefined') window.__tinyworldWindow = WINDOW;
+
+  function tinyworldOreMetalId(value) {
+    const raw = typeof value === 'string'
+      ? value
+      : (value && typeof value === 'object' ? value.oreMetal || value.ore || value.metal : '');
+    const key = String(raw || '').trim().toLowerCase();
+    if (key === 'copper' || key === 'iron' || key === 'silver' || key === 'gold') return key;
+    return null;
+  }
+
+  function tinyworldOreMaterialsFor(value) {
+    const metal = tinyworldOreMetalId(value);
+    if (metal === 'copper') return { id: metal, body: M.oreCopper, dark: M.oreCopperD };
+    if (metal === 'iron') return { id: metal, body: M.oreIron, dark: M.oreIronD };
+    if (metal === 'silver') return { id: metal, body: M.oreSilver, dark: M.oreSilverD };
+    if (metal === 'gold') return { id: metal, body: M.oreGold, dark: M.oreGoldD };
+    return null;
+  }
 
   // Build-scoped per-object override (an appearance.window spec). renderCellObject
   // (17) sets this around an object's build so the deep window builders pick up

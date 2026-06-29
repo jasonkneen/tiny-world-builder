@@ -107,7 +107,7 @@
     var cssH = cnv.clientHeight || cnv.height || 200;
     var dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
     cnv.width = Math.round(cssW * dpr); cnv.height = Math.round(cssH * dpr);
-    var c2 = cnv.getContext('2d');
+    var c2 = cnv.getContext('2d', { willReadFrequently: true });
     c2.setTransform(dpr, 0, 0, dpr, 0, 0);
     c2.clearRect(0, 0, cssW, cssH);
     var bg = c2.createLinearGradient(0, 0, 0, cssH);
@@ -174,7 +174,7 @@
 
   function cropPreviewCanvas(cnv) {
     if (!cnv) return null;
-    var ctx = cnv.getContext('2d');
+    var ctx = cnv.getContext('2d', { willReadFrequently: true });
     if (!ctx) return cnv;
     var w = cnv.width;
     var h = cnv.height;

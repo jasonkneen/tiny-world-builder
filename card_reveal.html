@@ -675,7 +675,7 @@
     <div class="collection-list" id="collectionList"></div>
   </div>
 </div>
-<div class="title" id="title"><h1>TinyWorld Builder</h1><p>Island Collection · Booster Pack</p></div>
+<div class="title" id="title"><h1>Island Pack</h1><p>1 procedural island</p></div>
 <div class="hud">
   <div class="prompt" id="prompt"></div>
   <button class="btn" id="btn"></button>
@@ -683,76 +683,22 @@
 
 <script type="application/json" id="pack-data">
 {
-  "packTitle": "TinyWorld Builder",
-  "packSubtitle": "Islands · Relics · Stickers",
-  "packLabel": "5 Cards + Bonus",
+  "packTitle": "Island Pack",
+  "packSubtitle": "1 procedural island",
+  "packLabel": "1 Island",
   "cards": [
     {
-      "id": "forest-realm",
+      "id": "raw-yield-island",
       "kind": "island",
-      "name": "Forest Realm",
+      "name": "Cliff Haven",
       "rarity": "Common",
       "backIndex": 0,
       "accent": "#7fd34f",
       "rim": "#3a6b22",
       "icon": "tree",
-      "description": "A lush starter island with fast growth and soft defensive cover.",
-      "tags": ["starter", "forest"],
-      "stats": { "Growth": 7, "Defense": 4, "Mana": 3 }
-    },
-    {
-      "id": "fortress-isle",
-      "kind": "island",
-      "name": "Fortress Isle",
-      "rarity": "Rare",
-      "backIndex": 2,
-      "accent": "#a069e0",
-      "rim": "#5a2f8a",
-      "icon": "shield",
-      "description": "Heavy stonework, locked gates, and a defensive bonus for compact builds.",
-      "tags": ["stone", "defense"],
-      "stats": { "Growth": 3, "Defense": 9, "Mana": 4 }
-    },
-    {
-      "id": "compass-of-return",
-      "kind": "artifact",
-      "name": "Compass of Return",
-      "rarity": "Epic",
-      "backIndex": 1,
-      "accent": "#4f9fe0",
-      "rim": "#1f5a8a",
-      "icon": "compass",
-      "description": "Reveals a hidden path tile and improves pack luck for the next opening.",
-      "tags": ["artifact", "navigation"],
-      "stats": { "Build": 6, "Luck": 8, "Charge": 5 }
-    },
-    {
-      "id": "builder-badge",
-      "kind": "sticker",
-      "name": "Builder Badge",
-      "rarity": "Uncommon",
-      "backIndex": 5,
-      "accent": "#e0b454",
-      "rim": "#8a6a1f",
-      "icon": "sticker",
-      "description": "A foil sticker for marking favorite builds and featured islands.",
-      "tags": ["sticker", "foil"],
-      "stats": { "Style": 9, "Shine": 7 }
-    },
-    {
-      "id": "bonus-cache",
-      "kind": "bonus",
-      "name": "Bonus Item Cache",
-      "rarity": "Bonus",
-      "backIndex": 7,
-      "accent": "#e06a3a",
-      "rim": "#8a3a1f",
-      "icon": "chest",
-      "description": "Contains extra placement tokens and one premium terrain swatch.",
-      "tags": ["bonus", "items"],
-      "reward": "Terrain Swatch",
-      "quantity": 3,
-      "stats": { "Items": 3, "Boost": 2 }
+      "description": "Common - Raw Yield 169",
+      "tags": ["COMMON", "CROP-LED", "YIELD 169"],
+      "stats": { "Raw Yield": 169, "Buildings": 36, "Total Rank": 205 }
     }
   ]
 }
@@ -830,13 +776,15 @@ function rarityKey(value){
   return RARITY_COLOR[key] ? key : 'COMMON';
 }
 function normalizeStats(stats){
-  if(!stats || typeof stats !== 'object') return { Value: 5 };
+  if(!stats || typeof stats !== 'object') return {};
   const out = {};
-  Object.entries(stats).slice(0, 3).forEach(([key, value])=>{
+  Object.entries(stats).forEach(([key, value])=>{
+    const number = Number(value);
+    if(Number.isFinite(number) && number <= 0) return;
     const label = String(key || 'Stat').slice(0, 18);
     out[label] = value;
   });
-  return Object.keys(out).length ? out : { Value: 5 };
+  return Object.fromEntries(Object.entries(out).slice(0, 3));
 }
 function normalizePackCard(card, idx){
   const defaults = DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
@@ -861,8 +809,8 @@ function normalizePackCard(card, idx){
     reward: String((card && card.reward) || ''),
     quantity: Number.isFinite(card && card.quantity) ? card.quantity : null,
     stats: normalizeStats(card && card.stats),
+    rawYield: card && card.rawYield ? card.rawYield : card && card.profile && card.profile.rawYield || null,
     seed: String((card && card.seed) || ''),
-    archetypeKey: String((card && card.archetypeKey) || ''),
     packSeed: String((card && card.packSeed) || ''),
     world: card && card.world ? card.world : null,
     profile: card && card.profile ? card.profile : null,
@@ -875,19 +823,22 @@ function normalizePackConfig(raw){
   const data = raw && typeof raw === 'object' ? raw : {};
   const cards = Array.isArray(data.cards) ? data.cards : [];
   return {
-    packTitle: String(data.packTitle || 'TinyWorld Builder'),
-    packSubtitle: String(data.packSubtitle || 'Island Collection · Booster Pack'),
-    packLabel: String(data.packLabel || `${Math.max(1, cards.length)} Cards`),
-    cards: cards.length ? cards.map(normalizePackCard) : DEFAULT_COLORS.slice(0, 5).map((colors, i)=>normalizePackCard({
-      name: ['Forest Realm','River Kingdom','Fortress Isle','Mystic Grove','Bonus Cache'][i] || `Card ${i + 1}`,
-      backIndex: i,
-      accent: colors[0],
-      rim: colors[1],
-      icon: colors[2],
-      rarity: i === 4 ? 'Bonus' : 'Common',
-      kind: i === 4 ? 'bonus' : 'island',
-      stats: { Growth: 5 + i, Defense: 4, Mana: 3 + i },
-    }, i)),
+    packTitle: String(data.packTitle || 'Island Pack'),
+    packSubtitle: String(data.packSubtitle || '1 procedural island'),
+    packLabel: String(data.packLabel || '1 Island'),
+    cards: cards.length ? cards.map(normalizePackCard) : [normalizePackCard({
+      id: 'raw-yield-island',
+      kind: 'island',
+      name: 'Cliff Haven',
+      rarity: 'Common',
+      backIndex: 0,
+      accent: DEFAULT_COLORS[0][0],
+      rim: DEFAULT_COLORS[0][1],
+      icon: DEFAULT_COLORS[0][2],
+      description: 'Common - Raw Yield 169',
+      tags: ['COMMON', 'CROP-LED', 'YIELD 169'],
+      stats: { 'Raw Yield': 169, Buildings: 36, 'Total Rank': 205 },
+    }, 0)],
   };
 }
 function loadPackConfig(){
@@ -1174,11 +1125,17 @@ function drawTags(ctx, tags, x, y, accent){
   });
 }
 function statEntries(stats){
-  return Object.entries(stats || {}).slice(0, 3).map(([label, value])=>({
-    label: String(label).toUpperCase(),
-    value,
-    number: Number(value),
-  }));
+  return Object.entries(stats || {})
+    .filter(([, value])=>{
+      const number = Number(value);
+      return !Number.isFinite(number) || number > 0;
+    })
+    .slice(0, 3)
+    .map(([label, value])=>({
+      label: String(label).toUpperCase(),
+      value,
+      number: Number(value),
+    }));
 }
 function cropForCard(card){
   const idx = ((card.backIndex % CARD_BACK_CROPS.length) + CARD_BACK_CROPS.length) % CARD_BACK_CROPS.length;
@@ -1355,23 +1312,18 @@ function drawBonusArt(ctx, card, ax, ay, aw, ah){
   ctx.fillStyle='#fff4c0'; ctx.font='900 36px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.shadowColor=card.accent; ctx.shadowBlur=16; ctx.fillText(qty, cx, cy+38); ctx.shadowBlur=0;
 }
-function drawCardStats(ctx, card, y){
+function drawCardScores(ctx, card, y){
   const rows = statEntries(card.stats);
-  const bx=196, bw=CW-bx-66, bh=13;
   rows.forEach((row, idx)=>{
     const sy = y + idx * 36;
     ctx.fillStyle='#aeb8c4'; ctx.font='800 14px system-ui'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillText(row.label.slice(0, 16), 64, sy);
-    ctx.fillStyle='#171c22'; roundRect(ctx,bx,sy-12,bw,bh,7); ctx.fill();
-    const isNum = Number.isFinite(row.number);
-    const val = isNum ? Math.max(0, Math.min(10, row.number)) : 5;
-    const fw=bw*(val/10);
-    const bg=ctx.createLinearGradient(bx,0,bx+fw,0);
-    bg.addColorStop(0,shade(card.accent,0.22)); bg.addColorStop(1,card.accent);
-    ctx.fillStyle=bg; ctx.shadowColor=card.accent; ctx.shadowBlur=7;
-    roundRect(ctx,bx,sy-12,Math.max(fw,bh),bh,7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.fillStyle='#edf4fb'; ctx.font='900 14px system-ui'; ctx.textAlign='right';
-    ctx.fillText(isNum ? `${row.number}/10` : String(row.value).toUpperCase().slice(0, 10), CW-64, sy);
+    ctx.fillStyle=hexToRGBA(card.accent,0.16);
+    roundRect(ctx,270,sy-19,178,28,9); ctx.fill();
+    ctx.strokeStyle=hexToRGBA(card.accent,0.34); ctx.lineWidth=1;
+    roundRect(ctx,270,sy-19,178,28,9); ctx.stroke();
+    ctx.fillStyle='#edf4fb'; ctx.font='900 16px system-ui'; ctx.textAlign='right';
+    ctx.fillText(Number.isFinite(row.number) ? String(Math.round(row.number)) : String(row.value).toUpperCase().slice(0, 10), CW-78, sy);
   });
 }
 function drawCardFrontCanvas(ctx, card){
@@ -1403,7 +1355,7 @@ function drawCardFrontCanvas(ctx, card){
   wrapText(ctx, card.description, CW/2, ay+ah+102, CW-110, 20, 3);
 
   drawTags(ctx, card.tags, 62, CH-184, card.accent);
-  drawCardStats(ctx, card, CH-108);
+  drawCardScores(ctx, card, CH-108);
   drawIcon(ctx, card.icon, CW-72, CH-54, 26, hexToRGBA(card.accent,0.72));
 
   if(!cardsSheetImage) metalCorners(ctx, card.accent);
@@ -1488,7 +1440,7 @@ function drawGeneratedPackWrapper(ctx, config){
   roundRect(ctx,0,0,512,716,26); ctx.clip();
   const matte=document.createElement('canvas');
   matte.width=512; matte.height=716;
-  const mctx=matte.getContext('2d');
+  const mctx=matte.getContext('2d', { willReadFrequently: true });
   mctx.filter='contrast(1.08) saturate(1.08) brightness(1.04)';
   mctx.drawImage(packWrapperImage, 106, 54, 812, 1428, 0, 0, 512, 716);
   mctx.filter='none';
@@ -1681,7 +1633,19 @@ const warm = new T.PointLight(0xc06a3a, 0.4, 38); warm.position.set(6,-3,6); sce
 })();
 
 const CARD_W = 3.0, CARD_H = 4.19, CARD_D = 0.05;
-let activePackConfig = PACK_CONFIG;
+
+function makePreviewPackConfig(){
+  const api = window.TinyverseCollectibles;
+  if(!api || typeof api.rollPack !== 'function') return null;
+  try {
+    const preview = api.rollPack('card-reveal-preview-fish-1');
+    return preview && Array.isArray(preview.cards) && preview.cards.length ? preview : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+let activePackConfig = makePreviewPackConfig() || PACK_CONFIG;
 let packData = activePackConfig.cards;
 let currentPackRoll = null;
 
@@ -1698,7 +1662,7 @@ function disposeCardGroup(grp){
 }
 
 // ---- PACK MESH ----
-const packTex = makePackTexture(PACK_CONFIG);
+const packTex = makePackTexture(activePackConfig);
 const edge = edgeTexture();
 const packGeo = new T.BoxGeometry(CARD_W*1.06, CARD_H*1.04, 0.5);
 const packMat = [
@@ -1890,8 +1854,8 @@ function paintCollection(){
     const title = document.createElement('strong');
     title.textContent = row.name || 'Island';
     const meta = document.createElement('span');
-    const rarity = row.profile && row.profile.economy && row.profile.economy.rarity ? row.profile.economy.rarity : 'Common';
-    meta.textContent = rarity + (row.archetypeKey ? ' · ' + row.archetypeKey : '');
+    const yieldLabel = TC && typeof TC.rawYieldLabel === 'function' ? TC.rawYieldLabel(row) : 'Raw Yield unavailable';
+    meta.textContent = yieldLabel;
     const visit = document.createElement('button');
     visit.type = 'button';
     visit.textContent = 'Visit';
@@ -2037,8 +2001,8 @@ function visitFocusedIsland(){
   TC.handoffToBuilder(saved.id);
 }
 
-titleEl.querySelector('h1').textContent = PACK_CONFIG.packTitle;
-titleEl.querySelector('p').textContent = PACK_CONFIG.packSubtitle;
+titleEl.querySelector('h1').textContent = activePackConfig.packTitle;
+titleEl.querySelector('p').textContent = activePackConfig.packSubtitle;
 refreshGoldHud();
 if(collectionBtn) collectionBtn.addEventListener('click', openCollection);
 if(collectionClose) collectionClose.addEventListener('click', closeCollection);
@@ -2112,7 +2076,7 @@ function spawnBurst(){
   burstParticles={ pts, vel, life:0 };
 }
 function spawnWrapperShards(){
-  const palette = PACK_CONFIG.cards.map(card => card.glow);
+  const palette = activePackConfig.cards.map(card => card.glow);
   for(let i=0;i<34;i++){
     const w=0.18+Math.random()*0.34, h=0.28+Math.random()*0.48;
     const geo=new T.PlaneGeometry(w,h);
@@ -2149,6 +2113,10 @@ function openPack(){
   phase='bursting';
   setPrompt(''); setBtn('');
   if(PA) PA.packBurst();
+  if(PA && typeof PA.islandReveal === 'function'){
+    const revealCard = packData.find(card => card && card.kind === 'island') || packData[0];
+    window.setTimeout(() => PA.islandReveal(revealCard), 220);
+  }
   t0=performance.now();
   spawnBurst();
   spawnWrapperShards();

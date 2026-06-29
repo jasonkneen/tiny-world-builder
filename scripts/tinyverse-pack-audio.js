@@ -8,8 +8,9 @@
     knock: ['foley-knock-jingle-1.mp3', 'foley-knock-jingle-2.mp3'],
     whoosh: ['foley-whoosh-1.mp3', 'foley-whoosh-2.mp3'],
     ripple: ['foley-digital ripple activity.mp3'],
+    rising: ['music-rising-1.mp3'],
   };
-  const SFX_MIN_GAP = { rustle: 70, knock: 90, whoosh: 110, ripple: 240 };
+  const SFX_MIN_GAP = { rustle: 70, knock: 90, whoosh: 110, ripple: 240, rising: 1400 };
   const AUDIO_LS = {
     sfx: 'tinyworld:audio:sfx',
     sfxMuted: 'tinyworld:audio:sfx-muted',
@@ -55,6 +56,31 @@
     node.addEventListener('ended', function () { node.src = ''; }, { once: true });
     const p = node.play();
     if (p && typeof p.catch === 'function') p.catch(function () {});
+  }
+
+  function rarityKey(value) {
+    const key = String(value || '').trim().toLowerCase();
+    if (key === 'legendary' || key === 'epic' || key === 'rare' || key === 'uncommon') return key;
+    return 'common';
+  }
+
+  function islandReveal(card) {
+    const rarity = rarityKey(card && card.rarity || card && card.rawYield && card.rawYield.rarity && card.rawYield.rarity.label);
+    const power = {
+      common: 0.44,
+      uncommon: 0.52,
+      rare: 0.66,
+      epic: 0.8,
+      legendary: 0.95,
+    }[rarity] || 0.5;
+    play('whoosh', 0.72 + power * 0.24);
+    window.setTimeout(function () { play('ripple', 0.28 + power * 0.28); }, 90);
+    if (rarity === 'rare' || rarity === 'epic' || rarity === 'legendary') {
+      window.setTimeout(function () { play('rising', 0.28 + power * 0.46); }, 155);
+    }
+    if (rarity === 'epic' || rarity === 'legendary') {
+      window.setTimeout(function () { play('knock', 0.32 + power * 0.22); }, 430);
+    }
   }
 
   function pickMusicTrack() {
@@ -109,6 +135,7 @@
     play,
     packBuy: function () { play('knock', 0.95); },
     packBurst: function () { play('whoosh', 1); },
+    islandReveal,
     cardFlip: function () { play('rustle', 0.55); },
     cardFocus: function () { play('ripple', 0.32); },
     visitIsland: function () { play('whoosh', 0.72); },

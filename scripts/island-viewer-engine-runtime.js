@@ -8,7 +8,7 @@
     resolution: 0.85,
     shadow: 'balanced',
     lighting: 0.92,
-    directionalSun: 1.1,
+    directionalSun: 10,
     directionalSunAngle: 37,
     timeCycle: 'fixed',
     timeOfDay: 720,
@@ -41,6 +41,12 @@
     const raw = value || {};
     const source = Object.assign({}, DEFAULT_GRAPHICS, raw);
     const stableEffects = raw.viewerEffectsVersion === GRAPHICS_DEFAULTS_VERSION;
+    const rawSun = Object.prototype.hasOwnProperty.call(raw, 'directionalSun')
+      ? Number(raw.directionalSun)
+      : NaN;
+    if (Number.isFinite(rawSun) && Math.abs(rawSun - 1.1) < 0.0001) {
+      source.directionalSun = DEFAULT_GRAPHICS.directionalSun;
+    }
     return {
       viewerEffectsVersion: GRAPHICS_DEFAULTS_VERSION,
       resolution: clampNumber(source.resolution, DEFAULT_GRAPHICS.resolution, 0.5, 1.25),
@@ -132,32 +138,11 @@
       rotationY: cell.transform && Number.isFinite(cell.transform.rotationY) ? cell.transform.rotationY : undefined,
       animate,
       impactDust: false,
-      forceTile: true,
+      forceTile: false,
     });
   }
 
-  function clearViewerWorld() {
-    for (let x = 0; x < VIEWER_GRID_SIZE; x++) {
-      for (let z = 0; z < VIEWER_GRID_SIZE; z++) {
-        setCell(x, z, {
-          terrain: 'grass',
-          terrainFloors: 1,
-          kind: null,
-          floors: 1,
-          buildingType: null,
-          fenceSide: null,
-          extras: [],
-          appearance: null,
-          rotationY: 0,
-          animate: false,
-          impactDust: false,
-          forceTile: true,
-        });
-      }
-    }
-  }
-
-  function applyGraphics(settings) {
+  function applyGraphics(settings, opts = {}) {
     const graphics = normalizeGraphics(settings);
     if (typeof setRenderResolutionScale === 'function') setRenderResolutionScale(graphics.resolution);
     if (typeof renderShadowQuality !== 'undefined') renderShadowQuality = graphics.shadow;
@@ -173,7 +158,7 @@
     if (typeof applyLightingSettings === 'function') applyLightingSettings();
     if (typeof applyCloudSettings === 'function') applyCloudSettings();
     if (typeof applyWaterMaterialSettings === 'function') applyWaterMaterialSettings();
-    if (typeof renderScene === 'function') renderScene();
+    if (opts.render !== false && !window.__tinyworldIslandViewerLoading && typeof renderScene === 'function') renderScene();
     return graphics;
   }
 
@@ -184,11 +169,13 @@
       graphics: normalizeGraphics(options && options.graphics),
       raf: 0,
       disposed: false,
+      loading: false,
     };
 
     function frame(now) {
       if (state.disposed) return;
       state.raf = requestAnimationFrame(frame);
+      if (state.loading) return;
       const dt = 1 / 60;
       if (typeof tickDropAnims === 'function') tickDropAnims(dt);
       if (typeof tickRippleAnims === 'function') tickRippleAnims(dt);
@@ -205,13 +192,19 @@
       state.world = normalized;
       state.profile = meta && meta.profile || null;
       if (meta && meta.graphics) state.graphics = normalizeGraphics(meta.graphics);
-      clearViewerWorld();
-      for (const cell of normalized.cells) applyCell(cell, false);
-      applyGraphics(state.graphics);
-      if (typeof target !== 'undefined' && target && target.set) target.set(0, 0, 0);
-      if (typeof viewSize !== 'undefined') viewSize = 8.2;
-      if (typeof cameraMode !== 'undefined') cameraMode = 'perspective';
-      if (typeof updateCamera === 'function') updateCamera();
+      state.loading = true;
+      window.__tinyworldIslandViewerLoading = true;
+      try {
+        for (const cell of normalized.cells) applyCell(cell, false);
+        applyGraphics(state.graphics, { render: false });
+        if (typeof target !== 'undefined' && target && target.set) target.set(0, 0, 0);
+        if (typeof viewSize !== 'undefined') viewSize = 8.2;
+        if (typeof cameraMode !== 'undefined') cameraMode = 'perspective';
+        if (typeof updateCamera === 'function') updateCamera();
+      } finally {
+        state.loading = false;
+        window.__tinyworldIslandViewerLoading = false;
+      }
       if (typeof renderScene === 'function') renderScene();
       return exportWorld();
     }

@@ -42,12 +42,26 @@
   // explicit colorSpace properties. Keep these helpers centralized so generated
   // canvas/video/model textures stay correct on r185 while old proof pages still
   // work through the vendor compatibility aliases.
+  function twTextureImageHasData(image) {
+    if (!image) return false;
+    if (Array.isArray(image)) return image.length > 0 && image.every(twTextureImageHasData);
+    if (image.data && image.width && image.height) return true;
+    if (image.videoWidth || image.videoHeight) return true;
+    if (image.width || image.height || image.naturalWidth || image.naturalHeight) return true;
+    return false;
+  }
+  function twTextureHasImageData(texture) {
+    return twTextureImageHasData(texture && texture.image);
+  }
+  function twMarkTextureNeedsUpdateIfReady(texture) {
+    if (twTextureHasImageData(texture)) texture.needsUpdate = true;
+    return texture;
+  }
   function twSetTextureColorSpace(texture, colorSpace) {
     if (!texture || !colorSpace) return texture;
     if ('colorSpace' in texture) texture.colorSpace = colorSpace;
     else texture.encoding = colorSpace;
-    texture.needsUpdate = true;
-    return texture;
+    return twMarkTextureNeedsUpdateIfReady(texture);
   }
   function twSetTextureSRGB(texture) {
     return twSetTextureColorSpace(texture, THREE.SRGBColorSpace || THREE.sRGBEncoding);

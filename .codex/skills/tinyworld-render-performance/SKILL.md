@@ -36,6 +36,11 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
   chunky. Future side-wall greedy strips should merge only contiguous faces with
   identical material, top height, and bottom height.
 - Pixelation shader AA should work in pixel mode, but only through edge/depth/normal detection. Do not use a broad fullscreen blur; it smears terrain texture and UI-like decals. Shader AA must not force the normal prepass by itself; only `Pixel normal edge` should allocate/render the normal target.
+- Pixel post shaders are variant-built: the depth sampler uniform exists only
+  when depth edge sampling is enabled, and the normal sampler uniform exists
+  only when normal edge sampling is enabled. Depth edge sampling uses the
+  separate RGBA-packed depth target; do not add unused sampler uniforms to the
+  fullscreen material because WebGL warns when no target is bound.
 - Pixel post shaders must preserve the renderer output color space. In Three r185 `ShaderMaterial` injects color-space helpers, so include/apply `colorspace_fragment` at the final `gl_FragColor` step; do not use the old `encodings_fragment`/`encodings_pars_fragment` chunks.
 - Backdrop/game-screen vignette should remain a cheap CSS overlay variable, not another WebGL post pass. Keep it separate from scene brightness/lighting so it can frame the background without retuning materials.
 - Sky/background colour controls are direct scene/CSS settings, not post passes: `Sky blue depth` darkens the shader sphere and CSS backdrop, `Sky blue saturation` pushes the same blue hue harder, and `Undercloud width` rebuilds the small under-island cloud ring. `Cloud height` also controls undercloud depth below the island, slightly farther than the upper cloud distance, so one height adjustment moves both cloud layers. Keep the undercloud layer as a handful of instanced cloud-puff groups attached below the floating island; do not make a full volumetric cloud field or reuse the full multi-mesh shadow-casting sky cloud factory there.
@@ -97,6 +102,11 @@ GPU caches (introduced for low-end GPU + visible-distance scaling):
 - Waterfall froth/foam should drift slowly. Keep `WATERFALL_FROTH_SPEED`
   conservative (currently `0.30`) so the white puff layer reads as moving foam,
   not flashing particles.
+- Enhanced-water planar reflection should capture only when enhanced water is
+  on, visible reflective water exists, and the viewer is not in a synchronous
+  load. The mirror plane comes from the nearest rendered/known water tile to the
+  camera target; `Y=0` is only a last-resort fallback when no water plane can be
+  found.
 - The object/stamp voxel bevel is a persisted render setting (`tinyworld:render:voxelBevel`) applied inside `vbox()` through cached centered voxel box geometry. It is intentionally fine-grained (0.001 steps) so tiny voxels can keep only a slight softened edge. Keep it subtle and global; do not hand-bevel individual stamps unless they need a genuinely different silhouette.
 - Terrain tile geometry must stay inside the logical cell footprint. Do not use
   x/z overhangs on tile tops, risers, voxel top panels, riser panels, or cheap

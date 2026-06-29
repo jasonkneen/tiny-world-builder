@@ -3,15 +3,15 @@
 
   const GRAPHICS_LS = 'tinyworld:island-viewer:graphics.v1';
   const VIEWER_LS = 'tinyworld:island-viewer:defaults.v1';
+  const GRAPHICS_SUN_MIGRATION_LS = 'tinyworld:island-viewer:directionalSunDefaultMigrated.v1';
   const ISLAND_VIEWER_GRID_SIZE = 8;
   const GRAPHICS_DEFAULTS_VERSION = 2;
-  const ARCHETYPES = ['pastoral', 'forest', 'quarry', 'river', 'village', 'fortress', 'ruins', 'harbor'];
   const DEFAULT_GRAPHICS = {
     viewerEffectsVersion: GRAPHICS_DEFAULTS_VERSION,
     resolution: 0.85,
     shadow: 'balanced',
     lighting: 0.92,
-    directionalSun: 1.1,
+    directionalSun: 10,
     directionalSunAngle: 37,
     timeCycle: 'fixed',
     timeOfDay: 720,
@@ -23,7 +23,6 @@
     distantWorlds: false,
   };
   const DEFAULT_VIEWER = {
-    archetype: 'random',
     gridSize: ISLAND_VIEWER_GRID_SIZE,
     seed: '',
   };
@@ -46,7 +45,6 @@
     devPanel: document.getElementById('iv-dev-panel'),
     devClose: document.getElementById('iv-dev-close'),
     devForm: document.getElementById('iv-dev-form'),
-    archetype: document.getElementById('iv-archetype'),
     gridSize: document.getElementById('iv-grid-size'),
     seed: document.getElementById('iv-seed'),
     resolution: document.getElementById('iv-render-resolution'),
@@ -112,10 +110,16 @@
     }
   }
 
-  function normalizeGraphics(value) {
+  function normalizeGraphics(value, opts = {}) {
     const raw = value || {};
     const source = Object.assign({}, DEFAULT_GRAPHICS, raw);
     const stableEffects = raw.viewerEffectsVersion === GRAPHICS_DEFAULTS_VERSION;
+    const rawSun = Object.prototype.hasOwnProperty.call(raw, 'directionalSun')
+      ? Number(raw.directionalSun)
+      : NaN;
+    if (opts.migrateOldSun !== false && Number.isFinite(rawSun) && Math.abs(rawSun - 1.1) < 0.0001) {
+      source.directionalSun = DEFAULT_GRAPHICS.directionalSun;
+    }
     return {
       viewerEffectsVersion: GRAPHICS_DEFAULTS_VERSION,
       resolution: clampNumber(source.resolution, DEFAULT_GRAPHICS.resolution, 0.5, 1.25),
@@ -136,16 +140,26 @@
 
   function normalizeViewer(value) {
     const source = Object.assign({}, DEFAULT_VIEWER, value || {});
-    const archetype = String(source.archetype || 'random').trim().toLowerCase();
     return {
-      archetype: archetype === 'random' || ARCHETYPES.includes(archetype) ? archetype : 'random',
       gridSize: ISLAND_VIEWER_GRID_SIZE,
       seed: String(source.seed || '').trim(),
     };
   }
 
   function loadGraphicsDefaults() {
-    return normalizeGraphics(loadJsonStorage(GRAPHICS_LS, DEFAULT_GRAPHICS));
+    const raw = loadJsonStorage(GRAPHICS_LS, DEFAULT_GRAPHICS);
+    const migrateOldSun = localStorage.getItem(GRAPHICS_SUN_MIGRATION_LS) !== '1';
+    const graphics = normalizeGraphics(raw, { migrateOldSun });
+    const rawSun = raw && Object.prototype.hasOwnProperty.call(raw, 'directionalSun')
+      ? Number(raw.directionalSun)
+      : NaN;
+    if (migrateOldSun) {
+      try { localStorage.setItem(GRAPHICS_SUN_MIGRATION_LS, '1'); } catch (_) {}
+    }
+    if (migrateOldSun && Number.isFinite(rawSun) && Math.abs(rawSun - 1.1) < 0.0001) {
+      try { localStorage.setItem(GRAPHICS_LS, JSON.stringify(graphics)); } catch (_) {}
+    }
+    return graphics;
   }
 
   function loadViewerDefaults() {
@@ -169,7 +183,6 @@
 
   function syncDevForm() {
     if (!el.devForm) return;
-    el.archetype.value = state.viewer.archetype;
     el.gridSize.value = String(state.viewer.gridSize);
     el.seed.value = state.viewer.seed || '';
     el.resolution.value = String(Math.round(state.graphics.resolution * 100));
@@ -201,7 +214,6 @@
 
   function readDevForm() {
     state.viewer = normalizeViewer({
-      archetype: el.archetype.value,
       gridSize: ISLAND_VIEWER_GRID_SIZE,
       seed: el.seed.value,
     });
@@ -235,9 +247,8 @@
   function currentProfileFor(world, meta) {
     const G = window.TinyWorldIslandGenerator;
     const seed = String((meta && meta.seed) || (state.current && state.current.seed) || '').trim();
-    const archetype = String((meta && meta.archetype) || (state.current && state.current.archetype) || '').trim().toLowerCase();
     if (G && typeof G.profile === 'function') {
-      return G.profile(world, { seed, archetype });
+      return G.profile(world, { seed });
     }
     return (meta && meta.profile) || null;
   }
@@ -280,7 +291,6 @@
       version: 1,
       savedAt: new Date().toISOString(),
       seed: state.current.seed || '',
-      archetype: state.current.archetype || '',
       world: exported,
       profile,
       viewerGraphics: state.graphics,
@@ -295,11 +305,14 @@
     state.ready = true;
     state.current = {
       seed: meta.seed || '',
-      archetype: meta.archetype || '',
       world: renderer.exportWorld(),
       profile,
     };
-    setStatus(profile && profile.name ? 'Viewing ' + profile.name + '.' : 'Island Viewer is ready.');
+    const rawYield = profile && profile.rawYield;
+    const rawYieldLabel = rawYield && rawYield.scores
+      ? ' ' + (rawYield.rarity && rawYield.rarity.label || 'Common') + ' - Raw Yield ' + Math.max(0, Math.round(Number(rawYield.scores.rawYield) || 0)) + '.'
+      : '';
+    setStatus(profile && profile.name ? 'Viewing ' + profile.name + '.' + rawYieldLabel : 'Island Viewer is ready.');
   }
 
   function generateIsland(opts = {}) {
@@ -309,15 +322,14 @@
       setStatus('Random island generator is unavailable.');
       return;
     }
-    const archetype = opts.archetype || state.viewer.archetype || 'random';
     const seed = opts.seed || state.viewer.seed || randomIslandSeed();
     state.viewer.seed = seed;
     syncDevForm();
-    setStatus(archetype === 'random' ? 'Rendering a random island...' : 'Rendering ' + archetype + ' island...');
+    setStatus('Rendering a random island...');
     try { localStorage.setItem(GRAPHICS_LS, JSON.stringify(state.graphics)); } catch (_) {}
-    const world = window.TinyWorldIslandGenerator.generate({ seed, archetype, gridSize: ISLAND_VIEWER_GRID_SIZE });
-    const profile = G.profile(world, { seed, archetype });
-    renderWorld(world, { seed, archetype, profile });
+    const world = window.TinyWorldIslandGenerator.generate({ seed, gridSize: ISLAND_VIEWER_GRID_SIZE });
+    const profile = G.profile(world, { seed });
+    renderWorld(world, { seed, profile });
   }
 
   function loadPayload(payload) {
@@ -330,10 +342,8 @@
       : payload && payload.type === 'tinyworld.randomIslandReveal' ? payload.world
         : payload;
     const seed = String(payload && payload.seed || '').trim();
-    const archetype = String(payload && (payload.archetype || payload.archetypeKey) || '').trim().toLowerCase();
     renderWorld(source, {
       seed,
-      archetype,
       profile: payload && payload.profile,
     });
   }
@@ -384,7 +394,6 @@
       commitDevDefaults();
     };
     const liveDefaultsControls = [
-      el.archetype,
       el.gridSize,
       el.seed,
       el.resolution,

@@ -230,7 +230,7 @@
       posZ = voxelRender.posZ;
       setGridUserData = voxelRender.setGridUserData !== false;
     } else if (kind === 'tree')      mesh = makeTree(level, x, z);
-    else if (kind === 'rock')      mesh = makeRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water');
+    else if (kind === 'rock')      mesh = makeRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water', { appearance: cell.appearance });
     else if (kind === 'bridge')    mesh = makeBridge(getBridgeOrientation(x, z), level);
     else if (kind === 'tuft')      mesh = makeTuft();
     else if (kind === 'flower')    mesh = makeFlower();
@@ -697,6 +697,7 @@
     const carriedExtras = opts && Object.prototype.hasOwnProperty.call(opts, 'extras')
       ? (opts.extras || [])
       : (prev.extras || []);
+    const extrasChanged = JSON.stringify(prev.extras || []) !== JSON.stringify(carriedExtras || []);
     // Rotation and within-tile offset for the main mesh. Cleared
     // whenever the kind changes so a fresh placement starts at the
     // default orientation.
@@ -785,7 +786,7 @@
         && typeof scheduleHomeBorderEdgeRefresh === 'function') {
       scheduleHomeBorderEdgeRefresh();
     }
-    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !appearanceChanged && !economyChanged && !transformChanged && !waterFlowChanged) {
+    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !extrasChanged && !appearanceChanged && !economyChanged && !transformChanged && !waterFlowChanged) {
       if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
         const saveStart = repaintProfileBegin();
         saveState();

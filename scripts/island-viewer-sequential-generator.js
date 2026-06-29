@@ -557,14 +557,55 @@
     return candidates.length ? candidates[0].patch : [];
   }
 
+  function compactRockPatch(cells, seed) {
+    const emptyIndexes = [];
+    for (let index = 0; index < cells.length; index++) {
+      if (isEmptyBuildableCell(cells, index)) emptyIndexes.push(index);
+    }
+    const emptySet = new Set(emptyIndexes);
+    const candidates = [];
+    for (const startIndex of emptyIndexes) {
+      const patch = [startIndex];
+      const used = new Set(patch);
+      while (patch.length < 4) {
+        const nextOptions = [];
+        for (const index of patch) {
+          for (const neighbor of cardinalNeighbors(index)) {
+            if (!emptySet.has(neighbor) || used.has(neighbor)) continue;
+            nextOptions.push({
+              index: neighbor,
+              score: distanceBetween(startIndex, neighbor)
+                + cellRand(seed, neighbor, 'rock-cluster-' + startIndex) * 0.35,
+            });
+          }
+        }
+        if (!nextOptions.length) break;
+        nextOptions.sort((a, b) => a.score - b.score);
+        patch.push(nextOptions[0].index);
+        used.add(nextOptions[0].index);
+      }
+      if (patch.length !== 4) continue;
+      candidates.push({
+        patch,
+        score: patch.reduce((sum, index) => sum + distanceBetween(startIndex, index), 0)
+          + cellRand(seed, startIndex, 'rock-cluster-patch') * 0.5,
+      });
+    }
+    candidates.sort((a, b) => a.score - b.score);
+    return candidates.length ? candidates[0].patch : [];
+  }
+
   function placeRockPatchLayer(cells, seed) {
     const patch = rockPatch(cells, seed);
-    for (const index of patch) {
+    const quarryPatch = patch.length === 4 ? patch : compactRockPatch(cells, seed);
+    const oreMetals = ['copper', 'iron', 'silver', 'gold'];
+    quarryPatch.forEach((index, oreIndex) => {
       cells[index].terrain = 'stone';
-      cells[index].object = cellRand(seed, index, 'rock-patch-ore') < 0.25 ? 'ore' : 'stone';
+      cells[index].object = 'ore';
+      cells[index].oreMetal = oreMetals[oreIndex % oreMetals.length];
       cells[index].motif = 'quarry';
-    }
-    return patch;
+    });
+    return quarryPatch;
   }
 
   function isEdgeIndex(index) {
@@ -923,11 +964,56 @@
 
     return [
       { id: 'crop', weight: 18 + nearWater * 8 + nearCrops * 5 + nearPath * 2 },
-      { id: 'ore', weight: 10 + nearStone * 10 + (isEdgeIndex(index) ? 2 : 0) },
+      { id: 'stone', weight: 16 + nearStone * 12 + (isEdgeIndex(index) ? 3 : 0) },
+      { id: 'ore', weight: 4 + nearStone * 4 + (isEdgeIndex(index) ? 1 : 0) },
       { id: 'animal', weight: 12 + nearAnimals * 7 + nearWater * 3 },
       { id: 'bush', weight: 22 + nearBuildings * 5 + nearPath * 4 + nearGreenery * 2 },
       { id: 'tree', weight: 16 + (isEdgeIndex(index) ? 7 : 0) + Math.max(0, 2 - nearBuildings) * 2 + nearGreenery },
     ];
+  }
+
+  function stoneContextValue(cells, index) {
+    let value = 0;
+    for (let other = 0; other < cells.length; other++) {
+      if (other === index) continue;
+      const cell = cells[other];
+      if (!cell || (cell.object !== 'stone' && cell.object !== 'ore' && cell.terrain !== 'stone')) continue;
+      const distance = distanceBetween(index, other);
+      if (distance < 1 || distance > 3) continue;
+      value += (cell.object === 'ore' ? 2.4 : 1.4) / distance;
+    }
+    return value;
+  }
+
+  function stoneOutcropCandidates(cells, seed) {
+    const candidates = [];
+    for (let index = 0; index < cells.length; index++) {
+      if (!isEmptyBuildableCell(cells, index)) continue;
+      const context = stoneContextValue(cells, index);
+      if (context <= 0) continue;
+      candidates.push({
+        index,
+        score: cellRand(seed, index, 'stone-outcrop')
+          - context * 0.55
+          - (isEdgeIndex(index) ? 0.08 : 0),
+      });
+    }
+    candidates.sort((a, b) => a.score - b.score);
+    return candidates;
+  }
+
+  function placeStoneOutcropLayer(cells, seed) {
+    const placed = [];
+    const target = 2 + Math.floor(seededRandom(String(seed) + '|stone-outcrop-target')() * 2);
+    for (const candidate of stoneOutcropCandidates(cells, seed)) {
+      if (placed.length >= target) break;
+      const cell = cells[candidate.index];
+      cell.object = 'stone';
+      cell.terrain = 'stone';
+      cell.motif = 'stone-outcrop';
+      placed.push(candidate.index);
+    }
+    return placed;
   }
 
   function weightedPick(options, roll) {
@@ -955,6 +1041,12 @@
       cell.object = 'ore';
       cell.terrain = 'stone';
       cell.motif = 'infill-ore';
+      return true;
+    }
+    if (id === 'stone') {
+      cell.object = 'stone';
+      cell.terrain = 'stone';
+      cell.motif = 'infill-stone';
       return true;
     }
     if (id === 'animal') {
@@ -1054,7 +1146,7 @@
     }
     if (object === 'stone' || object === 'ore') {
       const appearance = object === 'ore'
-        ? { objectStyle: 'voxel', oreMetal: pick(['copper', 'iron', 'silver', 'gold'], String(seed) + '|ore|' + index) }
+        ? { objectStyle: 'voxel', oreMetal: cell.oreMetal || pick(['copper', 'iron', 'silver', 'gold'], String(seed) + '|ore|' + index) }
         : objectStyle;
       return {
         kind: 'rock',
@@ -1099,6 +1191,7 @@
     placeWaterRouteLayer(cells, seed);
     placePathWaterPathBridgesLayer(cells);
     placeStrategicLampLayer(cells, seed);
+    placeStoneOutcropLayer(cells, seed);
     placeTreeBushLayer(cells, seed);
     placeProbabilisticInfillLayer(cells, seed);
 
@@ -1187,178 +1280,47 @@
     if (typeof canonical === 'function' && canonical !== buildRandomIslandEconomyProfile) {
       return canonical(data, options);
     }
-    const cells = Array.isArray(data && data.cells) ? data.cells : [];
     const seed = String(options.seed || (data && data.seed) || 'tiny-1');
-    const archetypeKey = normalizeArchetype(options.archetype || options.archetypeKey || (data && data.archetypeKey), seed);
-    const statDefs = [
-      { id: 'food', label: 'Food', color: '#219963' },
-      { id: 'materials', label: 'Materials', color: '#7b8794' },
-      { id: 'commerce', label: 'Commerce', color: '#ce8a15' },
-      { id: 'defense', label: 'Defense', color: '#536276' },
-      { id: 'charm', label: 'Charm', color: '#2473e6' },
-    ];
-    const archetypes = {
-      pastoral: { label: 'Pastoral', bestUse: 'Farming and wool', traits: ['Meadow Economy', 'Gentle Terrain'] },
-      forest: { label: 'Forest', bestUse: 'Wood and charm', traits: ['Deep Grove', 'Wood Reserve'] },
-      quarry: { label: 'Quarry', bestUse: 'Materials', traits: ['Stone Veins', 'Rough Ground'] },
-      river: { label: 'River', bestUse: 'Food and trade', traits: ['River Crossing', 'Fresh Water'] },
-      village: { label: 'Village', bestUse: 'Commerce', traits: ['House Cluster', 'Trade Footpaths'] },
-      fortress: { label: 'Fortress', bestUse: 'Defense', traits: ['Watch Posts', 'Guarded Edge'] },
-      ruins: { label: 'Ruins', bestUse: 'Rare traits', traits: ['Ancient Remains', 'Mystic Finds'] },
-      harbor: { label: 'Harbor', bestUse: 'Trade and charm', traits: ['Coastal Trade', 'Open Shore'] },
-    };
-    const archetype = archetypes[archetypeKey] || archetypes.pastoral;
-    const stats = Object.fromEntries(statDefs.map(stat => [stat.id, 0]));
-    const counts = {};
-    const terrains = {};
-    const byCoord = new Map();
-    const synergies = [];
-
-    for (const cell of cells) {
-      if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) continue;
-      byCoord.set(cellKey(cell), cell);
-      terrains[cell.terrain] = (terrains[cell.terrain] || 0) + 1;
-      const id = objectIdForProfile(cell);
-      if (id) counts[id] = (counts[id] || 0) + 1;
-      addStats(stats, terrainStats(cell), 1);
-      addStats(stats, profileObjectStats(id), Math.max(1, Number(cell.floors) || 1) > 1 && id !== 'cow' && id !== 'sheep' ? 1.12 : 1);
-    }
-
-    function cellAt(x, z) {
-      return byCoord.get(x + ',' + z) || null;
-    }
-
-    function neighborsOf(cell) {
-      return [[1, 0], [-1, 0], [0, 1], [0, -1]]
-        .map(([dx, dz]) => cellAt(cell.x + dx, cell.z + dz))
-        .filter(Boolean);
-    }
-
-    function addSynergy(label) {
-      if (!synergies.includes(label)) synergies.push(label);
-    }
-
-    for (const cell of cells) {
-      if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.z)) continue;
-      const id = objectIdForProfile(cell);
-      const nearby = neighborsOf(cell);
-      if (id === 'sheep' && nearby.some(neighbor => neighbor.terrain === 'grass')) {
-        stats.food += 0.8;
-        stats.charm += 0.5;
-        addSynergy('Sheep Meadow');
-      }
-      if (id === 'cow' && nearby.some(neighbor => neighbor.terrain === 'water' || neighbor.terrain === 'grass')) {
-        stats.food += 1.0;
-        addSynergy('Watered Pasture');
-      }
-      if ((id === 'house' || id === 'manor' || id === 'watchtower') && nearby.some(neighbor => neighbor.terrain === 'path')) {
-        stats.commerce += 1.1;
-        addSynergy(id === 'watchtower' ? 'Watch Path' : id === 'manor' ? 'Connected Manor' : 'Connected House');
-      }
-      if (['wheat', 'corn', 'carrot', 'pumpkin', 'sunflower'].includes(id) && nearby.some(neighbor => neighbor.terrain === 'water')) {
-        stats.food += 0.9;
-        addSynergy('Irrigated Crops');
-      }
-      if (id === 'stone' && nearby.some(neighbor => objectIdForProfile(neighbor) === 'stone')) {
-        stats.materials += 0.45;
-        addSynergy('Stone Cluster');
-      }
-      if (id === 'lamp-post' && nearby.some(neighbor => neighbor.terrain === 'path')) {
-        stats.commerce += 0.7;
-        stats.charm += 0.4;
-        addSynergy('Lit Footpaths');
-      }
-      if (id === 'tree' && nearby.some(neighbor => neighbor.terrain === 'water' || objectIdForProfile(neighbor) === 'bush')) {
-        stats.charm += 0.7;
-        addSynergy('Green Grove');
-      }
-      if (id === 'bush' && nearby.some(neighbor => objectIdForProfile(neighbor) === 'house' || objectIdForProfile(neighbor) === 'manor' || neighbor.terrain === 'path')) {
-        stats.charm += 0.5;
-        addSynergy('Trimmed Shrubs');
-      }
-    }
-
-    const roundedStats = Object.fromEntries(Object.entries(stats).map(([key, value]) => [key, Number(value.toFixed(1))]));
-    const topStats = statDefs
-      .map(stat => ({ id: stat.id, label: stat.label, color: stat.color, value: roundedStats[stat.id] || 0 }))
-      .sort((a, b) => b.value - a.value);
-    const traits = archetype.traits.slice();
-    if ((counts.sheep || 0) >= 2) traits.push('Sheep Meadows');
-    if ((counts.cow || 0) >= 2) traits.push('Cattle Pasture');
-    if ((counts.stone || 0) >= 4) traits.push('Rich Quarry');
-    if (((counts.house || 0) + (counts.manor || 0)) >= 3) traits.push('House Cluster');
-    if ((counts.manor || 0) >= 1) traits.push('Manor Grounds');
-    if ((counts.watchtower || 0) >= 2) traits.push('Watch Line');
-    if ((counts.bridge || 0) >= 1) traits.push('Bridge Crossing');
-    if ((counts['lamp-post'] || 0) >= 1) traits.push('Lantern Corners');
-    if ((counts.tree || 0) >= 2) traits.push('Tree Grove');
-    if ((counts.bush || 0) >= 2) traits.push('Shrub Border');
-    if ((terrains.water || 0) >= 5) traits.push('Fresh Water');
-    if ((terrains.dirt || 0) >= 4) traits.push('Tended Plots');
-
-    const weighted = roundedStats.food * 1.05
-      + roundedStats.materials * 0.95
-      + roundedStats.commerce * 0.9
-      + Math.min(roundedStats.defense, 28) * 0.65
-      + roundedStats.charm * 0.82;
-    const rarityScore = weighted + synergies.length * 0.9 + traits.length * 1.2;
-    const rarity = rarityScore >= 126 ? 'Legendary'
-      : rarityScore >= 118 ? 'Epic'
-        : rarityScore >= 110 ? 'Rare'
-          : rarityScore >= 96 ? 'Uncommon'
-            : 'Common';
-    const nameRng = seededRandom(seed + '|name|' + archetypeKey);
-    const prefixes = {
-      pastoral: ['Moss', 'Meadow', 'Clover', 'Wool', 'Green'],
-      forest: ['Pine', 'Fern', 'Oak', 'Moss', 'Canopy'],
-      quarry: ['Stone', 'Granite', 'Slate', 'Iron', 'Cliff'],
-      river: ['Brook', 'River', 'Moss', 'Willow', 'Reed'],
-      village: ['Hearth', 'Market', 'Lantern', 'Cottage', 'Moss'],
-      fortress: ['Watch', 'Iron', 'Shield', 'High', 'Stone'],
-      ruins: ['Relic', 'Moon', 'Elder', 'Totem', 'Crystal'],
-      harbor: ['Shoal', 'Salt', 'Dock', 'Tide', 'Harbor'],
-    };
+    const nameRng = seededRandom(seed + '|raw-yield-name');
+    const prefixes = ['Moss', 'Stone', 'Clover', 'Pine', 'Salt', 'Relic', 'Lantern', 'Crown', 'Brook', 'Hearth'];
     const suffixes = ['Hamlet', 'Shoal', 'Rise', 'Watch', 'Crossing', 'Haven', 'Crown', 'Hollow', 'Reach'];
-    const prefixList = prefixes[archetypeKey] || prefixes.pastoral;
-    const name = prefixList[Math.floor(nameRng() * prefixList.length)] + ' ' + suffixes[Math.floor(nameRng() * suffixes.length)];
-    const sampleCells = predicate => cells
-      .filter(cell => cell && Number.isInteger(cell.x) && Number.isInteger(cell.z) && predicate(cell, objectIdForProfile(cell)))
-      .slice(0, 10)
-      .map(cell => ({ x: cell.x, z: cell.z }));
-
+    const name = String(options.name || (data && data.name) || '').trim()
+      || prefixes[Math.floor(nameRng() * prefixes.length)] + ' ' + suffixes[Math.floor(nameRng() * suffixes.length)];
+    const buildRawYield = window.__buildIslandRawYieldEconomy;
+    const rawYield = typeof buildRawYield === 'function'
+      ? buildRawYield(data, { seed, name })
+      : {
+          aspect: 'raw_yield',
+          label: 'Raw Yield',
+          scoreV: 1,
+          seed,
+          name,
+          resources: {
+            crops: { wheat: 0, corn: 0, carrot: 0, pumpkin: 0, sunflower: 0 },
+            rockOre: { stone: 0, copper: 0, iron: 0, silver: 0, goldOre: 0 },
+            animals: { sheep: 0, cow: 0 },
+            nature: { trees: 0, berries: 0, water: 0, fish: 0 },
+            buildings: { houses: 0, towers: 0, manor: 0 },
+          },
+          scores: { crops: 0, rockOre: 0, animals: 0, nature: 0, rawYield: 0, buildings: 0, totalRank: 0 },
+          rarity: { id: 'common', label: 'Common', range: { min: 0, max: 169 } },
+          leader: { id: 'crops', label: 'Crop-led' },
+        };
     return {
       seed,
-      archetypeKey,
-      archetype: archetype.label,
-      bestUse: archetype.bestUse,
       name,
-      stats: roundedStats,
-      statDefs,
-      counts,
-      terrains,
-      synergyBonus: Number((synergies.length * 0.9).toFixed(1)),
-      synergies: synergies.slice(0, 8),
-      traits: [...new Set(traits)].slice(0, 6),
+      rawYield,
       economy: {
-        weighted: Number(weighted.toFixed(1)),
-        traitBonus: Number((traits.length * 1.2).toFixed(1)),
-        potential: Math.max(1, Math.round(rarityScore)),
-        rarityScore: Number(rarityScore.toFixed(1)),
-        rarity,
-        rarityScope: 'archetype',
+        aspect: 'raw_yield',
+        rarityScope: 'raw_yield',
+        rarity: rawYield.rarity.label,
+        rawYieldScore: rawYield.scores.rawYield,
+        buildingScore: rawYield.scores.buildings,
+        totalRankScore: rawYield.scores.totalRank,
+        leader: rawYield.leader,
       },
-      topStats,
-      highlights: [
-        { id: 'overview', stat: topStats[0].id, cells: sampleCells(() => true) },
-        { id: 'commerce', stat: 'commerce', cells: sampleCells((cell, id) => cell.terrain === 'path' || id === 'house' || id === 'manor' || id === 'watchtower' || id === 'lamp-post') },
-        { id: 'food', stat: 'food', cells: sampleCells((cell, id) => ['wheat', 'corn', 'pumpkin', 'carrot', 'sunflower', 'cow', 'sheep'].indexOf(id) !== -1 || cell.terrain === 'water') },
-        { id: 'materials', stat: 'materials', cells: sampleCells((cell, id) => id === 'stone' || id === 'tree' || cell.terrain === 'stone' || cell.terrain === 'dirt') },
-        { id: 'defense', stat: 'defense', cells: sampleCells((cell, id) => id === 'watchtower' || id === 'fence') },
-        { id: 'charm', stat: 'charm', cells: sampleCells((cell, id) => id === 'sheep' || id === 'lamp-post' || id === 'tree' || id === 'bush' || cell.terrain === 'water') },
-      ],
     };
   }
-
   function generate(options) {
     return generateRandomIslandWorld(options || {});
   }

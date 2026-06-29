@@ -229,6 +229,7 @@
     version: 'tinyworld:render:version',
   };
   const RENDER_SETTINGS_VERSION = '28';
+  const RENDER_DIRECTIONAL_SUN_MIGRATION_LS = 'tinyworld:render:directionalSunDefaultMigrated.v1';
   const RENDER_DEFAULTS = {
     // Defaults tuned for a bright, legible edit surface: lower internal
     // resolution, stronger direct/fill lighting, full ambient fill, brighter
@@ -243,7 +244,7 @@
     uiTheme: 'auto',
     shadow: 'balanced',
     lighting: '0.78',
-    directionalSun: '1',
+    directionalSun: '10',
     ambientFill: '1.00',
     frontFill: '0.48',
     sideFill: '0.40',
@@ -315,6 +316,16 @@
     for (const [key, value] of Object.entries(RENDER_DEFAULTS)) localStorage.setItem(RENDER_LS[key], value);
     localStorage.setItem(RENDER_LS.version, RENDER_SETTINGS_VERSION);
   }
+  try {
+    if (localStorage.getItem(RENDER_DIRECTIONAL_SUN_MIGRATION_LS) !== '1') {
+      const rawSun = localStorage.getItem(RENDER_LS.directionalSun);
+      const oldSun = parseFloat(rawSun);
+      if (rawSun === null || (Number.isFinite(oldSun) && Math.abs(oldSun - 1) < 0.0001)) {
+        localStorage.setItem(RENDER_LS.directionalSun, RENDER_DEFAULTS.directionalSun);
+      }
+      localStorage.setItem(RENDER_DIRECTIONAL_SUN_MIGRATION_LS, '1');
+    }
+  } catch (_) {}
   try {
     for (const key of [
       'tinyworld:render:post',
@@ -1050,14 +1061,19 @@
   // pass entirely and render directly to the screen.
   const pixelState = {
     target: null,
+    depthTarget: null,
+    depthMaterial: null,
     normalTarget: null,
     normalMaterial: null,
     quadScene: null,
+    quadMesh: null,
     quadCam: null,
     quadMaterial: null,
+    quadVariantKey: '',
     drawW: 0,
     drawH: 0,
     pixelSize: 0,
+    wantDepthEdge: false,
     wantNormals: false,
   };
   const renderBufferSizeVec = new THREE.Vector2();
@@ -1073,6 +1089,121 @@
       pixelState.normalMaterial.dispose();
       pixelState.normalMaterial = null;
     }
+  }
+
+  function disposePixelDepthResources() {
+    if (pixelState.depthTarget) {
+      pixelState.depthTarget.dispose();
+      pixelState.depthTarget = null;
+    }
+    if (pixelState.depthMaterial) {
+      pixelState.depthMaterial.dispose();
+      pixelState.depthMaterial = null;
+    }
+  }
+
+  function pixelPostVariantKey(wantNormals, wantDepthEdge) {
+    return (wantDepthEdge ? 'd' : '-') + (wantNormals ? 'n' : '-');
+  }
+
+  function createPixelQuadMaterial(targetW, targetH, wantNormals, wantDepthEdge) {
+    const uniforms = {
+      tColor: { value: null },
+      resolution: { value: new THREE.Vector2(targetW, targetH) },
+      depthEdgeStrength: { value: 0.0 },
+      normalEdgeStrength: { value: 0.0 },
+      antialiasStrength: { value: 0.0 },
+    };
+    if (wantDepthEdge) uniforms.tDepth = { value: null };
+    if (wantNormals) uniforms.tNormal = { value: null };
+    const fragment = [
+      'uniform sampler2D tColor;',
+      wantDepthEdge ? 'uniform sampler2D tDepth;' : '',
+      wantNormals ? 'uniform sampler2D tNormal;' : '',
+      'uniform vec2 resolution;',
+      'uniform float depthEdgeStrength;',
+      'uniform float normalEdgeStrength;',
+      'uniform float antialiasStrength;',
+      'varying vec2 vUv;',
+      wantDepthEdge ? '#include <packing>' : '',
+      wantDepthEdge ? 'float readDepth(vec2 uv) { return unpackRGBAToDepth(texture2D(tDepth, uv)); }' : '',
+      wantNormals ? 'vec3 readNormal(vec2 uv) { return normalize(texture2D(tNormal, uv).xyz * 2.0 - 1.0); }' : '',
+      'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
+      'vec3 antialiasColor(vec2 uv, vec2 texel, vec3 center, float edgeHint) {',
+      '  if (antialiasStrength <= 0.001) return center;',
+      '  vec3 cL = texture2D(tColor, uv - vec2(texel.x, 0.0)).rgb;',
+      '  vec3 cR = texture2D(tColor, uv + vec2(texel.x, 0.0)).rgb;',
+      '  vec3 cU = texture2D(tColor, uv - vec2(0.0, texel.y)).rgb;',
+      '  vec3 cD = texture2D(tColor, uv + vec2(0.0, texel.y)).rgb;',
+      '  vec3 cUL = texture2D(tColor, uv + vec2(-texel.x, -texel.y)).rgb;',
+      '  vec3 cUR = texture2D(tColor, uv + vec2( texel.x, -texel.y)).rgb;',
+      '  vec3 cDL = texture2D(tColor, uv + vec2(-texel.x,  texel.y)).rgb;',
+      '  vec3 cDR = texture2D(tColor, uv + vec2( texel.x,  texel.y)).rgb;',
+      '  float lC = luma(center);',
+      '  float lo = min(lC, min(min(luma(cL), luma(cR)), min(luma(cU), luma(cD))));',
+      '  float hi = max(lC, max(max(luma(cL), luma(cR)), max(luma(cU), luma(cD))));',
+      '  float colorMask = smoothstep(0.035, 0.22, hi - lo);',
+      '  float edgeMask = clamp(max(edgeHint, colorMask * 0.45) * antialiasStrength, 0.0, 0.86);',
+      '  vec3 crossAvg = (center * 4.0 + cL + cR + cU + cD) * 0.125;',
+      '  vec3 diagAvg = (cUL + cUR + cDL + cDR) * 0.25;',
+      '  vec3 avg = mix(crossAvg, diagAvg, 0.18);',
+      '  return mix(center, avg, edgeMask * 0.72);',
+      '}',
+      wantDepthEdge ? [
+        'float depthEdge(vec2 uv, vec2 texel) {',
+        '  float d = readDepth(uv);',
+        '  float dL = readDepth(uv - vec2(texel.x, 0.0));',
+        '  float dR = readDepth(uv + vec2(texel.x, 0.0));',
+        '  float dU = readDepth(uv - vec2(0.0, texel.y));',
+        '  float dD = readDepth(uv + vec2(0.0, texel.y));',
+        '  float diff = max(max(abs(d - dL), abs(d - dR)), max(abs(d - dU), abs(d - dD)));',
+        '  return smoothstep(0.0008, 0.004, diff);',
+        '}',
+      ].join('\n') : '',
+      wantNormals ? [
+        'float normalEdge(vec2 uv, vec2 texel) {',
+        '  vec3 n = readNormal(uv);',
+        '  vec3 nL = readNormal(uv - vec2(texel.x, 0.0));',
+        '  vec3 nR = readNormal(uv + vec2(texel.x, 0.0));',
+        '  vec3 nU = readNormal(uv - vec2(0.0, texel.y));',
+        '  vec3 nD = readNormal(uv + vec2(0.0, texel.y));',
+        '  float dL = 1.0 - max(0.0, dot(n, nL));',
+        '  float dR = 1.0 - max(0.0, dot(n, nR));',
+        '  float dU = 1.0 - max(0.0, dot(n, nU));',
+        '  float dD = 1.0 - max(0.0, dot(n, nD));',
+        '  float diff = max(max(dL, dR), max(dU, dD));',
+        '  return smoothstep(0.10, 0.40, diff);',
+        '}',
+      ].join('\n') : '',
+      'void main() {',
+      '  vec2 texel = 1.0 / resolution;',
+      '  vec3 col = texture2D(tColor, vUv).rgb;',
+      wantDepthEdge ? '  float deRaw = depthEdgeStrength > 0.001 ? depthEdge(vUv, texel) : 0.0;' : '  float deRaw = 0.0;',
+      wantNormals ? '  float neRaw = normalEdgeStrength > 0.001 ? normalEdge(vUv, texel) : 0.0;' : '  float neRaw = 0.0;',
+      '  float edgeHint = clamp(max(deRaw, neRaw), 0.0, 1.0);',
+      '  col = antialiasColor(vUv, texel, col, edgeHint);',
+      '  float de = deRaw * depthEdgeStrength;',
+      '  float ne = neRaw * normalEdgeStrength;',
+      '  float edge = clamp(max(de, ne), 0.0, 1.0);',
+      '  float edgeShade = mix(0.82, 0.62, clamp(max(depthEdgeStrength, normalEdgeStrength), 0.0, 1.0));',
+      '  col = mix(col, col * edgeShade, edge * 0.72);',
+      '  gl_FragColor = vec4(col, 1.0);',
+      '  #include <colorspace_fragment>',
+      '}',
+    ].filter(Boolean).join('\n');
+    return new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: [
+        'varying vec2 vUv;',
+        'void main() {',
+        '  vUv = uv;',
+        '  gl_Position = vec4(position.xy, 0.0, 1.0);',
+        '}',
+      ].join('\n'),
+      fragmentShader: fragment,
+      depthTest: false,
+      depthWrite: false,
+    });
   }
 
   function pixelZoomResolutionScale() {
@@ -1092,17 +1223,14 @@
     const targetH = Math.max(1, Math.floor(drawH / pixelSize));
     // The pixelation pass renders the scene to this low-res target and then
     // nearest-upscales it for the chunky look. Rendered with a single sample,
-    // the dense voxel SILHOUETTES on the island sides alias and crawl into the
-    // swimming diagonal "stripes" the user sees as the camera moves. MSAA
-    // multisamples coverage so those edges resolve to smooth chunky pixels (the
-    // NearestFilter upscale keeps the pixels crisp; surface texture/shader
-    // detail is handled separately by mipmaps + fwidth AA). WebGLRenderer's multisample
-    // target can't resolve a sampleable depth texture, and the depth-edge
-    // outline option needs one — so fall back to the plain depth-texture target
-    // only when depth edges are enabled (off by default).
-    const canMSAA = !wantDepthEdge && !!(renderer.capabilities && renderer.capabilities.isWebGL2)
+    // dense voxel silhouettes alias and crawl as the camera moves. MSAA
+    // multisamples coverage so those edges resolve to smooth chunky pixels
+    // while the NearestFilter upscale keeps the pixels crisp. Depth outlines use
+    // a separate RGBA depth render pass below; sampling WebGL depth textures from
+    // a regular sampler2D trips sampler-type mismatch errors on some drivers.
+    const canMSAA = !!(renderer.capabilities && renderer.capabilities.isWebGL2)
       && typeof THREE.WebGLMultisampleRenderTarget === 'function';
-    const wantMode = canMSAA ? 'msaa' : 'depth';
+    const wantMode = canMSAA ? 'msaa' : 'color';
     if (pixelState.target && pixelState.targetMode !== wantMode) {
       pixelState.target.dispose();
       pixelState.target = null;
@@ -1119,20 +1247,32 @@
         t.samples = Math.max(2, Math.min(4, maxSamples));
         pixelState.target = t;
       } else {
-        const depth = new THREE.DepthTexture(targetW, targetH);
-        depth.format = THREE.DepthFormat;
-        depth.type = THREE.UnsignedShortType;
         pixelState.target = new THREE.WebGLRenderTarget(targetW, targetH, {
           minFilter: THREE.NearestFilter,
           magFilter: THREE.NearestFilter,
           format: THREE.RGBAFormat,
           depthBuffer: true,
-          depthTexture: depth,
         });
       }
       pixelState.targetMode = wantMode;
     } else if (pixelState.target.width !== targetW || pixelState.target.height !== targetH) {
       pixelState.target.setSize(targetW, targetH);
+    }
+    if (wantDepthEdge) {
+      if (!pixelState.depthTarget) {
+        pixelState.depthTarget = new THREE.WebGLRenderTarget(targetW, targetH, {
+          minFilter: THREE.NearestFilter,
+          magFilter: THREE.NearestFilter,
+          format: THREE.RGBAFormat,
+        });
+        pixelState.depthMaterial = new THREE.MeshDepthMaterial({
+          depthPacking: THREE.RGBADepthPacking,
+        });
+      } else if (pixelState.depthTarget.width !== targetW || pixelState.depthTarget.height !== targetH) {
+        pixelState.depthTarget.setSize(targetW, targetH);
+      }
+    } else {
+      disposePixelDepthResources();
     }
     if (wantNormals) {
       if (!pixelState.normalTarget) {
@@ -1150,106 +1290,27 @@
     }
     if (!pixelState.quadScene) {
       pixelState.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-      pixelState.quadMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-          tColor: { value: null },
-          tDepth: { value: null },
-          tNormal: { value: null },
-          resolution: { value: new THREE.Vector2(targetW, targetH) },
-          depthEdgeStrength: { value: 0.0 },
-          normalEdgeStrength: { value: 0.0 },
-          antialiasStrength: { value: 0.0 },
-          useNormals: { value: 0.0 },
-        },
-        vertexShader: [
-          'varying vec2 vUv;',
-          'void main() {',
-          '  vUv = uv;',
-          '  gl_Position = vec4(position.xy, 0.0, 1.0);',
-          '}',
-        ].join('\n'),
-        fragmentShader: [
-          'uniform sampler2D tColor;',
-          'uniform sampler2D tDepth;',
-          'uniform sampler2D tNormal;',
-          'uniform vec2 resolution;',
-          'uniform float depthEdgeStrength;',
-          'uniform float normalEdgeStrength;',
-          'uniform float antialiasStrength;',
-          'uniform float useNormals;',
-          'varying vec2 vUv;',
-          'float readDepth(vec2 uv) { return texture2D(tDepth, uv).r; }',
-          'vec3 readNormal(vec2 uv) { return normalize(texture2D(tNormal, uv).xyz * 2.0 - 1.0); }',
-          'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
-          'vec3 antialiasColor(vec2 uv, vec2 texel, vec3 center, float edgeHint) {',
-          '  if (antialiasStrength <= 0.001) return center;',
-          '  vec3 cL = texture2D(tColor, uv - vec2(texel.x, 0.0)).rgb;',
-          '  vec3 cR = texture2D(tColor, uv + vec2(texel.x, 0.0)).rgb;',
-          '  vec3 cU = texture2D(tColor, uv - vec2(0.0, texel.y)).rgb;',
-          '  vec3 cD = texture2D(tColor, uv + vec2(0.0, texel.y)).rgb;',
-          '  vec3 cUL = texture2D(tColor, uv + vec2(-texel.x, -texel.y)).rgb;',
-          '  vec3 cUR = texture2D(tColor, uv + vec2( texel.x, -texel.y)).rgb;',
-          '  vec3 cDL = texture2D(tColor, uv + vec2(-texel.x,  texel.y)).rgb;',
-          '  vec3 cDR = texture2D(tColor, uv + vec2( texel.x,  texel.y)).rgb;',
-          '  float lC = luma(center);',
-          '  float lo = min(lC, min(min(luma(cL), luma(cR)), min(luma(cU), luma(cD))));',
-          '  float hi = max(lC, max(max(luma(cL), luma(cR)), max(luma(cU), luma(cD))));',
-          '  float colorMask = smoothstep(0.035, 0.22, hi - lo);',
-          '  float edgeMask = clamp(max(edgeHint, colorMask * 0.45) * antialiasStrength, 0.0, 0.86);',
-          '  vec3 crossAvg = (center * 4.0 + cL + cR + cU + cD) * 0.125;',
-          '  vec3 diagAvg = (cUL + cUR + cDL + cDR) * 0.25;',
-          '  vec3 avg = mix(crossAvg, diagAvg, 0.18);',
-          '  return mix(center, avg, edgeMask * 0.72);',
-          '}',
-          'float depthEdge(vec2 uv, vec2 texel) {',
-          '  float d = readDepth(uv);',
-          '  float dL = readDepth(uv - vec2(texel.x, 0.0));',
-          '  float dR = readDepth(uv + vec2(texel.x, 0.0));',
-          '  float dU = readDepth(uv - vec2(0.0, texel.y));',
-          '  float dD = readDepth(uv + vec2(0.0, texel.y));',
-          '  float diff = max(max(abs(d - dL), abs(d - dR)), max(abs(d - dU), abs(d - dD)));',
-          '  return smoothstep(0.0008, 0.004, diff);',
-          '}',
-          'float normalEdge(vec2 uv, vec2 texel) {',
-          '  vec3 n = readNormal(uv);',
-          '  vec3 nL = readNormal(uv - vec2(texel.x, 0.0));',
-          '  vec3 nR = readNormal(uv + vec2(texel.x, 0.0));',
-          '  vec3 nU = readNormal(uv - vec2(0.0, texel.y));',
-          '  vec3 nD = readNormal(uv + vec2(0.0, texel.y));',
-          '  float dL = 1.0 - max(0.0, dot(n, nL));',
-          '  float dR = 1.0 - max(0.0, dot(n, nR));',
-          '  float dU = 1.0 - max(0.0, dot(n, nU));',
-          '  float dD = 1.0 - max(0.0, dot(n, nD));',
-          '  float diff = max(max(dL, dR), max(dU, dD));',
-          '  return smoothstep(0.10, 0.40, diff);',
-          '}',
-          'void main() {',
-          '  vec2 texel = 1.0 / resolution;',
-          '  vec3 col = texture2D(tColor, vUv).rgb;',
-          '  float deRaw = depthEdge(vUv, texel);',
-          '  float neRaw = useNormals > 0.5 ? normalEdge(vUv, texel) : 0.0;',
-          '  float edgeHint = clamp(max(deRaw, neRaw), 0.0, 1.0);',
-          '  col = antialiasColor(vUv, texel, col, edgeHint);',
-          '  float de = deRaw * depthEdgeStrength;',
-          '  float ne = neRaw * normalEdgeStrength;',
-          '  float edge = clamp(max(de, ne), 0.0, 1.0);',
-          '  float edgeShade = mix(0.82, 0.62, clamp(max(depthEdgeStrength, normalEdgeStrength), 0.0, 1.0));',
-          '  col = mix(col, col * edgeShade, edge * 0.72);',
-          '  gl_FragColor = vec4(col, 1.0);',
-          '  #include <colorspace_fragment>',
-          '}',
-        ].join('\n'),
-        depthTest: false,
-        depthWrite: false,
-      });
+      pixelState.quadMaterial = createPixelQuadMaterial(targetW, targetH, wantNormals, wantDepthEdge);
+      pixelState.quadVariantKey = pixelPostVariantKey(wantNormals, wantDepthEdge);
       const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), pixelState.quadMaterial);
+      pixelState.quadMesh = quad;
       pixelState.quadScene = new THREE.Scene();
       pixelState.quadScene.add(quad);
+    } else {
+      const variantKey = pixelPostVariantKey(wantNormals, wantDepthEdge);
+      if (pixelState.quadVariantKey !== variantKey) {
+        const nextMaterial = createPixelQuadMaterial(targetW, targetH, wantNormals, wantDepthEdge);
+        if (pixelState.quadMaterial) pixelState.quadMaterial.dispose();
+        pixelState.quadMaterial = nextMaterial;
+        pixelState.quadVariantKey = variantKey;
+        if (pixelState.quadMesh) pixelState.quadMesh.material = nextMaterial;
+      }
     }
     pixelState.quadMaterial.uniforms.resolution.value.set(targetW, targetH);
     pixelState.drawW = drawW;
     pixelState.drawH = drawH;
     pixelState.pixelSize = pixelSize;
+    pixelState.wantDepthEdge = wantDepthEdge;
     pixelState.wantNormals = wantNormals;
   }
 
@@ -1276,13 +1337,16 @@
     0.0, 0.0, 0.5, 0.5,
     0.0, 0.0, 0.0, 1.0
   );
-  const twWaterReflectionPlaneY = 0;
+  let twWaterReflectionPlaneY = 0;
   const twWaterReflectionClipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -twWaterReflectionPlaneY);
   const twWaterReflectionEye = new THREE.Vector3();
   const twWaterReflectionLook = new THREE.Vector3();
   const twWaterReflectionUp = new THREE.Vector3();
   const twWaterReflectionDir = new THREE.Vector3();
   const twWaterReflectionBufferSize = new THREE.Vector2();
+  const twWaterReflectionBox = new THREE.Box3();
+  const twWaterReflectionCenter = new THREE.Vector3();
+  const twWaterReflectionTarget = new THREE.Vector3();
 
   function twWaterReflectionUniforms() {
     return twWaterReflectionState.uniforms;
@@ -1292,6 +1356,11 @@
     dst.copy(src);
     dst.y = twWaterReflectionPlaneY * 2 - dst.y;
     return dst;
+  }
+
+  function twWaterReflectionSetPlaneY(planeY) {
+    twWaterReflectionPlaneY = Number.isFinite(planeY) ? planeY : 0;
+    twWaterReflectionClipPlane.constant = -twWaterReflectionPlaneY;
   }
 
   function twWaterReflectionEnsureTarget() {
@@ -1374,6 +1443,79 @@
     return !!(mat && mat.userData && mat.userData.twWaterReflective);
   }
 
+  function twWaterReflectionResolveTarget() {
+    if (typeof target !== 'undefined' && target) {
+      twWaterReflectionTarget.set(target.x || 0, target.y || 0, target.z || 0);
+      return twWaterReflectionTarget;
+    }
+    if (camera) {
+      twWaterReflectionTarget.copy(camera.position);
+      camera.getWorldDirection(twWaterReflectionDir);
+      const fallbackViewSize = (typeof viewSize !== 'undefined' && Number.isFinite(viewSize)) ? viewSize : 8;
+      twWaterReflectionTarget.addScaledVector(twWaterReflectionDir, Math.max(1, fallbackViewSize));
+      return twWaterReflectionTarget;
+    }
+    return twWaterReflectionTarget.set(0, 0, 0);
+  }
+
+  function twWaterReflectionKnownWaterPlane() {
+    if (typeof world === 'undefined' || !world) return null;
+    const focus = twWaterReflectionResolveTarget();
+    let best = null;
+    let bestDist = Infinity;
+    for (let x = 0; x < world.length; x++) {
+      const row = world[x];
+      if (!row) continue;
+      for (let z = 0; z < row.length; z++) {
+        const cell = row[z];
+        if (!cell || cell.terrain !== 'water') continue;
+        const display = typeof cellDisplayPointForCell === 'function'
+          ? cellDisplayPointForCell(x, z, null, twWaterReflectionCenter)
+          : twWaterReflectionCenter.set(x - GRID / 2 + 0.5, 0, z - GRID / 2 + 0.5);
+        const dx = display.x - focus.x;
+        const dz = display.z - focus.z;
+        const dist = dx * dx + dz * dz;
+        if (dist >= bestDist) continue;
+        const rise = typeof terrainVisualRiseForCell === 'function' ? terrainVisualRiseForCell(cell) : 0;
+        best = display.y + rise;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  function twWaterReflectionNearestWaterPlane() {
+    const focus = twWaterReflectionResolveTarget();
+    let best = null;
+    let bestDist = Infinity;
+    let visibleReflectiveWater = false;
+    scene.updateMatrixWorld(false);
+    scene.traverse(obj => {
+      if (!obj || !obj.visible || !twWaterReflectionIsWaterObject(obj)) return;
+      visibleReflectiveWater = true;
+      try {
+        twWaterReflectionBox.setFromObject(obj);
+      } catch (_) {
+        return;
+      }
+      if (twWaterReflectionBox.isEmpty()) return;
+      twWaterReflectionBox.getCenter(twWaterReflectionCenter);
+      const dx = twWaterReflectionCenter.x - focus.x;
+      const dz = twWaterReflectionCenter.z - focus.z;
+      const dist = dx * dx + dz * dz;
+      if (dist < bestDist && Number.isFinite(twWaterReflectionBox.max.y)) {
+        best = twWaterReflectionBox.max.y;
+        bestDist = dist;
+      }
+    });
+    if (best === null) best = twWaterReflectionKnownWaterPlane();
+    return {
+      planeY: best === null ? 0 : best,
+      foundWater: best !== null,
+      visibleReflectiveWater,
+    };
+  }
+
   function twWaterReflectionHideWater() {
     const hidden = [];
     scene.traverse(obj => {
@@ -1392,10 +1534,17 @@
 
   function twWaterReflectionCapture() {
     const xrPresenting = renderer.xr && renderer.xr.isPresenting;
-    if (!renderEnhancedWater || xrPresenting || !camera || twWaterReflectionState.rendering) {
+    const viewerLoading = !!(window.__tinyworldIslandViewerLoading);
+    if (!renderEnhancedWater || xrPresenting || viewerLoading || !camera || twWaterReflectionState.rendering) {
       twWaterReflectionState.uniforms.strength.value = 0;
       return;
     }
+    const plane = twWaterReflectionNearestWaterPlane();
+    if (!plane.foundWater || !plane.visibleReflectiveWater) {
+      twWaterReflectionState.uniforms.strength.value = 0;
+      return;
+    }
+    twWaterReflectionSetPlaneY(plane.planeY);
     const targetRT = twWaterReflectionEnsureTarget();
     const mirrorCam = twWaterReflectionSyncCamera(camera);
     const previousTarget = renderer.getRenderTarget();
@@ -1767,6 +1916,31 @@
     const sceneRenderStart = repaintProfileBegin();
     renderer.render(scene, camera);
     repaintProfileEnd('render.scene', sceneRenderStart);
+    if (wantDepthEdge && pixelState.depthTarget && pixelState.depthMaterial) {
+      const prevOverride = scene.overrideMaterial;
+      const prevBackground = scene.background;
+      const prevFog = scene.fog;
+      const prevSkyBubbleVisible = skyBubble ? skyBubble.visible : false;
+      if (landscapeMeshEngine && landscapeMeshEngine._clipEnabled && landscapeMeshEngine._clipPlanes) {
+        pixelState.depthMaterial.clippingPlanes = landscapeMeshEngine._clipPlanes;
+      } else {
+        pixelState.depthMaterial.clippingPlanes = null;
+      }
+      scene.overrideMaterial = pixelState.depthMaterial;
+      scene.background = null;
+      scene.fog = null;
+      if (skyBubble) skyBubble.visible = false;
+      renderer.setRenderTarget(pixelState.depthTarget);
+      renderer.clear();
+      const depthRenderStart = repaintProfileBegin();
+      renderer.render(scene, camera);
+      repaintProfileEnd('render.depth', depthRenderStart);
+      scene.overrideMaterial = prevOverride;
+      scene.background = prevBackground;
+      scene.fog = prevFog;
+      if (skyBubble) skyBubble.visible = prevSkyBubbleVisible;
+      pixelState.depthMaterial.clippingPlanes = null;
+    }
     if (wantNormals && pixelState.normalTarget) {
       const prevOverride = scene.overrideMaterial;
       const prevBackground = scene.background;
@@ -1794,14 +1968,11 @@
     }
     const uniforms = pixelState.quadMaterial.uniforms;
     uniforms.tColor.value = pixelState.target.texture;
-    // MSAA targets have no sampleable depth texture; depth edges are disabled in
-    // that mode, so point the (unused) uniform at the colour texture as a dummy.
-    uniforms.tDepth.value = pixelState.target.depthTexture || pixelState.target.texture;
-    uniforms.tNormal.value = wantNormals && pixelState.normalTarget ? pixelState.normalTarget.texture : null;
-    uniforms.depthEdgeStrength.value = usePixelation ? renderPixelDepthEdge : 0;
-    uniforms.normalEdgeStrength.value = usePixelation ? renderPixelNormalEdge : 0;
+    if (uniforms.tDepth) uniforms.tDepth.value = wantDepthEdge && pixelState.depthTarget ? pixelState.depthTarget.texture : null;
+    if (uniforms.tNormal) uniforms.tNormal.value = wantNormals && pixelState.normalTarget ? pixelState.normalTarget.texture : null;
+    uniforms.depthEdgeStrength.value = wantDepthEdge ? renderPixelDepthEdge : 0;
+    uniforms.normalEdgeStrength.value = wantNormals ? renderPixelNormalEdge : 0;
     uniforms.antialiasStrength.value = useShaderAA ? renderShaderAntialias : 0;
-    uniforms.useNormals.value = wantNormals && usePixelation ? 1.0 : 0.0;
     renderer.setRenderTarget(prevTarget);
     const postQuadStart = repaintProfileBegin();
     renderer.render(pixelState.quadScene, pixelState.quadCam);
