@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-06-29T18:57:58.361Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-29T18-57-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
+    },
+    {
       "ts": "2026-06-29T18:01:45.274Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Update card_reveal.html\" -> plans/production-line/drafts/2026-06-29T18-01-update-card-reveal-html.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-27T14:52:23.141Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-27T14-52-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
-    },
-    {
-      "ts": "2026-06-27T13:54:40.483Z",
-      "kind": "tick",
-      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Merge branch 'main' of https://github.com/jasonkneen/tiny-world-builder\" -> plans/production-line/drafts/2026-06-27T13-54-merge-branch-main-of-https-github-com-jasonkneen.md. No economy paths touched."
     }
   ],
-  "lastTick": "2026-06-29T18:01:45.274Z"
+  "lastTick": "2026-06-29T18:57:58.361Z"
 }
