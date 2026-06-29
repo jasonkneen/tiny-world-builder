@@ -40,3 +40,25 @@ normal builder, worlds, or other scenes.
 
 `random-island-preview.html` remains only as a compatibility redirect to
 `island-viewer.html`.
+
+## Sequential Generator Evaluation
+
+Run statistical sweeps from the repo root:
+
+```bash
+npm run stats:island-viewer -- --count 1000
+```
+
+The evaluator loads `scripts/island-viewer-sequential-generator.js` directly,
+runs 1,000 deterministic seeds across all viewer archetypes, validates the emitted
+`v:4` schema shape and viewer invariants, then writes a timestamped report plus
+`stats-runs/island-viewer-sequential/latest.json`.
+
+Useful options:
+
+- `--count 2500` changes the total number of generated islands.
+- `--archetype river` evaluates all requested samples against one archetype
+  instead of distributing them across all eight.
+- `--seed-prefix my-run` changes the deterministic seed family.
+- `--out-dir scratch/my-stats` writes reports somewhere else.
+- `--strict` exits non-zero if any schema/invariant error is found.

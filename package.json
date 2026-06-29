@@ -13,6 +13,7 @@
     "perf": "node tools/perf-probe.js",
     "vendor:three": "node tools/build-three-vendor.mjs",
     "stats:random-island": "node tools/random-island-stats.mjs",
+    "stats:island-viewer": "node tools/island-viewer-sequential-stats.mjs",
     "sample:random-island": "node tools/random-island-samples.mjs",
     "db:local": "tools/db-local.sh",
     "party:dev": "partykit dev party/index.js --port 1999",

@@ -61,11 +61,16 @@ Rules:
 - Generated Island Viewer islands are fixed at `8 x 8`.
 - Persist viewer defaults only under `tinyworld:island-viewer:*`. Do not write
   viewer graphics into normal builder `tinyworld:render:*` keys.
+- Use `npm run stats:island-viewer -- --count 1000` for on-demand sequential
+  generator sweeps. The CLI loads the viewer generator directly, validates
+  schema/invariants, and writes reports under
+  `stats-runs/island-viewer-sequential/`.
 
 Validation:
 
 - `npm test`
 - `npm run build`
+- `npm run stats:island-viewer -- --count 1000`
 - Check `/island-viewer` or `/island-viewer.html`: page loads through the
   builder-engine renderer, generated saves contain no legacy bridge metadata,
   and the shell does not request `scripts/tinyworld-island-core.js` or

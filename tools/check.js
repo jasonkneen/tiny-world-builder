@@ -10,6 +10,7 @@ const islandViewerScriptPath = path.join(root, 'scripts', 'island-viewer.js');
 const islandViewerGeneratorPath = path.join(root, 'scripts', 'island-viewer-sequential-generator.js');
 const islandViewerPreludePath = path.join(root, 'scripts', 'island-viewer-engine-prelude.js');
 const islandViewerRuntimePath = path.join(root, 'scripts', 'island-viewer-engine-runtime.js');
+const islandViewerStatsPath = path.join(root, 'tools', 'island-viewer-sequential-stats.mjs');
 const randomIslandPreviewPath = path.join(root, 'random-island-preview.html');
 const cssPath = path.join(root, 'styles', 'tiny-world.css');
 const schemaPath = path.join(root, 'world.schema.json');
@@ -24,6 +25,7 @@ const islandViewerScriptRaw = fs.existsSync(islandViewerScriptPath) ? readText(i
 const islandViewerGeneratorRaw = fs.existsSync(islandViewerGeneratorPath) ? readText(islandViewerGeneratorPath) : '';
 const islandViewerPreludeRaw = fs.existsSync(islandViewerPreludePath) ? readText(islandViewerPreludePath) : '';
 const islandViewerRuntimeRaw = fs.existsSync(islandViewerRuntimePath) ? readText(islandViewerRuntimePath) : '';
+const islandViewerStatsRaw = fs.existsSync(islandViewerStatsPath) ? readText(islandViewerStatsPath) : '';
 const randomIslandPreviewRaw = fs.existsSync(randomIslandPreviewPath) ? readText(randomIslandPreviewPath) : '';
 const cssRaw = readText(cssPath);
 const publishRaw = fs.existsSync(publishPath) ? readText(publishPath) : '';
@@ -420,6 +422,14 @@ if (!/if \(cell\.path === true && terrain !== 'water'\) terrain = 'path';/.test(
     || !/function clearViewerWorld\(\)/.test(islandViewerRuntimeRaw)
     || /path: cell\.path|path: false/.test(islandViewerRuntimeRaw)) {
   fail('island viewer runtime must normalize legacy path booleans, clear stale cells, and export schema-native paths');
+}
+if (!islandViewerStatsRaw
+    || !/DEFAULT_COUNT = 1000/.test(islandViewerStatsRaw)
+    || !/scripts\/island-viewer-sequential-generator\.js/.test(islandViewerStatsRaw)
+    || !/validateWorld\(world, profile\)/.test(islandViewerStatsRaw)
+    || !/stats-runs\/island-viewer-sequential/.test(islandViewerStatsRaw)
+    || !/"stats:island-viewer": "node tools\/island-viewer-sequential-stats\.mjs"/.test(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))) {
+  fail('island viewer sequential stats CLI must run schema/invariant sweeps from npm');
 }
 if (!/meta http-equiv="refresh" content="0; url=island-viewer\.html"/.test(randomIslandPreviewRaw)
     || !/location\.replace\('island-viewer\.html' \+ location\.search \+ location\.hash\)/.test(randomIslandPreviewRaw)) {
