@@ -1741,8 +1741,6 @@
         document.body.classList.toggle('mp-guest', !!isGuest);
         document.body.classList.toggle('mp-noedit', !!noEdit);
         document.body.classList.toggle('mp-no-invite', !!hideInvite);
-        const inviteBtn = document.getElementById('invite-top-btn');
-        if (inviteBtn) inviteBtn.hidden = !!hideInvite;
         // If a guest had the world menu open, close it so it cannot linger.
         if (isGuest || hideInvite) {
           const menu = document.getElementById('world-menu');

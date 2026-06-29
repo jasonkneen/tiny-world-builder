@@ -3826,7 +3826,6 @@ syncTinyworldOwnerToolControls();
     const sharedSectionEl = document.getElementById('world-menu-shared');
     const sharedListEl = document.getElementById('world-menu-shared-list');
     const sharedEmptyEl = document.getElementById('world-menu-shared-empty');
-    const inviteTopBtn = document.getElementById('invite-top-btn');
     if (!trigger || !menu || !labelEl || !nameInput || !listEl) return;
     const manageBtn = menu.querySelector('[data-action="manage"]');
     const shareBtn = menu.querySelector('[data-action="share"]');
@@ -5413,12 +5412,6 @@ syncTinyworldOwnerToolControls();
     function toggle() { if (menu.hidden) open(); else close(); }
 
     trigger.addEventListener('click', e => { e.stopPropagation(); toggle(); });
-    if (inviteTopBtn) {
-      inviteTopBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        openInviteDialog();
-      });
-    }
     window.__tinyworldOpenInviteDialog = openInviteDialog;
     menu.addEventListener('click', e => { e.stopPropagation(); });
     document.addEventListener('click', () => { if (!menu.hidden) close(); });

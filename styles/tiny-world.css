@@ -317,40 +317,6 @@
   body.ui-theme-dark .sun-strength-control output {
     color: rgba(244, 247, 255, 0.72);
   }
-  .invite-top-btn {
-    position: fixed;
-    top: 14px;
-    left: calc(50% + 306px);
-    z-index: 17;
-    height: 42px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.62);
-    color: var(--ink);
-    font: 750 12px/1 "Space Grotesk", system-ui, sans-serif;
-    cursor: pointer;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.85) inset,
-      0 1px 2px rgba(20, 30, 50, 0.05),
-      0 10px 30px -14px rgba(40, 50, 80, 0.28);
-    backdrop-filter: blur(22px) saturate(180%);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
-  }
-  .invite-top-btn:hover { background: rgba(255, 255, 255, 0.76); }
-  .invite-top-btn svg {
-    width: 16px;
-    height: 16px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
   /* Keyboard/mouse tips — discreet pill above the appbar. */
   .tips-panel {
     position: fixed;
@@ -1516,8 +1482,7 @@
      so the world-management trigger + menu are removed for them. Host / null
      role / single-player are unaffected (body.mp-guest is never set there). */
   body.mp-guest #world-pill,
-  body.mp-guest #world-menu,
-  body.mp-no-invite #invite-top-btn { display: none !important; }
+  body.mp-guest #world-menu { display: none !important; }
 
   /* Viewer / player have NO edit rights: hide ALL editing chrome so there are no
      controls to reach for. Camera gestures (orbit/zoom/pan) still work, and a
@@ -1604,9 +1569,6 @@
     display: none !important;
   }
   body.tw-worlds-play #world-pill {
-    display: none !important;
-  }
-  body.tw-worlds-play #invite-top-btn {
     display: none !important;
   }
 
@@ -4680,7 +4642,6 @@
   body.welcome-launch-open .brand,
   body.welcome-launch-open .brand-banner,
   body.welcome-launch-open .world-pill,
-    body.welcome-launch-open #invite-top-btn,
     body.welcome-launch-open .sun-strength-control,
     body.welcome-launch-open .token-corner,
   body.welcome-launch-open .appbar,
@@ -5093,7 +5054,6 @@
   body.random-island-preview-mode .brand,
   body.random-island-preview-mode .controls,
   body.random-island-preview-mode .world-pill,
-  body.random-island-preview-mode #invite-top-btn,
   body.random-island-preview-mode .token-corner,
   body.random-island-preview-mode .appbar,
   body.random-island-preview-mode .tool-palette,
@@ -5122,7 +5082,6 @@
   body.new-world-reveal-open .controls,
   body.new-world-reveal-open .toolbar,
   body.new-world-reveal-open .appbar,
-  body.new-world-reveal-open #invite-top-btn,
   body.new-world-reveal-open .tool-palette,
   body.new-world-reveal-open .flyout,
   body.new-world-reveal-open #layers-toggle,
@@ -5678,7 +5637,6 @@
   body.ui-theme-dark .mp-lobby-card,
   body.ui-theme-dark .modal-card,
   body.ui-theme-dark .world-pill,
-  body.ui-theme-dark .invite-top-btn,
   body.ui-theme-dark .tips-panel {
     --ink: #f4f7ff;
     --muted: #b9c2d0;
@@ -5704,9 +5662,6 @@
     color: rgba(226, 232, 242, 0.82) !important;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   }
-  body.ui-theme-dark .invite-top-btn:hover {
-    background-color: rgba(24, 34, 51, 0.96) !important;
-  }
   body.ui-theme-dark .mp-zone-row,
   body.ui-theme-dark .mp-zone-picker {
     background: rgba(255, 255, 255, 0.06) !important;
@@ -5729,21 +5684,6 @@
       0 1px 0 rgba(255, 255, 255, 0.14) inset,
       0 -1px 0 rgba(0, 0, 0, 0.38) inset,
       0 18px 44px -18px rgba(0, 0, 0, 0.74) !important;
-  }
-  body.ui-theme-dark .invite-top-btn {
-    z-index: 17 !important;
-    transform: translateX(-10px);
-    border-color: rgba(220, 232, 255, 0.24) !important;
-    background-color: rgb(31, 38, 53) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)) !important;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.14) inset,
-      0 -1px 0 rgba(0, 0, 0, 0.40) inset,
-      0 18px 44px -18px rgba(0, 0, 0, 0.76) !important;
-  }
-  body.ui-theme-dark .invite-top-btn:hover {
-    background-color: rgba(41, 49, 66, 0.98) !important;
-    transform: translateX(-10px) translateY(-1px);
   }
   body.ui-theme-dark .tw-invite-card {
     --ink: #f4f7ff;
@@ -10277,18 +10217,6 @@
     .appbar .btn.icon svg { width: 14px; height: 14px; }
     .token-corner .token-sep,
     .token-corner .ca { display: none; }
-    .invite-top-btn {
-      left: auto;
-      right: 8px;
-      top: 62px;
-      height: 36px;
-      padding: 0 10px;
-      font-size: 11px;
-    }
-    .invite-top-btn svg {
-      width: 14px;
-      height: 14px;
-    }
     .sun-strength-control {
       left: auto;
       right: 8px;
