@@ -419,9 +419,10 @@ if (!/function placeStrategicLampLayer\(cells, seed\)/.test(islandViewerGenerato
   fail('island viewer generator must keep lantern, manor, tree/bush, and weighted infill layers');
 }
 if (!/if \(cell\.path === true && terrain !== 'water'\) terrain = 'path';/.test(islandViewerRuntimeRaw)
-    || !/function clearViewerWorld\(\)/.test(islandViewerRuntimeRaw)
+    || /function clearViewerWorld\(\)|clearViewerWorld\(\)|forceTile: true/.test(islandViewerRuntimeRaw)
+    || !/__tinyworldIslandViewerLoading/.test(islandViewerRuntimeRaw)
     || /path: cell\.path|path: false/.test(islandViewerRuntimeRaw)) {
-  fail('island viewer runtime must normalize legacy path booleans, clear stale cells, and export schema-native paths');
+  fail('island viewer runtime must normalize legacy path booleans, apply a single settled pass, and export schema-native paths');
 }
 if (!islandViewerStatsRaw
     || !/DEFAULT_COUNT = 1000/.test(islandViewerStatsRaw)

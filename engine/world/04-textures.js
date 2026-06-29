@@ -23,7 +23,8 @@
     const maxAniso = (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy)
       ? renderer.capabilities.getMaxAnisotropy() : 1;
     tex.anisotropy = Math.min(8, maxAniso || 1);
-    tex.needsUpdate = true;
+    if (typeof twMarkTextureNeedsUpdateIfReady === 'function') twMarkTextureNeedsUpdateIfReady(tex);
+    else if (tex.image) tex.needsUpdate = true;
     return tex;
   }
 
@@ -31,7 +32,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = scale;
     canvas.height = scale;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const rand = makeMulberry32('pixel-texture:' + type + ':' + scale);
     function tileRect(x, y, w, h) {
       ctx.fillRect(x, y, w, h);
@@ -639,7 +640,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = scale;
     canvas.height = scale;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const rand = makeMulberry32('cottage-texture:' + type + ':' + scale);
     function addNoise(amount = 42, alpha = 0.14) {
       const image = ctx.getImageData(0, 0, scale, scale);
@@ -740,7 +741,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingEnabled = false;
     const rand = makeMulberry32('island-side-strata-reference:' + width + ':' + height);
     function wrapRect(x, y, w, h, color) {
@@ -871,7 +872,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.imageSmoothingEnabled = false;
     const fallback = createIslandSideStrataReferenceTexture(width, height);
     if (fallback && fallback.image) ctx.drawImage(fallback.image, 0, 0, width, height);
@@ -2568,6 +2569,10 @@
       : null;
     const rawFenceStyle = String(value.fenceStyle || value.fence || '').toLowerCase();
     const fenceStyle = rawFenceStyle === 'garden' || rawFenceStyle === 'gate' ? rawFenceStyle : null;
+    const rawOreMetal = String(value.oreMetal || value.ore || value.metal || '').toLowerCase();
+    const oreMetal = rawOreMetal === 'copper' || rawOreMetal === 'iron' || rawOreMetal === 'silver' || rawOreMetal === 'gold'
+      ? rawOreMetal
+      : null;
     const clampNum = (raw, lo, hi) => {
       const n = Number(raw);
       return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null;
@@ -2686,6 +2691,7 @@
     }
     if (objectStyle) out.objectStyle = objectStyle;
     if (fenceStyle) out.fenceStyle = fenceStyle;
+    if (oreMetal) out.oreMetal = oreMetal;
     if (emissiveColor) out.emissiveColor = emissiveColor;
     if (emissiveIntensity !== null && emissiveIntensity > 0.001) out.emissiveIntensity = +emissiveIntensity.toFixed(3);
     if (opacity !== null && opacity < 0.999) out.opacity = +opacity.toFixed(3);

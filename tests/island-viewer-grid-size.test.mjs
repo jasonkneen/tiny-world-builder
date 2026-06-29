@@ -9,10 +9,18 @@ const controller = fs.readFileSync(path.join(root, 'scripts/island-viewer.js'), 
 const generator = fs.readFileSync(path.join(root, 'scripts/island-viewer-sequential-generator.js'), 'utf8');
 const runtime = fs.readFileSync(path.join(root, 'scripts/island-viewer-engine-runtime.js'), 'utf8');
 const prelude = fs.readFileSync(path.join(root, 'scripts/island-viewer-engine-prelude.js'), 'utf8');
+const economyProfile = fs.readFileSync(path.join(root, 'engine/world/26b-random-island-economy-profile.js'), 'utf8');
 
 function loadIslandGenerator() {
   const sandboxWindow = {};
-  const factory = new Function('window', generator + '\nreturn window;');
+  const economyPreamble = `
+    const GRID = 8;
+    function coerceGridSize(value, fallback) {
+      const n = Number(value);
+      return [8, 10, 12, 16, 20].includes(n) ? n : fallback;
+    }
+  `;
+  const factory = new Function('window', economyPreamble + '\n' + economyProfile + '\n' + generator + '\nreturn window;');
   return factory(sandboxWindow);
 }
 
@@ -185,14 +193,18 @@ test('Island Viewer graphics defaults are viewer scoped and fixed high noon', ()
   assert.equal(api.defaults.graphics.timeCycle, 'fixed');
   assert.equal(api.defaults.graphics.timeOfDay, 720);
   assert.equal(api.defaults.graphics.viewerEffectsVersion, 2);
+  assert.equal(api.defaults.graphics.directionalSun, 10);
   assert.equal(api.defaults.graphics.enhancedWater, false);
   assert.equal(api.defaults.graphics.cloudSea, false);
   assert.equal(api.defaults.graphics.distantWorlds, false);
   assert.equal(api.normalizeGraphics({ enhancedWater: true, cloudSea: true, distantWorlds: true }).enhancedWater, false);
   assert.equal(api.normalizeGraphics({ viewerEffectsVersion: 2, enhancedWater: true }).enhancedWater, true);
 
-  assert.match(runtime, /function clearViewerWorld\(\)/);
-  assert.match(runtime, /clearViewerWorld\(\);\s*for \(const cell of normalized\.cells\) applyCell\(cell, false\);/);
+  assert.doesNotMatch(runtime, /function clearViewerWorld\(\)/);
+  assert.doesNotMatch(runtime, /clearViewerWorld\(\)/);
+  assert.match(runtime, /for \(const cell of normalized\.cells\) applyCell\(cell, false\);/);
+  assert.match(runtime, /__tinyworldIslandViewerLoading/);
+  assert.doesNotMatch(runtime, /forceTile: true/);
   assert.match(runtime, /if \(cell\.path === true && terrain !== 'water'\) terrain = 'path';/);
   assert.doesNotMatch(runtime, /path: cell\.path|path: false/);
 
@@ -220,7 +232,10 @@ test('Island Viewer sequential generator emits v4 islands without legacy bridge 
     assert.equal(world.cells.some(cell => cell.terrain === 'path'), true);
     assert.equal(world.cells.some(cell => Object.prototype.hasOwnProperty.call(cell, 'path')), false);
     assert.doesNotMatch(serialized, /water-bridge|bridgeAxis/);
-    assert.ok(profile && profile.name && profile.stats && profile.economy);
+    assert.ok(profile && profile.name && profile.economy);
+    assert.ok(profile.rawYield && profile.rawYield.scores && profile.rawYield.scores.rawYield >= 0);
+    assert.equal(profile.economy.rarityScope, 'raw_yield');
+    assert.equal(Object.prototype.hasOwnProperty.call(profile, 'stats'), false);
   }
 });
 
@@ -339,14 +354,16 @@ test('Island Viewer tree, bush, and weighted infill layers fill remaining grass'
   assert.match(generator, /function placeTreeBushLayer\(cells, seed\)/);
   assert.match(generator, /function treeCandidates\(cells, seed\)/);
   assert.match(generator, /function bushCandidates\(cells, seed\)/);
+  assert.match(generator, /function placeStoneOutcropLayer\(cells, seed\)/);
   assert.match(generator, /function placeProbabilisticInfillLayer\(cells, seed\)/);
   assert.match(generator, /function weightedInfillOptions\(cells, index\)/);
-  assert.match(generator, /placeTreeBushLayer\(cells, seed\);\s*placeProbabilisticInfillLayer\(cells, seed\);/);
+  assert.match(generator, /placeStoneOutcropLayer\(cells, seed\);\s*placeTreeBushLayer\(cells, seed\);\s*placeProbabilisticInfillLayer\(cells, seed\);/);
   const api = loadIslandGenerator().TinyWorldIslandGenerator;
   let sawTree = false;
   let sawBush = false;
   let sawCrop = false;
   let sawOre = false;
+  let sawPlainStone = false;
   let sawAnimal = false;
   for (let i = 0; i < 180; i++) {
     const seed = 'viewer-tree-bush-layer-' + i;
@@ -354,13 +371,15 @@ test('Island Viewer tree, bush, and weighted infill layers fill remaining grass'
     const trees = world.cells.filter(cell => cell.kind === 'tree');
     const bushes = world.cells.filter(cell => cell.kind === 'bush');
     const crops = world.cells.filter(cell => VIEWER_CROP_KINDS.includes(cell.kind));
-    const ores = world.cells.filter(cell => cell.kind === 'rock' && cell.terrain === 'stone');
+    const ores = world.cells.filter(cell => cell.kind === 'rock' && cell.terrain === 'stone' && cell.appearance && cell.appearance.oreMetal);
+    const plainStones = world.cells.filter(cell => cell.kind === 'rock' && cell.terrain === 'stone' && !(cell.appearance && cell.appearance.oreMetal));
     const animals = world.cells.filter(cell => cell.kind === 'cow' || cell.kind === 'sheep');
     const reserved = manorReservedKeys(world);
     sawTree ||= trees.length > 0;
     sawBush ||= bushes.length > 0;
     sawCrop ||= crops.length > 4;
     sawOre ||= ores.length > 4;
+    sawPlainStone ||= plainStones.length > 0;
     sawAnimal ||= animals.length > 0;
     for (const tree of trees) {
       assert.equal(tree.terrain, 'grass', 'tree must be placed on grass for seed ' + seed);
@@ -377,7 +396,27 @@ test('Island Viewer tree, bush, and weighted infill layers fill remaining grass'
   assert.equal(sawBush, true, 'seed sample should include bushes');
   assert.equal(sawCrop, true, 'seed sample should include extra crops');
   assert.equal(sawOre, true, 'seed sample should include extra ore');
+  assert.equal(sawPlainStone, true, 'seed sample should include plain stone rocks');
   assert.equal(sawAnimal, true, 'seed sample should include extra animals');
+});
+
+test('Island Viewer quarry and stone outcrop layers emit stone plus all four ore metal variants', () => {
+  assert.match(generator, /function compactRockPatch\(cells, seed\)/);
+  assert.match(generator, /function stoneContextValue\(cells, index\)/);
+  const api = loadIslandGenerator().TinyWorldIslandGenerator;
+  const required = ['copper', 'iron', 'silver', 'gold'];
+  for (let i = 0; i < 180; i++) {
+    const seed = 'viewer-ore-variants-' + i;
+    const world = api.generate({ seed, gridSize: 8 });
+    const metals = new Set(world.cells
+      .filter(cell => cell.kind === 'rock' && cell.appearance && cell.appearance.oreMetal)
+      .map(cell => cell.appearance.oreMetal));
+    const plainStones = world.cells.filter(cell => cell.kind === 'rock' && !(cell.appearance && cell.appearance.oreMetal));
+    assert.ok(plainStones.length > 0, seed + ' should include plain Stone rock');
+    for (const metal of required) {
+      assert.equal(metals.has(metal), true, seed + ' should include ore metal ' + metal);
+    }
+  }
 });
 
 test('Island Viewer water carving crosses any path area through one cell only', () => {

@@ -15,7 +15,7 @@ const TERRAIN_IDS = ['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'snow'];
 const KIND_IDS = [null, 'house', 'tree', 'rock', 'bridge', 'wheat', 'corn', 'carrot', 'pumpkin', 'sunflower', 'cow', 'sheep', 'lamp-post', 'bush'];
 const CROP_KINDS = ['wheat', 'corn', 'carrot', 'pumpkin', 'sunflower'];
 const ANIMAL_KINDS = ['cow', 'sheep'];
-const PROFILE_STATS = ['food', 'materials', 'commerce', 'defense', 'charm'];
+const RAW_YIELD_RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
 function readArg(name, fallback) {
   const prefix = name + '=';
@@ -223,6 +223,19 @@ function countMap(items, getKey) {
   return out;
 }
 
+function rawYieldFromProfile(profile) {
+  return profile && profile.rawYield && typeof profile.rawYield === 'object' ? profile.rawYield : null;
+}
+
+function rawYieldResourceSummary(rawYield) {
+  const resources = rawYield && rawYield.resources && typeof rawYield.resources === 'object' ? rawYield.resources : {};
+  const scores = rawYield && rawYield.scores && typeof rawYield.scores === 'object' ? rawYield.scores : {};
+  return Object.fromEntries(Object.entries(resources).map(([id, group]) => [id, {
+    count: Object.values(group || {}).reduce((sum, value) => sum + (Number(value) || 0), 0),
+    score: Number(scores[id]) || 0,
+  }]));
+}
+
 function validateWorld(world, profile) {
   const errors = [];
   const allowedTerrain = new Set(TERRAIN_IDS);
@@ -263,13 +276,15 @@ function validateWorld(world, profile) {
     const front = frontCell(world, manor);
     if (!isPath(front) || connectedPathSize(world, front) <= 1) errors.push('manor front path not connected at ' + cellKey(manor));
   }
-  if (!profile || !profile.stats || !profile.economy || !profile.name) errors.push('profile missing required economy summary');
+  if (!profile || !profile.rawYield || !profile.economy || !profile.name) errors.push('profile missing required Raw Yield summary');
   return [...new Set(errors)];
 }
 
 function evaluateWorld(world, profile) {
   const terrain = countMap(world.cells, cell => cell.terrain);
   const kind = countMap(world.cells.filter(cell => cell.kind), cell => cell.kind);
+  const rawYield = rawYieldFromProfile(profile);
+  const rawYieldScores = rawYield && rawYield.scores ? rawYield.scores : {};
   const crops = world.cells.filter(isCrop);
   const animals = world.cells.filter(isAnimal);
   const bridges = world.cells.filter(cell => cell.kind === 'bridge');
@@ -308,12 +323,13 @@ function evaluateWorld(world, profile) {
     animalPenAnimals: animalPen.filter(isAnimal).length,
     pathComponents: pathCrossings.length,
     maxWaterTouchesPerPathComponent: Math.max(0, ...pathCrossings),
-    rarityScore: Number(profile && profile.economy && profile.economy.rarityScore) || 0,
-    potential: Number(profile && profile.economy && profile.economy.potential) || 0,
     rarity: profile && profile.economy && profile.economy.rarity || 'Unknown',
-    stats: Object.fromEntries(PROFILE_STATS.map(stat => [stat, Number(profile && profile.stats && profile.stats[stat]) || 0])),
-    traits: Array.isArray(profile && profile.traits) ? profile.traits : [],
-    synergies: Array.isArray(profile && profile.synergies) ? profile.synergies : [],
+    rawYieldScore: Number(rawYieldScores.rawYield || (profile && profile.economy && profile.economy.rawYieldScore)) || 0,
+    rawYieldBuildingScore: Number(rawYieldScores.buildings || (profile && profile.economy && profile.economy.buildingScore)) || 0,
+    rawYieldTotalRankScore: Number(rawYieldScores.totalRank || (profile && profile.economy && profile.economy.totalRankScore)) || 0,
+    rawYieldRarity: rawYield && rawYield.rarity && rawYield.rarity.label || profile && profile.economy && profile.economy.rarity || 'Unknown',
+    rawYieldLeader: rawYield && rawYield.leader && rawYield.leader.label || profile && profile.economy && profile.economy.leader && profile.economy.leader.label || 'Raw Yield',
+    rawYieldResources: rawYieldResourceSummary(rawYield),
   };
 }
 
@@ -328,16 +344,16 @@ function makeBucket() {
     animalKinds: {},
     cropPlotKinds: {},
     rarity: {},
-    traits: {},
-    synergies: {},
+    rawYieldRarity: {},
+    rawYieldLeaders: {},
+    rawYieldResources: {},
     values: {
       crops: [], animals: [], bridges: [], lamps: [], houses: [], towers: [], manors: [],
       trees: [], bushes: [], pathCells: [], waterCells: [], dirtCells: [], stoneCells: [],
       emptyGrass: [], cropPlotCells: [], cropPlotEmpty: [], animalPenCells: [],
       animalPenAnimals: [], pathComponents: [], maxWaterTouchesPerPathComponent: [],
-      rarityScore: [], potential: [],
+      rawYieldScore: [], rawYieldBuildingScore: [], rawYieldTotalRankScore: [],
       validBridgesPercent: [], validLampsPercent: [],
-      food: [], materials: [], commerce: [], defense: [], charm: [],
     },
   };
 }
@@ -354,12 +370,17 @@ function addToBucket(bucket, result, errors) {
   for (const [key, value] of Object.entries(result.animalKinds)) increment(bucket.animalKinds, key, value);
   for (const [key, value] of Object.entries(result.cropPlotKinds)) increment(bucket.cropPlotKinds, key, value);
   increment(bucket.rarity, result.rarity);
-  for (const trait of result.traits) increment(bucket.traits, trait);
-  for (const synergy of result.synergies) increment(bucket.synergies, synergy);
+  increment(bucket.rawYieldRarity, result.rawYieldRarity);
+  increment(bucket.rawYieldLeaders, result.rawYieldLeader);
+  for (const [id, group] of Object.entries(result.rawYieldResources)) {
+    if (!bucket.rawYieldResources[id]) bucket.rawYieldResources[id] = { count: 0, score: 0, active: 0 };
+    bucket.rawYieldResources[id].count += group.count;
+    bucket.rawYieldResources[id].score += group.score;
+    if (group.count > 0 || group.score > 0) bucket.rawYieldResources[id].active++;
+  }
   for (const [key, values] of Object.entries(bucket.values)) {
     if (key === 'validBridgesPercent') values.push(result.bridges ? result.validBridges / result.bridges * 100 : 100);
     else if (key === 'validLampsPercent') values.push(result.lamps ? result.validLamps / result.lamps * 100 : 100);
-    else if (Object.prototype.hasOwnProperty.call(result.stats, key)) values.push(result.stats[key]);
     else values.push(Number(result[key]) || 0);
   }
 }
@@ -377,18 +398,32 @@ function finishBucket(bucket) {
     cropPlotKindPercent: Object.fromEntries(['empty', ...CROP_KINDS].map(id => [id, pct(bucket.cropPlotKinds[id] || 0, Math.max(1, Object.values(bucket.cropPlotKinds).reduce((a, b) => a + b, 0)))])),
     animalKindPercent: Object.fromEntries(ANIMAL_KINDS.map(id => [id, pct(bucket.animalKinds[id] || 0, Math.max(1, Object.values(bucket.animalKinds).reduce((a, b) => a + b, 0)))])),
     rarityPercent: Object.fromEntries(Object.keys(bucket.rarity).sort().map(id => [id, pct(bucket.rarity[id], bucket.samples)])),
-    topTraits: topEntries(bucket.traits, bucket.samples),
-    topSynergies: topEntries(bucket.synergies, bucket.samples),
+    rawYieldRarityPercent: Object.fromEntries(RAW_YIELD_RARITIES.map(id => [id, pct(bucket.rawYieldRarity[id] || 0, bucket.samples)])),
+    rawYieldResources: Object.fromEntries(Object.entries(bucket.rawYieldResources).map(([id, group]) => [id, {
+      averageCount: Number((group.count / Math.max(1, bucket.samples)).toFixed(2)),
+      averageScore: Number((group.score / Math.max(1, bucket.samples)).toFixed(2)),
+      activeSamples: pct(group.active, bucket.samples),
+    }])),
+    topRawYieldLeaders: topEntries(bucket.rawYieldLeaders, bucket.samples),
     summaries: Object.fromEntries(Object.entries(bucket.values).map(([key, values]) => [key, summary(values)])),
   };
   return out;
 }
 
 function loadGenerator() {
+  const economyPath = path.join(ROOT, 'engine/world/26b-random-island-economy-profile.js');
   const generatorPath = path.join(ROOT, 'scripts/island-viewer-sequential-generator.js');
+  const preamble = `
+    const GRID = 8;
+    function coerceGridSize(value, fallback) {
+      const n = Number(value);
+      return [8, 10, 12, 16, 20].includes(n) ? n : fallback;
+    }
+  `;
+  const economySource = fs.readFileSync(economyPath, 'utf8');
   const source = fs.readFileSync(generatorPath, 'utf8');
   const sandboxWindow = {};
-  new Function('window', source + '\nreturn window;')(sandboxWindow);
+  new Function('window', preamble + '\n' + economySource + '\n' + source + '\nreturn window;')(sandboxWindow);
   if (!sandboxWindow.TinyWorldIslandGenerator) {
     throw new Error('TinyWorldIslandGenerator did not register from ' + generatorPath);
   }
@@ -460,6 +495,9 @@ console.log('terrain %:', JSON.stringify(report.all.terrainPercent));
 console.log('top kinds:', report.all.topKinds.map(entry => entry.name + '=' + entry.percent + '%').join(', '));
 console.log('crop plot %:', JSON.stringify(report.all.cropPlotKindPercent));
 console.log('rarity %:', JSON.stringify(report.all.rarityPercent));
+console.log('raw yield rarity %:', JSON.stringify(report.all.rawYieldRarityPercent));
+console.log('raw yield score summary:', JSON.stringify(report.all.summaries.rawYieldScore));
+console.log('raw yield resources:', JSON.stringify(report.all.rawYieldResources));
 console.log('bridge count summary:', JSON.stringify(report.all.summaries.bridges));
 console.log('lamp count summary:', JSON.stringify(report.all.summaries.lamps));
 console.log('manor count summary:', JSON.stringify(report.all.summaries.manors));

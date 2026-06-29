@@ -11,18 +11,18 @@
     'MapleVale', 'TideRook', 'GroveMint', 'AshPilot', 'LumenFern', 'QuarryBee',
   ];
   const ACTIVITY_ISLANDS = [
-    { name: 'Moss Hollow', archetype: 'forest', rarity: 'Legendary' },
-    { name: 'Cliff Haven', archetype: 'quarry', rarity: 'Legendary' },
-    { name: 'Sun Orchard', archetype: 'pastoral', rarity: 'Rare' },
-    { name: 'Reed Crossing', archetype: 'wetland', rarity: 'Rare' },
-    { name: 'Pine Relay', archetype: 'forest', rarity: 'Epic' },
-    { name: 'Harbor Lark', archetype: 'coastal', rarity: 'Uncommon' },
-    { name: 'Stone Sail', archetype: 'quarry', rarity: 'Epic' },
-    { name: 'Birch Vale', archetype: 'pastoral', rarity: 'Common' },
-    { name: 'Coral Nest', archetype: 'coastal', rarity: 'Rare' },
-    { name: 'Frost Loom', archetype: 'alpine', rarity: 'Legendary' },
-    { name: 'Maple Rise', archetype: 'forest', rarity: 'Uncommon' },
-    { name: 'Tide Rook', archetype: 'coastal', rarity: 'Epic' },
+    { name: 'Moss Hollow', rarity: 'Legendary' },
+    { name: 'Cliff Haven', rarity: 'Legendary' },
+    { name: 'Sun Orchard', rarity: 'Rare' },
+    { name: 'Reed Crossing', rarity: 'Rare' },
+    { name: 'Pine Relay', rarity: 'Epic' },
+    { name: 'Harbor Lark', rarity: 'Uncommon' },
+    { name: 'Stone Sail', rarity: 'Epic' },
+    { name: 'Birch Vale', rarity: 'Common' },
+    { name: 'Coral Nest', rarity: 'Rare' },
+    { name: 'Frost Loom', rarity: 'Legendary' },
+    { name: 'Maple Rise', rarity: 'Uncommon' },
+    { name: 'Tide Rook', rarity: 'Epic' },
   ];
   const ACTIVITY_RARITY_WEIGHTS = [
     ['Common', 42],
@@ -154,7 +154,6 @@
       id: 'act-' + activitySeq,
       player,
       island: island.name,
-      archetype: island.archetype,
       rarity,
       verb: randomPick(verbs),
       ts: Date.now() - (offsetSec * 1000),
@@ -194,7 +193,7 @@
         '<div class="tv-activity-body">' +
           '<strong>' + esc(evt.player) + '</strong>' +
           '<p>' + esc(evt.verb) + ' <em>' + esc(evt.island) + '</em></p>' +
-          '<span class="tv-activity-meta">' + esc(evt.rarity) + ' · ' + esc(evt.archetype) + ' · ' + esc(formatAgo(evt.ts)) + '</span>' +
+          '<span class="tv-activity-meta">' + esc(evt.rarity) + ' · ' + esc(formatAgo(evt.ts)) + '</span>' +
         '</div>' +
       '</li>'
     );
@@ -288,7 +287,7 @@
       const evt = activityEvents.find(row => row.id === id);
       if (!evt) return;
       const meta = item.querySelector('.tv-activity-meta');
-      if (meta) meta.textContent = evt.rarity + ' · ' + evt.archetype + ' · ' + formatAgo(evt.ts);
+      if (meta) meta.textContent = evt.rarity + ' · ' + formatAgo(evt.ts);
     });
   }
 
@@ -317,11 +316,14 @@
   }
 
   function rarityLabel(row) {
+    const api = TC();
+    if (api && typeof api.rawYieldLabel === 'function') {
+      return api.rawYieldLabel(row);
+    }
     const rarity = row.profile && row.profile.economy && row.profile.economy.rarity
       ? row.profile.economy.rarity
       : (row.card && row.card.rarity) || 'Common';
-    const arch = row.archetypeKey ? ' · ' + row.archetypeKey : '';
-    return rarity + arch;
+    return rarity;
   }
 
   function collectionGridHtml() {

@@ -13,7 +13,7 @@
   const FREE_PACK_LIMIT = 3;
   let freePackUserKey = '';
 
-  const ARCHETYPE_ACCENTS = {
+  const ISLAND_CARD_ACCENTS = {
     pastoral: ['#7fd34f', '#3a6b22', 'tree'],
     forest: ['#4fbf6a', '#2a6b3a', 'tree'],
     quarry: ['#9aa7b3', '#536276', 'mountain'],
@@ -274,28 +274,56 @@
     return frozen;
   }
 
-  function profileToCardStats(profile) {
-    const top = (profile && profile.topStats) ? profile.topStats.slice(0, 3) : [];
-    const statMap = profile && profile.stats ? profile.stats : {};
-    const maxStat = Math.max(
-      ...Object.values(statMap).map(v => Number(v) || 0),
-      ...(top.map(stat => Number(stat && stat.value) || 0)),
-      1,
-    );
-    const out = {};
-    top.forEach(stat => {
-      if (!stat || !stat.label) return;
-      const raw = Number(stat.value || statMap[stat.id] || 0);
-      const scaled = Math.max(1, Math.min(10, Math.round((raw / maxStat) * 10)));
-      out[stat.label] = scaled;
+  function rawYieldToCardStats(rawYield) {
+    const scores = rawYield && rawYield.scores ? rawYield.scores : {};
+    const stats = {};
+    [
+      ['Raw Yield', scores.rawYield],
+      ['Buildings', scores.buildings],
+      ['Total Rank', scores.totalRank],
+    ].forEach(([label, value]) => {
+      const rounded = Math.max(0, Math.round(Number(value) || 0));
+      if (rounded > 0) stats[label] = rounded;
     });
-    if (!Object.keys(out).length) return { Charm: 5, Food: 4, Defense: 3 };
-    return out;
+    return stats;
   }
 
-  function archetypeVisuals(archetypeKey, seed) {
-    const key = String(archetypeKey || 'pastoral').toLowerCase();
-    const palette = ARCHETYPE_ACCENTS[key] || ARCHETYPE_ACCENTS.pastoral;
+  function rawYieldForRecord(record) {
+    const row = record || {};
+    const profile = row.profile || row;
+    const world = row.world || null;
+    const seed = row.seed || (profile && profile.seed) || '';
+    const name = row.name || (profile && profile.name) || 'Island';
+    const buildRawYield = window.__buildIslandRawYieldEconomy;
+    if (typeof buildRawYield === 'function' && world && Array.isArray(world.cells)) {
+      return buildRawYield(world, { seed, name });
+    }
+    return profile && profile.rawYield ? profile.rawYield : null;
+  }
+
+  function rawYieldLabel(record) {
+    const rawYield = rawYieldForRecord(record);
+    if (!rawYield || !rawYield.scores || !rawYield.rarity) return 'Raw Yield unavailable';
+    const rarity = rawYield.rarity.label || 'Common';
+    const score = Number(rawYield.scores.rawYield) || 0;
+    return rarity + ' - Raw Yield ' + Math.max(0, Math.round(score));
+  }
+
+  function rawYieldCardTags(rawYield) {
+    const tags = [];
+    if (rawYield && rawYield.rarity && rawYield.rarity.label) tags.push(String(rawYield.rarity.label).toUpperCase());
+    const leader = rawYield && rawYield.leader && rawYield.leader.label && rawYield.leader.label !== 'Raw Yield'
+      ? String(rawYield.leader.label).toUpperCase()
+      : '';
+    if (leader) tags.push(leader);
+    const score = rawYield && rawYield.scores ? Number(rawYield.scores.rawYield) : 0;
+    if (Number.isFinite(score) && score > 0) tags.push('YIELD ' + Math.round(score));
+    return tags.slice(0, 3);
+  }
+
+  function islandCardVisuals(seed) {
+    const palettes = Object.values(ISLAND_CARD_ACCENTS);
+    const palette = pick(palettes, String(seed || '') + '|island-card-visuals') || ISLAND_CARD_ACCENTS.pastoral;
     return {
       accent: palette[0],
       rim: palette[1],
@@ -310,9 +338,10 @@
     }
     const world = G.generate({ seed, gridSize: 8 });
     const profile = G.profile(world, { seed });
-    const visuals = archetypeVisuals(profile.archetypeKey, seed);
-    const rarity = (profile.economy && profile.economy.rarity) || 'Common';
-    const goldDay = (profile.economy && profile.economy.potential) || 1;
+    const rawYield = rawYieldForRecord({ world, profile, seed, name: profile.name });
+    const visuals = islandCardVisuals(seed);
+    const rarity = rawYield && rawYield.rarity && rawYield.rarity.label || 'Common';
+    const yieldLabel = rawYieldLabel({ world, profile, seed, name: profile.name });
     return {
       id: 'island-' + seed,
       kind: 'island',
@@ -323,13 +352,13 @@
       accent: visuals.accent,
       rim: visuals.rim,
       icon: visuals.icon,
-      description: (profile.archetype || 'Island') + ' · ' + (profile.bestUse || 'Explore') + ' · ' + goldDay + ' gold/day',
-      tags: (profile.traits || []).slice(0, 3).map(tag => String(tag).toUpperCase()),
-      stats: profileToCardStats(profile),
+      description: yieldLabel,
+      tags: rawYieldCardTags(rawYield),
+      stats: rawYieldToCardStats(rawYield),
       seed,
-      archetypeKey: profile.archetypeKey,
       world,
       profile,
+      rawYield,
       preview: {
         gridSize: world.gridSize || 8,
         cells: Array.isArray(world.cells) ? world.cells : [],
@@ -383,8 +412,8 @@
     if (island) cards.push(island);
     return {
       packSeed: seed,
-      packTitle: 'TinyWorld Builder',
-      packSubtitle: 'Island collectible',
+      packTitle: 'Island Pack',
+      packSubtitle: '1 procedural island',
       packLabel: '1 Island',
       cards,
       cost: 0,
@@ -441,7 +470,6 @@
       kind: 'island',
       name: (card.profile && card.profile.name) || card.name,
       seed: card.seed,
-      archetypeKey: card.archetypeKey || (card.profile && card.profile.archetypeKey) || '',
       world: card.world,
       profile: card.profile || null,
       preview,
@@ -518,7 +546,9 @@
     buyPack,
     saveIslandFromPackRoll,
     buyArtifact,
-    profileToCardStats,
+    rawYieldToCardStats,
+    rawYieldForRecord,
+    rawYieldLabel,
     generateIslandCard,
     saveIslandFromCard,
     capturePreviewThumbnail,

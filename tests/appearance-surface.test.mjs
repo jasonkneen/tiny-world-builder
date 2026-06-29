@@ -12,9 +12,13 @@ import { buildEngineFns } from './helpers/extract-fn.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEXTURES = join(__dirname, '..', 'engine', 'world', '04-textures.js');
 const RENDER_CORE = join(__dirname, '..', 'engine', 'world', '01-render-core.js');
+const HISTORY_OBJECT_FACTORIES = join(__dirname, '..', 'engine', 'world', '06-history-object-factories.js');
+const VOXEL_BUILD_FACTORIES = join(__dirname, '..', 'engine', 'world', '09b-voxel-build-factories.js');
 const DEFAULTS = join(__dirname, '..', 'tinyworld-defaults.json');
 const texturesJs = readFileSync(TEXTURES, 'utf8');
 const renderCoreJs = readFileSync(RENDER_CORE, 'utf8');
+const historyObjectFactoriesJs = readFileSync(HISTORY_OBJECT_FACTORIES, 'utf8');
+const voxelBuildFactoriesJs = readFileSync(VOXEL_BUILD_FACTORIES, 'utf8');
 const defaultsJson = JSON.parse(readFileSync(DEFAULTS, 'utf8'));
 
 // materialTextureMap is a closure global used by normalizeMaterialTextureKey; an
@@ -60,6 +64,23 @@ test('fence style keeps garden and gate variants only', () => {
   assert.equal(normalizeAppearance({ fenceStyle: 'garden' }).fenceStyle, 'garden');
   assert.equal(normalizeAppearance({ fenceStyle: 'gate' }).fenceStyle, 'gate');
   assert.equal(normalizeAppearance({ fenceStyle: 'wire' }), null);
+});
+
+test('ore metal keeps the four generated ore variants only', () => {
+  assert.equal(normalizeAppearance({ oreMetal: 'copper' }).oreMetal, 'copper');
+  assert.equal(normalizeAppearance({ oreMetal: 'iron' }).oreMetal, 'iron');
+  assert.equal(normalizeAppearance({ oreMetal: 'silver' }).oreMetal, 'silver');
+  assert.equal(normalizeAppearance({ oreMetal: 'gold' }).oreMetal, 'gold');
+  assert.equal(normalizeAppearance({ oreMetal: 'tin' }), null);
+});
+
+test('ore rocks keep stone bodies with small embedded metal cubes', () => {
+  assert.match(historyObjectFactoriesJs, /const g = makeRock\(neighbors, level, seedX, seedZ, inWater, Object\.assign\(\{\}, opts, \{ appearance: null \}\)\);/);
+  assert.match(voxelBuildFactoriesJs, /const g = makeVoxelRock\(neighbors, level, seedX, seedZ, inWater, Object\.assign\(\{\}, opts, \{ appearance: null \}\)\);/);
+  assert.match(historyObjectFactoriesJs, /oreCube\(0\.14 \* grow/);
+  assert.match(voxelBuildFactoriesJs, /oreBox\(0\.14,/);
+  assert.doesNotMatch(historyObjectFactoriesJs, /oreCube\(0\.44/);
+  assert.doesNotMatch(voxelBuildFactoriesJs, /oreBox\(0\.44/);
 });
 
 test('light normalizes type/color/intensity/range and clamps', () => {

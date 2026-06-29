@@ -230,8 +230,9 @@ const {
   generateRandomIslandWorld,
 } = buildEngineFns(generatorPath, ['generateRandomIslandWorld'], preamble);
 const {
+  buildIslandRawYieldEconomy,
   buildRandomIslandEconomyProfile,
-} = buildEngineFns(economyProfilePath, ['buildRandomIslandEconomyProfile'], preamble);
+} = buildEngineFns(economyProfilePath, ['buildIslandRawYieldEconomy', 'buildRandomIslandEconomyProfile'], preamble);
 
 const samples = [];
 for (let i = 0; i < count; i++) {

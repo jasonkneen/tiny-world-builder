@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 import { buildEngineFns } from './helpers/extract-fn.mjs';
 
 const generatorPath = path.resolve('engine/world/26-ai-generation.js');
 const economyProfilePath = path.resolve('engine/world/26b-random-island-economy-profile.js');
+const economyProfileJs = readFileSync(economyProfilePath, 'utf8');
 const preamble = `
   const GRID = 8;
   function coerceGridSize(value, fallback) {
@@ -19,8 +21,9 @@ const {
   generateRandomIslandWorld,
 } = buildEngineFns(generatorPath, ['generateRandomIslandWorld'], preamble);
 const {
+  buildIslandRawYieldEconomy,
   buildRandomIslandEconomyProfile,
-} = buildEngineFns(economyProfilePath, ['buildRandomIslandEconomyProfile'], preamble);
+} = buildEngineFns(economyProfilePath, ['buildIslandRawYieldEconomy', 'buildRandomIslandEconomyProfile'], preamble);
 
 const DEFAULT_BIOMES = { grass: 55, forest: 20, water: 10, dirt: 10, settlement: 5 };
 const DEFAULT_ELEVATION = { plains: 55, hills: 30, mountains: 15 };
@@ -146,22 +149,209 @@ test('random island economy profile names and scores the loaded TinyWorld cells'
   const profile = buildRandomIslandEconomyProfile(island, { seed: 'market-haven', archetype: 'village' });
 
   assert.equal(profile.seed, 'market-haven');
-  assert.equal(profile.archetypeKey, 'village');
-  assert.equal(profile.archetype, 'Village');
   assert.match(profile.name, /\S+\s+\S+/);
-  assert.ok(profile.economy.potential >= 1);
+  assert.equal(profile.rawYield.aspect, 'raw_yield');
+  assert.equal(profile.rawYield.name, profile.name);
+  assert.equal(profile.economy.aspect, 'raw_yield');
+  assert.equal(profile.economy.rarityScope, 'raw_yield');
+  assert.ok(profile.economy.rawYieldScore >= 0);
   assert.ok(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].includes(profile.economy.rarity));
-  for (const key of ['food', 'materials', 'commerce', 'defense', 'charm']) {
-    assert.equal(typeof profile.stats[key], 'number');
-  }
-  assert.ok(profile.traits.length > 0);
-  assert.ok(profile.topStats.length === 5);
-  assert.ok(profile.highlights.some(step => step.id === 'commerce' && step.cells.length > 0));
-  for (const step of profile.highlights) {
-    for (const cell of step.cells) {
-      assert.ok(Number.isInteger(cell.x));
-      assert.ok(Number.isInteger(cell.z));
+  assert.equal(Object.prototype.hasOwnProperty.call(profile.economy, 'potential'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile.economy, 'rarityScore'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile, 'archetype'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile, 'bestUse'), false);
+});
+
+function rawYieldScoreCells(score) {
+  const units = [
+    { kind: 'rock', value: 13, terrain: 'stone', appearance: { oreMetal: 'gold' } },
+    { kind: 'pumpkin', value: 6, terrain: 'dirt' },
+    { kind: 'wheat', value: 5, terrain: 'dirt' },
+    { kind: 'tree', value: 2, terrain: 'grass' },
+    { kind: 'rock', value: 1, terrain: 'stone' },
+  ];
+  const memo = new Set();
+  function solve(remaining) {
+    if (remaining === 0) return [];
+    if (remaining < 0 || memo.has(remaining)) return null;
+    for (const unit of units) {
+      const tail = solve(remaining - unit.value);
+      if (tail) return [unit].concat(tail);
     }
+    memo.add(remaining);
+    return null;
+  }
+  const plan = solve(score);
+  assert.ok(plan, 'test helper should hit exact raw yield score');
+  return plan.map((unit, i) => ({
+    x: i,
+    z: 0,
+    terrain: unit.terrain,
+    kind: unit.kind,
+    floors: 1,
+    terrainFloors: 1,
+    buildingType: null,
+    fenceSide: null,
+    appearance: unit.appearance,
+  }));
+}
+
+function expectedFishRoll(value) {
+  let h = 1779033703 ^ String(value).length;
+  const str = String(value);
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  let n = (h ^= h >>> 16) >>> 0;
+  let t = (n += 0x6d2b79f5);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function expectedFishCount(seed, cells) {
+  return cells.filter(cell => cell.terrain === 'water')
+    .reduce((total, cell) => total + (expectedFishRoll(seed + '|fish|' + cell.x + ',' + cell.z) < 0.25 ? 1 : 0), 0);
+}
+
+test('raw yield economy counts resources, fish, buildings, and ore metals', () => {
+  const world = {
+    v: 4,
+    gridSize: 8,
+    cells: [
+      { x: 0, z: 0, terrain: 'dirt', kind: 'wheat', floors: 2, terrainFloors: 1 },
+      { x: 1, z: 0, terrain: 'dirt', kind: 'corn', floors: 1, terrainFloors: 1 },
+      { x: 2, z: 0, terrain: 'stone', kind: 'rock', floors: 1, terrainFloors: 1, appearance: { oreMetal: 'gold' } },
+      { x: 3, z: 0, terrain: 'stone', kind: 'rock', floors: 1, terrainFloors: 1, appearance: { oreMetal: 'iron' } },
+      { x: 4, z: 0, terrain: 'grass', kind: 'cow', floors: 1, terrainFloors: 1 },
+      { x: 5, z: 0, terrain: 'grass', kind: 'sheep', floors: 1, terrainFloors: 1 },
+      { x: 6, z: 0, terrain: 'grass', kind: 'tree', floors: 1, terrainFloors: 1 },
+      { x: 7, z: 0, terrain: 'grass', kind: 'bush', floors: 1, terrainFloors: 1 },
+      { x: 0, z: 1, terrain: 'water', kind: null, floors: 1, terrainFloors: 1 },
+      { x: 1, z: 1, terrain: 'water', kind: null, floors: 1, terrainFloors: 1 },
+      { x: 2, z: 1, terrain: 'grass', kind: 'house', floors: 1, terrainFloors: 1, buildingType: null },
+      { x: 3, z: 1, terrain: 'grass', kind: 'house', floors: 1, terrainFloors: 1, buildingType: 'tower' },
+      { x: 4, z: 1, terrain: 'grass', kind: 'house', floors: 1, terrainFloors: 1, buildingType: 'manor' },
+    ],
+  };
+  const profile = buildIslandRawYieldEconomy(world, { seed: 'raw-counts', name: 'Raw Counts' });
+  const again = buildIslandRawYieldEconomy(world, { seed: 'raw-counts', name: 'Raw Counts' });
+  const expectedFish = expectedFishCount('raw-counts', world.cells);
+
+  assert.equal(profile.aspect, 'raw_yield');
+  assert.equal(profile.label, 'Raw Yield');
+  assert.equal(profile.resources.crops.wheat, 1);
+  assert.equal(profile.resources.crops.corn, 1);
+  assert.equal(profile.resources.rockOre.goldOre, 1);
+  assert.equal(profile.resources.rockOre.iron, 1);
+  assert.equal(profile.resources.animals.cow, 1);
+  assert.equal(profile.resources.animals.sheep, 1);
+  assert.equal(profile.resources.nature.trees, 1);
+  assert.equal(profile.resources.nature.berries, 1);
+  assert.equal(profile.resources.nature.water, 2);
+  assert.equal(profile.resources.nature.fish, expectedFish);
+  assert.equal(profile.resources.nature.fish, again.resources.nature.fish);
+  assert.equal(world.cells.some(cell => cell.kind === 'fish'), false);
+  assert.match(economyProfileJs, /rawYieldRandom\(seed \+ '\|fish\|' \+ cell\.x \+ ',' \+ cell\.z\)\(\)/);
+  assert.match(economyProfileJs, /fishRoll < 0\.25/);
+  assert.equal(profile.resources.buildings.houses, 1);
+  assert.equal(profile.resources.buildings.towers, 1);
+  assert.equal(profile.resources.buildings.manor, 1);
+  assert.equal(profile.scores.crops, 10);
+  assert.equal(profile.scores.rockOre, 20);
+  assert.equal(profile.scores.animals, 15);
+  assert.equal(profile.scores.nature, 5 + profile.resources.nature.fish * 7);
+  assert.equal(profile.scores.rawYield, 50 + profile.resources.nature.fish * 7);
+  assert.equal(profile.scores.buildings, 53);
+  assert.equal(profile.scores.totalRank, profile.scores.rawYield + 53);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile.resources, 'GOLD'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile.scores, 'gold'), false);
+});
+
+test('raw yield economy counts compact builder tuple cells', () => {
+  const objectWorld = {
+    v: 4,
+    gridSize: 8,
+    cells: [
+      { x: 0, z: 0, terrain: 'dirt', kind: 'wheat', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 1, z: 0, terrain: 'dirt', kind: 'sunflower', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 2, z: 0, terrain: 'stone', kind: 'rock', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null, appearance: { oreMetal: 'silver' } },
+      { x: 3, z: 0, terrain: 'stone', kind: 'rock', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null, appearance: { oreMetal: 'gold' } },
+      { x: 4, z: 0, terrain: 'grass', kind: 'sheep', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 5, z: 0, terrain: 'grass', kind: 'cow', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 6, z: 0, terrain: 'grass', kind: 'tree', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 7, z: 0, terrain: 'grass', kind: 'bush', floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 0, z: 1, terrain: 'water', kind: null, floors: 1, terrainFloors: 1, buildingType: null, fenceSide: null },
+      { x: 1, z: 1, terrain: 'grass', kind: 'house', floors: 1, terrainFloors: 1, buildingType: 'tower', fenceSide: null },
+    ],
+  };
+  const tupleWorld = {
+    v: 4,
+    gridSize: 8,
+    cells: objectWorld.cells.map(cell => [
+      cell.x,
+      cell.z,
+      cell.terrain,
+      cell.kind,
+      cell.floors,
+      cell.buildingType,
+      cell.terrainFloors,
+      cell.fenceSide,
+      null,
+      null,
+      cell.appearance || null,
+    ]),
+  };
+  const objectProfile = buildIslandRawYieldEconomy(objectWorld, { seed: 'tuple-counts', name: 'Tuple Counts' });
+  const tupleProfile = buildIslandRawYieldEconomy(tupleWorld, { seed: 'tuple-counts', name: 'Tuple Counts' });
+
+  assert.equal(tupleProfile.scores.rawYield, objectProfile.scores.rawYield);
+  assert.equal(tupleProfile.scores.buildings, objectProfile.scores.buildings);
+  assert.equal(JSON.stringify(tupleProfile.resources), JSON.stringify(objectProfile.resources));
+  assert.equal(tupleProfile.resources.rockOre.silver, 1);
+  assert.equal(tupleProfile.resources.rockOre.goldOre, 1);
+  assert.equal(tupleProfile.resources.animals.sheep, 1);
+  assert.equal(tupleProfile.resources.animals.cow, 1);
+  assert.equal(tupleProfile.resources.buildings.towers, 1);
+  assert.ok(tupleProfile.scores.rawYield > 0);
+});
+
+test('raw yield ignores paths, bridges, fences, and lanterns as economic producers', () => {
+  const blank = buildIslandRawYieldEconomy({ v: 4, gridSize: 8, cells: [] }, { seed: 'infra' });
+  const infra = buildIslandRawYieldEconomy({
+    v: 4,
+    gridSize: 8,
+    cells: [
+      { x: 0, z: 0, terrain: 'path', kind: null, floors: 1, terrainFloors: 1 },
+      { x: 1, z: 0, terrain: 'grass', kind: 'bridge', floors: 1, terrainFloors: 1 },
+      { x: 2, z: 0, terrain: 'grass', kind: 'fence', floors: 1, terrainFloors: 1, fenceSide: 'n' },
+      { x: 3, z: 0, terrain: 'grass', kind: 'lamp-post', floors: 1, terrainFloors: 1 },
+      { x: 4, z: 0, terrain: 'grass', kind: null, floors: 1, terrainFloors: 1, extras: [{ kind: 'fence', fenceSide: 'e' }] },
+    ],
+  }, { seed: 'infra' });
+
+  assert.equal(infra.scores.rawYield, blank.scores.rawYield);
+  assert.equal(infra.resources.buildings.houses, 0);
+  assert.equal(infra.resources.buildings.towers, 0);
+  assert.equal(infra.resources.buildings.manor, 0);
+});
+
+test('raw yield rarity thresholds use the canonical score bands', () => {
+  const cases = [
+    [169, 'Common'],
+    [170, 'Uncommon'],
+    [193, 'Rare'],
+    [212, 'Epic'],
+    [231, 'Legendary'],
+  ];
+  for (const [score, rarity] of cases) {
+    const profile = buildIslandRawYieldEconomy({ v: 4, gridSize: 64, cells: rawYieldScoreCells(score) }, { seed: 'band-' + score });
+    assert.equal(profile.scores.rawYield, score);
+    assert.equal(profile.rarity.label, rarity);
+    assert.equal(profile.label, 'Raw Yield');
   }
 });
 
@@ -693,7 +883,6 @@ test('economy viability pass gives every archetype a resource floor', () => {
           resourceCells(island, resourceId).length >= min,
           archetype + ' should have at least ' + min + ' ' + resourceId + ' cells'
         );
-        assert.ok(profile.stats[resourceId] > 0, archetype + ' should score nonzero ' + resourceId);
       }
     }
   }
@@ -766,7 +955,7 @@ test('generated islands do not leave fence-only cells in open fields', () => {
   }
 });
 
-test('farm enclosures do not automatically claim the defensive ring trait', () => {
+test('farm enclosure infrastructure does not affect Raw Yield', () => {
   const cells = [];
   for (let x = 0; x < 6; x++) {
     for (let z = 0; z < 6; z++) {
@@ -783,10 +972,12 @@ test('farm enclosures do not automatically claim the defensive ring trait', () =
   [[1, 2, 'e'], [1, 3, 'e'], [4, 2, 'w'], [4, 3, 'w'], [2, 1, 's'], [3, 1, 's'], [2, 4, 'n'], [3, 4, 'n']]
     .forEach(([x, z, side]) => setKind(x, z, 'fence', side));
 
-  const profile = buildRandomIslandEconomyProfile({ v: 4, gridSize: 6, cells }, { seed: 'farm-enclosure', archetype: 'pastoral' });
+  const profile = buildRandomIslandEconomyProfile({ v: 4, gridSize: 6, cells }, { seed: 'farm-enclosure' });
 
-  assert.ok(profile.traits.includes('Meadow Economy'));
-  assert.ok(!profile.traits.includes('Defensive Ring'));
+  assert.equal(profile.rawYield.scores.buildings, 0);
+  assert.equal(profile.rawYield.resources.buildings.towers, 0);
+  assert.equal(profile.rawYield.resources.nature.water, 0);
+  assert.equal(Object.prototype.hasOwnProperty.call(profile, 'traits'), false);
 });
 
 test('generated homes and estates are path-connected', () => {

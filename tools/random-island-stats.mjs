@@ -56,7 +56,6 @@ const ARCHETYPE_MIXES = {
   },
 };
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
-const STATS = ['food', 'materials', 'commerce', 'defense', 'charm'];
 const CROP_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
 const ANIMAL_KINDS = new Set(['cow', 'sheep']);
 
@@ -81,10 +80,6 @@ function safeTimestamp(date) {
 
 function emptyRarityCounts() {
   return Object.fromEntries(RARITIES.map(rarity => [rarity, 0]));
-}
-
-function emptyStats() {
-  return Object.fromEntries(STATS.map(stat => [stat, 0]));
 }
 
 function pct(value, total) {
@@ -192,15 +187,14 @@ function motifSummary(world) {
 function makeBucket() {
   return {
     samples: 0,
-    gold: [],
-    rarityScore: [],
+    rawYield: [],
+    rawYieldBuilding: [],
+    rawYieldTotalRank: [],
     rarity: emptyRarityCounts(),
-    stats: emptyStats(),
-    statsValues: Object.fromEntries(STATS.map(stat => [stat, []])),
+    rawYieldLeaders: {},
+    rawYieldResources: {},
     terrain: {},
     kind: {},
-    traits: {},
-    synergies: {},
     objectCells: 0,
     waterCells: 0,
     pathCells: 0,
@@ -235,18 +229,18 @@ function makeBucket() {
 function finishBucket(bucket) {
   const samples = Math.max(1, bucket.samples);
   const cellSamples = Math.max(1, bucket.samples);
-  const statsAverage = Object.fromEntries(STATS.map(stat => [
-    stat,
-    Number((bucket.stats[stat] / samples).toFixed(2)),
-  ]));
-  const statsSummary = Object.fromEntries(STATS.map(stat => [stat, summary(bucket.statsValues[stat])]));
   return {
     samples: bucket.samples,
-    gold: summary(bucket.gold),
-    rarityScore: summary(bucket.rarityScore),
+    rawYield: summary(bucket.rawYield),
+    rawYieldBuilding: summary(bucket.rawYieldBuilding),
+    rawYieldTotalRank: summary(bucket.rawYieldTotalRank),
     rarity: Object.fromEntries(RARITIES.map(rarity => [rarity, pct(bucket.rarity[rarity], samples)])),
-    statsAverage,
-    statsSummary,
+    rawYieldLeaders: topEntries(bucket.rawYieldLeaders, samples),
+    rawYieldResources: Object.fromEntries(Object.entries(bucket.rawYieldResources).map(([id, group]) => [id, {
+      averageCount: Number((group.count / samples).toFixed(2)),
+      averageScore: Number((group.score / samples).toFixed(2)),
+      activeSamples: pct(group.active, samples),
+    }])),
     averageCells: {
       object: Number((bucket.objectCells / cellSamples).toFixed(2)),
       water: Number((bucket.waterCells / cellSamples).toFixed(2)),
@@ -271,8 +265,6 @@ function finishBucket(bucket) {
     groupedSignaturePercent: pct(bucket.groupedSignatureCells, bucket.signatureCells),
     topTerrain: topEntries(bucket.terrain, bucket.samples),
     topKinds: topEntries(bucket.kind, bucket.samples),
-    topTraits: topEntries(bucket.traits, bucket.samples),
-    topSynergies: topEntries(bucket.synergies, bucket.samples),
   };
 }
 
@@ -313,16 +305,22 @@ function waterComponents(world) {
 
 function addSample(bucket, world, profile, archetype) {
   bucket.samples++;
-  bucket.gold.push(profile.economy.potential);
-  bucket.rarityScore.push(profile.economy.rarityScore);
+  const rawYield = profile.rawYield || {};
+  const rawYieldScores = rawYield.scores || {};
+  const rawYieldScore = Number(rawYieldScores.rawYield || profile.economy.rawYieldScore) || 0;
+  bucket.rawYield.push(rawYieldScore);
+  bucket.rawYieldBuilding.push(Number(rawYieldScores.buildings || profile.economy.buildingScore) || 0);
+  bucket.rawYieldTotalRank.push(Number(rawYieldScores.totalRank || profile.economy.totalRankScore) || 0);
   bucket.rarity[profile.economy.rarity] = (bucket.rarity[profile.economy.rarity] || 0) + 1;
-  for (const stat of STATS) {
-    const value = Number(profile.stats[stat]) || 0;
-    bucket.stats[stat] += value;
-    bucket.statsValues[stat].push(value);
+  if (rawYield.leader && rawYield.leader.label) increment(bucket.rawYieldLeaders, rawYield.leader.label);
+  for (const [id, group] of Object.entries(rawYield.resources || {})) {
+    if (!bucket.rawYieldResources[id]) bucket.rawYieldResources[id] = { count: 0, score: 0, active: 0 };
+    const count = Object.values(group || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const score = Number(rawYieldScores[id]) || 0;
+    bucket.rawYieldResources[id].count += count;
+    bucket.rawYieldResources[id].score += score;
+    if (count > 0 || score > 0) bucket.rawYieldResources[id].active++;
   }
-  for (const trait of profile.traits || []) increment(bucket.traits, trait);
-  for (const synergy of profile.synergies || []) increment(bucket.synergies, synergy);
   const waterMotifs = waterComponents(world);
   if (waterMotifs.some(component => component.edge)) bucket.waterMotifs.edge++;
   if (waterMotifs.some(component => !component.edge && component.size >= 3)) bucket.waterMotifs.lake++;
@@ -386,8 +384,9 @@ const {
   generateRandomIslandWorld,
 } = buildEngineFns(generatorPath, ['generateRandomIslandWorld'], preamble);
 const {
+  buildIslandRawYieldEconomy,
   buildRandomIslandEconomyProfile,
-} = buildEngineFns(economyProfilePath, ['buildRandomIslandEconomyProfile'], preamble);
+} = buildEngineFns(economyProfilePath, ['buildIslandRawYieldEconomy', 'buildRandomIslandEconomyProfile'], preamble);
 
 const overall = makeBucket();
 const archetypeBuckets = Object.fromEntries(ARCHETYPES.map(archetype => [archetype, makeBucket()]));
@@ -436,4 +435,4 @@ await writeFile(latestPath, json, 'utf8');
 console.log('wrote ' + path.relative(ROOT, outputPath));
 console.log('updated ' + path.relative(ROOT, latestPath));
 console.log('rarity ' + JSON.stringify(result.overall.rarity));
-console.log('gold ' + JSON.stringify(result.overall.gold));
+console.log('raw yield ' + JSON.stringify(result.overall.rawYield));

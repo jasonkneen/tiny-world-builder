@@ -452,7 +452,38 @@
     return (n.n ? 1 : 0) + (n.s ? 1 : 0) + (n.e ? 1 : 0) + (n.w ? 1 : 0);
   }
 
-  function makeRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false) {
+  function makeOreRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false, opts = {}, ore = null) {
+    const mats = ore || (typeof tinyworldOreMaterialsFor === 'function' ? tinyworldOreMaterialsFor(opts && opts.appearance) : null);
+    const g = makeRock(neighbors, level, seedX, seedZ, inWater, Object.assign({}, opts, { appearance: null }));
+    const n = neighbors || { n: false, s: false, e: false, w: false };
+    const links = countNeighbors(n);
+    const extra = Math.max(0, Math.min(MAX_FLOORS, level || 1) - 1);
+    const sink = inWater ? 0.07 : 0;
+    const jitter = salt => cellRand(seedX, seedZ, 880 + salt) - 0.5;
+    function oreCube(w, h, d, x, y, z, mat, salt) {
+      const mesh = new THREE.Mesh(roundedBox(w, h, d, 0.018), mat);
+      mesh.position.set(x, y - sink, z);
+      mesh.rotation.set(jitter(salt) * 0.12, cellRand(seedX, seedZ, 900 + salt) * Math.PI * 0.5, jitter(salt + 1) * 0.12);
+      g.add(mesh);
+      return mesh;
+    }
+    const grow = 1 + extra * 0.035 + links * 0.012;
+    oreCube(0.14 * grow, 0.050 + extra * 0.004, 0.12 * grow, -0.18, 0.26 + extra * 0.014, 0.02, mats.body, 1);
+    oreCube(0.11 * grow, 0.045 + extra * 0.004, 0.10 * grow, 0.18, 0.24 + extra * 0.012, -0.12, mats.dark, 3);
+    oreCube(0.10 * grow, 0.040 + extra * 0.004, 0.12 * grow, 0.04, 0.39 + extra * 0.014, 0.20, mats.body, 5);
+    if (links >= 2) oreCube(0.095 * grow, 0.038, 0.090 * grow, -0.02, 0.46 + extra * 0.014, -0.08, mats.dark, 7);
+    if (n.n) oreCube(0.10, 0.034, 0.08, 0, 0.10 + extra * 0.006, -0.38, mats.dark, 11);
+    if (n.s) oreCube(0.10, 0.034, 0.08, 0, 0.10 + extra * 0.006, 0.38, mats.dark, 12);
+    if (n.e) oreCube(0.08, 0.034, 0.10, 0.38, 0.10 + extra * 0.006, 0, mats.dark, 13);
+    if (n.w) oreCube(0.08, 0.034, 0.10, -0.38, 0.10 + extra * 0.006, 0, mats.dark, 14);
+    g.userData = Object.assign(g.userData || {}, { kind: 'rock', oreMetal: mats.id, neighborCount: links });
+    castReceive(g);
+    return g;
+  }
+
+  function makeRock(neighbors, level = 1, seedX = 0, seedZ = 0, inWater = false, opts = {}) {
+    const ore = typeof tinyworldOreMaterialsFor === 'function' ? tinyworldOreMaterialsFor(opts && opts.appearance) : null;
+    if (ore) return makeOreRock(neighbors, level, seedX, seedZ, inWater, opts, ore);
     const g = new THREE.Group();
     if (inWater) {
       // Rocks dropped in water sink slightly and get a darker ring

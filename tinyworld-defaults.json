@@ -37,6 +37,7 @@
     "tinyworld:render:autoExpand": "0",
     "tinyworld:render:sideFill": "0.40",
     "tinyworld:render:shadow": "balanced",
+    "tinyworld:render:directionalSun": "10",
     "tinyworld:home-grid": "8",
     "tinyworld:audio:sfx-muted": "0",
     "tinyworld:render:ambientFill": "1.00",

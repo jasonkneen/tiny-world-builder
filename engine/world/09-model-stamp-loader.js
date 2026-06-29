@@ -907,7 +907,7 @@
         const canvas = modelStampTextureStats.canvas;
         canvas.width = sampleW;
         canvas.height = sampleH;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return null;
         ctx.clearRect(0, 0, sampleW, sampleH);
         ctx.drawImage(image, 0, 0, sampleW, sampleH);
