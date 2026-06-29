@@ -553,6 +553,23 @@ syncTinyworldOwnerToolControls();
     return false;
   }
 
+  let twCloudAuthPrompted = false;
+  function twCloudPromptAuthRequired(message) {
+    if (twCloudAuthPrompted) return;
+    twCloudAuthPrompted = true;
+    twCloudClearWalletSessionToken();
+    window.__loggedIn = false;
+    const reason = message || 'Sign in to continue.';
+    if (typeof window.__tinyworldHandleUnauthorized === 'function') {
+      window.__tinyworldHandleUnauthorized(reason);
+    } else if (typeof window.__openLoginModal === 'function') {
+      window.__openLoginModal(reason);
+    } else if (window.TinyverseAuthGate && typeof window.TinyverseAuthGate.openLogin === 'function') {
+      window.TinyverseAuthGate.openLogin(reason);
+    }
+    setTimeout(() => { twCloudAuthPrompted = false; }, 4000);
+  }
+
   async function twCloudApiCall(path, method, body) {
     try {
       const token = await twCloudAccessToken();
@@ -572,6 +589,11 @@ syncTinyworldOwnerToolControls();
       if (!r.ok) {
         const out = data || { error: r.statusText || ('HTTP ' + r.status) };
         out.status = r.status;
+        if (r.status === 401) {
+          out.error = out.error || 'Sign in required';
+          out.authRequired = true;
+          twCloudPromptAuthRequired('Your session expired. Sign in again.');
+        }
         out.cloudUnavailable = r.status === 503 && /Netlify Database is not available/i.test(String(out.error || ''));
         if (out.cloudUnavailable) {
           out.rawError = out.error;
@@ -1913,6 +1935,11 @@ syncTinyworldOwnerToolControls();
     }
     // Expose to gated handlers outside this closure.
     window.__openLoginModal = openLoginModal;
+    window.__tinyworldHandleUnauthorized = (message) => {
+      setLoggedInState(false);
+      twCloudClearWalletSessionToken();
+      openLoginModal(message || 'Sign in to continue.');
+    };
 
     function returnAfterAuthIfRequested() {
       try {
@@ -2110,7 +2137,8 @@ syncTinyworldOwnerToolControls();
         try {
           const qs = new URLSearchParams(window.location.search);
           if (qs.get('auth') === 'login' && !identityUnavailable) {
-            openLoginModal('Sign in to open Tinyverse packs');
+            const reason = String(qs.get('reason') || '').trim();
+            openLoginModal(reason || 'Sign in to open Tinyverse packs');
           }
         } catch (_) {}
       }
@@ -3155,6 +3183,42 @@ syncTinyworldOwnerToolControls();
       todMinutes = clampTodMinutes(min);
       applyTod(todMinutes);
     }
+    let islandViewCycleActive = false;
+    let islandViewCycleStartMs = 0;
+    let islandViewLastTodTickMs = 0;
+    const ISLAND_VIEW_TOD_TICK_MS = 250;
+    function beginIslandViewTimeCycle() {
+      const cycle = window.__tinyworldIslandViewTimeCycle;
+      if (!cycle) return;
+      islandViewCycleActive = true;
+      islandViewCycleStartMs = performance.now();
+      islandViewLastTodTickMs = 0;
+      applyTodMinutes(cycle.ISLAND_VIEW_MIDDAY_MIN);
+      repaintTimeWeatherPopup();
+    }
+    function endIslandViewTimeCycle() {
+      if (!islandViewCycleActive) return;
+      islandViewCycleActive = false;
+      islandViewCycleStartMs = 0;
+      islandViewLastTodTickMs = 0;
+      syncTodToUkTime({ force: true });
+    }
+    function tickIslandViewTime(now) {
+      const cycle = window.__tinyworldIslandViewTimeCycle;
+      if (!cycle || typeof cycle.isIslandViewTimeCycleContext !== 'function') return;
+      const inContext = cycle.isIslandViewTimeCycleContext();
+      if (!inContext) {
+        if (islandViewCycleActive) endIslandViewTimeCycle();
+        return;
+      }
+      if (!islandViewCycleActive) beginIslandViewTimeCycle();
+      const tNow = typeof now === 'number' ? now : performance.now();
+      if (tNow - islandViewLastTodTickMs < ISLAND_VIEW_TOD_TICK_MS) return;
+      islandViewLastTodTickMs = tNow;
+      const elapsed = tNow - islandViewCycleStartMs;
+      applyTodMinutes(cycle.islandViewTodMinutesFromElapsed(elapsed));
+    }
+    window.__tinyworldTickIslandViewTime = tickIslandViewTime;
     function restoreBuildTodIfNeeded() {
       if (!isBuildTimeEditable() || !buildTodManual) return false;
       applyTodMinutes(buildTodMinutes);
@@ -3164,8 +3228,15 @@ syncTinyworldOwnerToolControls();
     applyTodMinutes(todMinutes);
     applySeason(season);
     applyWeather(weather);
+    if (randomIslandPreviewModeEnabled()) beginIslandViewTimeCycle();
     function syncTodToUkTime(opts = {}) {
       const force = !!(opts && opts.force);
+      if (window.__tinyworldIslandViewTimeCycle
+        && typeof window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext === 'function'
+        && window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext()) {
+        repaintTimeWeatherPopup();
+        return;
+      }
       if (!force && isBuildTimeEditable() && buildTodManual) {
         repaintTimeWeatherPopup();
         return;
@@ -3183,6 +3254,11 @@ syncTinyworldOwnerToolControls();
     window.addEventListener('tinyworld:mode-changed', syncTimeModeState);
     setInterval(() => {
       if (window.__tinyworldElapsingTimeEnabled === false) return;
+      if (window.__tinyworldIslandViewTimeCycle
+        && typeof window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext === 'function'
+        && window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext()) {
+        return;
+      }
       if (isBuildTimeEditable() && buildTodManual) {
         repaintTimeWeatherPopup();
         return;
@@ -3336,7 +3412,10 @@ syncTinyworldOwnerToolControls();
       function paintReadout() {
         syncTimeRangeEditability();
         if (range) range.value = String(Math.floor(clampTodMinutes(todMinutes)));
-        const liveSuffix = (!isBuildTimeEditable() || !buildTodManual) ? ' BST' : '';
+        const inIslandCycle = window.__tinyworldIslandViewTimeCycle
+          && typeof window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext === 'function'
+          && window.__tinyworldIslandViewTimeCycle.isIslandViewTimeCycleContext();
+        const liveSuffix = inIslandCycle ? '' : ((!isBuildTimeEditable() || !buildTodManual) ? ' BST' : '');
         if (readout) readout.textContent = formatTime(todMinutes) + liveSuffix;
         if (intensityRange) intensityRange.value = String(Math.round(weatherIntensity * 100));
         if (intensityReadout) intensityReadout.textContent = Math.round(weatherIntensity * 100) + '%';
@@ -4771,6 +4850,7 @@ syncTinyworldOwnerToolControls();
           window.__tinyworldMode.setPlay();
         }
         if (typeof window.__tinyworldSyncCollectibleChrome === 'function') window.__tinyworldSyncCollectibleChrome();
+        beginIslandViewTimeCycle();
         return true;
       },
       exit() {
@@ -4779,6 +4859,7 @@ syncTinyworldOwnerToolControls();
         this.profile = null;
         this._resumeBuild = false;
         if (typeof window.__tinyworldSyncCollectibleChrome === 'function') window.__tinyworldSyncCollectibleChrome();
+        endIslandViewTimeCycle();
       },
       isActive() {
         return !!this.active;
@@ -4912,6 +4993,7 @@ syncTinyworldOwnerToolControls();
       dismissWelcomeLaunchForNewWorld();
       leaveWorldRoomForMenuLoad();
       document.body.classList.add('random-island-preview-mode');
+      beginIslandViewTimeCycle();
       randomIslandPreviewForceEnhancedWater();
       randomIslandPreviewCurrent = {
         seed: meta.seed || profile && profile.seed || '',
@@ -5079,6 +5161,7 @@ syncTinyworldOwnerToolControls();
       try {
         const result = await twCloudApiCall('/api/share', 'POST', { name, data: state });
         if (!result || result.error) {
+          if (result && result.authRequired) return null;
           twToast(
             twCloudIsUnavailable(result) ? 'Cloud sharing is unavailable in this Netlify session.' : ((result && result.error) || 'Share failed.'),
             twCloudIsUnavailable(result) ? 'warn' : 'err'

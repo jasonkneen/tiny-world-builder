@@ -47,6 +47,7 @@
 
     tickStart = repaintProfileBegin();
     tickWeather(dt);
+    if (typeof window.__tinyworldTickIslandViewTime === 'function') window.__tinyworldTickIslandViewTime(now);
     repaintProfileEnd('tick.weather', tickStart);
 
     tickStart = repaintProfileBegin();

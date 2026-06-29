@@ -26,22 +26,17 @@ function loadGate(extras) {
   const location = (extras && extras.location) ? extras.location : defaultLocation;
   const context = {
     document,
-    window: Object.assign({
-      location,
-      document,
-      localStorage,
-      setTimeout,
-      clearTimeout,
-    }, extras || {}),
     localStorage,
     setTimeout,
     clearTimeout,
     location,
     fetch: extras && extras.fetch,
     console,
+    URLSearchParams,
   };
-  context.window.window = context.window;
-  context.window.location = location;
+  Object.assign(context, extras || {});
+  context.window = context;
+  context.location = location;
   const src = readFileSync(new URL('../scripts/tinyverse-auth-gate.js', import.meta.url), 'utf8');
   vm.runInNewContext(src, context, { filename: 'tinyverse-auth-gate.js' });
   return context.window.TinyverseAuthGate;
@@ -76,6 +71,48 @@ test('evaluate bypasses login on local dev hosts', async () => {
   });
   const result = await gate.evaluate();
   assert.equal(result.ok, true);
+});
+
+test('openLogin sends users to the builder login screen with a return path', () => {
+  let href = '';
+  const contextLocation = {
+    hostname: 'prod.example.com',
+    protocol: 'https:',
+    pathname: '/card_reveal.html',
+    search: '?pack=island-pack',
+    get href() { return href; },
+    set href(value) { href = String(value || ''); },
+  };
+  const gate = loadGate({
+    location: contextLocation,
+  });
+  assert.equal(gate.openLogin('Sign in to open Tinyverse packs'), true);
+  assert.match(href, /^\/tiny-world-builder\.html\?/);
+  assert.match(href, /auth=login/);
+  assert.match(href, /return=%2Fcard_reveal\.html/);
+});
+
+test('require blocks unauthenticated users with a login reason', async () => {
+  const gate = loadGate({
+    fetch() {
+      return Promise.reject(new Error('offline'));
+    },
+  });
+  const result = await gate.evaluate();
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'login');
+});
+
+test('handleUnauthorized prefers the builder login modal when available', () => {
+  let modalReason = '';
+  const gate = loadGate({
+    __openLoginModal(reason) {
+      modalReason = reason;
+      return true;
+    },
+  });
+  assert.equal(gate.handleUnauthorized('Sign in to continue.'), true);
+  assert.equal(modalReason, 'Sign in to continue.');
 });
 
 test('evaluate treats signed-in non-allowlisted users as access blocked, not login', async () => {

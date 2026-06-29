@@ -200,16 +200,38 @@
     syncChrome();
   }
 
-  function openLogin() {
+  function loginReturnPath() {
+    try {
+      const path = window.location.pathname + window.location.search;
+      if (path && path !== '/') return path;
+    } catch (_) {}
+    return '';
+  }
+
+  function openLogin(reason) {
     try {
       const qs = new URLSearchParams();
       qs.set('auth', 'login');
-      const returnPath = window.location.pathname + window.location.search;
-      if (returnPath && returnPath !== '/') qs.set('return', returnPath);
+      const returnPath = loginReturnPath();
+      if (returnPath) qs.set('return', returnPath);
+      if (reason) qs.set('reason', String(reason).slice(0, 120));
       window.location.href = '/tiny-world-builder.html?' + qs.toString();
       return true;
     } catch (_) {}
     return false;
+  }
+
+  function promptLogin(reason) {
+    if (typeof window.__openLoginModal === 'function') {
+      window.__openLoginModal(reason || 'Sign in to continue.');
+      return true;
+    }
+    return openLogin(reason);
+  }
+
+  function handleUnauthorized(reason) {
+    if (isLocalDevHost()) return false;
+    return promptLogin(reason || 'Sign in to continue.');
   }
 
   async function require(opts) {
@@ -223,6 +245,11 @@
         return true;
       }
       gateUnlocked = false;
+      if (result.reason === 'login') {
+        if (opts && typeof opts.onBlocked === 'function') opts.onBlocked(result);
+        promptLogin('Sign in to open Tinyverse packs');
+        return false;
+      }
       showBlocker(result.reason);
       if (opts && typeof opts.onBlocked === 'function') opts.onBlocked(result);
       return false;
@@ -287,6 +314,7 @@
       return;
     }
     wireAuthListener();
+    schedulePackRevealReady();
   }
 
   window.TinyverseAuthGate = {
@@ -299,8 +327,12 @@
     showBlocker,
     hideBlocker,
     openLogin,
+    promptLogin,
+    handleUnauthorized,
+    loginReturnPath,
     wireControls,
   };
+  window.__tinyworldHandleUnauthorized = handleUnauthorized;
 
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
