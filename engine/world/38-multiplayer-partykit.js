@@ -2372,6 +2372,8 @@
       applySnapshot(payload);
     }
 
+    let pendingSnapshot = null;
+
     function applySnapshot(payload) {
       // Apply the host's world + environment WITHOUT echoing back. The world is
       // the subtle part: applyState's non-windowed path is ASYNC (rAF-chunked)
@@ -2383,7 +2385,12 @@
       // apply env in its onDone (fires at the END of both the sync and async
       // paths). Only on an early reject (applyState returns false, never
       // entering its suppressSave bracket) do we restore synchronously.
-      if (snapshotApplying) return;   // a previous snapshot is still painting; one is enough
+      if (snapshotApplying) {
+        // Buffer the latest snapshot so we can apply it when the current one finishes.
+        // This prevents a fresher snapshot from being silently dropped during a slow apply.
+        pendingSnapshot = payload;
+        return;
+      }
       const applyEnv = () => { if (payload && payload.env) applyEnvState(payload.env); };
       if (!payload.world || typeof applyState !== 'function') {
         applyEnv();
@@ -2401,7 +2408,17 @@
         // the environment so it lands on top of the freshly painted world.
         ok = applyState(payload.world, {
           keepCamera: true,
-          onDone: () => { applyingRemote = false; snapshotApplying = false; applyEnv(); },
+          onDone: () => {
+            applyingRemote = false;
+            snapshotApplying = false;
+            applyEnv();
+            // If a fresher snapshot arrived while we were painting, apply it now.
+            if (pendingSnapshot) {
+              const next = pendingSnapshot;
+              pendingSnapshot = null;
+              applySnapshot(next);
+            }
+          },
         });
       } catch (err) {
         console.warn('[multiplayer] snapshot world apply failed:', err);
@@ -2413,6 +2430,12 @@
         applyingRemote = false;
         snapshotApplying = false;
         applyEnv();
+        // Try a buffered snapshot if one arrived during the failed apply.
+        if (pendingSnapshot) {
+          const next = pendingSnapshot;
+          pendingSnapshot = null;
+          applySnapshot(next);
+        }
       }
     }
 

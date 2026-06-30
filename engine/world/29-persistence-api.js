@@ -138,13 +138,32 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try {
-        twSafeSetItem(STORAGE_KEY, JSON.stringify(buildWorldStateObject()), 'World');
+        const data = JSON.stringify(buildWorldStateObject());
+        twSafeSetItem(STORAGE_KEY, data, 'World');
+        // Warn the user if the serialized world is approaching localStorage quota (~5MB).
+        if (data.length > 4_500_000 && !window.__tinyworldQuotaWarned) {
+          window.__tinyworldQuotaWarned = true;
+          console.warn('[persistence] World data is ' + Math.round(data.length / 1024) + 'KB — approaching localStorage quota. Consider exporting to a named world slot.');
+        }
       } catch (_) {}
       // 800ms (was 200ms): a long paint stroke now serializes the world once
       // or twice instead of several times a second. Matches the world-menu
       // snapshot debounce; sub-second localStorage persistence buys nothing.
     }, 800);
   }
+
+  // Flush save on page hide / before unload so edits aren't lost if the tab
+  // closes during the 800ms debounce window.
+  function flushSaveNow() {
+    if (suppressSave) return;
+    clearTimeout(saveTimer);
+    try {
+      twSafeSetItem(STORAGE_KEY, JSON.stringify(buildWorldStateObject()), 'World');
+    } catch (_) {}
+  }
+  window.addEventListener('beforeunload', flushSaveNow);
+  window.addEventListener('pagehide', flushSaveNow);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSaveNow(); });
 
   // Apply a parsed state object to the world. Used by both localStorage
   // restore and JSON file import. Accepts schema v1/v2 cells where `floors`

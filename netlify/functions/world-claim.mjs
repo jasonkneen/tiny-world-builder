@@ -20,12 +20,25 @@ async function loadEconomy(sql) {
 // but skips the wallet/payment/on-chain steps. Enable with WORLDS_TEST_BYPASS_PAYMENT=1.
 function testBypassPayment() {
   try {
+    let v = null;
     if (globalThis.Netlify && Netlify.env && typeof Netlify.env.get === 'function') {
-      const v = Netlify.env.get('WORLDS_TEST_BYPASS_PAYMENT');
-      if (v != null && v !== '') return v === '1' || v === 'true';
+      v = Netlify.env.get('WORLDS_TEST_BYPASS_PAYMENT');
     }
+    if (v == null || v === '') v = process.env.WORLDS_TEST_BYPASS_PAYMENT;
+    if (v !== '1' && v !== 'true') return false;
+    // Safety guard: refuse to bypass payment on production-looking deployments.
+    // This prevents an accidental env copy from enabling free world claims in prod.
+    try {
+      const siteUrl = (globalThis.Netlify && Netlify.env && Netlify.env.get('URL')) || process.env.URL || process.env.SITE_URL || '';
+      const host = String(siteUrl).replace(/^https?:\/\//, '').split('/')[0].toLowerCase();
+      if (host && !/localhost|127\.0\.0\.1|\.local|dev\.|\.netlify\.app/i.test(host)) {
+        console.error('[world-claim] WORLDS_TEST_BYPASS_PAYMENT is set but URL looks like production (' + host + ') — refusing');
+        return false;
+      }
+    } catch (_) { return false; }
+    return true;
   } catch (_) {}
-  return process.env.WORLDS_TEST_BYPASS_PAYMENT === '1' || process.env.WORLDS_TEST_BYPASS_PAYMENT === 'true';
+  return false;
 }
 
 async function linkedWallet(sql, profileId) {

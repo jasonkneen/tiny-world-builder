@@ -139,6 +139,7 @@ test('Island Viewer is standalone and does not embed the builder runtime', () =>
   assert.doesNotMatch(shell, /09-model-stamp-loader\.js/);
   assert.doesNotMatch(shell, /14-editable-islands-moorings\.js/);
   assert.doesNotMatch(shell, /26-ai-generation\.js/);
+  assert.doesNotMatch(shell, /26a-island-generator\.js/);
   assert.match(prelude, /cellDisplayPointForCell/);
   assert.match(prelude, /cellRenderPositionForCell/);
   assert.match(prelude, /cellRenderParentForCell/);

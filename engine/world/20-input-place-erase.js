@@ -3412,12 +3412,17 @@
     // Dispose every existing cell mesh; cellPos depends on GRID so all
     // tiles need to be re-positioned. setCell will rebuild from
     // world[x][z] which we never throw away.
-    for (const key of Object.keys(cellMeshes)) {
-      const entry = cellMeshes[key];
-      if (entry.tile)   { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
-      if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
-      if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
-      delete cellMeshes[key];
+    // Route through disposeCellMeshEntry to keep cellMeshes + cellMeshesGrid in sync.
+    if (typeof disposeAllCellMeshes === 'function') {
+      disposeAllCellMeshes();
+    } else {
+      for (const key of Object.keys(cellMeshes)) {
+        const entry = cellMeshes[key];
+        if (entry.tile)   { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
+        if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
+        if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
+        delete cellMeshes[key];
+      }
     }
     homeRenderQueue = [];
     homeRenderQueueCursor = 0;
@@ -3570,16 +3575,21 @@
 
     // Drop any out-of-home cellMeshes (user overrides on ghost cells)
     // and wipe the matching world[][] entries so buildGhostBoard
-    // doesn't skip them next time.
+    // doesn't skip them next time. Route through disposeCellMeshEntry
+    // to keep cellMeshes + cellMeshesGrid in sync.
     for (const key of Object.keys(cellMeshes)) {
       const [kx, kz] = key.split(',').map(Number);
       if (kx >= 0 && kx < GRID && kz >= 0 && kz < GRID) continue;
       if (isEditableIslandCell(kx, kz)) continue;
-      const entry = cellMeshes[key];
-      if (entry.tile)   { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
-      if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
-      if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
-      delete cellMeshes[key];
+      if (typeof disposeCellMeshEntry === 'function') {
+        disposeCellMeshEntry(key);
+      } else {
+        const entry = cellMeshes[key];
+        if (entry.tile)   { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
+        if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
+        if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
+        delete cellMeshes[key];
+      }
     }
     for (const xKey of Object.keys(world)) {
       const x = parseInt(xKey, 10);

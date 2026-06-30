@@ -1,30 +1,14 @@
   // -------- animation loop --------
   let prevT = 0;
   let smokeTimer = 0;
-  // Item 5 — Page Visibility pause only. The old per-frame DPR backoff
-  // path was removed because renderer.setPixelRatio reallocates the
-  // shadow map and left it blank until the next click forced a re-render.
-  // Current dynamic resolution is opt-in via render settings, throttled,
-  // bounded below the user's Resolution ceiling, and forces a shadow refresh.
   let docHidden = false;
   document.addEventListener('visibilitychange', () => {
     docHidden = !!document.hidden;
   });
 
-  function animate(now, xrFrame) {
-    if (docHidden && !xrSession) {
-      // Tab is backgrounded — keep the rAF heartbeat (browsers throttle
-      // it anyway) but skip per-frame work + render. prevT reset so the
-      // first frame after resume doesn't see a giant dt.
-      prevT = 0;
-      return;
-    }
-    const t = now / 1000;
-    const dt = prevT ? Math.min(t - prevT, 0.05) : 0;
-    prevT = t;
+  // -------- per-frame tick groups (extracted from animate for readability) --------
 
-    // tile/object drop-in animations (load + placement)
-    let tickStart = repaintProfileBegin();
+  function tickAnimations(t, dt) {
     if (dropAnims.length) tickDropAnims(dt);
     if (typeof tickGhostHolo === 'function') tickGhostHolo(t);
     if (typeof tickIslandPlacementHolos === 'function') tickIslandPlacementHolos(t);
@@ -43,21 +27,16 @@
     if (typeof window.__tinyworldAnimalTick === 'function') {
       try { window.__tinyworldAnimalTick(t, dt); } catch (_) {}
     }
-    repaintProfileEnd('tick.anim', tickStart);
+  }
 
-    tickStart = repaintProfileBegin();
-    tickWeather(dt);
-    if (typeof window.__tinyworldTickIslandViewTime === 'function') window.__tinyworldTickIslandViewTime(now);
-    repaintProfileEnd('tick.weather', tickStart);
-
-    tickStart = repaintProfileBegin();
+  function tickIslands(t, dt) {
     tickIslandRocketEngines(t, dt);
     updateEditableIslandLods();
     if (typeof tickEditableIslandWarpArrivals === 'function') tickEditableIslandWarpArrivals(dt);
     tickEditableIslandEngines(dt, t);
-    repaintProfileEnd('tick.islands', tickStart);
+  }
 
-    tickStart = repaintProfileBegin();
+  function tickEffects(t, dt) {
     tickUndersideDebris(dt);
     updateClouds(dt);
     if (typeof tickCloudSea === 'function') tickCloudSea(t, dt);
@@ -66,6 +45,93 @@
     tickWaterTextureFlow(dt);
     updateWaterfallEffects(t);
     if (typeof window.__tinyworldShaderFXTick === 'function') window.__tinyworldShaderFXTick(t, dt);
+  }
+
+  function tickRuntime(t, dt, xrFrame) {
+    for (const obj of animatedCellObjects) {
+      if (!runtimeRootVisible(obj)) {
+        if (!obj || !obj.parent) animatedCellObjects.delete(obj);
+        continue;
+      }
+      const k = obj.userData.kind;
+      if (k === 'tree') {
+        obj.rotation.z = Math.sin(t * 0.85 + obj.userData.swayPhase) * 0.022;
+        obj.rotation.x = Math.cos(t * 0.65 + obj.userData.swayPhase) * 0.012;
+      } else if (k === 'tuft') {
+        obj.rotation.z = Math.sin(t * 1.2 + (obj.userData.gx + obj.userData.gz)) * 0.05;
+      } else if (windAnimatedPlantKinds.has(k)) {
+        const phase = (obj.userData.swayPhase || 0) + (obj.userData.gx || 0) * 0.41 + (obj.userData.gz || 0) * 0.23;
+        const tall = k === 'corn' || k === 'sunflower' || k === 'wheat';
+        const amp = tall ? 0.028 : 0.014;
+        obj.rotation.z = Math.sin(t * (tall ? 1.15 : 0.82) + phase) * amp;
+        obj.rotation.x = Math.cos(t * 0.72 + phase) * amp * 0.45;
+      }
+    }
+    smokeTimer += dt;
+    if (smokeTimer > 0.32) {
+      smokeTimer = 0;
+      let spawned = 0;
+      for (const o of smokeHouseObjects) {
+        if (!runtimeRootVisible(o)) {
+          if (!o || !o.parent) smokeHouseObjects.delete(o);
+          continue;
+        }
+        if (o && o.userData.kind === 'house' && !o.userData.landing) {
+          spawnSmoke(o);
+          spawned++;
+          if (spawned >= 4 || smokeParticles.length >= MAX_SMOKE_PARTICLES) break;
+        }
+      }
+    }
+    updateSmoke(dt);
+    if (typeof updateDust === 'function') updateDust(dt);
+    if (typeof updatePipeEmitters === 'function') updatePipeEmitters(dt);
+    if (window.__twStargateAnimated && window.__twStargateAnimated.length) {
+      const sgList = window.__twStargateAnimated;
+      for (let si = sgList.length - 1; si >= 0; si--) {
+        const p = sgList[si];
+        if (!p || !p.update || p.disposed) { sgList.splice(si, 1); continue; }
+        try { p.update(t); } catch (_) { sgList.splice(si, 1); }
+      }
+    }
+    updateXRFrame(xrFrame);
+  }
+
+  function tickPreRender(t, dt, now) {
+    if (window.tickFlight) window.tickFlight(dt);
+    if (window.__tinyworldCCTV && typeof window.__tinyworldCCTV.tick === 'function') {
+      try { window.__tinyworldCCTV.tick(t, dt); } catch (_) {}
+    }
+    if (window.__tinyworldLobby && typeof window.__tinyworldLobby.tick === 'function') {
+      try { window.__tinyworldLobby.tick(t, dt); } catch (_) {}
+    }
+    if (typeof tickDynamicResolution === 'function') tickDynamicResolution(now);
+  }
+
+  function animate(now, xrFrame) {
+    if (docHidden && !xrSession) {
+      prevT = 0;
+      return;
+    }
+    const t = now / 1000;
+    const dt = prevT ? Math.min(t - prevT, 0.05) : 0;
+    prevT = t;
+
+    let tickStart = repaintProfileBegin();
+    tickAnimations(t, dt);
+    repaintProfileEnd('tick.anim', tickStart);
+
+    tickStart = repaintProfileBegin();
+    tickWeather(dt);
+    if (typeof window.__tinyworldTickIslandViewTime === 'function') window.__tinyworldTickIslandViewTime(now);
+    repaintProfileEnd('tick.weather', tickStart);
+
+    tickStart = repaintProfileBegin();
+    tickIslands(t, dt);
+    repaintProfileEnd('tick.islands', tickStart);
+
+    tickStart = repaintProfileBegin();
+    tickEffects(t, dt);
     repaintProfileEnd('tick.effects', tickStart);
 
     tickStart = repaintProfileBegin();
@@ -88,8 +154,6 @@
     if (typeof tickPositionalAudio === 'function') tickPositionalAudio();
     repaintProfileEnd('tick.ambient', tickStart);
 
-    // Stream LandscapeEngine chunks when in landscape mesh mode. Auto-expand
-    // reveals by moving the clip window, not by building ghost/base boards.
     tickStart = repaintProfileBegin();
     if (isLandscapeMeshActive()) {
       landscapeMeshEngine.update(landscapeMeshFocusPos(), dt);
@@ -110,74 +174,18 @@
     }
     repaintProfileEnd('tick.homeQueue', tickStart);
 
-    // Drain the ghost-board build queue in small slices so visible-distance
-    // changes and Reset don't lock up the frame.
     if (pendingGhostBoards.length) processGhostBoardQueue(6);
 
-    // React to camera movement/zoom for progressive ghost quality
     tickStart = repaintProfileBegin();
     maybeReevaluateGhostDetails();
     repaintProfileEnd('tick.ghosts', tickStart);
 
-    // Sway only the roots that can actually animate. Scanning every cell
-    // every frame becomes noticeable once generated worlds get busy.
     tickStart = repaintProfileBegin();
-    for (const obj of animatedCellObjects) {
-      if (!runtimeRootVisible(obj)) {
-        if (!obj || !obj.parent) animatedCellObjects.delete(obj);
-        continue;
-      }
-      const k = obj.userData.kind;
-      if (k === 'tree') {
-        obj.rotation.z = Math.sin(t * 0.85 + obj.userData.swayPhase) * 0.022;
-        obj.rotation.x = Math.cos(t * 0.65 + obj.userData.swayPhase) * 0.012;
-      } else if (k === 'tuft') {
-        obj.rotation.z = Math.sin(t * 1.2 + (obj.userData.gx + obj.userData.gz)) * 0.05;
-      } else if (windAnimatedPlantKinds.has(k)) {
-        const phase = (obj.userData.swayPhase || 0) + (obj.userData.gx || 0) * 0.41 + (obj.userData.gz || 0) * 0.23;
-        const tall = k === 'corn' || k === 'sunflower' || k === 'wheat';
-        const amp = tall ? 0.028 : 0.014;
-        obj.rotation.z = Math.sin(t * (tall ? 1.15 : 0.82) + phase) * amp;
-        obj.rotation.x = Math.cos(t * 0.72 + phase) * amp * 0.45;
-      }
-    }
-
-    // chimney smoke — skip while the house is still landing (origin would be airborne)
-    smokeTimer += dt;
-    if (smokeTimer > 0.32) {
-      smokeTimer = 0;
-      let spawned = 0;
-      for (const o of smokeHouseObjects) {
-        if (!runtimeRootVisible(o)) {
-          if (!o || !o.parent) smokeHouseObjects.delete(o);
-          continue;
-        }
-        if (o && o.userData.kind === 'house' && !o.userData.landing) {
-          spawnSmoke(o);
-          spawned++;
-          if (spawned >= 4 || smokeParticles.length >= MAX_SMOKE_PARTICLES) break;
-        }
-      }
-    }
-    updateSmoke(dt);
-    if (typeof updatePipeEmitters === 'function') updatePipeEmitters(dt);
-    updateXRFrame(xrFrame);
+    tickRuntime(t, dt, xrFrame);
     repaintProfileEnd('tick.runtime', tickStart);
 
-    if (window.tickFlight) window.tickFlight(dt);
-    // CCTV/Truman feeds capture to their render targets BEFORE the main render so
-    // the freshly-captured surveillance picture appears in the same frame.
-    if (window.__tinyworldCCTV && typeof window.__tinyworldCCTV.tick === 'function') {
-      try { window.__tinyworldCCTV.tick(t, dt); } catch (_) {}
-    }
-    // Lobby presentation screen: auto-advance slides and cut to the hottest cam feed.
-    if (window.__tinyworldLobby && typeof window.__tinyworldLobby.tick === 'function') {
-      try { window.__tinyworldLobby.tick(t, dt); } catch (_) {}
-    }
-    if (typeof tickDynamicResolution === 'function') tickDynamicResolution(now);
+    tickPreRender(t, dt, now);
 
-    // CCTV-only view mode (?view=cctv): draw the feed wall to the canvas instead
-    // of the world. Falls back to renderScene() until the feeds are mounted.
     const cv = window.__tinyworldCctvView;
     if (cv && cv.active) {
       let drew = false;

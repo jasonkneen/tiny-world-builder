@@ -1832,11 +1832,9 @@
       ].join('\n');
       const user = JSON.stringify(payload);
       const _cpCallOpts = { imageDataUrl: payload.imageDataUrl, signal: _cpCtrl.signal };
-      const raw = provider === 'anthropic'
-        ? await callAnthropic(def.endpoint, ai.key, model, system, user, { name: 'emit_custom_parts', schema }, _cpCallOpts)
-        : provider === 'gemini'
-          ? await callGemini(def.endpoint, ai.key, model, system, user, _cpCallOpts)
-          : await callOpenAI(def.endpoint, ai.key, model, system, user, _cpCallOpts);
+      const raw = await callAIProvider(provider, ai.key, model, system, user, Object.assign({
+        toolSpec: { name: 'emit_custom_parts', schema },
+      }, _cpCallOpts));
       if (_cpCtrl.signal.aborted) return null;
       result = extractJSON(raw);
       if (!result) throw new Error('AI returned non-JSON');
@@ -2138,11 +2136,9 @@
     ].join('\n');
     const user = JSON.stringify(userPayload);
     const _vbCallOpts = { imageDataUrl: userPayload.imageDataUrl, signal: _vbCtrl.signal };
-    const raw = ai.provider === 'anthropic'
-      ? await callAnthropic(def.endpoint, ai.key, model, system, user, { name: 'emit_voxel_build', schema }, _vbCallOpts)
-      : ai.provider === 'gemini'
-        ? await callGemini(def.endpoint, ai.key, model, system, user, _vbCallOpts)
-        : await callOpenAI(def.endpoint, ai.key, model, system, user, _vbCallOpts);
+    const raw = await callAIProvider(ai.provider, ai.key, model, system, user, Object.assign({
+      toolSpec: { name: 'emit_voxel_build', schema },
+    }, _vbCallOpts));
     if (_vbCtrl.signal.aborted) return null;
     const parsed = extractJSON(raw);
     if (!parsed) throw new Error('AI returned non-JSON');

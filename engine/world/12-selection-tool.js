@@ -547,6 +547,18 @@
     },
   };
 
+  // Frozen singleton default cell — getWorldCell is a read-only accessor, so
+  // returning a shared frozen object avoids allocating a fresh object + array
+  // on every miss (getWorldCell is the hottest accessor: 4× per adjacency helper,
+  // 5× per fence cell in the setCell flood). Callers that need to write must
+  // use ensureWorldCell(), which allocates a real mutable cell.
+  const EMPTY_EXTRAS = Object.freeze([]);
+  const DEFAULT_CELL = Object.freeze({
+    terrain: 'grass', terrainFloors: 1, kind: null, floors: 1,
+    buildingType: null, fenceSide: null, extras: EMPTY_EXTRAS,
+    appearance: null, waterFlow: 'auto',
+  });
+
   function defaultCell() {
     return { terrain: 'grass', terrainFloors: 1, kind: null, floors: 1, buildingType: null, fenceSide: null, extras: [], appearance: null, waterFlow: 'auto' };
   }
@@ -625,7 +637,7 @@
   }
 
   function getWorldCell(x, z) {
-    return (world[x] && world[x][z]) ? world[x][z] : defaultCell();
+    return (world[x] && world[x][z]) ? world[x][z] : DEFAULT_CELL;
   }
 
   function ensureWorldCell(x, z) {

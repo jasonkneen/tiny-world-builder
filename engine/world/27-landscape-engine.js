@@ -1214,26 +1214,17 @@
   window.__generateLandscapeWorld = generateLandscapeWorld;
 
   // Latest-wins controller for world generation (modal + floating agent share one flow).
-  let aiWorldGenCtrl = null;
+  const aiWorldGenCtrl = makeLatestWinsController();
 
   async function generateWorld(provider, model, key, userPrompt, gridSize, opts = {}) {
-    if (aiWorldGenCtrl) aiWorldGenCtrl.abort();
-    const ctrl = new AbortController();
-    aiWorldGenCtrl = ctrl;
+    const ctrl = aiWorldGenCtrl.start();
     const callOpts = Object.assign({}, opts, { signal: ctrl.signal });
     const requestedGridSize = coerceGridSize(gridSize, GRID);
     const system = buildSystemPrompt(requestedGridSize);
-    const def = AI_DEFAULTS[provider];
-    if (!def) throw new Error('unknown provider: ' + provider);
     let raw;
-    if (provider === 'anthropic') {
-      raw = await callAnthropic(def.endpoint, key, model || def.model, system, userPrompt, null, callOpts);
-    } else if (provider === 'gemini') {
-      raw = await callGemini(def.endpoint, key, model || def.model, system, userPrompt, callOpts);
-    } else {
-      // OpenAI + xAI share the chat-completions shape.
-      raw = await callOpenAI(def.endpoint, key, model || def.model, system, userPrompt, callOpts);
-    }
+    try {
+      raw = await callAIProvider(provider, key, model, system, userPrompt, callOpts);
+    } catch (err) { if (ctrl.signal.aborted) return null; throw err; }
     if (ctrl.signal.aborted) return null;
     const parsed = extractJSON(raw);
     if (!parsed) {
@@ -1311,24 +1302,26 @@
     return next;
   }
 
+  const aiAutoSuggestCtrl = makeLatestWinsController();
+
   async function generateAutoSuggestions(snapshot) {
+    const ctrl = aiAutoSuggestCtrl.start();
+    const callOpts = { signal: ctrl.signal };
     const cfg = getAIProviderState();
     if (!cfg.key) throw new Error('API key required');
-    const def = AI_DEFAULTS[cfg.provider];
     const system = buildAutoSystemPrompt();
     const user = buildAutoUserPrompt();
     let raw;
-    if (cfg.provider === 'anthropic') {
-      raw = await callAnthropic(def.endpoint, cfg.key, cfg.model, system, user, {
-        name: 'choose_auto_suggestions',
-        description: 'Choose a ranked batch of Tiny World tile actions for the Auto palette tool.',
-        schema: AUTO_SUGGESTIONS_SCHEMA,
-      });
-    } else if (cfg.provider === 'gemini') {
-      raw = await callGemini(def.endpoint, cfg.key, cfg.model, system, user);
-    } else {
-      raw = await callOpenAI(def.endpoint, cfg.key, cfg.model, system, user);
-    }
+    try {
+      raw = await callAIProvider(cfg.provider, cfg.key, cfg.model, system, user, Object.assign({
+        toolSpec: {
+          name: 'choose_auto_suggestions',
+          description: 'Choose a ranked batch of Tiny World tile actions for the Auto palette tool.',
+          schema: AUTO_SUGGESTIONS_SCHEMA,
+        },
+      }, callOpts));
+    } catch (err) { if (ctrl.signal.aborted) return null; throw err; }
+    if (ctrl.signal.aborted) return null;
     const parsed = extractJSON(raw);
     if (!parsed) {
       console.warn('[auto] raw model output:', raw);

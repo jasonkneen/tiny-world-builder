@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const generatorPath = path.resolve('engine/world/26-ai-generation.js');
+const generatorPath = path.resolve('engine/world/26a-island-generator.js');
 const manifestPath = path.resolve('docs/random-island-generation-assets.md');
 
 function sliceBetween(source, start, end) {

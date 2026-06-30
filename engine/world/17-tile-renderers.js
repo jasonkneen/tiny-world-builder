@@ -154,6 +154,27 @@
     if (typeof rebuildExistingGhostBoards === 'function') rebuildExistingGhostBoards();
   }
 
+  // -------- simple object factory dispatch table --------
+  // One-liner kind → mesh factories. Complex kinds that need cell/cluster
+  // context (stargate, house, fence, artifacts, lamp-post) stay as explicit
+  // branches in renderCellObjectImpl.
+  const SIMPLE_OBJECT_FACTORIES = {
+    'tree':      (x, z, cell, level) => makeTree(level, x, z),
+    'rock':      (x, z, cell, level) => makeRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water', { appearance: cell.appearance }),
+    'bridge':    (x, z, cell, level) => makeBridge(getBridgeOrientation(x, z), level),
+    'tuft':      () => makeTuft(),
+    'flower':    () => makeFlower(),
+    'bush':      () => makeBush(),
+    'cow':       () => makeCow(),
+    'sheep':     () => makeSheep(),
+    'crop':      () => makeCrop(),
+    'corn':      () => makeCorn(),
+    'wheat':     () => makeWheat(),
+    'pumpkin':   (x, z, cell, level) => (level >= MAX_FLOORS && isCarriagePumpkin(x, z)) ? makePumpkinCarriage() : makePumpkin(),
+    'carrot':    () => makeCarrot(),
+    'sunflower': () => makeSunflower(),
+  };
+
   function renderCellObject(x, z, opts) {
     if (!shouldRenderCellMesh(x, z)) return;
     const profileStart = repaintProfileBegin();
@@ -171,6 +192,11 @@
     const key = x + ',' + z;
     const entry = getOrCreateCellMeshEntry(x, z);
     if (entry.object) {
+      // Stargate cleanup: mark the portal as disposed so the main-loop
+      // ticker removes it from __twStargateAnimated instead of ticking a dead object.
+      if (entry.object.userData && entry.object.userData.kind === 'stargate' && entry.object.userData.portal) {
+        entry.object.userData.portal.disposed = true;
+      }
       const disposeStart = repaintProfileBegin();
       if (entry.object.parent) entry.object.parent.remove(entry.object);
       disposeGroup(entry.object);
@@ -229,83 +255,65 @@
       posX = voxelRender.posX;
       posZ = voxelRender.posZ;
       setGridUserData = voxelRender.setGridUserData !== false;
-    } else if (kind === 'tree')      mesh = makeTree(level, x, z);
-    else if (kind === 'rock')      mesh = makeRock(getRockNeighbors(x, z), level, x, z, cell.terrain === 'water', { appearance: cell.appearance });
-    else if (kind === 'bridge')    mesh = makeBridge(getBridgeOrientation(x, z), level);
-    else if (kind === 'tuft')      mesh = makeTuft();
-    else if (kind === 'flower')    mesh = makeFlower();
-    else if (kind === 'bush')      mesh = makeBush();
-    else if (kind === 'cow')       mesh = makeCow();
-    else if (kind === 'sheep')     mesh = makeSheep();
-    else if (kind === 'crop')      mesh = makeCrop();
-    else if (kind === 'corn')      mesh = makeCorn();
-    else if (kind === 'wheat')     mesh = makeWheat();
-    else if (kind === 'pumpkin')   mesh = (level >= MAX_FLOORS && isCarriagePumpkin(x, z)) ? makePumpkinCarriage() : makePumpkin();
-    else if (kind === 'carrot')    mesh = makeCarrot();
-    else if (kind === 'sunflower') mesh = makeSunflower();
-    else if (kind === 'stargate') {
-      // Tinyverse portal: reuse the stargate factory (animated rings + glowing core).
-      // Registered in a global tick list so 17 has no per-frame loop of its own.
-      const SG = window.__tinyworldStargate;
-      if (SG && typeof SG.build === 'function') {
-        const portal = SG.build();
-        stargatePortal = portal;
-        mesh = portal.group;
-        mesh.userData = Object.assign({}, mesh.userData, { kind: 'stargate', dest: cell.dest || null, isStargate: true });
-        // Floating name label above the portal (cell.label).
-        try {
-          const labelText = cell.label || (cell.dest ? String(cell.dest).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
-          if (labelText) {
-            const cv = document.createElement('canvas');
-            const pad = 24, fontPx = 64;
-            const cx = cv.getContext('2d');
-            cx.font = '700 ' + fontPx + "px 'Pixelify Sans', ui-monospace, monospace";
-            const tw = Math.ceil(cx.measureText(labelText).width);
-            cv.width = tw + pad * 2; cv.height = fontPx + pad * 2;
-            const g = cv.getContext('2d');
-            g.font = '700 ' + fontPx + "px 'Pixelify Sans', ui-monospace, monospace";
-            g.textAlign = 'center'; g.textBaseline = 'middle';
-            // pill background
-            g.fillStyle = 'rgba(8,12,28,0.82)';
-            const r = 28; const w = cv.width, h = cv.height;
-            g.beginPath();
-            g.moveTo(r, 0); g.lineTo(w - r, 0); g.arcTo(w, 0, w, r, r);
-            g.lineTo(w, h - r); g.arcTo(w, h, w - r, h, r);
-            g.lineTo(r, h); g.arcTo(0, h, 0, h - r, r);
-            g.lineTo(0, r); g.arcTo(0, 0, r, 0, r); g.closePath(); g.fill();
-            g.lineWidth = 4; g.strokeStyle = 'rgba(120,200,255,0.55)'; g.stroke();
-            // text
-            g.fillStyle = '#dff1ff';
-            g.fillText(labelText, w / 2, h / 2 + 2);
-            const tex = new THREE.CanvasTexture(cv);
-            tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
-            const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
-            const aspect = cv.width / cv.height;
-            const labelH = 0.42;
-            spr.scale.set(labelH * aspect, labelH, 1);
-            spr.position.set(0, (portal.centerY || 0.9) + 0.95, 0);
-            spr.renderOrder = 999;
-            mesh.add(spr);
-          }
-        } catch (_) {}
-        try {
-          const reg = (window.__twStargateAnimated = window.__twStargateAnimated || []);
-          reg.push(portal);
-          if (!window.__twStargateTicker) {
-            window.__twStargateTicker = true;
-            const t0 = performance.now();
-            const tick = () => {
-              const t = (performance.now() - t0) / 1000;
-              const list = window.__twStargateAnimated || [];
-              for (const p of list) { try { if (p && p.update) p.update(t); } catch (_) {} }
-              requestAnimationFrame(tick);
-            };
-            requestAnimationFrame(tick);
-          }
-        } catch (_) {}
+    } else {
+      // Simple kind → factory dispatch table (one-liner factories only).
+      // Complex kinds (stargate, house, fence, artifacts, lamp-post) stay as
+      // explicit branches below because they need cell/cluster context.
+      const SIMPLE_FACTORY = SIMPLE_OBJECT_FACTORIES[kind];
+      if (SIMPLE_FACTORY) {
+        mesh = SIMPLE_FACTORY(x, z, cell, level);
+      } else if (kind === 'stargate') {
+        // Tinyverse portal: reuse the stargate factory (animated rings + glowing core).
+        // Registered in a global tick list so 17 has no per-frame loop of its own.
+        const SG = window.__tinyworldStargate;
+        if (SG && typeof SG.build === 'function') {
+          const portal = SG.build();
+          stargatePortal = portal;
+          mesh = portal.group;
+          mesh.userData = Object.assign({}, mesh.userData, { kind: 'stargate', dest: cell.dest || null, isStargate: true, portal: portal });
+          // Floating name label above the portal (cell.label).
+          try {
+            const labelText = cell.label || (cell.dest ? String(cell.dest).replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+            if (labelText) {
+              const cv = document.createElement('canvas');
+              const pad = 24, fontPx = 64;
+              const cx = cv.getContext('2d');
+              cx.font = '700 ' + fontPx + "px 'Pixelify Sans', ui-monospace, monospace";
+              const tw = Math.ceil(cx.measureText(labelText).width);
+              cv.width = tw + pad * 2; cv.height = fontPx + pad * 2;
+              const g = cv.getContext('2d');
+              g.font = '700 ' + fontPx + "px 'Pixelify Sans', ui-monospace, monospace";
+              g.textAlign = 'center'; g.textBaseline = 'middle';
+              // pill background
+              g.fillStyle = 'rgba(8,12,28,0.82)';
+              const r = 28; const w = cv.width, h = cv.height;
+              g.beginPath();
+              g.moveTo(r, 0); g.lineTo(w - r, 0); g.arcTo(w, 0, w, r, r);
+              g.lineTo(w, h - r); g.arcTo(w, h, w - r, h, r);
+              g.lineTo(r, h); g.arcTo(0, h, 0, h - r, r);
+              g.lineTo(0, r); g.arcTo(0, 0, r, 0, r); g.closePath(); g.fill();
+              g.lineWidth = 4; g.strokeStyle = 'rgba(120,200,255,0.55)'; g.stroke();
+              // text
+              g.fillStyle = '#dff1ff';
+              g.fillText(labelText, w / 2, h / 2 + 2);
+              const tex = new THREE.CanvasTexture(cv);
+              tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
+              const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+              const aspect = cv.width / cv.height;
+              const labelH = 0.42;
+              spr.scale.set(labelH * aspect, labelH, 1);
+              spr.position.set(0, (portal.centerY || 0.9) + 0.95, 0);
+              spr.renderOrder = 999;
+              mesh.add(spr);
+            }
+          } catch (_) {}
+          try {
+            const reg = (window.__twStargateAnimated = window.__twStargateAnimated || []);
+            reg.push(portal);
+          } catch (_) {}
+        }
       }
-    }
-    else if (kind === 'crystal' || kind === 'relic' || kind === 'totem' || kind === 'ruins' || kind === 'artifact') {
+      else if (kind === 'crystal' || kind === 'relic' || kind === 'totem' || kind === 'ruins' || kind === 'artifact') {
       // Artifact kinds (rich-island treasures). Map to existing primitives so
       // they render as visible props until bespoke meshes are authored.
       if (kind === 'crystal')      mesh = makeRock(getRockNeighbors(x, z), level, x, z, false);
@@ -392,10 +400,11 @@
         setGridUserData = false;
       }
       } // close skyscraper-bypass else
-    } else {
-      repaintProfileEnd('object.build', buildStart);
-      return;
-    }
+      } else {
+        repaintProfileEnd('object.build', buildStart);
+        return;
+      }
+    } // close the outer else (non-voxelRender dispatch)
 
     if (!mesh) {
       repaintProfileEnd('object.build', buildStart);
@@ -786,7 +795,21 @@
         && typeof scheduleHomeBorderEdgeRefresh === 'function') {
       scheduleHomeBorderEdgeRefresh();
     }
-    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !extrasChanged && !appearanceChanged && !economyChanged && !transformChanged && !waterFlowChanged) {
+    // Check if any neighbor has an adjacency-sensitive object (fence/house/rock)
+    // whose rendering depends on this cell's terrain. If so, we can't skip the
+    // object refresh pass even when only terrain changed.
+    let neighborNeedsObjectRefresh = false;
+    if (terrainChanged) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nc = getWorldCell(x + dx, z + dz);
+        const nk = nc && nc.kind;
+        if (nk === 'fence' || nk === 'house' || nk === 'rock' || nk === 'castle-wall') {
+          neighborNeedsObjectRefresh = true;
+          break;
+        }
+      }
+    }
+    if (!kindChanged && !floorsChanged && !terrainFloorsChanged && !bTypeChanged && !fenceSideChanged && !extrasChanged && !appearanceChanged && !economyChanged && !transformChanged && !waterFlowChanged && !neighborNeedsObjectRefresh) {
       if (terrainChanged || tileHeightChanged || waterFlowChanged || forceTile) {
         const saveStart = repaintProfileBegin();
         saveState();

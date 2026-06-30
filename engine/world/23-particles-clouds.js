@@ -1,8 +1,10 @@
   // -------- chimney smoke --------
   const MAX_SMOKE_PARTICLES = 70;
+  const MAX_DUST_PARTICLES = 40;
   const smokeMat = new THREE.MeshBasicMaterial({ color: 0xd4cfc2, transparent: true, opacity: 0.65, depthWrite: false });
   const smokeGeo = new THREE.SphereGeometry(0.06, 6, 6);
   const smokeParticles = [];
+  const dustParticles = [];
   const MAX_UNDERSIDE_DEBRIS_PARTICLES = 96;
   const undersideDebrisMat = new THREE.MeshBasicMaterial({ color: 0x8b8173, transparent: true, opacity: 0.64, depthWrite: false });
   const undersideDebrisGeo = getBoxGeometry(1, 1, 1);
@@ -194,7 +196,7 @@
   function spawnDustBurst(x, y, z, count = 14) {
     const colorHex = 0xcab38a;
     for (let i = 0; i < count; i++) {
-      if (smokeParticles.length >= MAX_SMOKE_PARTICLES) break;
+      if (dustParticles.length >= MAX_DUST_PARTICLES) break;
       const initialOpacity = 0.95;
       const d = new THREE.Mesh(smokeGeo, getCachedParticleMaterial(smokeMat, initialOpacity, colorHex));
       const a = (i / count) * Math.PI * 2 + Math.random() * 0.3;
@@ -211,7 +213,27 @@
       };
       setCachedParticleMaterial(d, smokeMat, initialOpacity, colorHex);
       xrWorldRoot.add(d);
-      smokeParticles.push(d);
+      dustParticles.push(d);
+    }
+  }
+
+  function updateDust(dt) {
+    for (let i = dustParticles.length - 1; i >= 0; i--) {
+      const d = dustParticles[i];
+      d.userData.life += dt;
+      const t = d.userData.life / d.userData.maxLife;
+      d.position.y += d.userData.vy * dt;
+      d.position.x += d.userData.vx * dt;
+      d.position.z += d.userData.vz * dt;
+      const maxOp = d.userData.maxOpacity !== undefined ? d.userData.maxOpacity : 0.85;
+      const op = maxOp * (1 - t);
+      setCachedParticleMaterial(d, smokeMat, op, d.userData.colorHex);
+      const sc = 1 + t * 0.8;
+      d.scale.set(sc, sc, sc);
+      if (t >= 1) {
+        if (d.parent) d.parent.remove(d);
+        dustParticles.splice(i, 1);
+      }
     }
   }
 

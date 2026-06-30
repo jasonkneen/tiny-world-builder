@@ -50,7 +50,11 @@ if [[ ! -f index.html ]]; then
   exit 1
 fi
 
-# Lightweight sanity checks before publishing.
+# Full static checks + unit tests before publishing (not just smoke-static).
+# This catches syntax errors, duplicate declarations, schema drift, and
+# all the check.js guardrails that smoke-static.js doesn't cover.
+node tools/check.js
+node --test tests/*.test.mjs || { echo 'unit tests failed — blocking publish' >&2; exit 1; }
 node tools/smoke-static.js
 printf '✓ publish checks passed\n'
 

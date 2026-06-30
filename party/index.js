@@ -1534,13 +1534,20 @@ export default class TinyWorldParty {
         // No durable economy is engaged here — flushPending() is disabled in this
         // mode — so a spoofed profile only affects this room's local tallies.
         this.openMode = true;
+        // Clear any accumulated pending resources/tax from a prior non-open session
+        // so they can't be flushed if the mode ever flips back.
+        if (this.pendingResources) this.pendingResources.clear();
+        if (this.pendingTax) this.pendingTax.clear();
+        if (this.pendingGold) this.pendingGold.clear();
         role = data.role === 'observe' ? 'observe' : 'play';
         profileId = data.profileId != null ? data.profileId : ('guest:' + id);
         if (this.siteBase() && data.worldId) await this.ensureWorldLoaded(data.worldId);
         if (!this.worldState) {
+          // In open mode, don't seed durable economy meta (ownerProfileId/taxPercent)
+          // from untrusted client data — those fields drive taxSplit math even in open mode.
           this.setWorldStateFromData(
             { v: 4, gridSize: data.gridSize || 8, cells: Array.isArray(data.cells) ? data.cells : [] },
-            { id: data.worldId, taxPercent: data.taxPercent != null ? data.taxPercent : null, ownerProfileId: data.ownerProfileId != null ? data.ownerProfileId : null, lastTaxChange: data.lastTaxChange || null },
+            { id: data.worldId, taxPercent: null, ownerProfileId: null, lastTaxChange: null },
           );
         }
       }

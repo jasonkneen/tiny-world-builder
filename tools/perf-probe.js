@@ -80,8 +80,15 @@ async function main() {
   const chromePath = findChrome();
   if (!chromePath) throw new Error('Chrome/Chromium executable not found. Set CHROME_PATH.');
 
-  const playwrightPath = path.join(root, 'tools', 'build-bridge', 'node_modules', 'playwright-core');
-  const { chromium } = require(playwrightPath);
+  let chromium;
+  try {
+    const playwrightPath = path.join(root, 'tools', 'build-bridge', 'node_modules', 'playwright-core');
+    ({ chromium } = require(playwrightPath));
+  } catch (_) {
+    console.error('[perf-probe] playwright-core not found. Install it with: npm i -D playwright-core');
+    console.error('[perf-probe] Or ensure tools/build-bridge/node_modules/playwright-core exists.');
+    process.exit(2);
+  }
   const browser = await chromium.launch({
     executablePath: chromePath,
     headless: true,

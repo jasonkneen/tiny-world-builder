@@ -631,6 +631,14 @@
   function registerDroppedModelStampFiles(fileList) {
     const files = Array.from(fileList || []).filter(file => file && typeof file.name === 'string');
     if (!files.length) return [];
+    const perFileLimit = MODEL_STAMP_DROPPED_CLOUD_MAX_BYTES;
+    for (const file of files) {
+      if (file.size && file.size > perFileLimit) {
+        modelStampScanMessage = 'File ' + (file.name || '?') + ' is ' + Math.round(file.size / 1048576) + ' MB — over the ' + Math.round(perFileLimit / 1048576) + ' MB limit';
+        console.warn('[model-stamp] ' + modelStampScanMessage);
+        return [];
+      }
+    }
     const ctx = modelStampBuildDroppedFileContext(files);
     const localFiles = ctx.localFiles;
     const sidecars = ctx.sidecars;
@@ -807,6 +815,12 @@
     if (!clean) return '';
     const localUrl = modelStampLocalUrlForRef(asset, clean);
     if (localUrl) return localUrl;
+    // For dropped-file assets, restrict external texture refs to same-origin,
+    // data:, and blob: URLs to prevent SSRF via hostile MTL map_Kd paths.
+    if (asset && asset.dropped && /^(https?:)?\/\//i.test(clean)) {
+      console.warn('[model-stamp] blocked external texture ref in dropped asset:', clean);
+      return '';
+    }
     try {
       if (/^(https?:|data:|blob:|\/)/i.test(clean) || clean.startsWith('models/')) {
         return new URL(clean, window.location.href).href;
@@ -1466,12 +1480,16 @@
     return loader;
   }
 
+  const OBJ_MAX_VERTICES = 200000;
+  const OBJ_MAX_FACES = 400000;
+
   function parseOBJModel(text, asset = null, materialLib = {}) {
     const verts = [[0, 0, 0]];
     const normals = [[0, 1, 0]];
     const uvs = [[0, 0]];
     const groups = [];
     let current = null;
+    let faceCount = 0;
     function ensureGroup(name = 'default') {
       const key = String(name || 'default').trim() || 'default';
       current = groups.find(group => group.name === key);
@@ -1494,6 +1512,7 @@
       const parts = trimmed.split(/\s+/);
       const key = parts[0].toLowerCase();
       if (key === 'v' && parts.length >= 4) {
+        if (verts.length > OBJ_MAX_VERTICES) throw new Error('OBJ exceeds ' + OBJ_MAX_VERTICES + ' vertex limit');
         verts.push([Number(parts[1]) || 0, Number(parts[2]) || 0, Number(parts[3]) || 0]);
       } else if (key === 'vt' && parts.length >= 3) {
         uvs.push([Number(parts[1]) || 0, Number(parts[2]) || 0]);
@@ -1502,6 +1521,7 @@
       } else if (key === 'usemtl') {
         ensureGroup(parts.slice(1).join(' ') || 'default');
       } else if (key === 'f' && parts.length >= 4) {
+        if (++faceCount > OBJ_MAX_FACES) throw new Error('OBJ exceeds ' + OBJ_MAX_FACES + ' face limit');
         const face = parts.slice(1).map(token => {
           const bits = token.split('/');
           return {
@@ -1691,9 +1711,11 @@
       }
       const loader = configureModelStampGltfLoader(new THREE.GLTFLoader(createModelStampLoadingManager(asset)));
       loader.load(asset.url, gltf => {
-        const scene = gltf.scene || (gltf.scenes && gltf.scenes[0]) || new THREE.Group();
-        hydrateModelStampScene(scene, asset, { flipY: false });
-        finish(scene, gltf.animations || []);
+        try {
+          const scene = gltf.scene || (gltf.scenes && gltf.scenes[0]) || new THREE.Group();
+          hydrateModelStampScene(scene, asset, { flipY: false });
+          finish(scene, gltf.animations || []);
+        } catch (err) { fail(err); }
       }, undefined, fail);
     } else if (asset.format === 'obj') {
       let objText = '';

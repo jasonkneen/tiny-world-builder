@@ -685,14 +685,16 @@
         const key = x + ',' + z;
         const entry = cellMeshes[key];
         if (entry) {
-          if (entry.tile) disposeGroup(entry.tile);
-          if (entry.object) disposeGroup(entry.object);
-          if (entry.extras) for (const m of entry.extras) disposeGroup(m);
+          if (entry.tile) { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
+          if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
+          if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
           delete cellMeshes[key];
         }
+        if (cellMeshesGrid[x]) cellMeshesGrid[x][z] = undefined;
       }
     }
-    const idx = editableIslands.indexOf(island);
+    if (typeof rebuildCropPositions === 'function') rebuildCropPositions();
+    if (typeof rebuildMaxPumpkinCache === 'function') rebuildMaxPumpkinCache();
     if (idx >= 0) editableIslands.splice(idx, 1);
     editableIslandById.delete(island.id);
     editableIslandByBoardKey.delete(editableIslandBoardKey(island.boardX, island.boardZ));
@@ -1439,17 +1441,20 @@
           const key = x + ',' + z;
           const entry = cellMeshes[key];
           if (entry) {
-            if (entry.tile) disposeGroup(entry.tile);
-            if (entry.object) disposeGroup(entry.object);
-            if (entry.extras) for (const m of entry.extras) disposeGroup(m);
+            if (entry.tile) { if (entry.tile.parent) entry.tile.parent.remove(entry.tile); disposeGroup(entry.tile); }
+            if (entry.object) { if (entry.object.parent) entry.object.parent.remove(entry.object); disposeGroup(entry.object); }
+            if (entry.extras) for (const m of entry.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
             delete cellMeshes[key];
           }
+          if (cellMeshesGrid[x]) cellMeshesGrid[x][z] = undefined;
         }
       }
     }
     editableIslands.length = 0;
     editableIslandById.clear();
     editableIslandByBoardKey.clear();
+    if (typeof rebuildCropPositions === 'function') rebuildCropPositions();
+    if (typeof rebuildMaxPumpkinCache === 'function') rebuildMaxPumpkinCache();
   }
 
   function runIslandStressDemo(count = ISLAND_STRESS_DEFAULT_COUNT, opts = {}) {

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 import { buildEngineFns } from './helpers/extract-fn.mjs';
 
-const generatorPath = path.resolve('engine/world/26-ai-generation.js');
+const generatorPath = path.resolve('engine/world/26a-island-generator.js');
 const economyProfilePath = path.resolve('engine/world/26b-random-island-economy-profile.js');
 const economyProfileJs = readFileSync(economyProfilePath, 'utf8');
 const preamble = `

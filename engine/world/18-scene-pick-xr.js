@@ -4,14 +4,19 @@
     clearMooringCables();
     clearEditableIslands();
     // Wipe any existing meshes + animation state so a Reset re-plays the drop.
-    for (const key in cellMeshes) {
-      const e = cellMeshes[key];
-      if (e.tile) { if (e.tile.parent) e.tile.parent.remove(e.tile); disposeGroup(e.tile); }
-      if (e.object) { if (e.object.parent) e.object.parent.remove(e.object); disposeGroup(e.object); }
-      if (e.extras) for (const m of e.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
+    // Route through disposeCellMeshEntry to keep cellMeshes + cellMeshesGrid in sync.
+    if (typeof disposeAllCellMeshes === 'function') {
+      disposeAllCellMeshes();
+    } else {
+      for (const key in cellMeshes) {
+        const e = cellMeshes[key];
+        if (e.tile) { if (e.tile.parent) e.tile.parent.remove(e.tile); disposeGroup(e.tile); }
+        if (e.object) { if (e.object.parent) e.object.parent.remove(e.object); disposeGroup(e.object); }
+        if (e.extras) for (const m of e.extras) { if (m.parent) m.parent.remove(m); disposeGroup(m); }
+      }
+      for (const k of Object.keys(cellMeshes)) delete cellMeshes[k];
+      initCellMeshesGrid();
     }
-    for (const k of Object.keys(cellMeshes)) delete cellMeshes[k];
-    initCellMeshesGrid();
     homeRenderQueue = [];
     homeRenderQueueCursor = 0;
     homeRenderQueued.clear();

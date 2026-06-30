@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import { buildEngineFns } from './helpers/extract-fn.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOM = join(__dirname, '..', 'engine', 'world', '47-worlds-room.js');
+const ROOM = join(__dirname, '..', 'engine', 'world', '47a-worlds-emotes.js');
 
 // EMOTES is a closure const, not a function declaration, so stub it in the
 // preamble with the same shape the real table uses.
