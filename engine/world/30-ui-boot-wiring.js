@@ -4456,10 +4456,10 @@ syncTinyworldOwnerToolControls();
       });
       scoreline.hidden = !scoreline.children.length;
       appendRandomIslandResourceRows(overlay.querySelector('.new-world-reveal-resources'), rawYield);
-      overlay.querySelector('.new-world-reveal-step-title').textContent = 'Visible island contents';
-      overlay.querySelector('.new-world-reveal-step-body').textContent = 'Raw Yield is derived from visible cells only. Buildings are shown separately for ranking.';
-      overlay.querySelector('.new-world-reveal-secondary').textContent = 'Close';
-      overlay.querySelector('.new-world-reveal-primary').textContent = worldMenuRevealText('newworld.done', 'Enter world');
+overlay.querySelector('.new-world-reveal-step-title').textContent = 'Visible island contents';
+overlay.querySelector('.new-world-reveal-step-body').textContent = 'Raw Yield is derived from visible cells only. Buildings are shown separately for ranking.';
+overlay.querySelector('.new-world-reveal-secondary').textContent = worldMenuRevealText('newworld.close', 'Close');
+overlay.querySelector('.new-world-reveal-primary').textContent = worldMenuRevealText('newworld.done', 'Enter world');
       overlay.hidden = false;
       document.body.classList.add('new-world-reveal-open');
     }
