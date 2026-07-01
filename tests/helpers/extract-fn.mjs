@@ -21,11 +21,40 @@ export function extractFunction(filePath, name) {
   // Find the opening brace of the body.
   let i = src.indexOf('{', p);
   if (i === -1) throw new Error('no body brace for: ' + name);
+  // String-aware brace matching: skip strings, template literals, comments,
+  // and regex so a `}` inside a string/template doesn't truncate the function.
   let depth = 0;
-  for (; i < src.length; i++) {
-    const c = src[i];
-    if (c === '{') depth++;
-    else if (c === '}') { depth--; if (depth === 0) { i++; break; } }
+  while (i < src.length) {
+    const ch = src[i];
+    const next = src[i + 1];
+    // Line comment
+    if (ch === '/' && next === '/') { i = src.indexOf('\n', i); if (i < 0) break; i++; continue; }
+    // Block comment
+    if (ch === '/' && next === '*') { i = src.indexOf('*/', i + 2); if (i < 0) break; i += 2; continue; }
+    // String literal
+    if (ch === "'" || ch === '"') {
+      const q = ch; i++;
+      while (i < src.length) { if (src[i] === '\\') { i += 2; continue; } if (src[i] === q) { i++; break; } i++; }
+      continue;
+    }
+    // Template literal
+    if (ch === '`') {
+      i++;
+      while (i < src.length) {
+        if (src[i] === '\\') { i += 2; continue; }
+        if (src[i] === '$' && src[i + 1] === '{') {
+          let d = 1; i += 2;
+          while (i < src.length && d > 0) { if (src[i] === '{') d++; else if (src[i] === '}') d--; i++; }
+          continue;
+        }
+        if (src[i] === '`') { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) { i++; break; } }
+    i++;
   }
   return src.slice(start, i);
 }
