@@ -195,7 +195,7 @@
     // Binary min-heap by f-score (replaces O(n log n) sort + O(n) shift per iteration).
     const heap = [];
     function heapPush(node) {
-      const i = heap.length;
+      let i = heap.length;
       heap.push(node);
       while (i > 0) {
         const parent = (i - 1) >> 1;
