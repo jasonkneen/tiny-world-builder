@@ -792,6 +792,77 @@
     });
   }
 
+  // -------- cloud-veil driven by altitude (replaces the old J-key scripted tween) --------
+  // As the plane drops from the island layer toward the planet surface, thin the
+  // cloud-sea veil so the ground/sea appears through it instead of popping in;
+  // thicken it back on the way up. Same primitives 54-fly-down.js drives on a
+  // scripted ease (setCloudSeaEnabled/setCloudSeaVeilOpacity from module 31,
+  // window.__setPlanetLandscapeUnderlay/NearView and the poser-surface toggle
+  // from module 27/its runtime), just sampled off the plane's real altitude
+  // every frame instead of a clock.
+  // Gated on the SAME boundary flightSurfaceAtScene uses to start treating the
+  // planet as ground (FLIGHT_PLANET_LAYER_Y): the plane spawns/launches well
+  // above this (~1.6 scene units), so simply flying near the island does NOT
+  // activate the planet underlay/poser surface or thin the clouds — only an
+  // actual descent past the island layer does, keeping the heavier rendering
+  // off until the player chooses to dive down.
+  const FLIGHT_VEIL_TOP_Y = FLIGHT_PLANET_LAYER_Y;       // at/above: normal resting veil, no planet needed
+  const FLIGHT_VEIL_CLEAR_Y = FLIGHT_PLANET_LAYER_Y - 8; // at/below: veil fully clear, ground visible
+  const FLIGHT_VEIL_DROP = 60;                      // matches FLY_DOWN_DEFAULT_DROP in 54-fly-down.js
+  let flightVeilActive = false;
+  let flightVeilCloudWasEnabled = false;
+  let flightVeilManaged = false;
+
+  function flightEnsurePlanetUnderlay() {
+    if (typeof isPlanetLandscapeActive === 'function' && isPlanetLandscapeActive()) return true;
+    if (typeof window.__setPlanetLandscapeUnderlay !== 'function') return false;
+    const biome = (typeof landscapeMeshBiome === 'string') ? landscapeMeshBiome : 'grassland';
+    const styleMode = (typeof landscapeMeshStyle === 'string') ? landscapeMeshStyle : 'lowpoly';
+    return !!window.__setPlanetLandscapeUnderlay({ enabled: true, drop: FLIGHT_VEIL_DROP, biome, styleMode });
+  }
+
+  function flightBeginVeil() {
+    if (flightVeilActive) return;
+    flightVeilActive = true;
+    flightVeilCloudWasEnabled = (typeof renderCloudSea !== 'undefined') ? !!renderCloudSea : false;
+    if (!flightVeilCloudWasEnabled && typeof setCloudSeaEnabled === 'function') {
+      setCloudSeaEnabled(true);
+      flightVeilManaged = true;
+    } else {
+      flightVeilManaged = false;
+    }
+    flightEnsurePlanetUnderlay();
+    if (typeof window.__setPlanetLandscapeNearView === 'function') window.__setPlanetLandscapeNearView(true);
+    if (window.__tinyworldPoserSurface) window.__tinyworldPoserSurface.show();
+  }
+
+  function flightEndVeil() {
+    if (!flightVeilActive) return;
+    flightVeilActive = false;
+    if (typeof window.__setPlanetLandscapeNearView === 'function') window.__setPlanetLandscapeNearView(false);
+    if (window.__tinyworldPoserSurface) window.__tinyworldPoserSurface.hide();
+    if (flightVeilManaged && typeof setCloudSeaEnabled === 'function') {
+      setCloudSeaEnabled(flightVeilCloudWasEnabled);
+      flightVeilManaged = false;
+    } else if (flightVeilCloudWasEnabled && typeof setCloudSeaVeilOpacity === 'function') {
+      setCloudSeaVeilOpacity(0.9);
+    }
+  }
+
+  // Called once per tick with the plane's current SCENE-space position (reuses
+  // the scratch vector tickFlight already computed this frame).
+  function flightUpdateCloudVeil(scenePos) {
+    if (scenePos.y < FLIGHT_VEIL_TOP_Y) {
+      flightBeginVeil();
+      const t = flightClamp01((FLIGHT_VEIL_TOP_Y - scenePos.y) / (FLIGHT_VEIL_TOP_Y - FLIGHT_VEIL_CLEAR_Y));
+      if (typeof setCloudSeaVeilOpacity === 'function') {
+        setCloudSeaVeilOpacity(Math.max(0, (flightVeilCloudWasEnabled ? 0.9 : 1) * (1 - t)));
+      }
+    } else if (flightVeilActive) {
+      flightEndVeil();
+    }
+  }
+
   // -------- per-frame tick (called from animate) --------
   const _fljetScenePos = new THREE.Vector3();
   const _fljetQuat = new THREE.Quaternion();
@@ -803,6 +874,7 @@
       flightJet.position.copy(_fljetScenePos);
       flightJet.quaternion.copy(_fljetQuat.copy(flightYawQuat).multiply(flightPlane.quat).multiply(FLIGHT_MODEL_FWD_FIX));
       updateFlightPropellers(dt);
+      flightUpdateCloudVeil(_fljetScenePos);
     }
     updateFlightCameras(dt);
     // Multiplayer: broadcast the live plane transform so peers see a ghost. The
@@ -855,24 +927,20 @@
   }
   window.isFlyableStampCell = isFlyableStampCell;
 
-  function enterFlight(x, z) {
-    if (flightActive) return false;
-    const cell = (typeof getWorldCell === 'function') ? getWorldCell(x, z) : (world[x] && world[x][z]);
-    if (!isFlyableStampCell(cell)) return false;
-    const entry = cellMeshes[x + ',' + z];
-    const jet = entry && entry.object;
-    if (!jet) return false;
-
+  // Shared entry body for both a placed model-stamp plane (enterFlight) and a
+  // spawned test plane with no board placement (enterFlightSpawn). `cell` is
+  // the { x, z } parking spot to respawn into on exit, or null when there is
+  // none — exitFlight already disposes flightJet cleanly whenever the parked
+  // entry doesn't match it, so a null cell needs no extra cleanup logic.
+  function finishFlightEntry(jet, scenePos, yawQuat, cell) {
     flightActive = true;
-    flightCell = { x, z };
+    flightCell = cell;
     flightJet = jet;
     window.__flightJet = jet;
     flightProps = flightPreparePropellers(jet);
 
-    // spawn transform from the parked plane
-    jet.getWorldPosition(flightSceneOrigin);
-    const yaw = jet.rotation.y || 0;
-    flightYawQuat.setFromEuler(new THREE.Euler(0, yaw + Math.PI, 0, 'XYZ'));
+    flightSceneOrigin.copy(scenePos);
+    flightYawQuat.copy(yawQuat);
 
     const launchSimY = (FLIGHT_SCENE_GEAR_CLEARANCE + FLIGHT_SCENE_LAUNCH_CLEARANCE) / FLIGHT_SIM_TO_SCENE;
     flightPlane.pos.set(0, launchSimY, 0);
@@ -914,6 +982,23 @@
     if (window.__flightCombat && typeof window.__flightCombat.onEnter === 'function') {
       window.__flightCombat.onEnter(jet);
     }
+  }
+
+  function enterFlight(x, z) {
+    if (flightActive) return false;
+    const cell = (typeof getWorldCell === 'function') ? getWorldCell(x, z) : (world[x] && world[x][z]);
+    if (!isFlyableStampCell(cell)) return false;
+    const entry = cellMeshes[x + ',' + z];
+    const jet = entry && entry.object;
+    if (!jet) return false;
+
+    // spawn transform from the parked plane
+    const scenePos = new THREE.Vector3();
+    jet.getWorldPosition(scenePos);
+    const yaw = jet.rotation.y || 0;
+    const yawQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw + Math.PI, 0, 'XYZ'));
+    finishFlightEntry(jet, scenePos, yawQuat, { x, z });
+
     // Leave a fresh parked vehicle in the lobby cell so another player can
     // immediately enter their own plane while this one is already airborne.
     if (entry.object === jet) {
@@ -925,9 +1010,104 @@
     return true;
   }
 
+  // -------- spawn-in-place entry (J-key test flight, no board placement) --------
+  // Shares the stunt_plane GLB with the crop-duster banner planes (module 24)
+  // but keeps its own load/cache so this works even when banner planes are
+  // disabled. Geometries are marked userData.cached so the shared disposeGroup
+  // (module 17) never frees them when a spawned plane is disposed on exit.
+  const FLIGHT_SPAWN_ASSET = 'models/stunt_plane.glb';
+  const FLIGHT_SPAWN_TEXTURES = [
+    'models/Polygon_Plane_Texture_01.png',
+    'models/Polygon_Plane_Texture_02.png',
+    'models/Polygon_Plane_Texture_03.png',
+  ];
+  const FLIGHT_SPAWN_WINGSPAN = 1.35;
+  let flightSpawnScene = null;
+  let flightSpawnMaterial = null;
+  let flightSpawnLoading = false;
+  let flightSpawnQueued = null;
+
+  function normalizeFlightSpawnModel(model) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const span = Math.max(size.x, size.z, 0.001);
+    model.position.sub(center);
+    model.scale.setScalar(FLIGHT_SPAWN_WINGSPAN / span);
+    model.rotation.y = 0;
+    model.traverse(o => {
+      if (o.isMesh) {
+        o.castShadow = false;
+        o.receiveShadow = false;
+        if (o.geometry) o.geometry.userData.cached = true;
+      }
+    });
+  }
+
+  function ensureFlightSpawnAssets(onReady) {
+    if (flightSpawnScene) { onReady(); return; }
+    flightSpawnQueued = onReady;
+    if (flightSpawnLoading) return;
+    flightSpawnLoading = true;
+    if (!THREE.GLTFLoader) {
+      flightSpawnLoading = false;
+      flightSpawnQueued = null;
+      if (typeof twToast === 'function') twToast('Plane model unavailable.', 'err');
+      return;
+    }
+    const texLoader = new THREE.TextureLoader();
+    const tex = texLoader.load(FLIGHT_SPAWN_TEXTURES[0]);
+    tex.flipY = false;
+    if (typeof twSetTextureSRGB === 'function') twSetTextureSRGB(tex);
+    flightSpawnMaterial = new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff });
+    new THREE.GLTFLoader().load(FLIGHT_SPAWN_ASSET, gltf => {
+      flightSpawnScene = gltf.scene;
+      normalizeFlightSpawnModel(flightSpawnScene);
+      flightSpawnLoading = false;
+      const cb = flightSpawnQueued;
+      flightSpawnQueued = null;
+      if (cb) cb();
+    }, undefined, err => {
+      flightSpawnLoading = false;
+      flightSpawnQueued = null;
+      console.warn('[flight-sim] failed to load spawn plane model', err);
+      if (typeof twToast === 'function') twToast('Plane model unavailable.', 'err');
+    });
+  }
+
+  function buildFlightSpawnJet() {
+    const model = flightSpawnScene.clone();
+    model.traverse(o => { if (o.isMesh) o.material = flightSpawnMaterial; });
+    const jet = new THREE.Group();
+    jet.name = 'tw_flight_spawn_plane';
+    jet.add(model);
+    return jet;
+  }
+
+  // Spawns a temp stunt plane at `scenePos` (world/scene space, e.g. the
+  // current orbit target) with its nose along `lookDir` (world-space, XZ,
+  // normalised) and immediately enters flight. Has no parking-spot cell, so
+  // exitFlight disposes it instead of respawning a parked replacement.
+  function enterFlightSpawn(scenePos, lookDir) {
+    if (flightActive) return false;
+    ensureFlightSpawnAssets(() => {
+      if (flightActive) return; // already flying some other way by the time this loaded
+      const jet = buildFlightSpawnJet();
+      jet.position.copy(scenePos);
+      xrWorldRoot.add(jet);
+      const yawQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), lookDir);
+      finishFlightEntry(jet, scenePos, yawQuat, null);
+    });
+    return true;
+  }
+  window.enterFlightSpawn = enterFlightSpawn;
+
   function exitFlight() {
     if (!flightActive) return;
     flightActive = false;
+    flightEndVeil();
     // Multiplayer: tell peers to drop our flight ghost (sent immediately,
     // bypassing the broadcast throttle). Guarded so single-player no-ops.
     const mp = window.__tinyworldMultiplayer;

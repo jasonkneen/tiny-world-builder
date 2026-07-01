@@ -288,19 +288,33 @@
       return { down, transitioning, phase };
     }
 
+    // Note: descend/ascend/toggle stay wired for gate-transit (module 56),
+    // worlds-room (module 47) and the race track (module 61), which still
+    // drive this scripted camera-tween descent for their own sequences. Only
+    // the manual 'J' test key below was repointed at the flight sim.
     window.__tinyworldFlyDown = { descend, ascend, toggle, isDown, state };
 
-    // -------- trigger: 'J' key (jump down / back up) --------
+    // -------- trigger: 'J' key (spawn a test stunt plane) --------
     // Bare 'j' is otherwise unused (see module 19 tool shortcuts + module 20/30
-    // handlers). Bail while flying, on modifier combos, and on text inputs so we
-    // never hijack typing or fight the flight-sim capture listener.
+    // handlers). Used to toggle this module's scripted fly-down/up camera tween;
+    // now it drops the player into a stunt plane at the current orbit target so
+    // they can fly down and see the ground appear through the cloud layer under
+    // real flight control (see 34-flight-sim.js's enterFlightSpawn + the
+    // altitude-driven cloud veil in its tickFlight). Bail while already flying,
+    // on modifier combos, and on text inputs so we never hijack typing or fight
+    // the flight-sim capture listener.
     window.addEventListener('keydown', e => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (window.__flightActive) return;
       const tgt = e.target;
       if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable)) return;
       if (e.key === 'j' || e.key === 'J') {
-        toggle();
+        if (typeof window.enterFlightSpawn === 'function' && typeof target !== 'undefined' && typeof camera !== 'undefined') {
+          const lookDir = target.clone().sub(camera.position);
+          lookDir.y = 0;
+          if (lookDir.lengthSq() < 1e-6) lookDir.set(0, 0, -1); else lookDir.normalize();
+          window.enterFlightSpawn(target.clone(), lookDir);
+        }
         e.preventDefault();
       }
     });

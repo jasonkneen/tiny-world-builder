@@ -257,7 +257,7 @@
   // assignment (hoisted to `undefined`) so updateCamera() — which may
   // be called before the lighting block has run — sees a falsy value
   // for `typeof` and skips the call safely.
-  const updateSunFollow = function () {
+  var updateSunFollow = function () {
     // Fixed sun direction in WORLD space — shadows cast from the same
     // angle regardless of how the camera is orbited or panned.  The sun
     // position translates with the target only so the shadow camera's
