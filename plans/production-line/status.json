@@ -216,6 +216,11 @@
   ],
   "feed": [
     {
+      "ts": "2026-07-01T21:50:10.261Z",
+      "kind": "tick",
+      "text": "Autonomous tick (safe scope): drafted news/tweet for \"Harden world state and admin flows\" -> plans/production-line/drafts/2026-07-01T21-50-harden-world-state-and-admin-flows.md. ECONOMY TRIPWIRE: netlify/functions/gold-payout.mjs, netlify/functions/lib/tinyverse-access.mjs, netlify/functions/resources-sell.mjs, netlify/functions/world-remix.mjs"
+    },
+    {
       "ts": "2026-07-01T18:16:08.557Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"Update 34-flight-sim.js\" -> plans/production-line/drafts/2026-07-01T18-16-update-34-flight-sim-js.md. No economy paths touched."
@@ -409,12 +414,7 @@
       "ts": "2026-06-28T21:39:41.909Z",
       "kind": "tick",
       "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-28T21-39-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
-    },
-    {
-      "ts": "2026-06-28T20:41:00.495Z",
-      "kind": "tick",
-      "text": "Autonomous tick (safe scope): drafted news/tweet for \"production-line: tick drafts + dashboard refresh [skip ci]\" -> plans/production-line/drafts/2026-06-28T20-41-production-line-tick-drafts-dashboard-refresh-sk.md. No economy paths touched."
     }
   ],
-  "lastTick": "2026-07-01T18:16:08.557Z"
+  "lastTick": "2026-07-01T21:50:10.261Z"
 }
