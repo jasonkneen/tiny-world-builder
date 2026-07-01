@@ -54,7 +54,8 @@ export function canAccessTinyverse(user) {
   // Authorize on the VERIFIED auth-provider email ONLY — never the user-editable
   // profiles.email (a wallet user can set that to anything via /api/profile, which
   // would let them self-grant access). See plans/production-line/SECURITY-NOTES.md.
-  return isTinyverseAccessEmail(cleanEmail(user.email || ''));
+  const verifiedEmail = cleanEmail(user.email || '');
+  return isTinyverseAccessEmail(verifiedEmail) || isWorldAdminEmail(verifiedEmail);
 }
 
 function adminUserDto(row) {
@@ -184,7 +185,7 @@ export default async function adminUsersFunction(request) {
         return jsonResponse({ allowed: canAccessTinyverse(user), admin: isWorldAdminEmail(user && user.email) }, origin);
       } catch (err) {
         if (isDatabaseUnavailable(err)) {
-          const allowed = isTinyverseAccessEmail(user && user.email);
+          const allowed = canAccessTinyverse(user);
           return jsonResponse({ allowed, admin: isWorldAdminEmail(user && user.email) }, origin);
         }
         return jsonResponse({ allowed: false }, origin);
