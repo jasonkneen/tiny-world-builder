@@ -424,6 +424,7 @@
     else if (kind === 'bush')      mesh = makeBush();
     else if (kind === 'cow')       mesh = makeCow();
     else if (kind === 'sheep')     mesh = makeSheep();
+    else if (kind === 'pig')       mesh = makePig();
     else if (kind === 'crop')      mesh = makeCrop();
     else if (kind === 'corn')      mesh = makeCorn();
     else if (kind === 'wheat')     mesh = makeWheat();

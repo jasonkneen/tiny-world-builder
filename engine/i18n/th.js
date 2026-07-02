@@ -274,6 +274,7 @@
     'tool.bush': 'พุ่มไม้',
     'tool.cow': 'วัว',
     'tool.sheep': 'แกะ',
+    'tool.pig': 'หมู',
     'tool.erase': 'ลบ',
     'toolVariant.cottage': 'คอตเทจ',
     'toolVariant.manor': 'คฤหาสน์',

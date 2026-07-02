@@ -425,6 +425,7 @@
           "bush",
           "cow",
           "sheep",
+          "pig",
           "lamp-post",
           "spotlight",
           "voxel-build",

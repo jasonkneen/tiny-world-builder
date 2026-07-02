@@ -1510,12 +1510,17 @@
     bushBerry:   new THREE.MeshLambertMaterial({ color: 0xc94a4f }),
   };
   const M_ANIMAL = {
-    cowWhite:  new THREE.MeshLambertMaterial({ color: 0xf2eee0 }),
-    cowSpot:   new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
-    cowMuzzle: new THREE.MeshLambertMaterial({ color: 0xeec7b0 }),
-    sheepWool: new THREE.MeshLambertMaterial({ color: 0xe8e2d2 }),
-    sheepFace: new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
-    hoof:      new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
+    cowWhite:    new THREE.MeshLambertMaterial({ color: 0xf2eee0 }),
+    cowSpot:     new THREE.MeshLambertMaterial({ color: 0x6b4226 }),
+    cowSpotDark: new THREE.MeshLambertMaterial({ color: 0x33343a }),
+    cowMuzzle:   new THREE.MeshLambertMaterial({ color: 0xeec7b0 }),
+    cowHorn:     new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }),
+    sheepWool:   new THREE.MeshLambertMaterial({ color: 0xe8e2d2 }),
+    sheepFace:   new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
+    eyeWhite:    new THREE.MeshLambertMaterial({ color: 0xf7f4ea }),
+    hoof:        new THREE.MeshLambertMaterial({ color: 0x2a2722 }),
+    pigPink:     new THREE.MeshLambertMaterial({ color: 0xf2a9b8 }),
+    pigSnout:    new THREE.MeshLambertMaterial({ color: 0xe08496 }),
   };
 
   const M_VEHICLE = {
@@ -1581,13 +1586,17 @@
     const body = new THREE.Mesh(getBoxGeometryPrecise(0.42, 0.26, 0.24), M_ANIMAL.cowWhite);
     body.position.set(0, 0.22, 0);
     g.add(body);
-    // Spots
+    // Spots — brown and dark-grey blocky patches
     const spot1 = new THREE.Mesh(getBoxGeometryPrecise(0.18, 0.05, 0.12), M_ANIMAL.cowSpot);
     spot1.position.set(0.06, 0.36, 0.06);
     g.add(spot1);
-    const spot2 = new THREE.Mesh(getBoxGeometryPrecise(0.12, 0.05, 0.10), M_ANIMAL.cowSpot);
+    const spot2 = new THREE.Mesh(getBoxGeometryPrecise(0.12, 0.05, 0.10), M_ANIMAL.cowSpotDark);
     spot2.position.set(-0.08, 0.36, -0.08);
     g.add(spot2);
+    // Udder
+    const udder = new THREE.Mesh(getBoxGeometryPrecise(0.10, 0.05, 0.08), M_ANIMAL.cowMuzzle);
+    udder.position.set(0, 0.10, 0);
+    g.add(udder);
     // Head
     const head = new THREE.Mesh(getBoxGeometryPrecise(0.18, 0.16, 0.16), M_ANIMAL.cowWhite);
     head.position.set(0.27, 0.30, 0);
@@ -1595,11 +1604,32 @@
     const muzzle = new THREE.Mesh(getBoxGeometry(0.08, 0.08, 0.10), M_ANIMAL.cowMuzzle);
     muzzle.position.set(0.36, 0.26, 0);
     g.add(muzzle);
-    // Legs (4 short)
+    // Ears with pink inner + cream horn nubs
+    [-1, 1].forEach((side) => {
+      const ear = new THREE.Mesh(getBoxGeometryPrecise(0.03, 0.07, 0.09), M_ANIMAL.hoof);
+      ear.position.set(0.22, 0.34, side * 0.11);
+      g.add(ear);
+      const earIn = new THREE.Mesh(getBoxGeometryPrecise(0.02, 0.04, 0.05), M_ANIMAL.cowMuzzle);
+      earIn.position.set(0.235, 0.34, side * 0.11);
+      g.add(earIn);
+      const horn = new THREE.Mesh(getBoxGeometryPrecise(0.03, 0.05, 0.03), M_ANIMAL.cowHorn);
+      horn.position.set(0.25, 0.40, side * 0.05);
+      g.add(horn);
+    });
+    // Eyes
+    [-1, 1].forEach((side) => {
+      const eye = new THREE.Mesh(getBoxGeometryPrecise(0.02, 0.02, 0.02), M_ANIMAL.hoof);
+      eye.position.set(0.36, 0.31, side * 0.06);
+      g.add(eye);
+    });
+    // Legs (4 short, two-tone)
     [[0.13, -0.08], [0.13, 0.08], [-0.13, -0.08], [-0.13, 0.08]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(getBoxGeometry(0.07, 0.16, 0.07), M_ANIMAL.hoof);
-      leg.position.set(x, 0.08, z);
+      const leg = new THREE.Mesh(getBoxGeometry(0.07, 0.10, 0.07), M_ANIMAL.cowWhite);
+      leg.position.set(x, 0.13, z);
       g.add(leg);
+      const hoof = new THREE.Mesh(getBoxGeometry(0.072, 0.06, 0.072), M_ANIMAL.hoof);
+      hoof.position.set(x, 0.03, z);
+      g.add(hoof);
     });
     g.userData = { kind: 'cow' };
     castReceive(g);
@@ -1610,8 +1640,8 @@
     const body = new THREE.Mesh(getBoxGeometryPrecise(0.34, 0.24, 0.22), M_ANIMAL.sheepWool);
     body.position.set(0, 0.22, 0);
     g.add(body);
-    // Wool puffs along the back
-    [[-0.10, 0.05], [0.00, 0.00], [0.10, 0.05]].forEach(([x, z]) => {
+    // Wool puffs clustered across the back and sides
+    [[-0.10, 0.05], [0.00, 0.00], [0.10, 0.05], [-0.06, -0.08], [0.07, -0.07], [-0.13, 0.00]].forEach(([x, z]) => {
       const puff = new THREE.Mesh(getBoxGeometryPrecise(0.10, 0.06, 0.10), M_ANIMAL.sheepWool);
       puff.position.set(x, 0.36, z);
       g.add(puff);
@@ -1620,13 +1650,83 @@
     const head = new THREE.Mesh(getBoxGeometryPrecise(0.14, 0.14, 0.12), M_ANIMAL.sheepFace);
     head.position.set(0.22, 0.28, 0);
     g.add(head);
-    // Legs
+    const muzzle = new THREE.Mesh(getBoxGeometryPrecise(0.05, 0.06, 0.06), M_ANIMAL.sheepFace);
+    muzzle.position.set(0.28, 0.25, 0);
+    g.add(muzzle);
+    // Ears with pink inner
+    [-1, 1].forEach((side) => {
+      const ear = new THREE.Mesh(getBoxGeometryPrecise(0.03, 0.06, 0.08), M_ANIMAL.sheepFace);
+      ear.position.set(0.18, 0.29, side * 0.09);
+      g.add(ear);
+      const earIn = new THREE.Mesh(getBoxGeometryPrecise(0.02, 0.035, 0.045), M_ANIMAL.cowMuzzle);
+      earIn.position.set(0.195, 0.29, side * 0.09);
+      g.add(earIn);
+    });
+    // Eyes
+    [-1, 1].forEach((side) => {
+      const eye = new THREE.Mesh(getBoxGeometryPrecise(0.02, 0.02, 0.02), M_ANIMAL.eyeWhite);
+      eye.position.set(0.28, 0.29, side * 0.05);
+      g.add(eye);
+    });
+    // Legs, two-tone dark/brown
     [[0.10, -0.08], [0.10, 0.08], [-0.10, -0.08], [-0.10, 0.08]].forEach(([x, z]) => {
-      const leg = new THREE.Mesh(getBoxGeometry(0.06, 0.14, 0.06), M_ANIMAL.hoof);
-      leg.position.set(x, 0.07, z);
+      const leg = new THREE.Mesh(getBoxGeometry(0.06, 0.09, 0.06), M_ANIMAL.sheepFace);
+      leg.position.set(x, 0.105, z);
       g.add(leg);
+      const hoof = new THREE.Mesh(getBoxGeometry(0.062, 0.05, 0.062), M_ANIMAL.hoof);
+      hoof.position.set(x, 0.025, z);
+      g.add(hoof);
     });
     g.userData = { kind: 'sheep' };
+    castReceive(g);
+    return g;
+  }
+  function makePig() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(getBoxGeometryPrecise(0.34, 0.20, 0.20), M_ANIMAL.pigPink);
+    body.position.set(0, 0.19, 0);
+    g.add(body);
+    // Curly tail — small offset boxes stepping up at the rear
+    [[-0.19, 0.28, 0.00], [-0.22, 0.31, 0.025], [-0.20, 0.34, 0.00]].forEach(([x, y, z]) => {
+      const t = new THREE.Mesh(getBoxGeometryPrecise(0.03, 0.03, 0.03), M_ANIMAL.pigSnout);
+      t.position.set(x, y, z);
+      g.add(t);
+    });
+    // Head + snout
+    const head = new THREE.Mesh(getBoxGeometryPrecise(0.14, 0.13, 0.13), M_ANIMAL.pigPink);
+    head.position.set(0.21, 0.24, 0);
+    g.add(head);
+    const snout = new THREE.Mesh(getBoxGeometryPrecise(0.06, 0.06, 0.09), M_ANIMAL.pigSnout);
+    snout.position.set(0.30, 0.21, 0);
+    g.add(snout);
+    [-1, 1].forEach((side) => {
+      const nostril = new THREE.Mesh(getBoxGeometryPrecise(0.012, 0.012, 0.012), M_ANIMAL.hoof);
+      nostril.position.set(0.335, 0.21, side * 0.02);
+      g.add(nostril);
+    });
+    // Floppy ears
+    [-1, 1].forEach((side) => {
+      const ear = new THREE.Mesh(getBoxGeometryPrecise(0.03, 0.07, 0.07), M_ANIMAL.pigSnout);
+      ear.position.set(0.15, 0.30, side * 0.07);
+      ear.rotation.z = side * 0.32;
+      g.add(ear);
+    });
+    // Eyes
+    [-1, 1].forEach((side) => {
+      const eye = new THREE.Mesh(getBoxGeometryPrecise(0.018, 0.018, 0.018), M_ANIMAL.hoof);
+      eye.position.set(0.28, 0.26, side * 0.055);
+      g.add(eye);
+    });
+    // Legs, two-tone pink/dark-pink trotters
+    [[0.10, -0.07], [0.10, 0.07], [-0.10, -0.07], [-0.10, 0.07]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(getBoxGeometry(0.06, 0.08, 0.06), M_ANIMAL.pigPink);
+      leg.position.set(x, 0.10, z);
+      g.add(leg);
+      const trotter = new THREE.Mesh(getBoxGeometry(0.062, 0.05, 0.062), M_ANIMAL.pigSnout);
+      trotter.position.set(x, 0.025, z);
+      g.add(trotter);
+    });
+    g.userData = { kind: 'pig' };
     castReceive(g);
     return g;
   }

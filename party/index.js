@@ -25,7 +25,7 @@ const MAX_CELL_COORD = 100000;
 const TERRAIN_ENUM = new Set(['grass', 'path', 'dirt', 'water', 'stone', 'lava', 'sand', 'snow']);
 const KIND_ENUM = new Set([
   'house', 'tree', 'fence', 'rock', 'bridge', 'crop', 'corn', 'wheat', 'pumpkin',
-  'carrot', 'sunflower', 'tuft', 'flower', 'bush', 'cow', 'sheep', 'lamp-post',
+  'carrot', 'sunflower', 'tuft', 'flower', 'bush', 'cow', 'sheep', 'pig', 'lamp-post',
   'spotlight', 'voxel-build', 'model-stamp',
 ]);
 
@@ -466,7 +466,7 @@ const WORLD_CHAT_MAX = 280;
 const ACTION_MS = { fish: 3000, mine: 5000, gather: 3000, hunt: 1000 };
 const HARVEST_ACTIONS = new Set(['fish', 'mine', 'gather', 'hunt']);
 const PLANT_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
-const ANIMAL_KINDS = new Set(['cow', 'sheep']);
+const ANIMAL_KINDS = new Set(['cow', 'sheep', 'pig']);
 const FISH_REGEN_MS = 20 * 1000;        // per fish charge, per connected water body
 const FISH_MAX_PER_BODY = 4;
 const PLANT_RIPEN_BASE_MS = 120 * 1000; // shrinks as grass count rises

@@ -296,6 +296,7 @@
     'tool.bush': 'Arbusto',
     'tool.cow': 'Vaca',
     'tool.sheep': 'Oveja',
+    'tool.pig': 'Cerdo',
     'tool.erase': 'Borrar',
 
     'toolVariant.cottage': 'Cabaña',

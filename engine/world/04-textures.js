@@ -2729,8 +2729,8 @@
       M.leaves, M.rockHi, M.cropLeaf, M.cornCob, M.cornLeaf, M.wheatHead,
       M.pumpkin, M.carrotBody, M.sunflowerPetal, M_PLANT.petalRed,
       M_PLANT.petalYellow, M_PLANT.petalPurple, M_PLANT.petalWhite,
-      M_PLANT.bushBerry, M_ANIMAL.cowSpot, M_ANIMAL.cowMuzzle,
-      M_ANIMAL.sheepFace, M.grass, M.grassHi,
+      M_PLANT.bushBerry, M_ANIMAL.cowSpot, M_ANIMAL.cowSpotDark, M_ANIMAL.cowMuzzle,
+      M_ANIMAL.sheepFace, M_ANIMAL.pigSnout, M.grass, M.grassHi,
     ]);
     const topDark = new Set([
       M.roofBlueD, M.manorRoofD, M.towerRoofD, M.castleRoofD, M.leavesDk,
@@ -2740,7 +2740,7 @@
       M.wallCream, M.manorBrick, M.towerStone, M.castleStone, M.skyBody,
       M.trunk, M.bridgeWood, M.fence, M.rock, M.cropStem, M.cornStalk,
       M.wheatStalk, M.pumpkinStem, M.sunflowerStalk, M_ANIMAL.cowWhite,
-      M_ANIMAL.sheepWool, M.dirtRich, M.islandUnder,
+      M_ANIMAL.sheepWool, M_ANIMAL.pigPink, M.dirtRich, M.islandUnder,
     ]);
     const bodyDark = new Set([
       M.wallTrim, M.manorBrickD, M.towerStoneD, M.castleStoneD,

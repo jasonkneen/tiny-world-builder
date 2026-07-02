@@ -327,7 +327,7 @@
 
     const occupied = new Set([...roadCells, ...waterCells]);
     const roadList = Array.from(roadCells).map(k => k.split(',').map(Number));
-    const decorKinds = ['tree', 'tree', 'bush', 'tuft', 'flower', 'rock', 'sheep', 'cow'];
+    const decorKinds = ['tree', 'tree', 'bush', 'tuft', 'flower', 'rock', 'sheep', 'cow', 'pig'];
     const decorCount = Math.min(2400, Math.max(120, Math.round(720 * (size * size) / (VEHICLE_DEMO_LARGE_SIZE_DEFAULT * VEHICLE_DEMO_LARGE_SIZE_DEFAULT))));
     for (let i = 0; i < decorCount; i++) {
       const road = roadList[Math.floor(rng() * roadList.length)];
@@ -484,7 +484,7 @@
     }
 
     const occupied = new Set([...roadCells, ...Array.from({ length: 8 }, (_, x) => x + ',' + waterRow)]);
-    const decorKinds = ['tree', 'tuft', 'flower', 'bush', 'sheep'];
+    const decorKinds = ['tree', 'tuft', 'flower', 'bush', 'sheep', 'pig'];
     for (let x = 0; x < 8; x++) {
       for (let z = 0; z < 8; z++) {
         const key = x + ',' + z;

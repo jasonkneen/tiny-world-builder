@@ -296,6 +296,7 @@
     'tool.bush': '灌木',
     'tool.cow': '牛',
     'tool.sheep': '羊',
+    'tool.pig': '猪',
     'tool.erase': '擦除',
 
     'toolVariant.cottage': '小屋',

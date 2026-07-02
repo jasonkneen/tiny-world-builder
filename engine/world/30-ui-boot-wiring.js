@@ -2455,8 +2455,8 @@ syncTinyworldOwnerToolControls();
       ctx.beginPath();
       ctx.arc(cx, cy, s * 0.24, 0, Math.PI * 2);
       ctx.fill();
-    } else if (kind === 'cow' || kind === 'sheep') {
-      ctx.fillStyle = minimapThemeCss(kind === 'cow' ? '#f2eee0' : '#e8e2d2');
+    } else if (kind === 'cow' || kind === 'sheep' || kind === 'pig') {
+      ctx.fillStyle = minimapThemeCss(kind === 'cow' ? '#f2eee0' : kind === 'pig' ? '#f2a9b8' : '#e8e2d2');
       ctx.strokeStyle = minimapThemeCss('#2a2722');
       ctx.beginPath();
       ctx.ellipse(cx, cy, s * 0.30, s * 0.20, 0, 0, Math.PI * 2);
@@ -4308,7 +4308,7 @@ syncTinyworldOwnerToolControls();
     const randomIslandRawYieldGroups = [
       { id: 'crops', title: 'Crops', rows: [['pumpkin', 'Pumpkin'], ['carrot', 'Carrot'], ['sunflower', 'Sunflower'], ['corn', 'Corn'], ['wheat', 'Wheat']] },
       { id: 'rockOre', title: 'Rock/Ore', rows: [['stone', 'Stone'], ['copper', 'Copper'], ['silver', 'Silver'], ['goldOre', 'Gold Ore'], ['iron', 'Iron']] },
-      { id: 'animals', title: 'Animals', rows: [['sheep', 'Sheep'], ['cow', 'Cow']] },
+      { id: 'animals', title: 'Animals', rows: [['sheep', 'Sheep'], ['cow', 'Cow'], ['pig', 'Pig']] },
       { id: 'nature', title: 'Nature', rows: [['trees', 'Trees'], ['berries', 'Berries'], ['water', 'Water'], ['fish', 'Fish']] },
       { id: 'buildings', title: 'Buildings', rows: [['houses', 'Houses'], ['towers', 'Towers'], ['manor', 'Manor']] },
     ];

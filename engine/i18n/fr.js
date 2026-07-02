@@ -296,6 +296,7 @@
     'tool.bush': 'Buisson',
     'tool.cow': 'Vache',
     'tool.sheep': 'Mouton',
+    'tool.pig': 'Cochon',
     'tool.erase': 'Effacer',
 
     'toolVariant.cottage': 'Chaumière',

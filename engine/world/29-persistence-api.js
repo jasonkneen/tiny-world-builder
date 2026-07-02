@@ -21,7 +21,7 @@
       if (localStorage.getItem(FLAG) === '1') return;
     } catch (_) { return; }
     const FLAT_REQUIRED = new Set([
-      'house','fence','bridge','tree','tuft','flower','bush','cow','sheep',
+      'house','fence','bridge','tree','tuft','flower','bush','cow','sheep','pig',
       'crop','corn','wheat','pumpkin','carrot','sunflower','lamp-post','spotlight',
     ]);
     function fixCells(cells) {
@@ -420,7 +420,7 @@
       // {kind:'house', terrainFloors:5}) and stale imports from the
       // earlier procedural generator that didn't enforce the rule.
       const FLAT_REQUIRED = new Set([
-        'house','fence','bridge','tree','tuft','flower','bush','cow','sheep',
+        'house','fence','bridge','tree','tuft','flower','bush','cow','sheep','pig',
         'crop','corn','wheat','pumpkin','carrot','sunflower','lamp-post','spotlight',
         'chimney','shrub','stone','pebble','bridge-rail','voxel-build','model-stamp',
       ]);

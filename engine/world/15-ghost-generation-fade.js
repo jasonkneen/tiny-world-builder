@@ -561,6 +561,7 @@
     else if (cell.kind === 'bush')      mesh = makeVoxelCropKind('bush', level);
     else if (cell.kind === 'cow')       mesh = makeVoxelAnimal('cow');
     else if (cell.kind === 'sheep')     mesh = makeVoxelAnimal('sheep');
+    else if (cell.kind === 'pig')       mesh = makeVoxelAnimal('pig');
     else if (cell.kind === 'crop')      mesh = makeVoxelCropKind('crop', level);
     else if (cell.kind === 'corn')      mesh = makeVoxelCropKind('corn', level);
     else if (cell.kind === 'wheat')     mesh = makeVoxelCropKind('wheat', level);

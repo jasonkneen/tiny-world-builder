@@ -23,7 +23,7 @@
     function on(ev, cb) { if (typeof WS.on === 'function') WS.on(ev, cb); }
 
     const PLANT_KINDS = new Set(['crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower']);
-    const ANIMAL_KINDS = new Set(['cow', 'sheep']);
+    const ANIMAL_KINDS = new Set(['cow', 'sheep', 'pig']);
 
     function hasResources(cells) {
       for (const c of (cells || [])) {
@@ -149,6 +149,7 @@
       const meadow = [
         [cx - 1, cz - 1, 'cow'], [cx + 1, cz, 'cow'],
         [cx, cz + 1, 'sheep'], [cx + 1, cz + 1, 'sheep'], [cx - 1, cz + 1, 'sheep'],
+        [cx + 2, cz + 1, 'pig'],
       ];
       for (const [x, z, kind] of meadow) {
         // never drop an animal on the centre gate cell itself

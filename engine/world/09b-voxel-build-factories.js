@@ -2494,30 +2494,93 @@
   function makeVoxelAnimal(kind, opts = {}) {
     const g = new THREE.Group();
     const sheep = kind === 'sheep';
-    const bodyMat = sheep ? M_ANIMAL.sheepWool : M_ANIMAL.cowWhite;
-    const faceMat = sheep ? M_ANIMAL.sheepFace : M_ANIMAL.cowWhite;
-    const animalScale = sheep ? 0.70 : 0.80;
+    const pig = kind === 'pig';
+    const cow = !sheep && !pig;
+    const bodyMat = sheep ? M_ANIMAL.sheepWool : pig ? M_ANIMAL.pigPink : M_ANIMAL.cowWhite;
+    const faceMat = sheep ? M_ANIMAL.sheepFace : pig ? M_ANIMAL.pigPink : M_ANIMAL.cowWhite;
+    const animalScale = sheep ? 0.70 : pig ? 0.72 : 0.80;
+    const bodyW = sheep ? 0.34 : pig ? 0.40 : 0.42;
+    const bodyH = sheep ? 0.24 : pig ? 0.27 : 0.26;
+    const bodyD = sheep ? 0.22 : pig ? 0.30 : 0.24;
     // Body on its own pivot so it can bob gently while ambling or settle down to rest.
     const body = new THREE.Group();
     g.add(body);
-    vbox(body, sheep ? 0.34 : 0.42, sheep ? 0.24 : 0.26, sheep ? 0.22 : 0.24, 0, 0.22, 0, bodyMat);
-    if (!sheep) vbox(body, 0.16, 0.04, 0.12, 0.02, 0.36, 0.05, M_ANIMAL.cowSpot);
-    else for (const x of [-0.10, 0, 0.10]) vbox(body, 0.10, 0.06, 0.10, x, 0.36, 0.03, M_ANIMAL.sheepWool);
+    vbox(body, bodyW, bodyH, bodyD, 0, 0.22, 0, bodyMat);
+    if (cow) {
+      // Blocky brown + dark-grey patches across the flank.
+      vbox(body, 0.16, 0.05, 0.12, 0.03, 0.37, 0.06, M_ANIMAL.cowSpot);
+      vbox(body, 0.11, 0.045, 0.09, -0.10, 0.36, -0.07, M_ANIMAL.cowSpotDark);
+      vbox(body, 0.07, 0.035, 0.06, -0.14, 0.30, 0.09, M_ANIMAL.cowSpot);
+      vbox(body, 0.08, 0.05, 0.04, -0.02, 0.10, 0, M_ANIMAL.cowMuzzle, { noGap: true });
+    } else if (sheep) {
+      // Clustered wool puffs give the fleece a lumpy, cloud-like silhouette.
+      const puffs = [
+        [-0.12, 0.34, 0.07], [-0.03, 0.37, -0.08], [0.06, 0.35, 0.08],
+        [0.13, 0.33, -0.06], [-0.06, 0.30, 0.10], [0.02, 0.28, -0.10],
+      ];
+      for (const [x, y, z] of puffs) vbox(body, 0.10, 0.09, 0.10, x, y, z, M_ANIMAL.sheepWool);
+    } else {
+      // Small curled tail stepping up and back off the rump.
+      vbox(body, 0.035, 0.035, 0.035, -0.19, 0.27, 0, M_ANIMAL.pigSnout);
+      vbox(body, 0.035, 0.035, 0.035, -0.22, 0.30, 0.03, M_ANIMAL.pigSnout);
+      vbox(body, 0.035, 0.035, 0.035, -0.20, 0.33, 0, M_ANIMAL.pigSnout);
+    }
     // Head pivots at the neck so it can dip down to nibble the grass while grazing.
     const head = new THREE.Group();
-    head.position.set(0.24, 0.30, 0);
+    // Pig head sits right against the barrel body (almost no neck) so it never
+    // reads as a long-necked dog.
+    head.position.set(pig ? 0.20 : 0.24, 0.30, 0);
     body.add(head);
-    vbox(head, sheep ? 0.14 : 0.18, sheep ? 0.14 : 0.16, sheep ? 0.12 : 0.16, 0, 0, 0, faceMat);
-    if (!sheep) vbox(head, 0.08, 0.08, 0.10, 0.12, -0.04, 0, M_ANIMAL.cowMuzzle);
+    const headW = sheep ? 0.14 : pig ? 0.17 : 0.18;
+    const headH = sheep ? 0.14 : pig ? 0.15 : 0.16;
+    const headD = sheep ? 0.12 : pig ? 0.17 : 0.16;
+    vbox(head, headW, headH, headD, 0, 0, 0, faceMat);
+    if (cow) {
+      vbox(head, 0.09, 0.09, 0.11, 0.13, -0.03, 0, M_ANIMAL.cowMuzzle);
+      for (const s of [-1, 1]) {
+        vbox(head, 0.16, 0.012, 0.012, 0.155, -0.02, s * 0.03, M_ANIMAL.hoof, { noGap: true }); // nostril
+        vbox(head, 0.03, 0.08, 0.09, -0.02, 0.06, s * 0.115, M_ANIMAL.hoof); // ear
+        vbox(head, 0.02, 0.045, 0.05, -0.01, 0.05, s * 0.115, M_ANIMAL.cowMuzzle, { noGap: true }); // pink inner ear
+        vbox(head, 0.03, 0.05, 0.03, 0.01, 0.13, s * 0.05, M_ANIMAL.cowHorn); // horn nub
+        vbox(head, 0.02, 0.02, 0.02, 0.155, 0.02, s * 0.06, M_ANIMAL.hoof, { noGap: true }); // eye
+      }
+    } else if (sheep) {
+      vbox(head, 0.06, 0.07, 0.07, 0.09, -0.02, 0, M_ANIMAL.sheepFace); // muzzle nub
+      for (const s of [-1, 1]) {
+        vbox(head, 0.03, 0.06, 0.08, -0.02, 0.04, s * 0.09, M_ANIMAL.sheepFace); // ear
+        vbox(head, 0.02, 0.035, 0.045, -0.01, 0.04, s * 0.09, M_ANIMAL.cowMuzzle, { noGap: true }); // pink inner ear
+        vbox(head, 0.018, 0.018, 0.018, 0.10, 0.01, s * 0.05, M_ANIMAL.eyeWhite, { noGap: true }); // eye
+      }
+    } else {
+      // Short flat snout disc flush to the face (a pig's snout, NOT a long
+      // muzzle) with two nostril holes punched into its flat front.
+      vbox(head, 0.11, 0.085, 0.045, 0.10, -0.015, 0, M_ANIMAL.pigSnout); // snout
+      for (const s of [-1, 1]) {
+        vbox(head, 0.016, 0.03, 0.016, 0.125, -0.02, s * 0.028, M_ANIMAL.hoof, { noGap: true }); // nostril
+        // Big flat triangular ears flopping forward over the brow (not upright spikes).
+        vbox(head, 0.05, 0.02, 0.08, 0.035, 0.085, s * 0.06, M_ANIMAL.pigPink, { rz: -0.5, rx: s * 0.18 }); // floppy ear
+        vbox(head, 0.02, 0.02, 0.02, 0.105, 0.02, s * 0.06, M_ANIMAL.hoof, { noGap: true }); // eye
+      }
+    }
     // Legs hang from hip pivots so they can swing when walking and fold forward when
     // the animal lowers its head to graze. Order is front-left, front-right,
-    // back-left, back-right (consumed by 70-animal-anim).
+    // back-left, back-right (consumed by 70-animal-anim). Each leg is two-tone: a
+    // body-colour upper segment and a darker hoof/trotter tip.
+    const legMat = sheep ? M_ANIMAL.sheepFace : pig ? M_ANIMAL.pigPink : M_ANIMAL.cowWhite;
+    const tipMat = pig ? M_ANIMAL.pigSnout : M_ANIMAL.hoof;
     const legs = [];
-    [[0.13, -0.08, true], [0.13, 0.08, true], [-0.13, -0.08, false], [-0.13, 0.08, false]].forEach(([x, z, front]) => {
+    // Pig: short stubby legs and a wider stance to carry the barrel body. The
+    // math preserves the exact cow/sheep leg geometry (upperH 0.09 -> tip -0.115).
+    const legHipY = pig ? 0.115 : 0.14;
+    const legUpperH = pig ? 0.055 : 0.09;
+    const legSpreadX = pig ? 0.15 : 0.13;
+    const legSpreadZ = pig ? 0.10 : 0.08;
+    [[legSpreadX, -legSpreadZ, true], [legSpreadX, legSpreadZ, true], [-legSpreadX, -legSpreadZ, false], [-legSpreadX, legSpreadZ, false]].forEach(([x, z, front]) => {
       const hip = new THREE.Group();
-      hip.position.set(x, 0.14, z);
+      hip.position.set(x, legHipY, z);
       g.add(hip);
-      vbox(hip, 0.06, 0.14, 0.06, 0, -0.07, 0, M_ANIMAL.hoof);
+      vbox(hip, 0.06, legUpperH, 0.06, 0, -legUpperH / 2, 0, legMat);
+      vbox(hip, 0.062, 0.05, 0.062, 0, -(legUpperH + 0.025), 0, tipMat);
       legs.push({ hip, front });
     });
     g.scale.setScalar(animalScale);
@@ -2679,7 +2742,7 @@
   const TW_VOXEL_SUBEDIT_BUILTIN_KINDS = new Set([
     'house', 'tree', 'rock', 'bridge', 'fence', 'lamp-post', 'spotlight',
     'tuft', 'flower', 'bush', 'crop', 'corn', 'wheat', 'pumpkin', 'carrot',
-    'sunflower', 'cow', 'sheep', 'chimney', 'ripple', 'shrub', 'stone',
+    'sunflower', 'cow', 'sheep', 'pig', 'chimney', 'ripple', 'shrub', 'stone',
     'pebble', 'bridge-rail',
   ]);
   function isVoxelSubEditableKind(kind, cell = null) {
@@ -2710,7 +2773,7 @@
     else if (kind === 'bridge') mesh = makeVoxelBridge(getBridgeOrientation(x, z), level, editOpts);
     else if (kind === 'tuft' || kind === 'flower' || kind === 'bush' || kind === 'crop' || kind === 'corn' || kind === 'wheat' || kind === 'carrot' || kind === 'sunflower') mesh = makeVoxelCropKind(kind, level, editOpts);
     else if (kind === 'pumpkin') mesh = (level >= MAX_FLOORS && isCarriagePumpkin(x, z)) ? makeVoxelPumpkinCarriage(editOpts) : makeVoxelCropKind('pumpkin', level, editOpts);
-    else if (kind === 'cow' || kind === 'sheep') mesh = makeVoxelAnimal(kind, editOpts);
+    else if (kind === 'cow' || kind === 'sheep' || kind === 'pig') mesh = makeVoxelAnimal(kind, editOpts);
     else if (kind === 'lamp-post' || kind === 'spotlight') mesh = makeVoxelLightSource(kind, level, editOpts);
     else if (kind === 'chimney' || kind === 'ripple' || kind === 'shrub' || kind === 'stone' || kind === 'pebble' || kind === 'bridge-rail') mesh = makeVoxelMicroKind(kind, level, x, z, editOpts);
     else if (kind === 'fence') {

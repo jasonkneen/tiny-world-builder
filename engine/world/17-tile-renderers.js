@@ -167,6 +167,7 @@
     'bush':      () => makeBush(),
     'cow':       () => makeCow(),
     'sheep':     () => makeSheep(),
+    'pig':       () => makePig(),
     'crop':      () => makeCrop(),
     'corn':      () => makeCorn(),
     'wheat':     () => makeWheat(),
@@ -449,7 +450,7 @@
     // Uneven natural objects get a random 90° rotation per cell so the
     // same kind doesn't look identical in every tile. Deterministic on
     // (x, z) via cellRand so re-renders keep the same orientation.
-    if (kind === 'rock' || kind === 'tree' || kind === 'tuft' || kind === 'flower' || kind === 'bush' || kind === 'cow' || kind === 'sheep') {
+    if (kind === 'rock' || kind === 'tree' || kind === 'tuft' || kind === 'flower' || kind === 'bush' || kind === 'cow' || kind === 'sheep' || kind === 'pig') {
       const r = Math.floor(cellRand(x, z, 71) * 4); // 0..3
       mesh.rotation.y += r * (Math.PI / 2);
     }

@@ -389,6 +389,7 @@
       if (kind === 'sunflower') return makeSunflower();
       if (kind === 'cow') return makeCow();
       if (kind === 'sheep') return makeSheep();
+      if (kind === 'pig') return makePig();
       return null;
     }
 
@@ -576,7 +577,7 @@
     const SELECTION_COLOR_EDITABLE_KINDS = new Set([
       'house', 'voxel-build', 'tree', 'rock', 'bridge', 'fence', 'crop',
       'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower', 'flower', 'bush',
-      'cow', 'sheep',
+      'cow', 'sheep', 'pig',
     ]);
     function isSelectionPartMaterialEditableCell(cell) {
       return !!(cell && cell.kind && cell.kind !== 'model-stamp');
@@ -628,12 +629,14 @@
           ],
         };
       }
-      if (kind === 'cow' || kind === 'sheep') {
+      if (kind === 'cow' || kind === 'sheep' || kind === 'pig') {
+        const bodyLabel = kind === 'sheep' ? 'Wool' : kind === 'pig' ? 'Skin' : 'Coat';
+        const topLabel = kind === 'sheep' ? 'Face' : kind === 'pig' ? 'Markings' : 'Markings';
         return {
           kinds: new Set([kind]),
           rows: [
-            { key: 'bodyColor', label: kind === 'sheep' ? 'Wool' : 'Coat', options: selectionColorOptions(SELECTION_BODY_COLOR_OPTIONS) },
-            { key: 'topColor', label: kind === 'sheep' ? 'Face' : 'Markings', options: selectionColorOptions(SELECTION_TOP_COLOR_OPTIONS) },
+            { key: 'bodyColor', label: bodyLabel, options: selectionColorOptions(SELECTION_BODY_COLOR_OPTIONS) },
+            { key: 'topColor', label: topLabel, options: selectionColorOptions(SELECTION_TOP_COLOR_OPTIONS) },
           ],
         };
       }

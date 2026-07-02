@@ -2971,7 +2971,7 @@
   const FP_STANDABLE_OBJECT_KINDS = new Set([
     'stargate', 'bridge', 'bush', 'flower', 'tuft',
     'crop', 'corn', 'wheat', 'pumpkin', 'carrot', 'sunflower',
-    'cow', 'sheep',
+    'cow', 'sheep', 'pig',
   ]);
   const fp = {
     active: false,

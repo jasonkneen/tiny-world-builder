@@ -322,6 +322,7 @@
     'tool.bush': 'Bush',
     'tool.cow': 'Cow',
     'tool.sheep': 'Sheep',
+    'tool.pig': 'Pig',
     'tool.erase': 'Erase',
 
     // ---- tool variants (key = 'toolVariant.' + variant.id) ----

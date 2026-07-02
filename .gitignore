@@ -40,3 +40,7 @@ plans/drafts/agent-spec-format.md
 plans/drafts/future-migrations.draft.sql
 plans/wave-launch-system.md
 .polly/registry.json
+
+# Working scratch + model-cascade artifacts (local only)
+scratch/
+cascade/
