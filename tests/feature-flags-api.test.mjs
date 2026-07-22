@@ -25,7 +25,12 @@ test('feature-flags POST rejects non-admin callers', async () => {
   assert.equal(res.status, 403);
 });
 
-test('feature-flags POST saves with localhost admin secret', async () => {
+test('feature-flags POST saves with localhost admin secret', async (t) => {
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    t.skip('Netlify Blobs/Database not available on Vercel static builds');
+    return;
+  }
+
   const prev = process.env.TINYWORLD_ADMIN_SECRET;
   process.env.TINYWORLD_ADMIN_SECRET = 'test-feature-flags-secret';
   try {
