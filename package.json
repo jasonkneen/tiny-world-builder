@@ -52,6 +52,7 @@
     "@netlify/database": "^1.1.0",
     "@netlify/identity": "^1.2.0",
     "netlify-cli": "^26.1.0",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "tar": "^7.5.19"
   }
 }
