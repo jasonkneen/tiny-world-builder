@@ -195,7 +195,7 @@ See [AGENTS.md](./AGENTS.md) for guidance on extending the codebase.
 
 If Tiny World Builder is useful to you, a star helps other builders find it.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=jasonkneen/tiny-world-builder&type=Date)](https://star-history.com/#jasonkneen/tiny-world-builder&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=jasonkneen/tiny-world-builder&type=Date)](https://star-history.dera.page/#jasonkneen/tiny-world-builder&Date)
 
 ## Files
 
