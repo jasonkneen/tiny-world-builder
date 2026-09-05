@@ -61,13 +61,28 @@ export function errorResponse(message, status, origin) {
   return jsonResponse({ error: message }, origin, status);
 }
 
-export async function readJson(request, maxBytes = 1_048_576) {
+function jsonDepth(value, depth = 0, maxDepth = 32) {
+  if (depth > maxDepth || value === null || typeof value !== 'object') return depth;
+  let max = depth;
+  for (const key in value) {
+    max = Math.max(max, jsonDepth(value[key], depth + 1, maxDepth));
+    if (max > maxDepth) break;
+  }
+  return max;
+}
+
+export async function readJson(request, maxBytes = 1_048_576, maxDepth = 32) {
   // Reject oversized bodies before parsing so a large/deeply-nested payload can't
   // spike memory. Netlify caps requests ~6MB; this is a tighter per-call guard.
   const len = Number(request.headers.get('content-length') || 0);
   if (len && len > maxBytes) return null;
   try {
-    return await request.json();
+    const data = await request.json();
+    // Reject pathologically deep structures (JSON "bombs") that can still cause
+    // CPU/memory spikes or stack overflows in downstream recursive processing
+    // even when the body itself is under maxBytes.
+    if (jsonDepth(data, 0, maxDepth) > maxDepth) return null;
+    return data;
   } catch (_) {
     return null;
   }
