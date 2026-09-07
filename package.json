@@ -48,6 +48,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.191",
     "@anthropic-ai/sdk": "^0.106.0",
+    "@fastify/static": "10.1.2",
     "@netlify/blobs": "^10.7.9",
     "@netlify/database": "^1.1.0",
     "@netlify/identity": "^1.2.0",
