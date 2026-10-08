@@ -1686,6 +1686,14 @@
   function clickLegacyControlButton(id) {
     const el = document.getElementById(id);
     if (el && !el.hidden) {
+      return true;
+    }
+    if (id === 'stamp-builder') {
+      const api = window.__tinyworldStampBuilder;
+      if (api && typeof api.toggle === 'function') {
+        api.toggle();
+        return true;
+      }
       el.click();
       return true;
     }
