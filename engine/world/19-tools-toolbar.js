@@ -1689,6 +1689,18 @@
       el.click();
       return true;
     }
+    if (id === 'stamp-builder') {
+      const api = window.__tinyworldStampBuilder;
+      if (api && typeof api.toggle === 'function') {
+        api.toggle();
+        return true;
+      }
+      if (el) {
+        el.click();
+        return true;
+      }
+      return false;
+    }
     if (id === 'account-btn') {
       const login = document.getElementById('auth-login-btn-top');
       if (login && !login.hidden) {
