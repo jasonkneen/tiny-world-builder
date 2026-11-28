@@ -133,8 +133,8 @@ export function cleanTaxPercent(value, worldId = null) {
 
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return null;
-  // Use mmo-core policy: max 20%, default 5%. Accepts percent or decimal.
-  const rate = n > 1 ? n / 100 : n;
+  // Use mmo-core policy: max 20%, default 5%. Value is an integer percent.
+  const rate = n / 100;
   const clamped = clampTaxRate(rate, DEFAULT_ECONOMY_POLICY);
   if (clamped <= 0) return null;
   return Math.round(clamped * 100); // store as integer percent 1-20

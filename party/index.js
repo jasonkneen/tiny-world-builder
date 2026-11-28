@@ -513,7 +513,9 @@ function taxSplit(gross, taxPercent, isOwner) {
 
   // Use package clamp + split logic (self-owner and no-owner cases already handled above)
   const event = { grossAmount, minerWallet: 'visitor', resource: 'ore' };
-  const island = { id: 'world', ownerWallet: 'owner', taxRate: Number(taxPercent) };
+  // taxPercent is a whole percent; cap at 100 before converting to a fraction,
+  // since clampTaxRate re-reads any rate above 1 as a percent.
+  const island = { id: 'world', ownerWallet: 'owner', taxRate: Math.min(100, Number(taxPercent)) / 100 };
 
   const split = applyIslandTax(event, island, DEFAULT_ECONOMY_POLICY);
   const taxRate = split.taxRate; // 0..0.2 already clamped by policy
@@ -1422,7 +1424,7 @@ export default class TinyWorldParty {
               loaded = true;
               this.world = body.world;
       if (this.world && this.world.taxPercent != null) {
-        const rate = this.world.taxPercent > 1 ? this.world.taxPercent / 100 : this.world.taxPercent;
+        const rate = this.world.taxPercent / 100;
         this.world.taxPercent = Math.round(clampTaxRate(rate, DEFAULT_ECONOMY_POLICY) * 100);
       }
               if (body.world.data) {

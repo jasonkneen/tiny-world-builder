@@ -521,6 +521,12 @@ test('taxSplit: owner keeps all, visitor split sums to gross, ownerless keeps al
   assert.equal(heavy.harvester, 2400);
 });
 
+test('taxSplit: a 1% world tax takes 1%, not the 20% cap', () => {
+  const split = taxSplit(3, 1, false);
+  assert.equal(split.owner, 30, '1% of 3000 milli');
+  assert.equal(split.harvester, 2970);
+});
+
 test('heartsNow regenerates 1/min and caps at max', () => {
   const now = 10_000_000;
   assert.equal(heartsNow(10, now, now).hearts, HEART_MAX, 'full stays full');
@@ -668,6 +674,22 @@ test('signed world join loads the full 20x20 world through the service token', a
     assert.ok(state.you.z >= 0 && state.you.z < 20);
     assert.equal(state.you.hearts, HEART_MAX);
     assert.equal(state.you.role, 'play');
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test('world load keeps a 1% tax from the worlds API as 1%', async () => {
+  const room = makeRoom({ URL: 'https://tinyworld.test' });
+  room.id = 'world-low-tax';
+  const party = new TinyWorldParty(room);
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    world: { id: 78, slug: 'low-tax', status: 'published', gridSize: 8, taxPercent: 1, data: { v: 4, gridSize: 8, cells: [] } },
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  try {
+    await party.ensureWorldLoaded();
+    assert.equal(party.world.taxPercent, 1, 'integer percent 1 must not be read as 100%');
   } finally {
     globalThis.fetch = oldFetch;
   }

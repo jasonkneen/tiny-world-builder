@@ -6,6 +6,7 @@ import {
   deriveTerrainCounts,
   deriveResourceStats,
   worldDto,
+  cleanTaxPercent,
 } from '../netlify/functions/lib/worlds.mjs';
 
 test('isWorldAdminEmail allows the default world-admin accounts (case/space-insensitive)', () => {
@@ -102,4 +103,12 @@ test('worldDto includes owner email and resource stats for cards', () => {
   assert.equal(dto.ownerEmail, 'jason@bouncingfish.com');
   assert.equal(dto.resourceStats.ore, 1);
   assert.equal(dto.resourceStats.mineable, 1);
+});
+
+test('cleanTaxPercent keeps integer percents and caps at the 20% policy max', () => {
+  assert.equal(cleanTaxPercent(5), 5);
+  assert.equal(cleanTaxPercent(20), 20);
+  assert.equal(cleanTaxPercent(100), 20, 'capped at policy max');
+  assert.equal(cleanTaxPercent(0), null, 'zero tax is rejected');
+  assert.equal(cleanTaxPercent(1), 1, 'a 1% tax stays 1%, not the 20% cap');
 });
